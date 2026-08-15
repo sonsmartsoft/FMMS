@@ -31,7 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Sidebar />
 
           <main className="flex-1 p-6 overflow-y-auto max-w-7xl mx-auto w-full">
-            {React.cloneElement(children as React.ReactElement, { cardSettings })}
+            {children}
           </main>
         </div>
 
