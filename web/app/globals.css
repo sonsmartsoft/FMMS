@@ -2,58 +2,188 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ================================================
+   CSS VARIABLES — Light / Dark Theme System
+   ================================================ */
+:root {
+  /* Light Mode */
+  --bg-primary:   #F0F4F8;
+  --bg-secondary: #FFFFFF;
+  --bg-card:      rgba(255, 255, 255, 0.85);
+  --bg-panel:     rgba(240, 244, 248, 0.85);
+  --bg-input:     #FFFFFF;
+  --bg-hover:     rgba(0, 0, 0, 0.05);
+
+  --text-primary:   #0F172A;
+  --text-secondary: #334155;
+  --text-muted:     #64748B;
+  --text-faint:     #94A3B8;
+
+  --border-default: rgba(0, 0, 0, 0.1);
+  --border-subtle:  rgba(0, 0, 0, 0.06);
+
+  --accent-cyan:        #0EA5E9;
+  --accent-cyan-bg:     rgba(14, 165, 233, 0.1);
+  --accent-cyan-border: rgba(14, 165, 233, 0.3);
+
+  --status-green:  #10B981;
+  --status-amber:  #F59E0B;
+  --status-red:    #EF4444;
+  --status-purple: #8B5CF6;
+  --status-rose:   #F43F5E;
+
+  --glass-bg:     rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+
+  --scrollbar-track:      #E2E8F0;
+  --scrollbar-thumb:      #CBD5E1;
+  --scrollbar-thumb-hover: #0EA5E9;
+}
+
+.dark {
+  /* Dark Mode */
+  --bg-primary:   #0B0F19;
+  --bg-secondary: #111827;
+  --bg-card:      rgba(30, 41, 59, 0.6);
+  --bg-panel:     rgba(17, 24, 39, 0.7);
+  --bg-input:     #0F172A;
+  --bg-hover:     rgba(255, 255, 255, 0.04);
+
+  --text-primary:   #F1F5F9;
+  --text-secondary: #CBD5E1;
+  --text-muted:     #64748B;
+  --text-faint:     #475569;
+
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+
+  --accent-cyan:        #38BDF8;
+  --accent-cyan-bg:     rgba(56, 189, 248, 0.15);
+  --accent-cyan-border: rgba(56, 189, 248, 0.3);
+
+  --status-green:  #34D399;
+  --status-amber:  #FBBF24;
+  --status-red:    #F87171;
+  --status-purple: #A78BFA;
+  --status-rose:   #FB7185;
+
+  --glass-bg:     rgba(17, 24, 39, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  --scrollbar-track:       #0B0F19;
+  --scrollbar-thumb:       #1E293B;
+  --scrollbar-thumb-hover: #38BDF8;
+}
+
+/* ================================================
+   Base
+   ================================================ */
 @layer base {
   body {
-    @apply bg-[#0B0F19] text-slate-100 antialiased font-sans min-h-screen selection:bg-cyan-500 selection:text-white;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    @apply antialiased font-sans min-h-screen;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    selection-color: white;
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection {
+    background: var(--accent-cyan);
+    color: white;
   }
 }
 
-/* Glassmorphism Utilities */
+/* ================================================
+   Glassmorphism
+   ================================================ */
 .glass-panel {
-  background: rgba(17, 24, 39, 0.7);
+  background: var(--glass-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .glass-card {
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.8) 100%);
+  background: var(--bg-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--glass-shadow);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
-  border-color: rgba(56, 189, 248, 0.4);
+  border-color: var(--accent-cyan-border);
   transform: translateY(-4px);
-  box-shadow: 0 12px 40px 0 rgba(14, 165, 233, 0.15);
+  box-shadow: 0 12px 40px rgba(14, 165, 233, 0.15);
 }
 
+/* ================================================
+   Gradient Text
+   ================================================ */
 .gradient-text {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-sky-400 to-blue-500;
+  background: linear-gradient(135deg, var(--accent-cyan), #3B82F6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.glow-blue {
-  box-shadow: 0 0 25px -5px rgba(59, 130, 246, 0.4);
-}
+/* ================================================
+   Custom Scrollbar
+   ================================================ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* ================================================
+   Animations
+   ================================================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
+.animate-fadeIn { animation: fadeIn 0.4s ease forwards; }
 
-::-webkit-scrollbar-track {
-  background: #0B0F19;
-}
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+.animate-spin-slow { animation: spin-slow 4s linear infinite; }
 
-::-webkit-scrollbar-thumb {
-  background: #1E293B;
-  border-radius: 9999px;
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px var(--accent-cyan); }
+  50%       { box-shadow: 0 0 20px var(--accent-cyan), 0 0 40px var(--accent-cyan-bg); }
 }
+.animate-glow { animation: pulse-glow 2s ease infinite; }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #38BDF8;
+/* ================================================
+   Theme-aware form inputs
+   ================================================ */
+.theme-input {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s;
 }
+.theme-input:focus { border-color: var(--accent-cyan); }
+
+.theme-select {
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  width: 100%;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+}
+.theme-select:focus { border-color: var(--accent-cyan); }

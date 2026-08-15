@@ -8,14 +8,15 @@ import { AIChatDrawer } from '@/components/ai/AIChatDrawer';
 import { DisplaySettingsModal } from '@/components/dashboard/DisplaySettingsModal';
 import { DEFAULT_CARD_SETTINGS } from '@/lib/data/mockData';
 import { CardDisplaySettings } from '@/types/mobility';
+import { ThemeProvider } from '@/lib/theme/ThemeContext';
 
-export function ClientShell({ children }: { children: React.ReactNode }) {
+function AppShell({ children }: { children: React.ReactNode }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [cardSettings, setCardSettings] = useState<CardDisplaySettings>(DEFAULT_CARD_SETTINGS);
 
   return (
-    <body className="bg-[#0B0F19] text-slate-100 flex flex-col min-h-screen">
+    <body className="min-h-screen flex flex-col transition-colors duration-300" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       <Navbar
         onOpenSettings={() => setIsSettingsOpen(true)}
         onToggleAiChat={() => setIsAiOpen((prev) => !prev)}
@@ -23,19 +24,13 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex flex-1">
         <Sidebar />
-
         <main className="flex-1 p-6 overflow-y-auto max-w-7xl mx-auto w-full">
           {children}
         </main>
       </div>
 
-      {/* Global Floating AI Button */}
       <AIFloatingButton onClick={() => setIsAiOpen(true)} />
-
-      {/* AI Chat Drawer */}
       <AIChatDrawer isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
-
-      {/* Dashboard Display Settings Modal */}
       <DisplaySettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
@@ -43,5 +38,13 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
         onSaveSettings={(newSet) => setCardSettings(newSet)}
       />
     </body>
+  );
+}
+
+export function ClientShell({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider>
+      <AppShell>{children}</AppShell>
+    </ThemeProvider>
   );
 }
