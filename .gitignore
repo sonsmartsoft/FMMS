@@ -7,6 +7,8 @@ web/node_modules/
 web/.next/
 out/
 web/out/
+*.tsbuildinfo
+web/*.tsbuildinfo
 
 # Production build artifacts
 build/
@@ -33,4 +35,3 @@ android/local.properties
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.env
