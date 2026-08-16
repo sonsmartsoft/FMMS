@@ -12,26 +12,20 @@ interface DisplaySettingsModalProps {
 }
 
 export const DisplaySettingsModal: React.FC<DisplaySettingsModalProps> = ({
-  isOpen,
-  onClose,
-  settings,
-  onSaveSettings,
+  isOpen, onClose, settings, onSaveSettings,
 }) => {
   const [localSettings, setLocalSettings] = React.useState<CardDisplaySettings>(settings);
 
   if (!isOpen) return null;
 
   const toggleField = (key: keyof Omit<CardDisplaySettings, 'cardStyle'>) => {
-    setLocalSettings((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
+    setLocalSettings((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const fields: { key: keyof Omit<CardDisplaySettings, 'cardStyle'>; label: string; desc: string }[] = [
     { key: 'showPhoto', label: 'Hình ảnh phương tiện', desc: 'Hiển thị ảnh đại diện xe trên thẻ card' },
     { key: 'showName', label: 'Tên phương tiện & Model', desc: 'Tên hiển thị chính (vd: Mazda2 Base 2026)' },
-    { key: 'showType', label: 'Badge Loại phương tiện', desc: 'Huy hiệu phân loại (Ô tồ, Xe đạp, Xe điện,...)' },
+    { key: 'showType', label: 'Badge Loại phương tiện', desc: 'Huy hiệu phân loại (Ô tô, Xe đạp, Xe điện...)' },
     { key: 'showPrice', label: 'Giá mua ban đầu', desc: 'Hiển thị giá mua tài sản' },
     { key: 'showLicensePlate', label: 'Biển số xe', desc: 'Hiển thị biển số đăng ký' },
     { key: 'showOdometer', label: 'Số km / Quãng đường (ODO)', desc: 'Hiển thị ODO thực tế hoặc Virtual ODO' },
@@ -47,48 +41,49 @@ export const DisplaySettingsModal: React.FC<DisplaySettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
-      <div className="glass-panel w-full max-w-lg rounded-2xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn"
+      style={{ background: 'rgba(0,0,0,0.65)' }}>
+      <div className="glass-panel w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        style={{ border: '1px solid var(--border-default)' }}>
+
+        {/* Header */}
+        <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-default)' }}>
           <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-lg bg-cyan-500/20 text-cyan-400">
+            <div className="p-2 rounded-lg" style={{ background: 'var(--accent-cyan-bg)', color: 'var(--accent-cyan)' }}>
               <Sliders className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">Tùy chỉnh thẻ phương tiện</h2>
-              <p className="text-xs text-slate-400">Chọn các thông tin hiển thị trên Dashboard</p>
+              <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>Tùy chỉnh thẻ phương tiện</h2>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Chọn các thông tin hiển thị trên Dashboard</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+          <button onClick={onClose} className="p-1.5 rounded-lg transition hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-3 flex-1">
+        {/* Body */}
+        <div className="p-6 overflow-y-auto space-y-2 flex-1">
           {fields.map((f) => {
             const isChecked = localSettings[f.key];
             return (
               <div
                 key={f.key}
                 onClick={() => toggleField(f.key)}
-                className={`p-3.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                  isChecked
-                    ? 'bg-cyan-950/30 border-cyan-500/40 text-slate-100'
-                    : 'bg-slate-900/40 border-slate-800 text-slate-400 hover:border-slate-700'
-                }`}
+                className="p-3.5 rounded-xl flex items-center justify-between cursor-pointer transition-all"
+                style={isChecked
+                  ? { background: 'var(--accent-cyan-bg)', border: '1px solid var(--accent-cyan-border)' }
+                  : { background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}
               >
                 <div>
-                  <p className="text-xs font-semibold text-white">{f.label}</p>
-                  <p className="text-[11px] text-slate-400">{f.desc}</p>
+                  <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{f.label}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{f.desc}</p>
                 </div>
                 <div
-                  className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors ${
-                    isChecked
-                      ? 'bg-cyan-500 border-cyan-400 text-white'
-                      : 'border-slate-700 bg-slate-800'
-                  }`}
+                  className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 ml-3 transition-colors"
+                  style={isChecked
+                    ? { background: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)', color: 'white' }
+                    : { background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}
                 >
                   {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                 </div>
@@ -97,17 +92,19 @@ export const DisplaySettingsModal: React.FC<DisplaySettingsModalProps> = ({
           })}
         </div>
 
-        {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-end space-x-3 bg-slate-900/50">
+        {/* Footer */}
+        <div className="px-6 py-4 flex items-center justify-end space-x-3" style={{ borderTop: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 transition"
+            className="px-4 py-2 rounded-xl text-xs font-medium transition hover:opacity-80"
+            style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
           >
             Hủy
           </button>
           <button
             onClick={handleSave}
-            className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-lg shadow-cyan-500/25 transition"
+            className="px-5 py-2 rounded-xl text-xs font-bold text-white transition hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
           >
             Lưu cấu hình
           </button>

@@ -158,6 +158,18 @@
 }
 .animate-glow { animation: pulse-glow 2s ease infinite; }
 
+@keyframes slideLeft {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slideLeft { animation: slideLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+@keyframes bounceSub {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+.animate-bounce-subtle { animation: bounceSub 3s ease-in-out infinite; }
+
 /* ================================================
    Theme-aware form inputs
    ================================================ */

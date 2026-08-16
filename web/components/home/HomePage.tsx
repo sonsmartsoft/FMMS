@@ -4,16 +4,7 @@ import React, { useState } from 'react';
 import { INITIAL_ASSETS, DEFAULT_CARD_SETTINGS } from '@/lib/data/mockData';
 import { AssetCard } from '@/components/dashboard/AssetCard';
 import { CardDisplaySettings, AssetType } from '@/types/mobility';
-import { 
-  Plus, 
-  Car, 
-  Bike, 
-  Zap, 
-  Gauge, 
-  DollarSign, 
-  Fuel, 
-  Sparkles
-} from 'lucide-react';
+import { Plus, Car, Bike, Zap, Gauge, DollarSign, Fuel, Sparkles, Search } from 'lucide-react';
 
 interface HomePageProps {
   cardSettings?: CardDisplaySettings;
@@ -25,112 +16,129 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
 
   const filteredAssets = INITIAL_ASSETS.filter((asset) => {
     const matchesType = filterType === 'ALL' || asset.asset_type === filterType;
-    const matchesSearch = asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          asset.brand.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch =
+      asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      asset.brand.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesType && matchesSearch;
   });
 
-  const totalDistanceThisMonth = 3842;
-  const totalFuelCostThisMonth = 1674750;
-  const totalExpenses = 4324750;
-  const totalLoanBalance = 210000000;
+  const totalFuelCostThisMonth = 1_674_750;
+  const totalDistanceThisMonth = 3_842;
+
+  const KPI = [
+    {
+      label: 'Tổng phương tiện',
+      value: `${INITIAL_ASSETS.length} tài sản`,
+      sub: '● Tất cả đang hoạt động tốt',
+      subColor: 'var(--status-green)',
+      icon: Car,
+      iconBg: 'var(--accent-cyan-bg)',
+      iconColor: 'var(--accent-cyan)',
+      iconBorder: 'var(--accent-cyan-border)',
+      valueColor: 'var(--text-primary)',
+    },
+    {
+      label: 'Quãng đường tháng này',
+      value: `${totalDistanceThisMonth.toLocaleString('vi-VN')} km`,
+      sub: '+14% so với tháng trước',
+      subColor: 'var(--accent-cyan)',
+      icon: Gauge,
+      iconBg: 'rgba(59,130,246,0.12)',
+      iconColor: '#60A5FA',
+      iconBorder: 'rgba(59,130,246,0.3)',
+      valueColor: 'var(--text-primary)',
+    },
+    {
+      label: 'Tốn nhiên liệu / Pin',
+      value: `${totalFuelCostThisMonth.toLocaleString('vi-VN')} ₫`,
+      sub: 'TB 6.9 L/100km (Mazda2)',
+      subColor: 'var(--text-muted)',
+      icon: Fuel,
+      iconBg: 'rgba(245,158,11,0.12)',
+      iconColor: 'var(--status-amber)',
+      iconBorder: 'rgba(245,158,11,0.3)',
+      valueColor: 'var(--status-amber)',
+    },
+    {
+      label: 'Dư nợ khoản vay',
+      value: '210M ₫',
+      sub: 'BIDV · 7.8M ₫/tháng',
+      subColor: 'var(--text-muted)',
+      icon: DollarSign,
+      iconBg: 'rgba(244,63,94,0.12)',
+      iconColor: 'var(--status-rose)',
+      iconBorder: 'rgba(244,63,94,0.3)',
+      valueColor: 'var(--status-rose)',
+    },
+  ];
+
+  const FILTERS = [
+    { id: 'ALL', label: `Tất cả (${INITIAL_ASSETS.length})`, icon: Car },
+    { id: 'CAR', label: 'Ô tô (1)', icon: Car },
+    { id: 'BICYCLE', label: 'Xe đạp (1)', icon: Bike },
+    { id: 'E_BIKE', label: 'Xe điện (1)', icon: Zap },
+    { id: 'MOTORCYCLE', label: 'Mô tô (1)', icon: Bike },
+  ];
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-      {/* Top Banner Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 glass-panel p-6 rounded-2xl border border-white/10 relative overflow-hidden">
-        <div className="absolute -right-10 -bottom-10 w-60 h-60 bg-gradient-to-br from-cyan-500/20 to-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-
+    <div className="space-y-6 animate-fadeIn">
+      {/* Banner */}
+      <div className="glass-panel p-6 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden"
+        style={{ border: '1px solid var(--border-default)' }}>
+        <div className="absolute -right-10 -bottom-10 w-60 h-60 rounded-full pointer-events-none blur-3xl"
+          style={{ background: 'radial-gradient(circle, rgba(14,165,233,0.12), transparent)' }} />
         <div>
-          <div className="flex items-center space-x-2 text-xs font-semibold text-cyan-400 mb-1">
-            <Sparkles className="w-4 h-4 text-cyan-300" />
+          <div className="flex items-center space-x-2 text-xs font-semibold mb-1" style={{ color: 'var(--accent-cyan)' }}>
+            <Sparkles className="w-4 h-4" />
             <span>HỆ THỐNG QUẢN LÝ TÀI SẢN DI CHUYỂN GIA ĐÌNH</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
             FAMILY MOBILITY DASHBOARD
           </h1>
-          <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-            Nơi tập trung theo dõi 4 phương tiện gia đình, quãng đường Virtual Odometer, mức nhiên liệu/pin, lịch bảo dưỡng và phân tích tổng chi phí sở hữu (TCO).
+          <p className="text-xs mt-1 max-w-2xl" style={{ color: 'var(--text-muted)' }}>
+            Theo dõi {INITIAL_ASSETS.length} phương tiện gia đình · Virtual Odometer · Nhiên liệu/Pin · Lịch bảo dưỡng · Phân tích TCO
           </p>
         </div>
-
-        <div className="flex items-center space-x-3">
-          <button className="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 hover:from-cyan-400 hover:to-blue-500 transition">
-            <Plus className="w-4 h-4" />
-            <span>Thêm phương tiện</span>
-          </button>
-        </div>
+        <button className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition hover:opacity-90 self-start"
+          style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+          <Plus className="w-4 h-4" />
+          <span>Thêm phương tiện</span>
+        </button>
       </div>
 
-      {/* Summary KPI Cards */}
+      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-card p-4 rounded-2xl flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tổng phương tiện</p>
-            <p className="text-xl font-extrabold text-white mt-1">{INITIAL_ASSETS.length} tài sản</p>
-            <p className="text-[10px] text-emerald-400 font-medium mt-0.5">● Tất cả đang hoạt động tốt</p>
+        {KPI.map((k, i) => (
+          <div key={i} className="glass-card p-4 rounded-2xl flex items-center justify-between"
+            style={{ border: '1px solid var(--border-default)' }}>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{k.label}</p>
+              <p className="text-xl font-extrabold mt-1" style={{ color: k.valueColor }}>{k.value}</p>
+              <p className="text-[10px] font-medium mt-0.5" style={{ color: k.subColor }}>{k.sub}</p>
+            </div>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: k.iconBg, color: k.iconColor, border: `1px solid ${k.iconBorder}` }}>
+              <k.icon className="w-5 h-5" />
+            </div>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
-            <Car className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="glass-card p-4 rounded-2xl flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Quãng đường tháng này</p>
-            <p className="text-xl font-extrabold text-white mt-1">{totalDistanceThisMonth.toLocaleString()} km</p>
-            <p className="text-[10px] text-cyan-400 font-medium mt-0.5">+14% so với tháng trước</p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
-            <Gauge className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="glass-card p-4 rounded-2xl flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tốn nhiên liệu / Pin</p>
-            <p className="text-xl font-extrabold text-amber-400 mt-1">{totalFuelCostThisMonth.toLocaleString()} ₫</p>
-            <p className="text-[10px] text-slate-400 font-medium mt-0.5">TB 6.9L/100km (Mazda2)</p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/30">
-            <Fuel className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="glass-card p-4 rounded-2xl flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Dư nợ khoản vay</p>
-            <p className="text-xl font-extrabold text-rose-400 mt-1">210M ₫</p>
-            <p className="text-[10px] text-slate-400 font-medium mt-0.5">BIDV • 7.8M ₫/tháng</p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
-            <DollarSign className="w-5 h-5" />
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Filter and Category Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel p-4 rounded-2xl border border-white/10">
-        {/* Category Tabs */}
-        <div className="flex items-center space-x-2 overflow-x-auto pb-2 sm:pb-0">
-          {[
-            { id: 'ALL', label: 'Tất cả (4)', icon: Car },
-            { id: 'CAR', label: 'Ô tô (1)', icon: Car },
-            { id: 'BICYCLE', label: 'Xe đạp (1)', icon: Bike },
-            { id: 'E_BIKE', label: 'Xe điện (1)', icon: Zap },
-            { id: 'MOTORCYCLE', label: 'Mô tô (1)', icon: Bike },
-          ].map((tab) => {
+      {/* Filter + Search Bar */}
+      <div className="glass-panel p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        style={{ border: '1px solid var(--border-default)' }}>
+        <div className="flex items-center space-x-2 overflow-x-auto pb-1 sm:pb-0">
+          {FILTERS.map((tab) => {
             const Icon = tab.icon;
-            const isActive = filterType === tab.id;
+            const isActive = filterType === (tab.id as any);
             return (
               <button
                 key={tab.id}
                 onClick={() => setFilterType(tab.id as any)}
-                className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                  isActive
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20'
-                    : 'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
+                className="flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all"
+                style={isActive
+                  ? { background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)', color: 'white' }
+                  : { background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
               >
                 <Icon className="w-3.5 h-3.5" />
                 <span>{tab.label}</span>
@@ -139,26 +147,28 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
           })}
         </div>
 
-        {/* Search */}
         <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Tìm kiếm phương tiện..."
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-full sm:w-60"
+            className="theme-input pl-9 w-full sm:w-60"
           />
         </div>
       </div>
 
-      {/* Visual Asset Cards Grid */}
+      {/* Asset Grid */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold text-white flex items-center space-x-2">
+          <h2 className="text-sm font-bold flex items-center space-x-2" style={{ color: 'var(--text-primary)' }}>
             <span>Danh sách phương tiện gia đình</span>
-            <span className="text-xs text-cyan-400 font-normal">({filteredAssets.length} phương tiện)</span>
+            <span className="text-xs font-normal" style={{ color: 'var(--accent-cyan)' }}>
+              ({filteredAssets.length} phương tiện)
+            </span>
           </h2>
-          <span className="text-xs text-slate-400">Click vào card để vào trang chi tiết</span>
+          <span className="text-xs" style={{ color: 'var(--text-faint)' }}>Click vào card để vào trang chi tiết</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -166,6 +176,13 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
             <AssetCard key={asset.id} asset={asset} settings={cardSettings} />
           ))}
         </div>
+
+        {filteredAssets.length === 0 && (
+          <div className="py-20 text-center" style={{ color: 'var(--text-muted)' }}>
+            <Car className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="font-semibold">Không tìm thấy phương tiện nào</p>
+          </div>
+        )}
       </div>
     </div>
   );
