@@ -229,9 +229,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
 
       {/* Account Edit Modal */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setShowEditModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-md" style={{ border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5" style={{ borderBottom: '1px solid var(--border-default)' }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setShowEditModal(false)}>
+          <div className="glass-panel rounded-2xl w-full max-w-md my-auto shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5" style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
               <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Chỉnh sửa thông tin tài khoản người dùng</h3>
               <button onClick={() => setShowEditModal(false)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
             </div>

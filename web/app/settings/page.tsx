@@ -2,10 +2,19 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Activity, Key, Database, Cloud, Bell, Shield, Sliders, ExternalLink, User, Check, Plus, Trash2 } from 'lucide-react';
+import { Activity, Key, Database, Cloud, Bell, Shield, Sliders, ExternalLink, User, Check, Plus, Trash2, Users } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 const SETTINGS_CARDS = [
+  {
+    href: '/settings/users',
+    icon: Users,
+    color: 'var(--status-purple)',
+    bg: 'rgba(139,92,246,0.15)',
+    title: 'Quản lý Người dùng & Phân quyền',
+    desc: 'Danh sách thành viên gia đình, phân quyền Admin/Member, chỉ định xe & reset mật khẩu',
+    tag: 'Mới',
+  },
   {
     href: '/settings/health',
     icon: Activity,
