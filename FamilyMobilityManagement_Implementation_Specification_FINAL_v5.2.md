@@ -5889,6 +5889,8 @@ battery_logs
 charging_logs
 
 maintenance_records
+maintenance_orders
+maintenance_order_items
 parts
 asset_parts
 upgrades
@@ -5925,6 +5927,7 @@ audit_logs
 sync_queue
 
 household_members
+asset_members
 invitations
 ```
 
@@ -6015,19 +6018,27 @@ Auth, roles, onboarding, session, and family sharing for the Web + Android.
 [ ] Signed-out users only; changing password signs out other sessions
 ```
 
-### 230.1.5 Roles & Family Sharing
+### 230.1.5 Roles & Asset Assignment
 
 ```text
-owner    — full access, manage members, transfer ownership
-admin    — edit all data, manage assets, create invites
-member   — edit data (per 230.2), no member management
-viewer   — read-only
+admin   — full access to ALL assets in household: create/edit/delete, manage
+          members, assign assets to members, approve ODO corrections
+member  — NO edit rights (read-only on assigned assets)
+          sees ONLY the assets the admin assigned to them
+          can report fuel/ODO/expense entries? → NO, admin decides (see note)
 ```
 
-- Each asset belongs to exactly one `household_id` (plus `owner_id` = creating user).
-- `household_members` table maps user → household → role.
-- Assets are visible to every member of the household via RLS (not only `owner_id`).
-- Owner may transfer ownership; audit-logged.
+- **Admin decides everything.** Member can only VIEW assigned assets; every
+  write action (edit, delete, ODO correction, loan payment) is admin-only.
+- Each asset has `assigned_member_ids[]` (many-to-many via `asset_members`):
+  - Admin → sees all assets.
+  - Member → sees only assets where they appear in `asset_members`.
+- RLS: `SELECT` = member of household AND (admin OR in `asset_members`).
+  `INSERT/UPDATE/DELETE` = admin only.
+- Each asset belongs to one `household_id` (plus `owner_id` = creating admin).
+- Owner (household creator) is the top admin; may transfer ownership (audited).
+- Optional (default OFF): admin may allow member to add fuel/ODO entries for
+  their assigned cars. If OFF, members are strictly read-only.
 
 ### 230.1.6 Invites
 
@@ -6059,6 +6070,26 @@ viewer   — read-only
 - Device ↔ account binding via QR (pair screen) — see 230.3
 ```
 
+### 230.1.9 Logout & Session UI (Web)
+
+```text
+- Logout button MUST exist on every authenticated page:
+  Sidebar footer + top bar avatar menu
+- Logout flow: confirm → supabase.auth.signOut() → clear cookies → /login
+- Logout removes session cookie so back-button can NOT re-enter protected pages
+- Middleware + /api/* checks fail closed after logout
+```
+
+### 230.1.10 User Info on Dashboard
+
+```text
+- Sidebar footer shows: avatar + display name + role badge (Admin/Member)
+- Top bar shows current user (avatar, name, email) on ALL pages
+- Dropdown: Profile, Change password, Logout
+- Member sees only assigned assets (see 230.1.5) with "view only" banner
+- Admin sees member count + household name
+```
+
 ## 230.2 GLOBAL EDIT & VALIDATION RULES
 
 Applies to every edit action across master data, finance, warranty, documents.
@@ -6066,10 +6097,13 @@ Applies to every edit action across master data, finance, warranty, documents.
 ### 230.2.1 Edit Permissions
 
 ```text
-owner / admin → create + edit + void/delete
-member        → create + edit (no delete of shared records)
-viewer        → read-only, edit controls hidden
+admin  → create + edit + void/delete on ALL household assets
+member → NO edit — read-only on assigned assets only (see 230.1.5)
+         edit controls are HIDDEN, not just disabled
 ```
+
+- Member sees read-only views; forms/modals/buttons for editing are absent.
+- Server enforces: `UPDATE/DELETE` policies allow `is_admin(auth.uid())` only.
 
 ### 230.2.2 Field Validation (Business Rules)
 
@@ -6186,6 +6220,124 @@ Complements section 7 / 101 with the account + permission + lifecycle contract.
 - Queue is durable: survives app restart and force-stop
 ```
 
+## 230.4 ASSET EDIT COMPLETENESS
+
+Every asset field MUST be editable from the Web (admin-only). This closes the
+"seen but not editable" gap reported in review.
+
+### 230.4.1 Asset Master Data — Full Edit List
+
+```text
+[ ] Name / nickname
+[ ] Asset type, make, model, trim, color
+[ ] Model year, VIN, engine number, license plate
+[ ] Purchase date, purchase price, currency
+[ ] Mileage at purchase (initial ODO)
+[ ] Engine size, fuel type, transmission
+[ ] Seats, doors, wheelbase, dimensions
+[ ] Status (ACTIVE / INACTIVE / ARCHIVED)
+[ ] Group / category assignment
+[ ] Assigned member(s) — admin assigns which member can view
+[ ] Notes / custom fields
+```
+
+### 230.4.2 Finance — Full Edit List
+
+```text
+[ ] Purchase price (edit with audit + reason)
+[ ] Loan: amount, rate, term, start/end, monthly payment (recalc)
+[ ] Loan payments: add/edit/void (audited)
+[ ] Insurance: premium, period, provider, documents
+[ ] Registration: fee, period, due date
+[ ] Depreciation: method (linear/declining), residual value, rate
+[ ] TCO / per-km: recalculated automatically from source data
+```
+
+### 230.4.3 Documents — Full Edit List
+
+```text
+[ ] Add document with metadata: type, title, provider, number,
+    issue date, expiry date, cost, notes
+[ ] Upload file (Supabase Storage) + preview
+[ ] Document types: ownership/vehicle card (cavet), insurance,
+    registration (đăng ký), inspection (đăng kiểm), tax, warranty,
+    receipt, photo, other
+[ ] Edit metadata of existing document
+[ ] Replace file, keep version history
+[ ] Expiry alerts for time-bound documents
+```
+
+### 230.4.4 Warranties / Other Records
+
+```text
+- Every warranty/claim/upgrade/part field editable (per section 211–218)
+- Any field shown on Asset Detail MUST have an edit entry point —
+  NO dead/read-only fields
+```
+
+## 230.5 MULTI-SERVICE MAINTENANCE
+
+Maintenance is NOT a single service per record — one visit can include many
+services, parts and costs. Model is a **maintenance order with line items**.
+
+### 230.5.1 Data Model
+
+```text
+maintenance_orders           -- one visit / repair order
+  id, asset_id, date, odometer_at, workshop, total_cost,
+  status (SCHEDULED/IN_PROGRESS/COMPLETED/CANCELLED), notes
+
+maintenance_order_items      -- one line per service or part
+  id, order_id, item_type (SERVICE/PART/OTHER),
+  description, service_category, cost,
+  quantity, unit_cost, odometer_at, warranty_id? (link to part warranty)
+```
+
+### 230.5.2 Web UI
+
+```text
+- Create order → add MULTIPLE line items in one form (dynamic rows)
+- Each row: description, category, cost (auto-sum → total_cost)
+- Edit existing order → add/remove/edit line items; total recalcs
+- Cancel order → void (never hard delete), audit-logged
+- Parts in order auto-create/link asset_parts + activate their warranty
+- Services auto-suggest from history (same category/cost last time)
+- Order history visible in asset detail → Maintenance
+```
+
+### 230.5.3 Service Categories
+
+```text
+OIL_CHANGE, FILTERS, TIRES, BRAKES, SUSPENSION, ENGINE,
+TRANSMISSION, ELECTRICAL, BODY, INTERIOR, INSPECTION (đăng kiểm),
+CLEANING, OTHERS
+```
+
+## 230.6 FUNCTIONAL BUTTON VERIFICATION
+
+Requirement: every button/action in the UI must be backed by a real
+service call — NO UI-only placeholders.
+
+### 230.6.1 Rule
+
+```text
+- Every interactive element maps to a working supabase service function
+- Clicking a button MUST write/read real data, not just toggle UI state
+- "Add Asset" opens form → save → asset appears in list + persisted
+- "Edit", "Delete", "Export", "Send", "Save" → same guarantee
+- Any placeholder button MUST be marked DISABLED with "(coming soon)"
+  label until implemented — never a silent no-op
+```
+
+### 230.6.2 Verification (Acceptance)
+
+```text
+[ ] Walk every button on every page
+[ ] Confirm each triggers a real DB/storage/API operation
+[ ] Confirm success/failure feedback (toast/snackbar)
+[ ] No dead buttons without a visible "coming soon" state
+```
+
 ## 231. V5.2 ACCEPTANCE CHECKLIST
 
 ### Master Data
@@ -6198,7 +6350,10 @@ Complements section 7 / 101 with the account + permission + lifecycle contract.
 [ ] VIN can be changed
 [ ] Engine number can be changed
 [ ] Asset status can be changed
+[ ] Purchase price editable with audit
 [ ] Critical changes create history
+[ ] Documents: add/edit/replace with metadata (cavet, đăng ký, đăng kiểm...)
+[ ] Every field shown on Asset Detail has an edit entry point (no dead fields)
 ```
 
 ### ODO / Telemetry
@@ -6272,11 +6427,12 @@ Complements section 7 / 101 with the account + permission + lifecycle contract.
 [ ] Email confirmation delivered and auto-signs-in
 [ ] Login page renders standalone (no sidebar/shell)
 [ ] Forgot/reset password flow works
-[ ] Logout returns to /login and clears session
+[ ] Logout button on every page → clears session → /login
+[ ] User info (avatar, name, role badge) visible on dashboard/sidebar
 [ ] Session refresh works; expiry redirects to /login
-[ ] Owner/Admin/Member/Viewer roles enforced
+[ ] Admin/Member roles enforced: member read-only on assigned assets only
+[ ] Member cannot see unassigned assets (RLS via asset_members)
 [ ] Invite flow works; token single-use and expires
-[ ] Household members share assets via RLS
 [ ] All /api/* routes require authentication
 [ ] Auth callback works without hardcoded env values
 ```
@@ -6291,6 +6447,25 @@ Complements section 7 / 101 with the account + permission + lifecycle contract.
 [ ] Audit history viewable in UI
 [ ] Void/soft-delete policy in place; raw telemetry never deleted
 [ ] Optimistic concurrency + offline conflict handling work
+```
+
+### Maintenance (Multi-Service)
+
+```text
+[ ] One maintenance order can contain MULTIPLE line items (services/parts)
+[ ] Total cost auto-summed from line items
+[ ] Order can be edited: add/remove/change line items
+[ ] Cancel = void (no hard delete), audited
+[ ] Parts auto-create/link asset_parts + warranty
+```
+
+### Functional Buttons
+
+```text
+[ ] Every button triggers a real DB/storage/API operation
+[ ] Add Asset actually persists and appears in list
+[ ] Success/failure feedback (toast) on every action
+[ ] No silent no-op buttons; placeholders show "(coming soon)"
 ```
 
 ### Android
