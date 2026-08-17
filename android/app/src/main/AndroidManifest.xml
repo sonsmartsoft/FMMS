@@ -38,7 +38,7 @@
         android:theme="@style/Theme.MazdaCarLogger">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.fmms.carlogger.ui.MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|screenLayout"
             android:screenOrientation="landscape">

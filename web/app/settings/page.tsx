@@ -42,6 +42,15 @@ const SETTINGS_CARDS = [
     tag: 'DB',
   },
   {
+    href: '/settings/master-data',
+    icon: Sliders,
+    color: 'var(--status-amber)',
+    bg: 'rgba(251,191,36,0.15)',
+    title: 'Quản lý Danh Mục & Master Data',
+    desc: 'Chỉnh sửa danh mục bảo dưỡng, danh mục chi phí, danh sách Đại lý/Garage cho Admin',
+    tag: 'Admin',
+  },
+  {
     href: '#',
     icon: Sliders,
     color: 'var(--text-secondary)',

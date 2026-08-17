@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Car, Fuel, Wrench, DollarSign,
-  FileText, BarChart3, Settings, Activity, Sparkles,
+  FileText, BarChart3, Settings, Activity, Sparkles, Award,
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -18,6 +18,7 @@ const NAV_SECTIONS = [
       { name: 'Bảo dưỡng & Phụ tùng', href: '/maintenance', icon: Wrench },
       { name: 'Chi phí & Khoản vay', href: '/finance', icon: DollarSign },
       { name: 'Giấy tờ & Bảo hiểm', href: '/documents', icon: FileText },
+      { name: 'Sổ Bảo hành & Claim', href: '/warranties', icon: Award },
       { name: 'Báo cáo & Phân tích', href: '/analytics', icon: BarChart3 },
     ],
   },
