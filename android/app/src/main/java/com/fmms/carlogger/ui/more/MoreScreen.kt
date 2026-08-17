@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -24,6 +25,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.ui.DashboardViewModel
+import com.fmms.carlogger.ui.i18n.LocalStrings
+import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -39,6 +42,7 @@ class MoreViewModel(private val dashboard: DashboardViewModel) : ViewModel() {
         object Cloud : Page()
         object Settings : Page()
         object Connection : Page()
+        object Device : Page()
     }
 
     private val _page = MutableStateFlow<Page>(Page.Menu)
@@ -63,53 +67,59 @@ fun MoreScreen(vm: DashboardViewModel) {
         is MoreViewModel.Page.Cloud -> CloudScreen(onBack = moreVm::back)
         is MoreViewModel.Page.Settings -> SettingsScreen(onBack = moreVm::back)
         is MoreViewModel.Page.Connection -> ConnectionScreen(onBack = moreVm::back)
+        is MoreViewModel.Page.Device -> DeviceConfigScreen(onBack = moreVm::back)
     }
 }
 
 @Composable
 private fun MoreMenu(onOpen: (MoreViewModel.Page) -> Unit, vm: DashboardViewModel) {
+    val colors = LocalFmmsColors.current
+    val strings = LocalStrings.current
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0F19))
+            .background(colors.background)
             .padding(16.dp),
     ) {
-        Text("MORE", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(strings.more, color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(10.dp))
-        MenuItem("LIVE DATA", "All OBD + GPS readings in real time") { onOpen(MoreViewModel.Page.Live) }
-        MenuItem("VEHICLES", "Manage your fleet and active vehicle") { onOpen(MoreViewModel.Page.Vehicles) }
-        MenuItem("DIAGNOSTICS", "Raw ELM327 command / response log") { onOpen(MoreViewModel.Page.Diagnostics) }
-        MenuItem("CLOUD", "Sync status with Supabase") { onOpen(MoreViewModel.Page.Cloud) }
-        MenuItem("CONNECTION", "Pair & connect the KW906 adapter") { onOpen(MoreViewModel.Page.Connection) }
-        MenuItem("SETTINGS", "App preferences, trip timeout, sync") { onOpen(MoreViewModel.Page.Settings) }
+        MenuItem(strings.liveData, "All OBD + GPS readings in real time") { onOpen(MoreViewModel.Page.Live) }
+        MenuItem(strings.vehicles, "Manage your fleet and active vehicle") { onOpen(MoreViewModel.Page.Vehicles) }
+        MenuItem(strings.diagnostics, "Raw ELM327 command / response log") { onOpen(MoreViewModel.Page.Diagnostics) }
+        MenuItem(strings.cloud, "Sync status with Supabase") { onOpen(MoreViewModel.Page.Cloud) }
+        MenuItem(strings.connection, "Pair & connect the KW906 adapter") { onOpen(MoreViewModel.Page.Connection) }
+        MenuItem(strings.device, "Cấu hình tên thiết bị, chế độ OBD / GPS-only") { onOpen(MoreViewModel.Page.Device) }
+        MenuItem(strings.settings, "App preferences, trip timeout, sync") { onOpen(MoreViewModel.Page.Settings) }
     }
 }
 
 @Composable
 private fun MenuItem(title: String, subtitle: String, onClick: () -> Unit) {
+    val colors = LocalFmmsColors.current
     Card(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
         onClick = onClick,
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = Color.Gray, fontSize = 12.sp)
+            Text(title, color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = colors.textSecondary, fontSize = 12.sp)
         }
     }
 }
 
 @Composable
 private fun BackHeader(title: String, onBack: () -> Unit) {
+    val colors = LocalFmmsColors.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(onClick = onBack) { Text("‹ Back", color = Color(0xFF06B6D4)) }
+        TextButton(onClick = onBack) { Text("‹ Back", color = colors.cyan) }
         Spacer(modifier = Modifier.width(8.dp))
-        Text(title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -117,11 +127,12 @@ private fun BackHeader(title: String, onBack: () -> Unit) {
 private fun LiveDataScreen(vm: DashboardViewModel, onBack: () -> Unit) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     val t = state.telemetry
+    val colors = LocalFmmsColors.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0F19))
+            .background(colors.background)
             .padding(16.dp),
     ) {
         BackHeader("LIVE DATA", onBack)
@@ -148,20 +159,21 @@ private fun LiveDataScreen(vm: DashboardViewModel, onBack: () -> Unit) {
 
 @Composable
 private fun LiveGrid(vararg cells: Pair<String, String>) {
+    val colors = LocalFmmsColors.current
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(cells.size) { i ->
             val (label, value) = cells[i]
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+                colors = CardDefaults.cardColors(containerColor = colors.surface),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(label, color = Color.Gray, fontSize = 14.sp)
-                    Text(value, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(label, color = colors.textSecondary, fontSize = 14.sp)
+                    Text(value, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -173,11 +185,12 @@ private fun DiagnosticsScreen(onBack: () -> Unit) {
     val entries by AppContainer.diagLog.entries.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var crashLog by remember { mutableStateOf<String?>(null) }
+    val colors = LocalFmmsColors.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0F19))
+            .background(colors.background)
             .padding(16.dp),
     ) {
         BackHeader("DIAGNOSTICS", onBack)
@@ -190,12 +203,12 @@ private fun DiagnosticsScreen(onBack: () -> Unit) {
                     .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("No diagnostic entries. Enable diag logging in Settings, then connect OBD.", color = Color.Gray)
+                Text("No diagnostic entries. Enable diag logging in Settings, then connect OBD.", color = colors.textSecondary)
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
                 val lines = crashLog?.split("\n") ?: entries
-                items(lines.size) { i -> Text(lines[i], color = Color(0xFF4ADE80), fontSize = 11.sp) }
+                items(lines.size) { i -> Text(lines[i], color = colors.emerald, fontSize = 11.sp) }
             }
         }
 
@@ -214,11 +227,12 @@ private fun DiagnosticsScreen(onBack: () -> Unit) {
 @Composable
 private fun CloudScreen(onBack: () -> Unit) {
     val pending by AppContainer.syncQueueRepository.observePendingCount().collectAsStateWithLifecycle(0)
+    val colors = LocalFmmsColors.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0F19))
+            .background(colors.background)
             .padding(16.dp),
     ) {
         BackHeader("CLOUD", onBack)
@@ -226,14 +240,14 @@ private fun CloudScreen(onBack: () -> Unit) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text("PENDING SYNC", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("PENDING SYNC", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("$pending records", color = Color(0xFF06B6D4), fontSize = 24.sp, fontWeight = FontWeight.Black)
+                Text("$pending records", color = colors.cyan, fontSize = 24.sp, fontWeight = FontWeight.Black)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Background WorkManager syncs every 15 min when online.", color = Color.Gray, fontSize = 12.sp)
+                Text("Background WorkManager syncs every 15 min when online.", color = colors.textSecondary, fontSize = 12.sp)
             }
         }
     }
@@ -247,31 +261,45 @@ private fun SettingsScreen(onBack: () -> Unit) {
     var diag by remember { mutableStateOf(prefs.getDiagEnabled()) }
     var sync by remember { mutableStateOf(prefs.getSyncEnabled()) }
     var timeoutMin by remember { mutableStateOf((prefs.getTripTimeoutMs() / 60000).toInt()) }
+    var theme by remember { mutableStateOf(prefs.getTheme()) }
+    var language by remember { mutableStateOf(prefs.getLanguage()) }
+    val colors = LocalFmmsColors.current
+    val strings = LocalStrings.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0F19))
+            .background(colors.background)
             .padding(16.dp),
     ) {
-        BackHeader("SETTINGS", onBack)
+        BackHeader(strings.settings, onBack)
         Spacer(modifier = Modifier.height(8.dp))
 
-        SettingRow("Auto-start on boot", autoStart) { v -> autoStart = v; prefs.setAutoStart(v) }
-        SettingRow("Diagnostic logging", diag) { v -> diag = v; prefs.setDiagEnabled(v) }
-        SettingRow("Sync to cloud", sync) { v -> sync = v; prefs.setSyncEnabled(v) }
+        SettingRow(strings.autoStart, autoStart) { v -> autoStart = v; prefs.setAutoStart(v) }
+        SettingRow(strings.diagLogging, diag) { v -> diag = v; prefs.setDiagEnabled(v) }
+        SettingRow(strings.syncCloud, sync) { v -> sync = v; prefs.setSyncEnabled(v) }
+
+        ThemeSelector(theme) { mode ->
+            theme = mode
+            AppContainer.setThemeMode(mode)
+        }
+
+        LanguageSelector(language) { lang ->
+            language = lang
+            AppContainer.setLanguage(lang)
+        }
 
         Card(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Trip end timeout (min)", color = Color.White, fontSize = 14.sp)
+                Text(strings.tripTimeout, color = colors.textPrimary, fontSize = 14.sp)
                 OutlinedTextField(
                     value = timeoutMin.toString(),
                     onValueChange = { v ->
@@ -287,18 +315,92 @@ private fun SettingsScreen(onBack: () -> Unit) {
 }
 
 @Composable
+private fun LanguageSelector(current: String, onSelect: (String) -> Unit) {
+    val colors = LocalFmmsColors.current
+    val strings = LocalStrings.current
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+            Text(
+                strings.languageLabel,
+                color = colors.textPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            listOf("en" to strings.english, "vi" to strings.vietnamese).forEach { (code, label) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onSelect(code) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = current == code, onClick = { onSelect(code) })
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(label, color = colors.textPrimary, fontSize = 14.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemeSelector(current: String, onSelect: (String) -> Unit) {
+    val colors = LocalFmmsColors.current
+    val options = listOf(
+        com.fmms.carlogger.ui.theme.ThemeMode.DARK,
+        com.fmms.carlogger.ui.theme.ThemeMode.LIGHT,
+        com.fmms.carlogger.ui.theme.ThemeMode.SYSTEM,
+    )
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+            Text(
+                "Chế độ hiển thị (Theme)",
+                color = colors.textPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            options.forEach { mode ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onSelect(mode) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = current == mode,
+                        onClick = { onSelect(mode) },
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        com.fmms.carlogger.ui.theme.ThemeMode.label(mode),
+                        color = colors.textPrimary,
+                        fontSize = 14.sp,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingRow(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val colors = LocalFmmsColors.current
     Card(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(title, color = Color.White, fontSize = 14.sp)
+            Text(title, color = colors.textPrimary, fontSize = 14.sp)
             Switch(checked = checked, onCheckedChange = onChange)
     }
 }
@@ -308,13 +410,15 @@ private fun SettingRow(title: String, checked: Boolean, onChange: (Boolean) -> U
 private fun VehiclesScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val vehicles by AppContainer.vehicleRepository.observeAll().collectAsStateWithLifecycle(emptyList())
+    val colors = LocalFmmsColors.current
 
     var showAdd by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<com.fmms.carlogger.core.database.entity.VehicleEntity?>(null) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0F19))
+            .background(colors.background)
             .padding(16.dp),
     ) {
         Row(
@@ -332,29 +436,34 @@ private fun VehiclesScreen(onBack: () -> Unit) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+                    colors = CardDefaults.cardColors(containerColor = colors.surface),
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column {
+                    Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (v.active) {
-                                    Box(modifier = Modifier.size(8.dp).background(Color(0xFF10B981), shape = RoundedCornerShape(50)))
+                                    Box(modifier = Modifier.size(8.dp).background(colors.emerald, shape = RoundedCornerShape(50)))
                                     Spacer(modifier = Modifier.width(6.dp))
                                 }
-                                Text("${v.make} ${v.model} ${v.year}", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                Text("${v.make} ${v.model} ${v.trim} ${v.year}", color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                             }
-                            Text("${v.licensePlate} • ${v.trim} • ${v.fuelType} • ${v.tankCapacityLiters.toInt()}L", color = Color.Gray, fontSize = 12.sp)
-                            Text("ODO ${v.odometerKm.toInt()} km", color = Color(0xFF06B6D4), fontSize = 12.sp)
+                            if (!v.active) {
+                                TextButton(onClick = {
+                                    AppContainer.launch { AppContainer.vehicleRepository.setActive(v.id) }
+                                    Toast.makeText(context, "Active: ${v.model}", Toast.LENGTH_SHORT).show()
+                                }) { Text("SET ACTIVE", color = colors.cyan) }
+                            }
                         }
-                        if (!v.active) {
-                            TextButton(onClick = {
-                                AppContainer.launch { AppContainer.vehicleRepository.setActive(v.id) }
-                                Toast.makeText(context, "Active: ${v.model}", Toast.LENGTH_SHORT).show()
-                            }) { Text("SET ACTIVE", color = Color(0xFF06B6D4)) }
+                        Text("${v.licensePlate} • ${v.fuelType} • ${v.tankCapacityLiters.toInt()}L", color = colors.textSecondary, fontSize = 12.sp)
+                        Text("ODO ${v.odometerKm.toInt()} km", color = colors.cyan, fontSize = 12.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { editing = v }) {
+                                Text("EDIT TÊN XE", color = colors.cyan, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -365,22 +474,32 @@ private fun VehiclesScreen(onBack: () -> Unit) {
     if (showAdd) {
         AddVehicleDialog(onDismiss = { showAdd = false })
     }
+    editing?.let { v ->
+        EditVehicleDialog(vehicle = v, onDismiss = { editing = null })
+    }
 }
 
 @Composable
 private fun AddVehicleDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
-    var model by remember { mutableStateOf("Mazda2") }
+    var make by remember { mutableStateOf("Mazda") }
+    var model by remember { mutableStateOf("Mazda 2 AT") }
+    var trim by remember { mutableStateOf("AT") }
     var plate by remember { mutableStateOf("") }
     var year by remember { mutableStateOf("2026") }
     var tank by remember { mutableStateOf("44") }
+    val colors = LocalFmmsColors.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Vehicle") },
+        title = { Text("Add Vehicle", color = colors.textPrimary) },
         text = {
             Column {
-                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Model") }, singleLine = true)
+                OutlinedTextField(value = make, onValueChange = { make = it }, label = { Text("Make (Hãng)") }, singleLine = true)
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Model (Tên xe)") }, singleLine = true)
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(value = trim, onValueChange = { trim = it }, label = { Text("Phiên bản (Trim)") }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
                 OutlinedTextField(value = plate, onValueChange = { plate = it }, label = { Text("License plate") }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
@@ -393,10 +512,10 @@ private fun AddVehicleDialog(onDismiss: () -> Unit) {
             Button(onClick = {
                 AppContainer.launch {
                     AppContainer.vehicleRepository.addVehicle(
-                        make = "Mazda",
-                        model = model.ifBlank { "Mazda2" },
+                        make = make.ifBlank { "Mazda" },
+                        model = model.ifBlank { "Mazda 2 AT" },
                         year = year.toIntOrNull() ?: 2026,
-                        trim = "BASE",
+                        trim = trim.ifBlank { "AT" },
                         licensePlate = plate.ifBlank { "WIP" },
                         vin = null,
                         engine = "1.5L Petrol",
@@ -415,28 +534,289 @@ private fun AddVehicleDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun ConnectionScreen(onBack: () -> Unit) {
+private fun EditVehicleDialog(
+    vehicle: com.fmms.carlogger.core.database.entity.VehicleEntity,
+    onDismiss: () -> Unit,
+) {
     val context = LocalContext.current
-    val vm: ConnectionViewModel = viewModel()
-    val devices by vm.devices.collectAsStateWithLifecycle(emptyList())
-    val scanning by vm.scanning.collectAsStateWithLifecycle(false)
-    val state by vm.connectionState.collectAsStateWithLifecycle(com.fmms.carlogger.core.obd.OBDConnectionState.DISCONNECTED)
+    var make by remember { mutableStateOf(vehicle.make) }
+    var model by remember { mutableStateOf(vehicle.model) }
+    var trim by remember { mutableStateOf(vehicle.trim) }
+    var plate by remember { mutableStateOf(vehicle.licensePlate) }
+    var year by remember { mutableStateOf(vehicle.year.toString()) }
+    var tank by remember { mutableStateOf(vehicle.tankCapacityLiters.toInt().toString()) }
+    val colors = LocalFmmsColors.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Sửa thông tin xe", color = colors.textPrimary) },
+        text = {
+            Column {
+                OutlinedTextField(value = make, onValueChange = { make = it }, label = { Text("Make (Hãng)") }, singleLine = true)
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Model (Tên xe)") }, singleLine = true)
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(value = trim, onValueChange = { trim = it }, label = { Text("Phiên bản (Trim)") }, singleLine = true)
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(value = plate, onValueChange = { plate = it }, label = { Text("License plate") }, singleLine = true)
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("Year") }, singleLine = true)
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(value = tank, onValueChange = { tank = it }, label = { Text("Tank (L)") }, singleLine = true)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                AppContainer.launch {
+                    AppContainer.vehicleRepository.updateVehicle(
+                        vehicle.copy(
+                            make = make.ifBlank { vehicle.make },
+                            model = model.ifBlank { vehicle.model },
+                            trim = trim.ifBlank { vehicle.trim },
+                            licensePlate = plate.ifBlank { vehicle.licensePlate },
+                            year = year.toIntOrNull() ?: vehicle.year,
+                            tankCapacityLiters = tank.toDoubleOrNull() ?: vehicle.tankCapacityLiters,
+                        )
+                    )
+                }
+                Toast.makeText(context, "Vehicle updated", Toast.LENGTH_SHORT).show()
+                onDismiss()
+            }) { Text("SAVE") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("CANCEL") }
+        },
+    )
+}
+
+@Composable
+private fun DeviceConfigScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = AppContainer.prefs
+    val colors = LocalFmmsColors.current
+    val strings = LocalStrings.current
+
+    var deviceName by remember { mutableStateOf(prefs.getDeviceName() ?: "") }
+    var deviceMode by remember { mutableStateOf(prefs.getDeviceMode()) }
+    var gpsInterval by remember { mutableStateOf(prefs.getGpsIntervalSec()) }
+    val deviceId = remember { prefs.getDeviceId() }
+    val obdMac = remember { prefs.getObdMacAddress() }
+    val vehicles by AppContainer.vehicleRepository.observeAll().collectAsStateWithLifecycle(emptyList())
+    val activeVehicleId = vehicles.firstOrNull { it.active }?.id ?: vehicles.firstOrNull()?.id
+    var assignedId by remember { mutableStateOf(prefs.getAssignedVehicleId()) }
+    var syncingWeb by remember { mutableStateOf(false) }
+    var webSynced by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0F19))
+            .background(colors.background)
+            .padding(16.dp),
+    ) {
+        BackHeader(strings.deviceTitle, onBack)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(strings.deviceNameLabel, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = deviceName,
+                    onValueChange = {
+                        deviceName = it
+                        prefs.setDeviceName(it)
+                    },
+                    label = { Text(strings.deviceNameHint, color = colors.textSecondary) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(strings.deviceIdLabel, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(deviceId, color = colors.cyan, fontSize = 12.sp)
+                if (prefs.getDeviceMode() == "obd") {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("MAC (OBD): ${obdMac ?: "chưa chọn adapter"}", color = colors.textSecondary, fontSize = 11.sp)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(strings.deviceIdNote, color = colors.textSecondary, fontSize = 11.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(strings.deviceModeLabel, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                listOf("obd" to strings.modeObd, "gps" to strings.modeGps).forEach { (mode, label) ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            deviceMode = mode
+                            prefs.setDeviceMode(mode)
+                            AppContainer.setDeviceMode(mode)
+                        },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = deviceMode == mode, onClick = {
+                            deviceMode = mode
+                            prefs.setDeviceMode(mode)
+                            AppContainer.setDeviceMode(mode)
+                        })
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(label, color = colors.textPrimary, fontSize = 14.sp)
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    if (deviceMode == "gps") strings.modeGpsNote else strings.modeObdNote,
+                    color = colors.textSecondary,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(strings.gpsInterval, color = colors.textPrimary, fontSize = 14.sp)
+                OutlinedTextField(
+                    value = gpsInterval.toString(),
+                    onValueChange = { v ->
+                        gpsInterval = v.filter { c -> c.isDigit() }.toIntOrNull()?.coerceIn(2, 60) ?: 5
+                        prefs.setGpsIntervalSec(gpsInterval)
+                    },
+                    modifier = Modifier.width(70.dp),
+                    singleLine = true,
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(strings.assignVehicle, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(strings.syncWebHint + (if (webSynced) " ✓" else ""), color = if (webSynced) colors.emerald else colors.textSecondary, fontSize = 11.sp)
+
+                Button(
+                    onClick = {
+                        syncingWeb = true
+                        AppContainer.launch {
+                            val synced = AppContainer.vehicleRepository.pullWebVehicles()
+                            webSynced = true
+                            syncingWeb = false
+                            Toast.makeText(
+                                context,
+                                if (synced.isNotEmpty()) "Đã đồng bộ ${synced.size} xe từ web"
+                                else "Không có xe từ web — tạo xe trên web trước",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    },
+                    enabled = !syncingWeb,
+                ) {
+                    Text(if (syncingWeb) "ĐANG ĐỒNG BỘ..." else strings.syncWeb)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (vehicles.isEmpty()) {
+                    Text(strings.noVehicles, color = colors.textSecondary, fontSize = 12.sp)
+                } else {
+                    vehicles.forEach { v ->
+                        val isAssigned = v.id == assignedId
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                assignedId = v.id
+                                prefs.setAssignedVehicleId(v.id)
+                                AppContainer.launch {
+                                    AppContainer.vehicleRepository.setActive(v.id)
+                                    AppContainer.vehicleRepository.registerDeviceWithVehicle(v.id, prefs.getDeviceName() ?: "Tracker")
+                                }
+                                Toast.makeText(context, "Đã gán: ${v.make} ${v.model}", Toast.LENGTH_SHORT).show()
+                            },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(selected = isAssigned, onClick = {
+                                assignedId = v.id
+                                prefs.setAssignedVehicleId(v.id)
+                                AppContainer.launch {
+                                    AppContainer.vehicleRepository.setActive(v.id)
+                                    AppContainer.vehicleRepository.registerDeviceWithVehicle(v.id, prefs.getDeviceName() ?: "Tracker")
+                                }
+                                Toast.makeText(context, "Đã gán: ${v.make} ${v.model}", Toast.LENGTH_SHORT).show()
+                            })
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Column {
+                                Text(
+                                    "${v.make} ${v.model} ${v.year}".trim(),
+                                    color = if (isAssigned) colors.cyan else colors.textPrimary,
+                                    fontSize = 14.sp,
+                                )
+                                if (v.fleetId != null) {
+                                    Text("fleet: ${v.fleetId}", color = colors.textSecondary, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    if (assignedId != null) "Đã gán cố định → mọi dữ liệu gửi về xe id: $assignedId"
+                    else strings.assignNote,
+                    color = colors.textSecondary,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ConnectionScreen(onBack: () -> Unit) {    val context = LocalContext.current
+    val vm: ConnectionViewModel = viewModel()
+    val devices by vm.devices.collectAsStateWithLifecycle(emptyList())
+    val scanning by vm.scanning.collectAsStateWithLifecycle(false)
+    val state by vm.connectionState.collectAsStateWithLifecycle(com.fmms.carlogger.core.obd.OBDConnectionState.DISCONNECTED)
+    val colors = LocalFmmsColors.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.background)
             .padding(16.dp),
     ) {
         BackHeader("OBD CONNECTION", onBack)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             "Status: ${state.name}",
-            color = if (state == com.fmms.carlogger.core.obd.OBDConnectionState.CONNECTED) Color(0xFF10B981) else Color(0xFFF59E0B),
+            color = if (state == com.fmms.carlogger.core.obd.OBDConnectionState.CONNECTED) colors.emerald else colors.amber,
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
         )
-        Text("Pair the KW906 in Android Bluetooth settings first, then choose it below.", color = Color.Gray, fontSize = 12.sp)
+        Text("Pair the KW906 in Android Bluetooth settings first, then choose it below.", color = colors.textSecondary, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(10.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -452,7 +832,7 @@ private fun ConnectionScreen(onBack: () -> Unit) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF111827)),
+                    colors = CardDefaults.cardColors(containerColor = colors.surface),
                     onClick = { vm.connect(device.address, device.name) },
                 ) {
                     Row(
@@ -461,15 +841,15 @@ private fun ConnectionScreen(onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column {
-                            Text(device.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text(device.address, color = Color.Gray, fontSize = 12.sp)
+                            Text(device.name, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text(device.address, color = colors.textSecondary, fontSize = 12.sp)
                         }
-                        Text("Tap to connect", color = Color(0xFF06B6D4), fontSize = 12.sp)
+                        Text("Tap to connect", color = colors.cyan, fontSize = 12.sp)
                     }
                 }
             }
             if (devices.isEmpty()) {
-                item { Text("No paired devices found. Enable Bluetooth.", color = Color.Gray, modifier = Modifier.padding(8.dp)) }
+                item { Text("No paired devices found. Enable Bluetooth.", color = colors.textSecondary, modifier = Modifier.padding(8.dp)) }
             }
         }
     }
@@ -485,29 +865,76 @@ class ConnectionViewModel : ViewModel() {
     private val _connectionState = MutableStateFlow(com.fmms.carlogger.core.obd.OBDConnectionState.DISCONNECTED)
     val connectionState = _connectionState
 
+    private val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    private var discoveryReceiver: android.content.BroadcastReceiver? = null
+
     init {
         viewModelScope.launch {
             c.obdManager.connectionState.collect { _connectionState.value = it }
         }
+        if (adapter != null) {
+            registerDiscoveryReceiver()
+        }
+    }
+
+    private fun registerDiscoveryReceiver() {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(ctx: android.content.Context?, intent: android.content.Intent?) {
+                when (intent?.action) {
+                    BluetoothDevice.ACTION_FOUND -> {
+                        val device: BluetoothDevice? =
+                            intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                        if (device != null && device.name?.isNotBlank() == true) {
+                            val current = _devices.value
+                            if (current.none { it.address == device.address }) {
+                                _devices.value = current + device
+                            }
+                        }
+                    }
+                    BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                        _scanning.value = false
+                    }
+                }
+            }
+        }
+        discoveryReceiver = receiver
+        androidx.core.content.ContextCompat.registerReceiver(
+            c.context,
+            receiver,
+            android.content.IntentFilter().apply {
+                addAction(BluetoothDevice.ACTION_FOUND)
+                addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+            },
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
     }
 
     fun scan() {
         _scanning.value = true
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                val adapter = BluetoothAdapter.getDefaultAdapter()
                 if (adapter == null || !adapter.isEnabled) {
                     _scanning.value = false
                     return@withContext
                 }
-                val result = adapter.bondedDevices.toList().filter {
+                // 1) Already paired OBD-like devices (fast path).
+                val bonded = adapter.bondedDevices.toList().filter {
                     it.name?.contains("KW", ignoreCase = true) == true ||
                         it.name?.contains("OBD", ignoreCase = true) == true ||
                         it.name?.contains("ELM", ignoreCase = true) == true ||
                         it.name?.contains("V-LINK", ignoreCase = true) == true
                 }
-                _devices.value = if (result.isNotEmpty()) result else adapter.bondedDevices.toList()
-                _scanning.value = false
+                // 2) Start discovery so unpaired adapters can be found too.
+                try {
+                    adapter.cancelDiscovery()
+                    adapter.startDiscovery()
+                } catch (_: Exception) {
+                    _scanning.value = false
+                }
+                _devices.value = if (bonded.isNotEmpty()) bonded else adapter.bondedDevices.toList()
+                // _scanning reset by ACTION_DISCOVERY_FINISHED; safety fallback:
+                kotlinx.coroutines.delay(15000)
+                if (bonded.isNotEmpty()) _scanning.value = false
             }
         }
     }
@@ -525,5 +952,14 @@ class ConnectionViewModel : ViewModel() {
 
     fun disconnect() {
         viewModelScope.launch { c.obdManager.disconnect() }
+    }
+
+    override fun onCleared() {
+        try {
+            adapter?.cancelDiscovery()
+            discoveryReceiver?.let { c.context.unregisterReceiver(it) }
+        } catch (_: Exception) {
+        }
+        super.onCleared()
     }
 }

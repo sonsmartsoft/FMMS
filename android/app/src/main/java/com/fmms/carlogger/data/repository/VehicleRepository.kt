@@ -12,6 +12,8 @@ import com.fmms.carlogger.domain.model.LiveTelemetry
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 import org.json.JSONObject
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class VehicleRepository(
     private val context: Context,
@@ -104,6 +106,101 @@ class VehicleRepository(
 
     fun observeDeviceByMac(mac: String): Flow<DeviceEntity?> = deviceDao.observeByMac(mac)
 
+    /**
+     * Pull the fleet vehicles this device is allowed to see from the web
+     * (`GET /rpc/get_fleet_vehicles` edge function, Cách B) and merge into
+     * local Room so THIẾT BỊ can assign an official web vehicle_id.
+     */
+    suspend fun pullWebVehicles(): List<VehicleEntity> {
+        val body = JSONObject().apply { put("device_id", prefs.getDeviceId()) }
+        val request = okhttp3.Request.Builder()
+            .url("${com.fmms.carlogger.BuildConfig.SUPABASE_URL}/rest/v1/rpc/get_fleet_vehicles")
+            .header("apikey", com.fmms.carlogger.BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+            .header("Authorization", "Bearer ${com.fmms.carlogger.BuildConfig.SUPABASE_PUBLISHABLE_KEY}")
+            .header("Content-Type", "application/json")
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        val resp = try {
+            okhttp3.OkHttpClient().newCall(request).execute()
+        } catch (e: Exception) {
+            return emptyList()
+        }
+        if (!resp.isSuccessful) return emptyList()
+        val text = resp.body?.string() ?: return emptyList()
+        val arr = try { org.json.JSONArray(text) } catch (e: Exception) { return emptyList() }
+        val result = mutableListOf<VehicleEntity>()
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val id = o.optString("id")
+            if (id.isBlank()) continue
+            val now = System.currentTimeMillis()
+            val v = VehicleEntity(
+                id = id,
+                fleetId = o.optString("fleet_id").takeIf { it.isNotBlank() },
+                vin = o.optString("vin").takeIf { it.isNotBlank() },
+                licensePlate = o.optString("license_plate").takeIf { it.isNotBlank() } ?: "",
+                make = o.optString("make").takeIf { it.isNotBlank() } ?: "Web",
+                model = o.optString("model").takeIf { it.isNotBlank() } ?: "Vehicle",
+                year = o.optInt("year", 2026),
+                trim = o.optString("trim").takeIf { it.isNotBlank() } ?: "",
+                engine = o.optString("engine").takeIf { it.isNotBlank() } ?: "",
+                fuelType = o.optString("fuel_type").takeIf { it.isNotBlank() } ?: "Petrol",
+                tankCapacityLiters = o.optDouble("tank_capacity_liters", 44.0),
+                odometerKm = o.optDouble("odometer_km", 0.0),
+                active = false,
+                createdAt = now,
+                updatedAt = now,
+            )
+            vehicleDao.upsert(v)
+            result += v
+        }
+        return result
+    }
+
+    /** Register/refresh this device against its assigned web vehicle. */
+    suspend fun registerDeviceWithVehicle(assignedVehicleId: String, deviceName: String): DeviceEntity? {
+        val vehicle = vehicleDao.getById(assignedVehicleId) ?: return null
+        val mac = prefs.getObdMacAddress()
+        val now = System.currentTimeMillis()
+        val d = DeviceEntity(
+            id = prefs.getDeviceId(),
+            vehicleId = vehicle.id,
+            deviceType = if (prefs.getDeviceMode() == "gps") "GPS-TRACKER" else "ELM327-BT",
+            deviceName = deviceName,
+            macAddress = mac ?: prefs.getDeviceId(),
+            serialNumber = null,
+            appVersion = "1.0.0",
+            lastSeen = now,
+            status = "REGISTERED",
+            createdAt = now,
+            updatedAt = now,
+        )
+        deviceDao.upsert(d)
+        val payload = JSONObject().apply {
+            put("id", d.id)
+            put("vehicle_id", d.vehicleId)
+            put("device_type", d.deviceType)
+            put("device_name", d.deviceName)
+            put("mac_address", d.macAddress)
+            put("last_seen", d.lastSeen ?: JSONObject.NULL)
+            put("status", d.status)
+            put("created_at", d.createdAt)
+            put("updated_at", d.updatedAt)
+        }.toString()
+        syncQueueDao.insert(
+            SyncQueueEntity(
+                id = UUID.randomUUID().toString(),
+                vehicleId = vehicle.id,
+                entityType = "devices",
+                entityId = d.id,
+                operation = "UPSERT",
+                payload = payload,
+                createdAt = now,
+            )
+        )
+        return d
+    }
+
     private suspend fun enqueueUpsert(vehicleId: String) {
         val v = vehicleDao.getById(vehicleId) ?: return
         val payload = JSONObject().apply {
@@ -146,6 +243,30 @@ class PrefsStore(context: Context) {
     fun getDeviceName(): String? = prefs.getString(OBDConnectionManager.PREF_OBD_NAME, null)
     fun setDeviceName(name: String?) { prefs.edit().putString(OBDConnectionManager.PREF_OBD_NAME, name).apply() }
 
+    /** Stable per-install tracker id (device identity for GPS-only trackers). */
+    fun getDeviceId(): String {
+        val existing = prefs.getString("device_id", null)
+        if (existing != null) return existing
+        val id = UUID.randomUUID().toString()
+        prefs.edit().putString("device_id", id).apply()
+        return id
+    }
+
+    /** Web-managed vehicle this device is permanently assigned to (Cách B). */
+    fun getAssignedVehicleId(): String? = prefs.getString("assigned_vehicle_id", null)
+    fun setAssignedVehicleId(id: String?) { prefs.edit().putString("assigned_vehicle_id", id).apply() }
+
+    /** Bluetooth MAC of the OBD adapter (null for GPS-only trackers). */
+    fun getObdMacAddress(): String? = getMac()
+
+    /** Device mode: "obd" = ELM327 adapter (car) | "gps" = GPS-only tracker (bike). */
+    fun getDeviceMode(): String = prefs.getString("device_mode", "obd") ?: "obd"
+    fun setDeviceMode(mode: String) { prefs.edit().putString("device_mode", mode).apply() }
+
+    /** GPS trackpoint recording interval in seconds. */
+    fun getGpsIntervalSec(): Int = prefs.getInt("gps_interval_sec", 5).coerceIn(2, 60)
+    fun setGpsIntervalSec(sec: Int) { prefs.edit().putInt("gps_interval_sec", sec).apply() }
+
     fun getOdoPref(): Double = getOdo()
     fun getOdo(): Double = prefs.getFloat("odo_km", 12846f).toDouble()
     fun setOdo(odo: Double) { prefs.edit().putFloat("odo_km", odo.toFloat()).apply() }
@@ -161,6 +282,12 @@ class PrefsStore(context: Context) {
 
     fun getSyncEnabled(): Boolean = prefs.getBoolean("sync_enabled", true)
     fun setSyncEnabled(v: Boolean) { prefs.edit().putBoolean("sync_enabled", v).apply() }
+
+    fun getTheme(): String = prefs.getString("theme", "dark") ?: "dark"
+    fun setTheme(v: String) { prefs.edit().putString("theme", v).apply() }
+
+    fun getLanguage(): String = prefs.getString("language", "en") ?: "en"
+    fun setLanguage(v: String) { prefs.edit().putString("language", v).apply() }
 }
 
 /** Represents a raw OBD diagnostic log line (spec §15). */

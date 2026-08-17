@@ -59,4 +59,7 @@ interface TripDao {
 
     @Query("SELECT * FROM trips WHERE vehicle_id = :vehicleId AND status = 'ACTIVE'")
     suspend fun getActiveTrips(vehicleId: String): List<TripEntity>
+
+    @Query("SELECT DISTINCT CAST(strftime('%Y', start_time / 1000, 'unixepoch') AS INTEGER) AS y FROM trips WHERE vehicle_id = :vehicleId ORDER BY y DESC")
+    suspend fun getYears(vehicleId: String): List<Int>
 }

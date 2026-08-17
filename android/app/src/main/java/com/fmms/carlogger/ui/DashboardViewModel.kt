@@ -26,6 +26,9 @@ data class DashboardUiState(
     val obdMac: String? = null,
     val obdName: String? = null,
     val elmInfo: String? = null,
+    val vehicleName: String = "XE CỦA TÔI",
+    val vehicleSubtitle: String = "",
+    val deviceMode: String = "obd",
 )
 
 /**
@@ -43,10 +46,29 @@ class DashboardViewModel : ViewModel() {
         c.tripEngine.state,
         c.odometerEngine.state,
         c.obdManager.connectionState,
-    ) { telemetry, fuel, trip, odo, conn ->
+        c.vehicleRepository.observeAll(),
+        c.gpsTelemetry,
+    ) { values: Array<Any?> ->
+        @Suppress("UNCHECKED_CAST")
+        val telemetry = values[0] as LiveTelemetry
+        @Suppress("UNCHECKED_CAST")
+        val fuel = values[1] as FuelEstimate
+        @Suppress("UNCHECKED_CAST")
+        val trip = values[2] as TripLiveState
+        @Suppress("UNCHECKED_CAST")
+        val odo = values[3] as OdometerInfo
+        @Suppress("UNCHECKED_CAST")
+        val conn = values[4] as OBDConnectionState
+        @Suppress("UNCHECKED_CAST")
+        val vehicles = values[5] as List<com.fmms.carlogger.core.database.entity.VehicleEntity>
+        @Suppress("UNCHECKED_CAST")
+        val gps = values[6] as LiveTelemetry
+        val deviceMode = c.prefs.getDeviceMode()
+        val live = if (deviceMode == "gps") gps else telemetry
         val hasMac = c.prefs.getMac() != null
+        val active = vehicles.firstOrNull { it.active } ?: vehicles.firstOrNull()
         DashboardUiState(
-            telemetry = telemetry,
+            telemetry = live,
             fuel = fuel,
             trip = trip,
             odometer = odo,
@@ -60,6 +82,14 @@ class DashboardViewModel : ViewModel() {
                     it.protocol?.takeIf { p -> p.isNotBlank() },
                 ).joinToString(" • ")
             },
+            vehicleName = active?.let { "${it.make} ${it.model} ${it.trim}" } ?: "XE CỦA TÔI",
+            vehicleSubtitle = active?.let {
+                listOfNotNull(
+                    it.licensePlate.takeIf { p -> p.isNotBlank() },
+                    it.year.toString(),
+                ).joinToString(" • ")
+            } ?: "",
+            deviceMode = deviceMode,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())
 

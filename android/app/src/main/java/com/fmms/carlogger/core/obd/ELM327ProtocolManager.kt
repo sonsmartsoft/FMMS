@@ -74,6 +74,10 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
         transport.sendCommandAndWait(cmd, 2000)
     }
 
+    /** Cheap liveness probe used by the connection manager (no mutex to avoid deadlock). */
+    suspend fun transportCommand(cmd: String): String? =
+        transport.sendCommandAndWait(cmd, 1500)
+
     /** Run a single read of a PID, returns parsed value or null if unsupported/unreadable. */
     suspend fun readPid(pid: PidDefinition): Double? {
         if (info.supportedPids.isNotEmpty() && pid.command !in info.supportedPids) {

@@ -5,14 +5,16 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Car, Fuel, Wrench, DollarSign,
-  FileText, BarChart3, Settings, Activity, Sparkles, Award,
+  FileText, BarChart3, Settings, Activity, Sparkles, Award, MapPin, Radio,
 } from 'lucide-react';
+
 
 const NAV_SECTIONS = [
   {
     title: 'Quản lý Mobility',
     items: [
       { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+      { name: 'Bản đồ GPS', href: '/map', icon: MapPin },
       { name: 'Phương tiện', href: '/assets', icon: Car },
       { name: 'Nhiên liệu & Pin', href: '/fuel', icon: Fuel },
       { name: 'Bảo dưỡng & Phụ tùng', href: '/maintenance', icon: Wrench },
@@ -26,6 +28,7 @@ const NAV_SECTIONS = [
     title: 'Hệ thống & AI',
     items: [
       { name: 'AI Center', href: '/ai-center', icon: Sparkles },
+      { name: 'Thiết bị Tracker', href: '/settings/devices', icon: Radio },
       { name: 'Cài đặt hệ thống', href: '/settings', icon: Settings },
       { name: 'System Health', href: '/settings/health', icon: Activity },
     ],

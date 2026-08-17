@@ -8,6 +8,7 @@ import com.fmms.carlogger.core.gps.GpsTracker
 import com.fmms.carlogger.core.obd.OBDConnectionManager
 import com.fmms.carlogger.core.odometer.VirtualOdometerEngine
 import com.fmms.carlogger.data.repository.DiagnosticLogEmitter
+import com.fmms.carlogger.data.repository.GpsTrackRepository
 import com.fmms.carlogger.data.repository.PrefsStore
 import com.fmms.carlogger.data.repository.SyncQueueRepository
 import com.fmms.carlogger.data.repository.TelemetryRepository
@@ -41,6 +42,7 @@ object AppContainer {
     lateinit var tripRepository: TripRepository
     lateinit var fuelLogRepository: FuelLogRepository
     lateinit var syncQueueRepository: SyncQueueRepository
+    lateinit var gpsTrackRepository: GpsTrackRepository
     lateinit var diagLog: DiagnosticLogEmitter
     lateinit var gpsTracker: GpsTracker
     lateinit var obdManager: OBDConnectionManager
@@ -54,6 +56,38 @@ object AppContainer {
     private val _serviceRunning = MutableStateFlow(false)
     val serviceRunning: StateFlow<Boolean> = _serviceRunning.asStateFlow()
 
+    private val _themeMode = MutableStateFlow("dark")
+    val themeMode: StateFlow<String> = _themeMode.asStateFlow()
+
+    fun setThemeMode(mode: String) {
+        prefs.setTheme(mode)
+        _themeMode.value = mode
+    }
+
+    private val _deviceMode = MutableStateFlow("obd")
+    val deviceMode: StateFlow<String> = _deviceMode.asStateFlow()
+
+    fun setDeviceMode(mode: String) {
+        prefs.setDeviceMode(mode)
+        _deviceMode.value = mode
+    }
+
+    private val _language = MutableStateFlow("en")
+    val language: StateFlow<String> = _language.asStateFlow()
+
+    fun setLanguage(lang: String) {
+        prefs.setLanguage(lang)
+        _language.value = lang
+    }
+
+    /** GPS-only live telemetry (bike/tracker mode, no OBD). */
+    private val _gpsTelemetry = MutableStateFlow(com.fmms.carlogger.domain.model.LiveTelemetry())
+    val gpsTelemetry: StateFlow<com.fmms.carlogger.domain.model.LiveTelemetry> = _gpsTelemetry.asStateFlow()
+
+    fun publishGpsTelemetry(t: com.fmms.carlogger.domain.model.LiveTelemetry) {
+        _gpsTelemetry.value = t
+    }
+
     @Synchronized
     fun init(context: Context) {
         if (::context.isInitialized) return
@@ -63,15 +97,19 @@ object AppContainer {
                 AppDatabase::class.java,
                 "fmms.db",
             )
-            .fallbackToDestructiveMigration() // local-first raw cache; safe for v1
+            .addMigrations(AppDatabase.MIGRATION_1_2)
             .build()
 
         this.prefs = PrefsStore(this.context)
+        this._themeMode.value = prefs.getTheme()
+        this._deviceMode.value = prefs.getDeviceMode()
+        this._language.value = prefs.getLanguage()
 
         // Layer: repositories (depend on DAOs)
         this.telemetryRepository = TelemetryRepository(db.telemetryDao())
         this.syncQueueRepository = SyncQueueRepository(db.syncQueueDao())
         this.tripRepository = TripRepository(db.tripDao(), syncQueueRepository)
+        this.gpsTrackRepository = GpsTrackRepository(db.gpsTrackPointDao(), syncQueueRepository)
         this.fuelLogRepository = FuelLogRepository(db.fuelLogDao())
         this.vehicleRepository = VehicleRepository(
             this.context, db.vehicleDao(), db.deviceDao(), db.syncQueueDao(), prefs,

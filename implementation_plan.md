@@ -103,6 +103,53 @@ Develop a complete, production-ready **Family Mobility Management System (FMMS)*
 #### [NEW] [`android/app/src/main/java/com/fmms/carlogger/ui/dashboard/DashboardScreen.kt`](file:///Users/uti/Documents/FMMS/android/app/src/main/java/com/fmms/carlogger/ui/dashboard/DashboardScreen.kt)
 - 9-inch Landscape ZESTECH UI dashboard: High contrast dark theme, large gauge targets (Speed, RPM, Fuel %, Range, Coolant Temp, Voltage, Today's Distance/Cost).
 
+### 4. GPS Maps & Live Tracking (V5.3)
+
+#### [NEW] [`android/.../core/database/entity/GpsTrackPointEntity.kt`](file:///Users/uti/Documents/FMMS/android/app/src/main/java/com/fmms/carlogger/core/database/entity/GpsTrackPointEntity.kt)
+- Room entity for `gps_track_points` (asset_id, trip_id, recorded_at, lat, lon, altitude, speed, accuracy, sync_status). Sampled every 5s + first/last point per trip.
+
+#### [NEW] [`android/.../core/database/dao/GpsTrackPointDao.kt`](file:///Users/uti/Documents/FMMS/android/app/src/main/java/com/fmms/carlogger/core/database/dao/GpsTrackPointDao.kt)
+- DAO: insert, observe by trip, observe latest per asset, pending-sync query.
+
+#### [NEW] [`android/.../ui/map/MapScreen.kt`](file:///Users/uti/Documents/FMMS/android/app/src/main/java/com/fmms/carlogger/ui/map/MapScreen.kt)
+- Live map screen hosted in Compose. Single `MapViewModel`; rendering delegated to `MapFactory` that picks the renderer at runtime:
+  - Google Maps SDK (`google-maps-compose`) when Google Play Services present
+  - osmdroid `MapView` fallback (ZESTECH, no GMS) with offline tile cache, dark/light tile background
+- Features: live marker (from `GpsTracker`), running-trip polyline, historical trip replay, zoom controls.
+
+#### [MOD] [`android/.../ui/dashboard/DashboardScreen.kt`](file:///Users/uti/Documents/FMMS/android/app/src/main/java/com/fmms/carlogger/ui/dashboard/DashboardScreen.kt)
+- Auto-fit: remove fixed landscape assumption; adapt dashboard to portrait/landscape via `BoxWithConstraints`; scrollable when narrow. (Partially done: manifest landscape forced was removed.)
+
+#### [MOD] Android theme
+- `MainActivity.kt:71`: replace hardcoded `darkColorScheme()` with theme-aware scheme driven by new `PrefsStore.theme` (dark/light/system), reactive to change.
+- Refactor hardcoded colors (`0xFF0B0F19`, `0xFF111827`, accent colors) in `DashboardScreen`, `MoreScreen`, `TripsScreen`, `FuelScreen`, `StatsScreen` into a theme-aware palette.
+
+#### [NEW] `supabase/migrations/0006_gps_track_points.sql`
+- `gps_track_points` table + indexes `(asset_id, recorded_at)`, `(trip_id)` + RLS (owner via asset) + sync-queue compatible.
+
+#### [MOD] `web/lib/services/tripService.ts` & new `web/lib/services/trackService.ts`
+- Read `gps_track_points` from Supabase; group by trip for replay; last-known position per asset.
+
+#### [NEW] `web/components/map/AssetMap.tsx` (Leaflet)
+- Per-asset map tab: last position marker + trip list + polyline replay (no API key, OSM tiles).
+
+#### [NEW] `web/app/fleet/map/page.tsx`
+- Fleet live map: one marker per asset (last known GPS).
+
+#### [NEW] `web/app/assets/[id]/page.tsx` map tab
+- Reuse `AssetMap` component in the "Bản đồ" tab.
+
+### 5. iOS Port — Future Work (planned after Android/Web ship)
+
+Cross-platform contract is fixed at the **data + backend layer** so iOS plugs in with zero backend changes:
+
+- `gps_track_points` schema + sync protocol identical to Android (no contract change).
+- iOS live map via **Google Maps SDK for iOS**, with MapKit/Apple Maps as no-key offline-capable fallback (per spec §234).
+- Trip replay + fleet map use the same Supabase data as Android/Web.
+- Web map tab is device-agnostic (no iOS-specific branch).
+- Theme config (Dark/Light/System) mirrors the Android setting contract.
+- Supabase auth for iOS reuses the same project (email/password + magic link already supported).
+
 ---
 
 ## Verification Plan

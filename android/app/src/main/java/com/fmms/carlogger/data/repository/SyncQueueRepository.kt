@@ -54,6 +54,38 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
         )
     }
 
+    suspend fun enqueueGpsPoints(points: List<com.fmms.carlogger.core.database.entity.GpsTrackPointEntity>) {
+        if (points.isEmpty()) return
+        val deviceName = com.fmms.carlogger.AppContainer.prefs.getDeviceName()
+        val arr = org.json.JSONArray()
+        points.forEach { p ->
+            arr.put(
+                JSONObject().apply {
+                    put("id", p.id)
+                    put("trip_id", p.tripId ?: JSONObject.NULL)
+                    put("vehicle_id", p.vehicleId)
+                    put("device_id", p.deviceId)
+                    put("device_name", deviceName ?: JSONObject.NULL)
+                    put("lat", p.lat)
+                    put("lng", p.lng)
+                    put("speed_kmh", p.speedKmh ?: JSONObject.NULL)
+                    put("recorded_at", p.recordedAt)
+                }
+            )
+        }
+        syncQueueDao.insert(
+            SyncQueueEntity(
+                id = UUID.randomUUID().toString(),
+                vehicleId = points.first().vehicleId,
+                entityType = "gps_track_points",
+                entityId = points.first().id,
+                operation = "UPSERT",
+                payload = arr.toString(),
+                createdAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
     suspend fun markSynced(id: String) {
         syncQueueDao.markStatus(id, "SYNCED", null, System.currentTimeMillis())
     }
@@ -89,7 +121,6 @@ class TripRepository(
     private val tripDao: TripDao,
     private val syncQueueRepository: SyncQueueRepository,
 ) {
-
     fun observeByVehicle(vehicleId: String): Flow<List<TripEntity>> = tripDao.observeByVehicle(vehicleId)
 
     suspend fun getActiveTrip(vehicleId: String): TripEntity? = tripDao.getActiveTrip(vehicleId)
@@ -108,6 +139,8 @@ class TripRepository(
 
     suspend fun getWithOdometer(): List<TripEntity> = tripDao.getWithOdometer()
 
+    suspend fun getYears(vehicleId: String): List<Int> = tripDao.getYears(vehicleId)
+
     suspend fun aggregate(vehicleId: String): TripAggregate =
         tripDao.getAggregates(vehicleId).firstOrNull()?.let {
             TripAggregate(it.distanceKm, it.fuelUsedLiters, it.tripCount, it.maxSpeedKmh, it.avgSpeedKmh)
@@ -121,3 +154,18 @@ data class TripAggregate(
     val maxSpeedKmh: Double,
     val avgSpeedKmh: Double,
 )
+
+class GpsTrackRepository(
+    private val gpsTrackPointDao: com.fmms.carlogger.core.database.dao.GpsTrackPointDao,
+    private val syncQueueRepository: SyncQueueRepository,
+) {
+    suspend fun insertAndEnqueue(points: List<com.fmms.carlogger.core.database.entity.GpsTrackPointEntity>) {
+        if (points.isEmpty()) return
+        gpsTrackPointDao.insertAll(points)
+        syncQueueRepository.enqueueGpsPoints(points)
+    }
+
+    suspend fun purgeOlderThan(cutoff: Long) {
+        gpsTrackPointDao.purgeOlderThan(cutoff)
+    }
+}

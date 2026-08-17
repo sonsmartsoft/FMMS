@@ -6560,3 +6560,182 @@ AI / API
 ```
 
 The core FMMS MUST remain fully functional when all AI providers are offline.
+
+---
+
+# V5.3 — GPS MAPS & LIVE TRACKING + ANDROID THEME EXTENSION
+
+## 233. GPS MAPS & LIVE TRACKING — SCOPE
+
+Free, no-API-key mapping that lets the family see **where each vehicle is now** and
+**replay the exact route** it travelled. Designed cross-platform from day one:
+**Android (today) + iOS (planned next)** share one data contract and one backend;
+only the map renderer differs per OS.
+
+```text
+Requirement
+  ├── Android app: live map (current position) + route polyline of the running trip
+  ├── Android app: historical trip replay (pick a past trip → draw its path)
+  ├── iOS app (future): same live map + trip replay features
+  ├── Web app: "Bản đồ" tab per asset → live position + trip replay
+  ├── Web app: fleet live map (all vehicles on one map)
+  └── Data: GPS track points collected on devices, synced to Supabase
+```
+
+Non-negotiable constraints:
+- **No Google Play Services dependency on the in-car unit** (ZESTECH 9" head-unit has no GMS).
+- **No paid API keys.** Map rendering stays within free tiers (Google Maps free tier + OSM).
+- Must work **offline** on Android (cached tiles), consistent with §33 OFFLINE-FIRST SYNC.
+- **Cross-platform contract**: `gps_track_points` schema + sync protocol are identical for Android and iOS, so iOS reuses the Supabase backend unchanged.
+
+## 234. MAP TECHNOLOGY CHOICE
+
+**DECISION (user, V5.3): HYBRID — Google Maps on capable devices + OSM fallback, per platform.**
+
+### Android
+Detects at runtime whether Google Play Services is available:
+- **GMS available (phones like A52, tablets, any device with GMS):** **Google Maps SDK** free tier (~28,500 tile loads / month; enough for a family fleet). Richer rendering, native UX.
+- **No GMS (ZESTECH 9" head-unit, offline in-car):** **osmdroid** (OpenStreetMap) with offline tile cache. No key, no GMS needed — the ONLY option that works on the in-car unit.
+
+### iOS (future)
+iOS has **no GMS equivalent blocking Google Maps** — Google Maps SDK for iOS works on every iPhone.
+- **Default:** **Google Maps SDK for iOS** (free tier, same ~28,500 loads/month as Android).
+- **Fallback/offline-capable:** **MapKit (Apple Maps)** — free, native, no key, no third-party dependency; good for offline-capable rendering. Choose at build time or runtime per policy.
+
+### Web
+**Leaflet** + OSM tile layer (free, no key, no quota) — single web path regardless of device.
+
+| Layer | Library | When |
+|-------|---------|------|
+| Android (GMS device) | **Google Maps SDK** (Compose Maps) | Phone/tablet with Play Services |
+| Android (no GMS) | **osmdroid** (OSM tiles) | ZESTECH, offline in-car |
+| iOS (future) | **Google Maps SDK for iOS** | All iPhones (default) |
+| iOS (future) | **MapKit / Apple Maps** | Offline-capable fallback / no-key option |
+| Web | **Leaflet** + OSM tiles | Browser, all devices |
+
+Implementation note: each platform's map engines share ONE data source
+(`gps_track_points`), ONE view-model, and ONE backend. Only the rendering component
+differs behind a thin per-platform `MapFactory`:
+- Android: `GoogleMap` vs `osmdroid MapView`
+- iOS: `GMSMapView` vs `MKMapView`
+Google Maps requires an API key (free tier) — OSM/MapKit paths use none. This keeps
+ONE feature, several thin renderers, not several features.
+
+## 235. GPS TRACK POINT DATA MODEL
+
+New table `gps_track_points` (dedicated compact track storage; independent of telemetry_samples):
+
+```text
+gps_track_points
+  id            uuid PK (local UUID, idempotent sync)
+  asset_id      uuid FK → assets
+  trip_id       uuid nullable FK → trips
+  device_id     uuid nullable
+  recorded_at   timestamptz (device time)
+  latitude      double precision
+  longitude     double precision
+  altitude_m    double precision nullable
+  speed_kmh     double precision nullable
+  gps_accuracy_m real nullable
+  sync_status   text DEFAULT 'PENDING'
+  created_at    timestamptz DEFAULT now()
+```
+
+Rules:
+- **Sampling rate:** 1 point per **5 seconds** while trip active (quota-safe; telemetry_samples keeps the 1s raw OBD/GPS stream for full fidelity).
+- **Always record first and last point of every trip.**
+- GPS filtering per §19: reject accuracy > 50 m, reject impossible speed jumps.
+- Local-first: points are written to Room immediately, queued in `sync_queue` (`entityType='gps_track_points'`), uploaded by WorkManager.
+- Retention: `gps_track_points` kept forever (routes are valuable); raw `telemetry_samples` follows §43 retention.
+
+## 236. ANDROID — LIVE MAP SCREEN
+
+New screen reachable from bottom nav or MORE → "BẢN ĐỒ" (Map).
+
+- **Live marker** of the vehicle, fed by `GpsTracker.location` StateFlow (already emitting every ~1 s).
+- Camera follows the marker while a trip is running; user can pan/zoom freely.
+- **Running-trip polyline**: append each new track point to the line as it arrives.
+- Connection badge (OBD/GPS state) reused from dashboard.
+- Renderer selected by MapFactory: **Google Maps** on GMS devices, **osmdroid** on ZESTECH.
+- osmdroid path: tile cache on device so the map still renders on ZESTECH without mobile data.
+- Zoom controls + fullscreen toggle.
+
+Relevant existing assets reused:
+- `core/gps/GpsTracker.kt` (already streams location)
+- `core/database/entity/TelemetrySampleEntity.kt` (raw GPS per second; source of truth)
+- `TripEntity.startLatitude/Longitude`, `endLatitude/Longitude` (trip-level anchors)
+- `TelemetryService` runner (adds track-point writer alongside `persistSample`)
+
+## 237. ANDROID — HISTORICAL TRIP REPLAY
+
+- Pick a past trip (from TRIPS screen or map screen list) → fetch its `gps_track_points`.
+- Draw polyline + start/end markers + key stats (distance, duration, avg/max speed).
+- Works offline from Room; cloud sync fills in after network.
+
+## 238. ANDROID — THEME CONFIGURATION (DARK / LIGHT)
+
+The app currently hardcodes `darkColorScheme()` (`MainActivity.kt:71`) and every screen uses fixed dark colors (`0xFF0B0F19`, `0xFF111827`). This is a hardcode to remove.
+
+New setting under **MORE → SETTINGS → Chế độ hiển thị (Theme)**:
+
+```text
+THEME
+  ├── Sáng (Light)      → lightColorScheme()
+  ├── Tối (Dark)        → darkColorScheme()        [default]
+  └── Theo hệ thống     → isSystemInDarkTheme() follows device
+```
+
+Requirements:
+- Persist selection in `PrefsStore` (`theme` key; default `dark`).
+- `MainActivity` composes `MaterialTheme(colorScheme = if (theme == light) lightColorScheme() else darkColorScheme())`, reading the setting and reacting to changes (StateFlow or re-read on resume).
+- **Refactor hardcoded colors** in all screens (`DashboardScreen`, `MoreScreen`, `TripsScreen`, `FuelScreen`, `StatsScreen`, dialogs) into theme-aware color references (Material tokens or a small `AppColors` palette) so Light mode is legible (dark text on light surfaces).
+- Map screen (osmdroid) tile/overlay colors also adapt to theme if feasible.
+- Theme change applies immediately without app restart.
+
+## 239. WEB — ASSET MAP TAB & FLEET LIVE MAP
+
+- **Asset Detail → tab "Bản đồ"**: Leaflet map showing last known position (latest `gps_track_points`), plus a trip list; selecting a trip draws its polyline + stats.
+- **Fleet live map** (Home or dedicated page): one marker per asset with last known GPS; click marker → asset detail.
+- No tiles are self-hosted; use the standard OSM tile layer (subject to OSM tile usage policy; acceptable for family/private use).
+- No API key required anywhere on web.
+
+## 240. WEB — SYNC & DATA
+
+- SyncWorker uploads `gps_track_points` like other entities (idempotent upsert on `id`).
+- Web queries read from Supabase `gps_track_points` directly.
+- Prune: optional WorkManager cleanup of raw telemetry per §43; track points persist.
+
+## 241. GPS MAPS & THEME — ACCEPTANCE CHECKLIST
+
+### Maps
+- [ ] ZESTECH: open map, see live marker move while driving, no GMS required (osmdroid path)
+- [ ] ZESTECH: running-trip route drawn as polyline
+- [ ] Phone (A52, has GMS): same map renders via Google Maps SDK free tier
+- [ ] Phone: same map fits portrait
+- [ ] Offline (ZESTECH): map tiles render from cache without network
+- [ ] Historical trip replay draws correct path + stats (both renderers)
+- [ ] Track points appear in Supabase `gps_track_points` after sync (idempotent, no dupes)
+- [ ] Web asset map tab shows last position + replays a trip
+- [ ] Web fleet map shows all assets
+- [ ] Google Maps API key free-tier usage stays within quota; no key needed on ZESTECH path
+
+### iOS (future port)
+- [ ] Same `gps_track_points` schema + Supabase backend used unchanged (no contract change)
+- [ ] iOS live map renders via Google Maps SDK for iOS (or MapKit fallback)
+- [ ] iOS trip replay shows identical route/stats as Android/Web
+- [ ] Web map tab + fleet map are device-agnostic (no iOS-specific branch needed on web)
+
+### Theme
+- [ ] Theme setting: Dark / Light / System toggle, persists, applies immediately
+- [ ] Light mode legible across all screens (no leftover hardcoded dark colors)
+- [ ] Theme choice stored in user-visible setting, applied on both Android and (future) iOS
+
+## 242. V5.3 FINAL PRINCIPLE
+
+Location and map remain **user-owned data**: collected on device, stored in the
+user's Supabase project, rendered with free maps (Google Maps free tier where
+available, OSM/MapKit otherwise). The **cross-platform contract is fixed at the
+data + backend layer** (`gps_track_points`, trips, sync protocol) so that an iOS
+app plugs in with zero backend changes. The map and theme features must not require
+network to function for the vehicle-owner's core use (local map + live route on
+ZESTECH), consistent with the offline-first philosophy.

@@ -2,7 +2,9 @@ package com.fmms.carlogger.ui.dashboard
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,24 +18,21 @@ import com.fmms.carlogger.core.obd.OBDConnectionState
 import com.fmms.carlogger.domain.model.LiveTelemetry
 import com.fmms.carlogger.ui.DashboardUiState
 import com.fmms.carlogger.ui.DashboardViewModel
+import com.fmms.carlogger.ui.i18n.FmmsStrings
+import com.fmms.carlogger.ui.i18n.LocalStrings
+import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import java.util.Locale
 
-private val DarkBackground = Color(0xFF0B0F19)
-private val CardBackground = Color(0xFF111827)
-private val CyanAccent = Color(0xFF06B6D4)
-private val AmberAccent = Color(0xFFF59E0B)
-private val EmeraldAccent = Color(0xFF10B981)
-private val RedAccent = Color(0xFFEF4444)
-private val PurpleAccent = Color(0xFFA855F7)
-
 @Composable
-fun DashboardScreen(vm: DashboardViewModel) {
+fun DashboardScreen(vm: DashboardViewModel, onAddDevice: () -> Unit = {}) {
     val state by vm.uiState.collectAsStateWithLifecycle()
-    DashboardContent(state = state)
+    DashboardContent(state = state, onAddDevice = onAddDevice)
 }
 
 @Composable
-private fun DashboardContent(state: DashboardUiState) {
+private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit) {
+    val colors = LocalFmmsColors.current
+    val strings = LocalStrings.current
     val t = state.telemetry
     val conn = state.connectionState
     val connected = conn == OBDConnectionState.CONNECTED
@@ -41,7 +40,7 @@ private fun DashboardContent(state: DashboardUiState) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(colors.background)
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -53,33 +52,39 @@ private fun DashboardContent(state: DashboardUiState) {
         ) {
             Column {
                 Text(
-                    text = "MAZDA 2 BASE 2026",
-                    color = Color.White,
+                    text = state.vehicleName,
+                    color = colors.textPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
                 )
                 Text(
-                    text = "${state.obdName ?: "OBD-II ELM327"} • ${state.elmInfo ?: "Not connected"}",
-                    color = Color.Gray,
+                    text = state.vehicleSubtitle.ifBlank { "${state.obdName ?: "OBD-II ELM327"} • ${state.elmInfo ?: strings.notConnected}" },
+                    color = colors.textSecondary,
                     fontSize = 12.sp,
+                    maxLines = 1,
                 )
                 if (state.hasObdMac && state.obdMac != null) {
                     Text(
                         text = state.obdMac!!,
-                        color = Color.Gray,
+                        color = colors.textSecondary,
                         fontSize = 10.sp,
                     )
                 }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                StatusBadge(connected, conn)
-                if (!state.hasObdMac) {
-                    Surface(color = AmberAccent.copy(alpha = 0.15f), shape = RoundedCornerShape(20.dp)) {
+                StatusBadge(connected, conn, state.deviceMode, strings)
+                if (!state.hasObdMac && state.deviceMode == "obd") {
+                    Surface(
+                        color = colors.amber.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(20.dp),
+                        onClick = onAddDevice,
+                    ) {
                         Text(
-                            text = "ADD DEVICE",
+                            text = strings.addDevice,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            color = AmberAccent,
+                            color = colors.amber,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                         )
@@ -88,45 +93,163 @@ private fun DashboardContent(state: DashboardUiState) {
             }
         }
 
-        // Hero range + fuel + consumption
+        // Auto-fit: narrow (phone portrait) -> scrollable stack; wide (ZESTECH/landscape) -> compact grid.
+        BoxWithConstraints {
+            val narrow = maxWidth < 560.dp
+            if (narrow) {
+                NarrowLayout(state, colors, connected, conn, strings)
+            } else {
+                WideLayout(state, colors, connected, conn, strings)
+            }
+        }
+    }
+}
+
+@Composable
+private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.theme.FmmsColors, connected: Boolean, conn: OBDConnectionState, strings: FmmsStrings) {
+    val t = state.telemetry
+
+    // Hero range + fuel + consumption
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HeroCell(
+                label = strings.estimatedRange,
+                value = state.fuel.rangeKm?.let { "${it.toInt()} km" } ?: strings.learning,
+                sub = state.fuel.learningNote ?: "",
+                color = colors.cyan,
+                showSubAsNote = state.fuel.rangeKm == null,
+                noteColor = colors.amber,
+            )
+            VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
+            HeroCell(
+                label = strings.fuelLevel,
+                value = state.fuel.levelPercent?.let { "${it.toInt()}% (${state.fuel.estimatedLiters?.let { l -> String.format(Locale.US, "%.1f", l) }}L)" }
+                    ?: "—",
+                sub = state.fuel.source ?: "",
+                color = colors.amber,
+                showSubAsNote = state.fuel.levelPercent == null,
+                noteColor = colors.textSecondary,
+            )
+            VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
+            HeroCell(
+                label = strings.avgConsumption,
+                value = state.fuel.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) + " L/100km" }
+                    ?: "—",
+                sub = state.fuel.learningNote ?: strings.learning,
+                color = colors.textPrimary,
+                showSubAsNote = state.fuel.consumptionL100km == null,
+                noteColor = colors.textSecondary,
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
+
+    // Today / trip row
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+        ) {
+            TripStatCell(strings.trip, state.trip.distanceKm.let { "${String.format(Locale.US, "%.1f", it)} km" }, colors.textPrimary, null)
+            TripStatCell(strings.duration, state.trip.durationSeconds.toTime(), colors.textPrimary, null)
+            TripStatCell(strings.maxSpeed, state.trip.maxSpeedKmh.takeIf { it > 0 }?.let { "${it.toInt()} km/h" } ?: "—", colors.cyan, null)
+            TripStatCell(strings.odo, state.odometer.virtualOdoKm.let { "${it.toInt()} km" }, colors.textPrimary, state.odometer.sourceStatus)
+        }
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
+
+    // Gauges grid
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        GaugeCard(
+            title = strings.speed, value = t.speedKmh?.let { "${it.toInt()}" } ?: "—", unit = "km/h",
+            color = colors.cyan, modifier = Modifier.weight(1f),
+            maxValue = 220f, currentValue = t.speedKmh?.toFloat() ?: 0f,
+        )
+        GaugeCard(
+            title = strings.rpm, value = t.rpm?.let { "${it.toInt()}" } ?: "—", unit = "rpm",
+            color = colors.purple, modifier = Modifier.weight(1f),
+            maxValue = 8000f, currentValue = t.rpm?.toFloat() ?: 0f,
+        )
+        GaugeCard(
+            title = strings.coolant, value = t.coolantTempC?.let { "${it.toInt()}°C" } ?: "—", unit = "",
+            color = colors.emerald, modifier = Modifier.weight(1f),
+            maxValue = 140f, currentValue = t.coolantTempC?.toFloat() ?: 0f,
+        )
+        GaugeCard(
+            title = strings.voltage, value = t.batteryVoltage?.let { String.format(Locale.US, "%.1f", it) } ?: "—", unit = "V",
+            color = colors.amber, modifier = Modifier.weight(1f),
+            maxValue = 16f, currentValue = t.batteryVoltage?.toFloat() ?: 0f,
+        )
+    }
+}
+
+@Composable
+private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.theme.FmmsColors, connected: Boolean, conn: OBDConnectionState, strings: FmmsStrings) {
+    val t = state.telemetry
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        // Hero
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(20.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 HeroCell(
-                    label = "ESTIMATED RANGE",
-                    value = state.fuel.rangeKm?.let { "${it.toInt()} km" } ?: "RANGE",
-                    sub = state.fuel.learningNote ?: state.fuel.rangeKm?.let { "" } ?: "Learning...",
-                    color = CyanAccent,
+                    label = strings.estimatedRange,
+                    value = state.fuel.rangeKm?.let { "${it.toInt()} km" } ?: strings.learning,
+                    sub = state.fuel.learningNote ?: "",
+                    color = colors.cyan,
                     showSubAsNote = state.fuel.rangeKm == null,
-                    noteColor = AmberAccent,
+                    noteColor = colors.amber,
                 )
-                VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = Color.DarkGray)
-                HeroCell(
-                    label = "FUEL LEVEL",
-                    value = state.fuel.levelPercent?.let { "${it.toInt()}% (${state.fuel.estimatedLiters?.let { l -> String.format(Locale.US, "%.1f", l) }}L)" }
-                        ?: "—",
-                    sub = state.fuel.source ?: "",
-                    color = AmberAccent,
-                    showSubAsNote = state.fuel.levelPercent == null,
-                    noteColor = Color.Gray,
-                )
-                VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = Color.DarkGray)
-                HeroCell(
-                    label = "AVG CONSUMPTION",
-                    value = state.fuel.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) + " L/100km" }
-                        ?: "—",
-                    sub = state.fuel.learningNote ?: "Learning...",
-                    color = Color.White,
-                    showSubAsNote = state.fuel.consumptionL100km == null,
-                    noteColor = Color.Gray,
-                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                ) {
+                    HeroCell(
+                        label = strings.fuelLevel,
+                        value = state.fuel.levelPercent?.let { "${it.toInt()}%" } ?: "—",
+                        sub = state.fuel.source ?: "",
+                        color = colors.amber,
+                        showSubAsNote = state.fuel.levelPercent == null,
+                        noteColor = colors.textSecondary,
+                    )
+                    HeroCell(
+                        label = strings.avgConsumption,
+                        value = state.fuel.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) + " L/100km" } ?: "—",
+                        sub = state.fuel.learningNote ?: strings.learning,
+                        color = colors.textPrimary,
+                        showSubAsNote = state.fuel.consumptionL100km == null,
+                        noteColor = colors.textSecondary,
+                    )
+                }
             }
         }
 
@@ -134,40 +257,63 @@ private fun DashboardContent(state: DashboardUiState) {
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
             ) {
-                TripStatCell("TRIP", state.trip.distanceKm.let { "${String.format(Locale.US, "%.1f", it)} km" }, Color.White, null)
-                TripStatCell("DURATION", state.trip.durationSeconds.toTime(), Color.White, null)
-                TripStatCell("MAX SPEED", state.trip.maxSpeedKmh.takeIf { it > 0 }?.let { "${it.toInt()} km/h" } ?: "—", CyanAccent, null)
-                TripStatCell("ODO", state.odometer.virtualOdoKm.let { "${it.toInt()} km" }, Color.White, state.odometer.sourceStatus)
+                TripStatCell(strings.trip, state.trip.distanceKm.let { "${String.format(Locale.US, "%.1f", it)} km" }, colors.textPrimary, null)
+                TripStatCell(strings.duration, state.trip.durationSeconds.toTime(), colors.textPrimary, null)
+                TripStatCell(strings.maxSpeed, state.trip.maxSpeedKmh.takeIf { it > 0 }?.let { "${it.toInt()} km/h" } ?: "—", colors.cyan, null)
+                TripStatCell(strings.odo, state.odometer.virtualOdoKm.let { "${it.toInt()} km" }, colors.textPrimary, null)
             }
         }
 
-        // Gauges grid
+        // Gauges 2x2
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            GaugeCard("SPEED", t.speedKmh?.let { "${it.toInt()}" } ?: "—", "km/h", CyanAccent, Modifier.weight(1f))
-            GaugeCard("RPM", t.rpm?.let { "${it.toInt()}" } ?: "—", "rpm", PurpleAccent, Modifier.weight(1f))
-            GaugeCard("COOLANT", t.coolantTempC?.let { "${it.toInt()}°C" } ?: "—", "", EmeraldAccent, Modifier.weight(1f))
-            GaugeCard("VOLTAGE", t.batteryVoltage?.let { String.format(Locale.US, "%.1f", it) } ?: "—", "V", AmberAccent, Modifier.weight(1f))
+            GaugeCard(
+                title = strings.speed, value = t.speedKmh?.let { "${it.toInt()}" } ?: "—", unit = "km/h",
+                color = colors.cyan, modifier = Modifier.weight(1f),
+                maxValue = 220f, currentValue = t.speedKmh?.toFloat() ?: 0f,
+            )
+            GaugeCard(
+                title = strings.rpm, value = t.rpm?.let { "${it.toInt()}" } ?: "—", unit = "rpm",
+                color = colors.purple, modifier = Modifier.weight(1f),
+                maxValue = 8000f, currentValue = t.rpm?.toFloat() ?: 0f,
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            GaugeCard(
+                title = strings.coolant, value = t.coolantTempC?.let { "${it.toInt()}°C" } ?: "—", unit = "",
+                color = colors.emerald, modifier = Modifier.weight(1f),
+                maxValue = 140f, currentValue = t.coolantTempC?.toFloat() ?: 0f,
+            )
+            GaugeCard(
+                title = strings.voltage, value = t.batteryVoltage?.let { String.format(Locale.US, "%.1f", it) } ?: "—", unit = "V",
+                color = colors.amber, modifier = Modifier.weight(1f),
+                maxValue = 16f, currentValue = t.batteryVoltage?.toFloat() ?: 0f,
+            )
         }
     }
 }
 
 @Composable
-private fun StatusBadge(connected: Boolean, conn: OBDConnectionState) {
+private fun StatusBadge(connected: Boolean, conn: OBDConnectionState, deviceMode: String, strings: FmmsStrings) {
+    val colors = LocalFmmsColors.current
     val (color, text) = when {
-        conn == OBDConnectionState.RECONNECTING -> RedAccent to "OBD RECONNECTING"
-        conn == OBDConnectionState.SCANNING -> AmberAccent to "SCANNING"
-        connected -> EmeraldAccent to "OBD CONNECTED"
-        conn == OBDConnectionState.ERROR -> RedAccent to "OBD ERROR"
-        else -> Color.Gray to "OBD DISCONNECTED"
+        deviceMode == "gps" -> colors.emerald to strings.gpsTracking
+        conn == OBDConnectionState.RECONNECTING -> colors.red to strings.obdReconnecting
+        conn == OBDConnectionState.SCANNING -> colors.amber to strings.scanning
+        connected -> colors.emerald to strings.obdConnected
+        conn == OBDConnectionState.ERROR -> colors.red to strings.obdError
+        else -> colors.textSecondary to strings.obdDisconnected
     }
     Surface(color = color.copy(alpha = 0.2f), shape = RoundedCornerShape(20.dp)) {
         Row(
@@ -190,8 +336,9 @@ private fun HeroCell(
     showSubAsNote: Boolean = false,
     noteColor: Color = Color.Gray,
 ) {
+    val colors = LocalFmmsColors.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(2.dp))
         Text(value, color = color, fontSize = 32.sp, fontWeight = FontWeight.Black)
         if (showSubAsNote) {
@@ -204,36 +351,13 @@ private fun HeroCell(
 
 @Composable
 private fun TripStatCell(label: String, value: String, color: Color, sub: String?) {
+    val colors = LocalFmmsColors.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = colors.textSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(2.dp))
         Text(value, color = color, fontSize = 16.sp, fontWeight = FontWeight.Black)
         if (sub != null) {
-            Text(sub, color = Color.Gray, fontSize = 9.sp)
-        }
-    }
-}
-
-@Composable
-fun GaugeCard(title: String, value: String, unit: String, color: Color, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(title, color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(value, color = color, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                if (unit.isNotBlank()) {
-                    Spacer(modifier = Modifier.width(2.dp))
-                    Text(unit, color = Color.Gray, fontSize = 10.sp)
-                }
-            }
+            Text(sub, color = colors.textSecondary, fontSize = 9.sp)
         }
     }
 }

@@ -71,6 +71,14 @@ class OBDConnectionManager(
         reconnectJob = scope.launch {
             while (shouldBeConnected) {
                 if (transport.isConnected()) {
+                    // Even when the socket reports connected, verify the link is
+                    // actually alive: a stale socket (silent BT drop) must trigger
+                    // a real reconnect, not sit idle forever.
+                    if (!isLinkAlive()) {
+                        _connectionState.value = OBDConnectionState.RECONNECTING
+                        mutex.withLock { transport.disconnect() }
+                        continue
+                    }
                     delay(3000)
                     continue
                 }
@@ -100,6 +108,15 @@ class OBDConnectionManager(
                 }
             }
         }
+    }
+
+    /** Lightweight liveness probe: if the ELM was initialised, a dead socket
+     *  makes a cheap AT command time out. */
+    private suspend fun isLinkAlive(): Boolean {
+        if (!elms.isInitialised) return true
+        return kotlinx.coroutines.withTimeoutOrNull(1500) {
+            elms.transportCommand("AT@1")
+        } != null
     }
 
     fun getLastMacAddress(): String? = lastMacAddress

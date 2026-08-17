@@ -11,7 +11,9 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.R
+import com.fmms.carlogger.core.database.entity.GpsTrackPointEntity
 import com.fmms.carlogger.core.obd.OBDConnectionState
+import com.fmms.carlogger.domain.model.DataQuality
 import com.fmms.carlogger.domain.model.LiveTelemetry
 import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
@@ -19,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -30,6 +33,7 @@ class TelemetryService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var runnerJob: Job? = null
+    private var gpsJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -62,32 +66,103 @@ class TelemetryService : Service() {
     }
 
     private fun startIfNeeded() {
-        if (runnerJob?.isActive == true) return
+        if (runnerJob?.isActive == true || gpsJob?.isActive == true) return
         val c = AppContainer
 
         c.gpsTracker.start()
-        c.obdManager.start()
-        c.tripEngine.start()
-        c.telemetryEngine.start()
+        if (c.prefs.getDeviceMode() == "gps") {
+            startGpsOnly()
+        } else {
+            c.obdManager.start()
+            c.tripEngine.start()
+            c.telemetryEngine.start()
+            runnerJob = serviceScope.launch {
+                var lastOdo = c.vehicleRepository.getActive()?.odometerKm
 
-        runnerJob = serviceScope.launch {
-            var lastOdo = c.vehicleRepository.getActive()?.odometerKm
+                c.telemetryEngine.live.collect { telemetry ->
+                    c.tripEngine.feed(telemetry)
+                    c.fuelEngine.onTelemetry(telemetry)
 
-            c.telemetryEngine.live.collect { telemetry ->
-                c.tripEngine.feed(telemetry)
-                c.fuelEngine.onTelemetry(telemetry)
-
-                val vehicle = c.vehicleRepository.getActive()
-                if (vehicle != null) {
-                    lastOdo = lastOdo ?: telemetry.odometerKm ?: vehicle.odometerKm
-                    persistSample(vehicle.id, telemetry, lastOdo)
-                    // Odometer sync: prefer verified OBD; else trip-range accumulation handled by TripEngine
-                    if (telemetry.odometerKm != null) {
-                        c.vehicleRepository.updateOdometer(vehicle.id, telemetry.odometerKm!!)
-                        lastOdo = telemetry.odometerKm!!
+                    val vehicle = c.vehicleRepository.getActive()
+                    if (vehicle != null) {
+                        lastOdo = lastOdo ?: telemetry.odometerKm ?: vehicle.odometerKm
+                        persistSample(vehicle.id, telemetry, lastOdo)
+                        // Odometer sync: prefer verified OBD; else trip-range accumulation handled by TripEngine
+                        if (telemetry.odometerKm != null) {
+                            c.vehicleRepository.updateOdometer(vehicle.id, telemetry.odometerKm!!)
+                            lastOdo = telemetry.odometerKm!!
+                        }
                     }
+                    updateNotification(telemetry, c.obdManager.connectionState.value)
                 }
-                updateNotification(telemetry, c.obdManager.connectionState.value)
+            }
+        }
+    }
+
+    /**
+     * GPS-only tracker mode (bike): no OBD adapter. Publishes GPS-derived
+     * telemetry, feeds the trip engine, and records + enqueues trackpoints
+     * every `gps_interval_sec` seconds while moving (or during an active trip).
+     */
+    private fun startGpsOnly() {
+        val c = AppContainer
+        c.tripEngine.start()
+        gpsJob = serviceScope.launch {
+            var currentTripId: String? = null
+            var lastRecord = 0L
+            val batch = mutableListOf<GpsTrackPointEntity>()
+
+            while (isActive) {
+                val loc = c.gpsTracker.currentLocation()
+                if (loc != null) {
+                    val speedKmh = (loc.speed * 3.6).takeIf { it >= 0.1 }
+                    val telemetry = LiveTelemetry(
+                        speedKmh = speedKmh,
+                        latitude = loc.latitude,
+                        longitude = loc.longitude,
+                        gpsSpeedKmh = speedKmh,
+                        gpsAccuracy = loc.accuracy.toDouble(),
+                        connectionQuality = "OK",
+                        dataQuality = DataQuality.VALID,
+                        rawSource = "GPS",
+                        timestamp = System.currentTimeMillis(),
+                    )
+                    c.publishGpsTelemetry(telemetry)
+                    c.tripEngine.feed(telemetry)
+
+                    val vehicle = c.vehicleRepository.getActive()
+                    val tripState = c.tripEngine.state.value
+                    val tripActive = tripState.active
+                    currentTripId = if (tripActive) {
+                        c.tripRepository.getActiveTrip(vehicle?.id ?: "")?.id ?: currentTripId
+                    } else {
+                        currentTripId
+                    }
+
+                    val moving = (speedKmh ?: 0.0) >= 1.0
+                    val now = System.currentTimeMillis()
+                    val intervalMs = c.prefs.getGpsIntervalSec() * 1000L
+                    if (vehicle != null && (moving || tripActive) && now - lastRecord >= intervalMs) {
+                        lastRecord = now
+                        batch += GpsTrackPointEntity(
+                            id = UUID.randomUUID().toString(),
+                            tripId = currentTripId,
+                            vehicleId = vehicle.id,
+                            deviceId = c.prefs.getDeviceId(),
+                            lat = loc.latitude,
+                            lng = loc.longitude,
+                            speedKmh = speedKmh,
+                            recordedAt = now,
+                        )
+                    }
+
+                    if (batch.size >= 25 || (batch.isNotEmpty() && now - lastRecord > 60000L)) {
+                        c.gpsTrackRepository.insertAndEnqueue(batch.toList())
+                        batch.clear()
+                    }
+                    updateNotification(telemetry, OBDConnectionState.DISCONNECTED)
+                }
+                delay(1000)
             }
         }
     }
@@ -129,19 +204,25 @@ class TelemetryService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         val speed = telemetry.speedKmh?.let { "${it.toInt()} km/h" } ?: "—"
         val rpm = telemetry.rpm?.let { "${it.toInt()} rpm" } ?: "—"
-        val statusLine = when (state) {
-            OBDConnectionState.CONNECTED -> "OBD CONNECTED"
-            OBDConnectionState.RECONNECTING -> "OBD RECONNECTING"
-            OBDConnectionState.SCANNING -> "SCANNING"
-            OBDConnectionState.ERROR -> "OBD ERROR"
-            else -> "OBD DISCONNECTED"
+        val isGpsMode = AppContainer.prefs.getDeviceMode() == "gps"
+        val statusLine = if (isGpsMode) {
+            "GPS TRACKING"
+        } else {
+            when (state) {
+                OBDConnectionState.CONNECTED -> "OBD CONNECTED"
+                OBDConnectionState.RECONNECTING -> "OBD RECONNECTING"
+                OBDConnectionState.SCANNING -> "SCANNING"
+                OBDConnectionState.ERROR -> "OBD ERROR"
+                else -> "OBD DISCONNECTED"
+            }
         }
         nm.notify(NOTIFICATION_ID, notification("$statusLine • $speed • $rpm"))
     }
 
     private fun notification(text: String): Notification {
+        val deviceName = AppContainer.prefs.getDeviceName()?.takeIf { it.isNotBlank() } ?: "FMMS Tracker"
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Mazda2 Logger")
+            .setContentTitle(deviceName)
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setOngoing(true)
@@ -159,6 +240,7 @@ class TelemetryService : Service() {
 
     override fun onDestroy() {
         runnerJob?.cancel()
+        gpsJob?.cancel()
         serviceScope.cancel()
         super.onDestroy()
     }
