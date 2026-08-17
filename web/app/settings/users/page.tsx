@@ -140,7 +140,7 @@ export default function UsersManagementPage() {
           <div>
             <h1 className="text-2xl font-extrabold flex items-center space-x-2.5" style={{ color: 'var(--text-primary)' }}>
               <Users className="w-6 h-6 text-cyan-400" />
-              <span>Quản Lý Người Dùng &amp; Phân Quyền Thành Viên (§202)</span>
+              <span>Quản Lý Người Dùng &amp; Phân Quyền Thành Viên</span>
             </h1>
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
               Quản lý danh sách thành viên gia đình, phân quyền Admin/Member, chỉ định xe và reset mật khẩu

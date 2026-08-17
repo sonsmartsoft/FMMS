@@ -172,9 +172,9 @@ export default function MaintenancePage() {
 
       {/* Multi-Service Maintenance Modal */}
       {openModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setOpenModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 sticky top-0 z-10 glass-panel" style={{ borderBottom: '1px solid var(--border-default)' }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(false)}>
+          <div className="glass-panel rounded-2xl w-full max-w-lg my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
                 <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Thêm đợt bảo dưỡng / Thay phụ tùng</h3>
                 <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Quản lý đợt bảo dưỡng gồm nhiều dịch vụ & phụ tùng</p>
@@ -218,23 +218,23 @@ export default function MaintenancePage() {
 
                 <div className="space-y-2">
                   {serviceItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center space-x-2">
+                    <div key={idx} className="flex items-center gap-2">
                       <input
                         type="text"
-                        className="theme-input flex-1"
+                        className="theme-input flex-1 min-w-0"
                         placeholder="Tên dịch vụ (VD: Thay dầu máy, Lọc gió...)"
                         value={item.name}
                         onChange={e => updateServiceItem(idx, 'name', e.target.value)}
                       />
                       <input
                         type="number"
-                        className="theme-input w-28"
+                        className="theme-input w-32 shrink-0"
                         placeholder="Giá (₫)"
                         value={item.cost}
                         onChange={e => updateServiceItem(idx, 'cost', e.target.value)}
                       />
                       {serviceItems.length > 1 && (
-                        <button type="button" onClick={() => removeServiceItem(idx)} className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10">
+                        <button type="button" onClick={() => removeServiceItem(idx)} className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 shrink-0">
                           <X className="w-4 h-4" />
                         </button>
                       )}
