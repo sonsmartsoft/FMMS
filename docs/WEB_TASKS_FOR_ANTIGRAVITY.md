@@ -38,9 +38,11 @@ App Android (Kotlin/Compose, package `com.fmms.carlogger`) đã hoàn thiện c�
 - Phục vụ web lấy điểm GPS theo khoảng thời gian/trip cho replay.
 
 ## Ghi chú contract (đã cố định, không thay đổi)
-- Android gửi GPS dạng **JSON array batch**, mỗi mẫu tối đa 5s.
+- Android gửi GPS dạng **JSON array batch**, mỗi mẫu tối đa 5s, kèm `vehicle_id` + `device_id`.
 - Tên bảng/cột theo đúng spec trên (đã đóng băng để không ảnh hưởng bản phát triển iOS sau này).
 - RLS phải bật; mọi thao tác ghi phải qua policy theo owner/fleet.
+- **Định danh dữ liệu bằng id (`vehicle_id`, `device_id`), tuyệt đối không dùng tên xe** — tên chỉ là hiển thị.
+- Mỗi lần cài app sinh 1 `device_id` (UUID ổn định); để đổi thiết bị khác phải cài lại. `MAC` có khi dùng OBD; xe đạp GPS-only không có MAC mà dùng `device_id`.
 
 ## BỔ SUNG (14/08/2026) — chế độ GPS-only cho xe đạp + quản lý thiết bị
 
@@ -66,10 +68,10 @@ App Android mới có 2 chế độ thiết bị, quản lý theo **tracker devi
 - Web/fleet hiển thị bình thường, các ô nhiên liệu để trống.
 
 ### Ưu tiên (cập nhật)
-1. Bảng + RLS + Edge Function (thêm `device_id`, `device_name`).
+1. Bảng `gps_track_points` + `devices` + RLS + Edge functions.
 2. Tab MAP + live position theo device.
 3. Replay trip.
-4. Fleet admin map (theo device).
+4. Fleet admin map + quản lý device↔xe.
 
 ---
 
