@@ -355,9 +355,9 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       </div>
       {/* ─── Add Asset Modal ─── */}
       {openAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={() => setOpenAddModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 sticky top-0 z-10 glass-panel" style={{ borderBottom: '1px solid var(--border-default)' }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
+          <div className="glass-panel rounded-2xl w-full max-w-lg my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
                 <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Thêm phương tiện mới</h3>
                 <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Điền thông tin cơ bản của phương tiện</p>
@@ -441,9 +441,9 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       )}
       {/* ─── Card Configuration Modal (Spec v5.2 §224) ─── */}
       {openCardConfigModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={() => setOpenCardConfigModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 sticky top-0 z-10 glass-panel" style={{ borderBottom: '1px solid var(--border-default)' }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenCardConfigModal(false)}>
+          <div className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
                 <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Cấu hình hiển thị thẻ phương tiện</h3>
                 <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Tùy chọn hiển thị các trường dữ liệu trên Card</p>

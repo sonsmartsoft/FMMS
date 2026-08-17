@@ -29,16 +29,16 @@ const durFmt = (s: number) => `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.65)' }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md"
+      style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={onClose}
     >
       <div
-        className="glass-panel rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
-        style={{ border: '1px solid var(--border-default)' }}
+        className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[85vh] overflow-y-auto shadow-2xl"
+        style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'var(--border-default)' }}>
+        <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
           <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{title}</h3>
           <button onClick={onClose} className="p-1 rounded-lg transition hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
             <X className="w-4 h-4" />
