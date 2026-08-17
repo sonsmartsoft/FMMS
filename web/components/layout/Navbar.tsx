@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Car, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, ShieldCheck } from 'lucide-react';
+import { Car, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, ShieldCheck, X } from 'lucide-react';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { createClient } from '@/lib/supabase/client';
 
@@ -16,15 +16,25 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
   const { theme, toggleTheme } = useTheme();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string>('demo@fmms.com');
+  const [userName, setUserName] = useState<string>('Nguyễn Trung Sơn');
+  const [orgName, setOrgName] = useState<string>('CONG TY TNHH UTI VINA');
   const [userRole, setUserRole] = useState<'ADMIN' | 'MEMBER'>('ADMIN');
+  const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const supabase = createClient();
 
   useEffect(() => {
     (async () => {
       try {
+        const savedName = localStorage.getItem('fmms_user_name');
+        const savedOrg = localStorage.getItem('fmms_org_name');
+        if (savedName) setUserName(savedName);
+        if (savedOrg) setOrgName(savedOrg);
+
         const { data: { user } } = await supabase.auth.getUser();
         if (user && user.email) {
           setUserEmail(user.email);
+          if (user.user_metadata?.full_name && !savedName) setUserName(user.user_metadata.full_name);
           setUserRole(user.user_metadata?.role || (user.email.includes('admin') || user.email === 'demo@fmms.com' ? 'ADMIN' : 'MEMBER'));
         }
       } catch {}
@@ -119,32 +129,150 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
           <Sliders className="w-4 h-4" />
         </button>
 
-        {/* User Info & Logout Badge */}
-        <div className="flex items-center space-x-2 pl-2 border-l" style={{ borderColor: 'var(--border-default)' }}>
-          <div className="hidden sm:flex flex-col text-right">
-            <span className="text-xs font-bold truncate max-w-[130px]" style={{ color: 'var(--text-primary)' }}>
-              {userEmail.split('@')[0]}
-            </span>
-            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded w-fit ml-auto"
-              style={{
-                background: userRole === 'ADMIN' ? 'rgba(59,130,246,0.15)' : 'var(--bg-hover)',
-                color: userRole === 'ADMIN' ? '#60A5FA' : 'var(--text-muted)',
-                border: `1px solid ${userRole === 'ADMIN' ? 'rgba(59,130,246,0.3)' : 'var(--border-default)'}`,
-              }}>
-              {userRole}
-            </span>
-          </div>
-
+        {/* Microsoft 365 Style User Profile Trigger */}
+        <div className="relative pl-2 border-l" style={{ borderColor: 'var(--border-default)' }}>
           <button
-            onClick={handleLogout}
-            className="p-2 rounded-xl text-rose-400 hover:bg-rose-500/10 transition border border-rose-500/20 flex items-center space-x-1"
-            title="Đăng xuất"
+            onClick={() => setShowProfileMenu(p => !p)}
+            className="flex items-center space-x-2.5 p-1 rounded-full transition hover:opacity-90"
+            style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)' }}
           >
-            <LogOut className="w-4 h-4" />
-            <span className="text-xs font-bold hidden md:inline">Thoát</span>
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-200 via-orange-300 to-amber-400 p-0.5 shadow-sm flex items-center justify-center overflow-hidden">
+              <img
+                src={`https://api.dicebear.com/7.x/bottts/svg?seed=${userEmail}`}
+                alt="Avatar"
+                className="w-full h-full rounded-full object-cover bg-amber-100"
+              />
+            </div>
+            <div className="hidden sm:flex flex-col text-left pr-2">
+              <span className="text-xs font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>
+                {userName}
+              </span>
+              <span className="text-[9px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+                {userRole === 'ADMIN' ? 'Quản trị viên' : 'Thành viên'}
+              </span>
+            </div>
           </button>
+
+          {/* Popover Dropdown inspired by Microsoft 365 Profile */}
+          {showProfileMenu && (
+            <div
+              className="absolute right-0 mt-3 w-80 rounded-2xl shadow-2xl z-50 overflow-hidden animate-scaleIn"
+              style={{
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border-default)',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+              }}
+            >
+              {/* Top Banner Header */}
+              <div className="px-5 py-3 flex items-center justify-between" style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-subtle)' }}>
+                <span className="text-[11px] font-bold tracking-wider uppercase truncate max-w-[180px]" style={{ color: 'var(--text-muted)' }}>
+                  {orgName}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="text-xs font-bold hover:underline transition"
+                  style={{ color: 'var(--status-red)' }}
+                >
+                  Sign out
+                </button>
+              </div>
+
+              {/* User Identity Card */}
+              <div className="p-5 flex items-start space-x-4">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-amber-200 to-amber-400 p-1 shrink-0 shadow-md">
+                  <img
+                    src={`https://api.dicebear.com/7.x/bottts/svg?seed=${userEmail}`}
+                    alt="Avatar"
+                    className="w-full h-full rounded-full bg-amber-50 object-cover"
+                  />
+                </div>
+                <div className="space-y-1 overflow-hidden">
+                  <h4 className="font-extrabold text-base leading-snug truncate" style={{ color: 'var(--text-primary)' }}>
+                    {userName}
+                  </h4>
+                  <p className="text-xs truncate font-medium" style={{ color: 'var(--text-muted)' }}>
+                    {userEmail}
+                  </p>
+
+                  <div className="pt-2 space-y-1">
+                    <button
+                      onClick={() => { setShowProfileMenu(false); setShowEditModal(true); }}
+                      className="text-xs font-bold text-cyan-400 hover:underline block text-left"
+                    >
+                      View account (Xem tài khoản)
+                    </button>
+                    <button
+                      onClick={() => { setShowProfileMenu(false); setShowEditModal(true); }}
+                      className="text-xs font-bold text-blue-400 hover:underline block text-left"
+                    >
+                      My FMMS Profile &amp; Settings
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Switch Account Action */}
+              <div className="p-3 border-t" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)' }}>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center space-x-2 py-2.5 rounded-xl text-xs font-bold transition hover:opacity-90"
+                  style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
+                >
+                  <User className="w-4 h-4" />
+                  <span>Sign in with a different account</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Account Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setShowEditModal(false)}>
+          <div className="glass-panel rounded-2xl w-full max-w-md" style={{ border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5" style={{ borderBottom: '1px solid var(--border-default)' }}>
+              <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Chỉnh sửa thông tin tài khoản người dùng</h3>
+              <button onClick={() => setShowEditModal(false)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-3 text-xs">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Họ và tên hiển thị</label>
+                <input type="text" className="theme-input" value={userName} onChange={e => setUserName(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tên Công ty / Hộ gia đình</label>
+                <input type="text" className="theme-input" value={orgName} onChange={e => setOrgName(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Email đăng nhập</label>
+                <input type="text" className="theme-input opacity-70 cursor-not-allowed" value={userEmail} disabled />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Vai trò phân quyền</label>
+                <input type="text" className="theme-input opacity-70 cursor-not-allowed" value={userRole === 'ADMIN' ? 'ADMIN (Quản trị viên)' : 'MEMBER (Thành viên)'} disabled />
+              </div>
+              <div className="flex space-x-2 pt-3">
+                <button
+                  onClick={() => {
+                    localStorage.setItem('fmms_user_name', userName);
+                    localStorage.setItem('fmms_org_name', orgName);
+                    setShowEditModal(false);
+                    alert('Đã cập nhật thông tin tài khoản thành công!');
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90"
+                  style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+                >
+                  Lưu thay đổi
+                </button>
+                <button onClick={() => setShowEditModal(false)} className="px-4 py-2.5 rounded-xl text-xs font-semibold" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
