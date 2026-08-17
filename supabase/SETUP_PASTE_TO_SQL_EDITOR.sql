@@ -570,6 +570,82 @@ DROP POLICY IF EXISTS "sync_queue_via_asset" ON public.sync_queue;
 CREATE POLICY "sync_queue_via_asset" ON public.sync_queue FOR ALL
   USING (EXISTS (SELECT 1 FROM public.assets WHERE assets.id = sync_queue.asset_id AND assets.owner_id = auth.uid()));
 
+CREATE TABLE IF NOT EXISTS public.warranties (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    asset_id UUID NOT NULL REFERENCES public.assets(id) ON DELETE CASCADE,
+    item_type TEXT NOT NULL CHECK (item_type IN ('VEHICLE', 'PART', 'UPGRADE', 'OTHER')),
+    item_name TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    policy_number TEXT,
+    start_date DATE NOT NULL,
+    expiry_date DATE,
+    expiry_km NUMERIC(10,2),
+    coverage_details TEXT,
+    status TEXT DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'EXPIRED', 'CLAIMED', 'VOID')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.warranty_claims (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    warranty_id UUID REFERENCES public.warranties(id) ON DELETE CASCADE,
+    asset_id UUID NOT NULL REFERENCES public.assets(id) ON DELETE CASCADE,
+    claim_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    description TEXT NOT NULL,
+    amount_claimed NUMERIC(12,2) DEFAULT 0,
+    amount_approved NUMERIC(12,2) DEFAULT 0,
+    status TEXT DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'IN_PROGRESS', 'RESOLVED')),
+    vendor TEXT,
+    resolution_notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    asset_id UUID REFERENCES public.assets(id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id UUID,
+    previous_value JSONB,
+    new_value JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.dashboard_settings (
+    user_id UUID PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
+    card_fields JSONB NOT NULL DEFAULT '["image","name","type","brand","price","plate","mileage","fuel","next_maint"]'::jsonb,
+    sort_by TEXT DEFAULT 'created_at',
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for v5.2
+CREATE INDEX IF NOT EXISTS idx_warranties_asset ON public.warranties(asset_id);
+CREATE INDEX IF NOT EXISTS idx_claims_warranty ON public.warranty_claims(warranty_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON public.audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_asset ON public.audit_logs(asset_id);
+
+-- RLS for v5.2
+ALTER TABLE public.warranties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.warranty_claims ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.dashboard_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "warranties_via_asset" ON public.warranties;
+CREATE POLICY "warranties_via_asset" ON public.warranties FOR ALL
+  USING (EXISTS (SELECT 1 FROM public.assets WHERE assets.id = warranties.asset_id AND assets.owner_id = auth.uid()));
+
+DROP POLICY IF EXISTS "claims_via_asset" ON public.warranty_claims;
+CREATE POLICY "claims_via_asset" ON public.warranty_claims FOR ALL
+  USING (EXISTS (SELECT 1 FROM public.assets WHERE assets.id = warranty_claims.asset_id AND assets.owner_id = auth.uid()));
+
+DROP POLICY IF EXISTS "audit_self" ON public.audit_logs;
+CREATE POLICY "audit_self" ON public.audit_logs FOR ALL USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "dashboard_self" ON public.dashboard_settings;
+CREATE POLICY "dashboard_self" ON public.dashboard_settings FOR ALL USING (auth.uid() = user_id);
+
 -- ================================================================
 -- XONG! Chạy thành công → đăng ký user trên app → data tự tạo
 -- ================================================================

@@ -15,7 +15,7 @@ import { createClient } from '@/lib/supabase/client';
 import {
   ArrowLeft, Gauge, Fuel, Wrench, DollarSign, FileText, BarChart3,
   Cpu, CheckCircle2, Plus, MapPin, Activity, Layers, Car, X, Pencil,
-  Zap, Clock, TrendingDown, Shield, CreditCard,
+  Zap, Clock, TrendingDown, Shield, CreditCard, Award,
 } from 'lucide-react';
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -238,6 +238,7 @@ export default function AssetDetailPage() {
     { id: 'expenses', label: 'Chi phí', show: true, icon: DollarSign },
     { id: 'finance', label: 'Khoản vay', show: asset.capabilities.has_finance, icon: CreditCard },
     { id: 'insurance', label: 'Bảo hiểm & Giấy tờ', show: asset.capabilities.has_documents, icon: Shield },
+    { id: 'warranty', label: 'Bảo hành & Claim', show: true, icon: Award },
     { id: 'analytics', label: 'Phân tích TCO', show: true, icon: BarChart3 },
   ].filter((t) => t.show);
 
@@ -915,6 +916,58 @@ export default function AssetDetailPage() {
                   <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{v}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ WARRANTY ═══ */}
+        {activeTab === 'warranty' && (
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Sổ Bảo Hành & Sổ Claim Phụ Tùng</h3>
+              <button onClick={() => setOpenModal('warranty')}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-bold transition hover:opacity-90">
+                <Plus className="w-3.5 h-3.5" /><span>Thêm bảo hành</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-bold" style={{ color: 'var(--text-primary)' }}>Bảo hành Hãng xe / Phương tiện</p>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)' }}>CÒN HẠN</span>
+                </div>
+                {[
+                  ['Hạng mục', `${asset.brand} ${asset.model}`],
+                  ['Đơn vị bảo hành', `${asset.brand} Việt Nam`],
+                  ['Thời hạn', '3 năm / 100,000 km'],
+                  ['Ngày bắt đầu', asset.purchase_date || '01/01/2026'],
+                  ['Trạng thái', 'Đang áp dụng'],
+                ].map(([k, v], i) => (
+                  <div key={i} className="flex justify-between">
+                    <span style={{ color: 'var(--text-muted)' }}>{k}</span>
+                    <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="font-bold" style={{ color: 'var(--text-primary)' }}>Bảo hành Phụ tùng / Nâng cấp</p>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)' }}>{parts.length} phụ tùng</span>
+                </div>
+                {parts.slice(0, 3).map((p, i) => (
+                  <div key={i} className="flex justify-between items-center py-1" style={{ borderBottom: i < 2 ? '1px solid var(--border-subtle)' : 'none' }}>
+                    <div>
+                      <p className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{p.name}</p>
+                      <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{p.brand || 'Chính hãng'}</p>
+                    </div>
+                    <span className="text-[10px] font-bold" style={{ color: 'var(--status-green)' }}>
+                      {p.warranty_months ? `${p.warranty_months} tháng` : 'Theo hãng'}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}

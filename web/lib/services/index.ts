@@ -9,3 +9,4 @@ export * from './insuranceService';
 export * from './partService';
 export * from './registrationService';
 export * from './documentService';
+export * from './warrantyService';
