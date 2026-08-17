@@ -10,6 +10,7 @@ data class VehicleEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "fleet_id") val fleetId: String?,
     val vin: String?,
+    val name: String,
     @ColumnInfo(name = "license_plate") val licensePlate: String,
     val make: String,
     val model: String,
@@ -22,4 +23,14 @@ data class VehicleEntity(
     val active: Boolean,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
-)
+) {
+    /** Display name: web `name` preferred; local fallback joins make-model. */
+    fun displayName(): String {
+        val n = name.trim()
+        if (n.isNotEmpty()) return n
+        val m = model.trim()
+        val k = make.trim()
+        if (m.isNotEmpty() && k.isNotEmpty()) return "$k - $m"
+        return m.ifEmpty { k }
+    }
+}

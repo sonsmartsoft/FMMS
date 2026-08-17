@@ -48,6 +48,23 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
   const [cardConfig, setCardConfig] = useState<CardDisplaySettings>(cardSettings || DEFAULT_CARD_SETTINGS);
 
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem('fmms_card_settings');
+      if (saved) setCardConfig(JSON.parse(saved));
+    } catch {}
+
+    const handleSettingsUpdated = () => {
+      try {
+        const saved = localStorage.getItem('fmms_card_settings');
+        if (saved) setCardConfig(JSON.parse(saved));
+      } catch {}
+    };
+
+    window.addEventListener('fmms_settings_updated', handleSettingsUpdated);
+    return () => window.removeEventListener('fmms_settings_updated', handleSettingsUpdated);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
@@ -301,13 +318,13 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
         </div>
 
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 z-10" style={{ color: 'var(--text-muted)' }} />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Tìm kiếm phương tiện..."
-            className="theme-input pl-9 w-full sm:w-60"
+            className="theme-input !pl-9 w-full sm:w-60"
           />
         </div>
       </div>

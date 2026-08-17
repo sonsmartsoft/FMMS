@@ -45,6 +45,7 @@ class VehicleRepository(
             id = UUID.randomUUID().toString(),
             fleetId = null,
             vin = vin,
+            name = "",
             licensePlate = licensePlate,
             make = make,
             model = model,
@@ -112,7 +113,7 @@ class VehicleRepository(
      * local Room so THIẾT BỊ can assign an official web vehicle_id.
      */
     suspend fun pullWebVehicles(): List<VehicleEntity> {
-        val body = JSONObject().apply { put("device_id", prefs.getDeviceId()) }
+        val body = JSONObject().apply { put("p_device_id", prefs.getDeviceId()) }
         val request = okhttp3.Request.Builder()
             .url("${com.fmms.carlogger.BuildConfig.SUPABASE_URL}/rest/v1/rpc/get_fleet_vehicles")
             .header("apikey", com.fmms.carlogger.BuildConfig.SUPABASE_PUBLISHABLE_KEY)
@@ -138,14 +139,15 @@ class VehicleRepository(
                 id = id,
                 fleetId = o.optString("fleet_id").takeIf { it.isNotBlank() },
                 vin = o.optString("vin").takeIf { it.isNotBlank() },
+                name = o.optString("name"),
                 licensePlate = o.optString("license_plate").takeIf { it.isNotBlank() } ?: "",
-                make = o.optString("make").takeIf { it.isNotBlank() } ?: "Web",
-                model = o.optString("model").takeIf { it.isNotBlank() } ?: "Vehicle",
-                year = o.optInt("year", 2026),
+                make = o.optString("make").takeIf { it.isNotBlank() } ?: "",
+                model = o.optString("model").takeIf { it.isNotBlank() } ?: "",
+                year = o.optInt("year", 0),
                 trim = o.optString("trim").takeIf { it.isNotBlank() } ?: "",
                 engine = o.optString("engine").takeIf { it.isNotBlank() } ?: "",
-                fuelType = o.optString("fuel_type").takeIf { it.isNotBlank() } ?: "Petrol",
-                tankCapacityLiters = o.optDouble("tank_capacity_liters", 44.0),
+                fuelType = o.optString("fuel_type").takeIf { it.isNotBlank() } ?: "",
+                tankCapacityLiters = o.optDouble("tank_capacity_liters", 0.0),
                 odometerKm = o.optDouble("odometer_km", 0.0),
                 active = false,
                 createdAt = now,

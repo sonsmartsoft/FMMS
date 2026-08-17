@@ -178,7 +178,10 @@
   color: var(--text-primary);
   border: 1px solid var(--border-default);
   border-radius: 0.75rem;
-  padding: 0.5rem 0.75rem;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-right: 0.75rem;
+  padding-left: 0.75rem;
   font-size: 0.75rem;
   width: 100%;
   outline: none;

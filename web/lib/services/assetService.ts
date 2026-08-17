@@ -202,21 +202,32 @@ export async function createAsset(data: AssetInput) {
 
 export async function updateAsset(id: string, data: Partial<AssetInput>) {
   const supabase = createClient();
+  const payload: Record<string, any> = {};
+  if ('name' in data) payload.name = data.name;
+  if ('asset_type' in data) payload.asset_type = data.asset_type;
+  if ('brand' in data) payload.brand = data.brand;
+  if ('model' in data) payload.model = data.model;
+  if ('year' in data) payload.year = data.year;
+  if ('color' in data) payload.color = data.color;
+  if ('license_plate' in data) payload.license_plate = data.license_plate;
+  if ('vin' in data) payload.vin = data.vin;
+  if ('engine' in data) payload.engine = data.engine;
+  if ('fuel_type' in data) payload.fuel_type = data.fuel_type;
+  if ('tank_capacity_liters' in data) payload.tank_capacity_liters = data.tank_capacity_liters;
+  if ('battery_capacity_kwh' in data) payload.battery_capacity_kwh = data.battery_capacity_kwh;
+  if ('purchase_date' in data) payload.purchase_date = data.purchase_date;
+  if ('purchase_price' in data) payload.purchase_price = data.purchase_price;
+  if ('current_value' in data) payload.current_value = data.current_value;
+  if ('image_url' in data) payload.image_url = data.image_url;
+  if ('current_odometer_km' in data) payload.current_odometer_km = data.current_odometer_km;
+  if ('virtual_odometer_km' in data) payload.virtual_odometer_km = data.virtual_odometer_km;
+  if ('status' in data) payload.status = data.status;
+  if ('description' in data) payload.description = data.description;
+  payload.updated_at = new Date().toISOString();
+
   const { error } = await supabase
     .from('assets')
-    .update({
-      ...('name' in data ? { name: data.name } : {}),
-      ...('asset_type' in data ? { asset_type: data.asset_type } : {}),
-      ...('brand' in data ? { brand: data.brand } : {}),
-      ...('model' in data ? { model: data.model } : {}),
-      ...('year' in data ? { year: data.year } : {}),
-      ...('color' in data ? { color: data.color } : {}),
-      ...('license_plate' in data ? { license_plate: data.license_plate } : {}),
-      ...('current_odometer_km' in data ? { current_odometer_km: data.current_odometer_km } : {}),
-      ...('virtual_odometer_km' in data ? { virtual_odometer_km: data.virtual_odometer_km } : {}),
-      ...('status' in data ? { status: data.status } : {}),
-      ...('description' in data ? { description: data.description } : {}),
-    })
+    .update(payload)
     .eq('id', id);
   if (error) throw error;
   return getAsset(id);

@@ -96,7 +96,7 @@ RETURNS TABLE (
     make TEXT,
     model TEXT,
     year INT,
-    trim TEXT,
+    "trim" TEXT,
     engine TEXT,
     fuel_type TEXT,
     tank_capacity_liters NUMERIC,

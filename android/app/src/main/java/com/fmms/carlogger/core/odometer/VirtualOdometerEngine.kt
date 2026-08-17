@@ -38,6 +38,14 @@ class VirtualOdometerEngine(
         _state.value = OdometerInfo(officialKm, "VERIFIED (OBD)", "VERIFIED")
     }
 
+    /** Adopt the active vehicle's odometer (e.g. after assigning a web vehicle). */
+    suspend fun adoptVehicleOdometer() {
+        val v = vehicleRepository.getActive() ?: return
+        if (v.odometerKm <= 0) return
+        prefsStore.setOdo(v.odometerKm)
+        _state.value = OdometerInfo(v.odometerKm, "FROM VEHICLE", "VERIFIED")
+    }
+
     suspend fun manualCalibration(actualDashboardKm: Double) {
         prefsStore.setOdo(actualDashboardKm)
         vehicleRepository.getActive()?.let {

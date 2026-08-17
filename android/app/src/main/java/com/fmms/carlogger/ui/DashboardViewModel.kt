@@ -67,11 +67,16 @@ class DashboardViewModel : ViewModel() {
         val live = if (deviceMode == "gps") gps else telemetry
         val hasMac = c.prefs.getMac() != null
         val active = vehicles.firstOrNull { it.active } ?: vehicles.firstOrNull()
+        val odoDisplay = if (active != null && active.odometerKm > 0) {
+            OdometerInfo(active.odometerKm, "FROM VEHICLE", "VERIFIED")
+        } else {
+            odo
+        }
         DashboardUiState(
             telemetry = live,
             fuel = fuel,
             trip = trip,
-            odometer = odo,
+            odometer = odoDisplay,
             connectionState = conn,
             hasObdMac = hasMac,
             obdMac = c.prefs.getMac(),
@@ -82,7 +87,7 @@ class DashboardViewModel : ViewModel() {
                     it.protocol?.takeIf { p -> p.isNotBlank() },
                 ).joinToString(" • ")
             },
-            vehicleName = active?.let { "${it.make} ${it.model} ${it.trim}" } ?: "XE CỦA TÔI",
+            vehicleName = active?.displayName() ?: "XE CỦA TÔI",
             vehicleSubtitle = active?.let {
                 listOfNotNull(
                     it.licensePlate.takeIf { p -> p.isNotBlank() },

@@ -36,15 +36,19 @@ export const DisplaySettingsModal: React.FC<DisplaySettingsModalProps> = ({
   ];
 
   const handleSave = () => {
+    try {
+      localStorage.setItem('fmms_card_settings', JSON.stringify(localSettings));
+      window.dispatchEvent(new Event('fmms_settings_updated'));
+    } catch {}
     onSaveSettings(localSettings);
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn"
-      style={{ background: 'rgba(0,0,0,0.65)' }}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-md animate-fadeIn"
+      style={{ background: 'rgba(0,0,0,0.75)' }}>
       <div className="glass-panel w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-        style={{ border: '1px solid var(--border-default)' }}>
+        style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}>
 
         {/* Header */}
         <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border-default)' }}>

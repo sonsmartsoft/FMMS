@@ -6,6 +6,8 @@ import android.bluetooth.BluetoothDevice
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -444,22 +447,42 @@ private fun VehiclesScreen(onBack: () -> Unit) {
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                                 if (v.active) {
                                     Box(modifier = Modifier.size(8.dp).background(colors.emerald, shape = RoundedCornerShape(50)))
                                     Spacer(modifier = Modifier.width(6.dp))
                                 }
-                                Text("${v.make} ${v.model} ${v.trim} ${v.year}", color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    v.displayName(),
+                                    color = colors.textPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                             if (!v.active) {
                                 TextButton(onClick = {
-                                    AppContainer.launch { AppContainer.vehicleRepository.setActive(v.id) }
-                                    Toast.makeText(context, "Active: ${v.model}", Toast.LENGTH_SHORT).show()
+                                    AppContainer.launch {
+                                        AppContainer.vehicleRepository.setActive(v.id)
+                                        AppContainer.odometerEngine.adoptVehicleOdometer()
+                                    }
+                                    Toast.makeText(context, "Active: ${v.displayName()}", Toast.LENGTH_SHORT).show()
                                 }) { Text("SET ACTIVE", color = colors.cyan) }
                             }
                         }
-                        Text("${v.licensePlate} • ${v.fuelType} • ${v.tankCapacityLiters.toInt()}L", color = colors.textSecondary, fontSize = 12.sp)
-                        Text("ODO ${v.odometerKm.toInt()} km", color = colors.cyan, fontSize = 12.sp)
+                        val meta = listOfNotNull(
+                            v.licensePlate.takeIf { it.isNotBlank() },
+                            v.fuelType.takeIf { it.isNotBlank() },
+                            v.tankCapacityLiters.takeIf { it > 0 }?.let { "${it.toInt()}L" },
+                            v.year.takeIf { it > 0 }?.toString(),
+                        ).joinToString(" • ")
+                        if (meta.isNotEmpty()) {
+                            Text(meta, color = colors.textSecondary, fontSize = 12.sp)
+                        }
+                        if (v.odometerKm > 0) {
+                            Text("ODO ${v.odometerKm.toInt()} km", color = colors.cyan, fontSize = 12.sp)
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(onClick = { editing = v }) {
                                 Text("EDIT TÊN XE", color = colors.cyan, fontSize = 12.sp)
@@ -611,6 +634,7 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
         BackHeader(strings.deviceTitle, onBack)
@@ -727,12 +751,14 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                             val synced = AppContainer.vehicleRepository.pullWebVehicles()
                             webSynced = true
                             syncingWeb = false
-                            Toast.makeText(
-                                context,
-                                if (synced.isNotEmpty()) "Đã đồng bộ ${synced.size} xe từ web"
-                                else "Không có xe từ web — tạo xe trên web trước",
-                                Toast.LENGTH_SHORT,
-                            ).show()
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(
+                                    context,
+                                    if (synced.isNotEmpty()) "Đã đồng bộ ${synced.size} xe từ web"
+                                    else "Không có xe từ web — tạo xe trên web trước",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                            }
                         }
                     },
                     enabled = !syncingWeb,
@@ -753,9 +779,10 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                                 prefs.setAssignedVehicleId(v.id)
                                 AppContainer.launch {
                                     AppContainer.vehicleRepository.setActive(v.id)
+                                    AppContainer.odometerEngine.adoptVehicleOdometer()
                                     AppContainer.vehicleRepository.registerDeviceWithVehicle(v.id, prefs.getDeviceName() ?: "Tracker")
                                 }
-                                Toast.makeText(context, "Đã gán: ${v.make} ${v.model}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Đã gán: ${v.displayName()}", Toast.LENGTH_SHORT).show()
                             },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -764,19 +791,26 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                                 prefs.setAssignedVehicleId(v.id)
                                 AppContainer.launch {
                                     AppContainer.vehicleRepository.setActive(v.id)
+                                    AppContainer.odometerEngine.adoptVehicleOdometer()
                                     AppContainer.vehicleRepository.registerDeviceWithVehicle(v.id, prefs.getDeviceName() ?: "Tracker")
                                 }
-                                Toast.makeText(context, "Đã gán: ${v.make} ${v.model}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Đã gán: ${v.displayName()}", Toast.LENGTH_SHORT).show()
                             })
                             Spacer(modifier = Modifier.width(4.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    "${v.make} ${v.model} ${v.year}".trim(),
+                                    v.displayName(),
                                     color = if (isAssigned) colors.cyan else colors.textPrimary,
                                     fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
-                                if (v.fleetId != null) {
-                                    Text("fleet: ${v.fleetId}", color = colors.textSecondary, fontSize = 10.sp)
+                                val meta = listOfNotNull(
+                                    v.licensePlate.takeIf { it.isNotBlank() },
+                                    v.year.takeIf { it > 0 }?.toString(),
+                                ).joinToString(" • ")
+                                if (meta.isNotEmpty()) {
+                                    Text(meta, color = colors.textSecondary, fontSize = 10.sp)
                                 }
                             }
                         }

@@ -72,13 +72,13 @@ export default function AssetsPage() {
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 z-10" style={{ color: 'var(--text-muted)' }} />
           <input
             type="text"
             placeholder="Tìm kiếm tên, biển số..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="theme-input pl-9"
+            className="theme-input !pl-9"
           />
         </div>
         <div className="flex items-center space-x-1">

@@ -35,7 +35,7 @@ import com.fmms.carlogger.core.database.entity.VehicleEntity
         DailySummaryEntity::class,
         GpsTrackPointEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -66,6 +66,12 @@ abstract class AppDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_gps_track_points_vehicle_id_recorded_at` ON `gps_track_points` (`vehicle_id`, `recorded_at`)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_gps_track_points_trip_id_recorded_at` ON `gps_track_points` (`trip_id`, `recorded_at`)")
+            }
+        }
+
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `vehicles` ADD COLUMN `name` TEXT NOT NULL DEFAULT ''")
             }
         }
     }

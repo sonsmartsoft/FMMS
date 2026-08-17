@@ -216,13 +216,42 @@ export default function MaintenancePage() {
                   </button>
                 </div>
 
+                {/* Quick suggestions */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Thêm nhanh:</span>
+                  {[
+                    { name: 'Thay dầu máy', cost: '650000' },
+                    { name: 'Thay lọc dầu', cost: '220000' },
+                    { name: 'Thay lọc gió', cost: '180000' },
+                    { name: 'Bugi đánh lửa', cost: '350000' },
+                    { name: 'Kiểm tra phanh', cost: '150000' },
+                  ].map((s, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setServiceItems(p => [...p, { name: s.name, cost: s.cost }])}
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80 transition"
+                      style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
+                    >
+                      + {s.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Column Headers */}
+                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider px-1 pt-1" style={{ color: 'var(--text-muted)' }}>
+                  <span className="flex-1 min-w-0">Tên dịch vụ / Phụ tùng *</span>
+                  <span className="w-32 shrink-0">Chi phí (₫) *</span>
+                  <span className="w-6 shrink-0"></span>
+                </div>
+
                 <div className="space-y-2">
                   {serviceItems.map((item, idx) => (
                     <div key={idx} className="flex items-center gap-2">
                       <input
                         type="text"
                         className="theme-input flex-1 min-w-0"
-                        placeholder="Tên dịch vụ (VD: Thay dầu máy, Lọc gió...)"
+                        placeholder="VD: Thay dầu máy, Lọc nhớt, Má phanh..."
                         value={item.name}
                         onChange={e => updateServiceItem(idx, 'name', e.target.value)}
                       />
@@ -233,10 +262,12 @@ export default function MaintenancePage() {
                         value={item.cost}
                         onChange={e => updateServiceItem(idx, 'cost', e.target.value)}
                       />
-                      {serviceItems.length > 1 && (
+                      {serviceItems.length > 1 ? (
                         <button type="button" onClick={() => removeServiceItem(idx)} className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 shrink-0">
                           <X className="w-4 h-4" />
                         </button>
+                      ) : (
+                        <div className="w-7 shrink-0" />
                       )}
                     </div>
                   ))}

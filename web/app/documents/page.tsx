@@ -131,10 +131,10 @@ export default function DocumentsPage() {
 
       {/* Add Document Modal */}
       {openModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.65)' }} onClick={() => setOpenModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-md" style={{ border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5" style={{ borderBottom: '1px solid var(--border-default)' }}>
-              <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Thêm giấy tờ / tài liệu phương tiện</h3>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(false)}>
+          <div className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Thêm giấy tờ / bảo hiểm phương tiện</h3>
               <button onClick={() => setOpenModal(false)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
             </div>
             <div className="p-5 space-y-3 text-xs">
@@ -145,13 +145,13 @@ export default function DocumentsPage() {
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tên tài liệu *</label>
-                <input type="text" className="theme-input" placeholder="VD: Hóa đơn mua xe, Giấy đăng ký..." value={docForm.title} onChange={e => setDocForm(p => ({ ...p, title: e.target.value }))} />
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tên tài liệu / Bảo hiểm *</label>
+                <input type="text" className="theme-input" placeholder="VD: Bảo hiểm vật chất MIC, Hóa đơn mua xe..." value={docForm.title} onChange={e => setDocForm(p => ({ ...p, title: e.target.value }))} />
               </div>
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Loại tài liệu</label>
                 <select className="theme-select" value={docForm.document_type} onChange={e => setDocForm(p => ({ ...p, document_type: e.target.value }))}>
-                  {['Đăng ký xe', 'Đăng kiểm', 'Bảo hiểm vật chất', 'Bảo hiểm TNDS', 'Hóa đơn / Chứng từ', 'Sổ bảo hành', 'Khác'].map(t => <option key={t}>{t}</option>)}
+                  {['Bảo hiểm vật chất', 'Bảo hiểm TNDS bắt buộc', 'Đăng ký xe', 'Đăng kiểm', 'Hóa đơn / Chứng từ', 'Sổ bảo hành', 'Khác'].map(t => <option key={t}>{t}</option>)}
                 </select>
               </div>
               <div className="space-y-1">

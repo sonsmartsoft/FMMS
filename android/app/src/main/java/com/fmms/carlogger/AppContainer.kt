@@ -97,7 +97,7 @@ object AppContainer {
                 AppDatabase::class.java,
                 "fmms.db",
             )
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .build()
 
         this.prefs = PrefsStore(this.context)

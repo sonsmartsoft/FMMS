@@ -64,6 +64,13 @@ export async function createInsurancePolicy(input: InsuranceInput) {
   return mapInsuranceRow(data);
 }
 
+export async function updateInsurancePolicy(id: string, input: Partial<InsuranceInput>) {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('insurance_policies').update(input).eq('id', id).select().single();
+  if (error) throw error;
+  return mapInsuranceRow(data);
+}
+
 export async function deleteInsurancePolicy(id: string) {
   const supabase = createClient();
   const { error } = await supabase.from('insurance_policies').delete().eq('id', id);

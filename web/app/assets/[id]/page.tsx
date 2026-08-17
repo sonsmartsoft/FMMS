@@ -29,16 +29,16 @@ const durFmt = (s: number) => `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto"
       style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={onClose}
     >
       <div
-        className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[85vh] overflow-y-auto shadow-2xl"
+        className="glass-panel rounded-2xl w-full max-w-lg my-auto max-h-[88vh] overflow-y-auto shadow-2xl"
         style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-5 border-b" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+        <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
           <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{title}</h3>
           <button onClick={onClose} className="p-1 rounded-lg transition hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
             <X className="w-4 h-4" />
@@ -114,7 +114,9 @@ export default function AssetDetailPage() {
         setEditForm({
           name: a.name, brand: a.brand, model: a.model, year: String(a.year || ''),
           color: a.color || '', license_plate: a.license_plate || '',
-          vin: a.vin || '', engine: a.engine || '',
+          vin: a.vin || '', engine: a.engine || '', fuel_type: a.fuel_type || 'PETROL',
+          tank_capacity_liters: String(a.tank_capacity_liters ?? ''),
+          battery_capacity_kwh: String(a.battery_capacity_kwh ?? ''),
           purchase_price: String(a.purchase_price || ''), current_value: String(a.current_value || ''),
           purchase_date: a.purchase_date || '', image_url: a.image_url || '',
           current_odometer_km: String(a.current_odometer_km || 0),
@@ -205,7 +207,9 @@ export default function AssetDetailPage() {
   const [insForm, setInsForm] = useState({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', notes: '' });
   const [editForm, setEditForm] = useState({
     name: '', brand: '', model: '', year: '', color: '',
-    license_plate: '', vin: '', engine: '', purchase_price: '', current_value: '',
+    license_plate: '', vin: '', engine: '', fuel_type: 'PETROL',
+    tank_capacity_liters: '', battery_capacity_kwh: '',
+    purchase_price: '', current_value: '',
     purchase_date: '', image_url: '', current_odometer_km: '', status: 'ACTIVE', description: '',
   });
   const [odoForm, setOdoForm] = useState({ new_value_km: '', reason: 'Hiệu chỉnh sai số đồng hồ' });
@@ -394,6 +398,9 @@ export default function AssetDetailPage() {
         license_plate: editForm.license_plate || undefined,
         vin: editForm.vin || undefined,
         engine: editForm.engine || undefined,
+        fuel_type: editForm.fuel_type || undefined,
+        tank_capacity_liters: editForm.tank_capacity_liters ? parseFloat(editForm.tank_capacity_liters) : undefined,
+        battery_capacity_kwh: editForm.battery_capacity_kwh ? parseFloat(editForm.battery_capacity_kwh) : undefined,
         purchase_price: editForm.purchase_price ? parseFloat(editForm.purchase_price) : undefined,
         current_value: editForm.current_value ? parseFloat(editForm.current_value) : undefined,
         purchase_date: editForm.purchase_date || undefined,
@@ -472,7 +479,7 @@ export default function AssetDetailPage() {
      RENDER
      ══════════════════════════════════════════════ */
   return (
-    <div className="space-y-5 animate-fadeIn pb-12">
+    <div className="space-y-5 pb-12">
 
       {/* Back */}
       <button onClick={() => router.push('/')} className="flex items-center space-x-2 text-xs font-semibold transition hover:opacity-70" style={{ color: 'var(--accent-cyan)' }}>
@@ -504,7 +511,9 @@ export default function AssetDetailPage() {
           <button onClick={() => { setEditForm({
             name: asset.name, brand: asset.brand, model: asset.model, year: String(asset.year || ''),
             color: asset.color || '', license_plate: asset.license_plate || '',
-            vin: asset.vin || '', engine: asset.engine || '',
+            vin: asset.vin || '', engine: asset.engine || '', fuel_type: asset.fuel_type || 'PETROL',
+            tank_capacity_liters: String(asset.tank_capacity_liters ?? ''),
+            battery_capacity_kwh: String(asset.battery_capacity_kwh ?? ''),
             purchase_price: String(asset.purchase_price || ''), current_value: String(asset.current_value || ''),
             purchase_date: asset.purchase_date || '', image_url: asset.image_url || '',
             current_odometer_km: String(asset.current_odometer_km || 0),
@@ -572,7 +581,29 @@ export default function AssetDetailPage() {
         {/* ═══ OVERVIEW ═══ */}
         {activeTab === 'overview' && (
           <div className="space-y-5">
-            <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Thông số tổng quan</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Thông số tổng quan</h3>
+              <button
+                onClick={() => {
+                  setEditForm({
+                    name: asset.name, brand: asset.brand, model: asset.model, year: String(asset.year || ''),
+                    color: asset.color || '', license_plate: asset.license_plate || '',
+                    vin: asset.vin || '', engine: asset.engine || '', fuel_type: asset.fuel_type || 'PETROL',
+                    tank_capacity_liters: String(asset.tank_capacity_liters ?? ''),
+                    battery_capacity_kwh: String(asset.battery_capacity_kwh ?? ''),
+                    purchase_price: String(asset.purchase_price || ''), current_value: String(asset.current_value || ''),
+                    purchase_date: asset.purchase_date || '', image_url: asset.image_url || '',
+                    current_odometer_km: String(asset.current_odometer_km || 0),
+                    status: asset.status || 'ACTIVE', description: asset.description || '',
+                  });
+                  setOpenModal('edit');
+                }}
+                className="text-xs font-semibold text-cyan-400 hover:underline flex items-center space-x-1"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Sửa thông số xe</span>
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
               {[
                 { label: 'Giá mua ban đầu', value: `${fmt(asset.purchase_price)} ₫`, sub: `Ngày mua: ${fmtDate(asset.purchase_date || '')}`, color: 'var(--text-primary)' },
@@ -1113,7 +1144,20 @@ export default function AssetDetailPage() {
           <Field label="Ngày mua"><input type="date" className="theme-input" value={editForm.purchase_date} onChange={e => setEditForm(p => ({ ...p, purchase_date: e.target.value }))} /></Field>
           <Field label="Biển số xe"><input type="text" className="theme-input" value={editForm.license_plate} onChange={e => setEditForm(p => ({ ...p, license_plate: e.target.value }))} /></Field>
           <Field label="Số khung / VIN"><input type="text" className="theme-input" value={editForm.vin} onChange={e => setEditForm(p => ({ ...p, vin: e.target.value }))} /></Field>
-          <Field label="Số máy / Động cơ"><input type="text" className="theme-input" value={editForm.engine} onChange={e => setEditForm(p => ({ ...p, engine: e.target.value }))} /></Field>
+          <Field label="Số máy / Động cơ"><input type="text" className="theme-input" placeholder="VD: 1.5L SkyActiv" value={editForm.engine} onChange={e => setEditForm(p => ({ ...p, engine: e.target.value }))} /></Field>
+          <Field label="Loại nhiên liệu">
+            <select className="theme-select" value={editForm.fuel_type} onChange={e => setEditForm(p => ({ ...p, fuel_type: e.target.value }))}>
+              <option value="PETROL">Xăng (Petrol)</option>
+              <option value="DIESEL">Dầu (Diesel)</option>
+              <option value="ELECTRIC">Điện (Electric)</option>
+              <option value="HYBRID">Hybrid</option>
+              <option value="HUMAN_POWER">Sức người (Xe đạp)</option>
+            </select>
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Dung tích bình (L)"><input type="number" className="theme-input" placeholder="VD: 45" value={editForm.tank_capacity_liters} onChange={e => setEditForm(p => ({ ...p, tank_capacity_liters: e.target.value }))} /></Field>
+            <Field label="Dung lượng pin (kWh)"><input type="number" className="theme-input" placeholder="VD: 52" value={editForm.battery_capacity_kwh} onChange={e => setEditForm(p => ({ ...p, battery_capacity_kwh: e.target.value }))} /></Field>
+          </div>
           <Field label="Màu sắc"><input type="text" className="theme-input" value={editForm.color} onChange={e => setEditForm(p => ({ ...p, color: e.target.value }))} /></Field>
           <Field label="Link ảnh phương tiện (URL)"><input type="text" className="theme-input" placeholder="https://..." value={editForm.image_url} onChange={e => setEditForm(p => ({ ...p, image_url: e.target.value }))} /></Field>
           <Field label="Odometer (km)"><input type="number" className="theme-input" value={editForm.current_odometer_km} onChange={e => setEditForm(p => ({ ...p, current_odometer_km: e.target.value }))} /></Field>
