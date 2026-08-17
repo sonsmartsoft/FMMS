@@ -10,7 +10,7 @@ import { getFuelLogs } from '@/lib/services/fuelService';
 import { getExpenses } from '@/lib/services/expenseService';
 import { getLoans } from '@/lib/services/loanService';
 import { importSampleData } from '@/lib/services/sampleDataImporter';
-import { Plus, Car, Bike, Zap, Gauge, DollarSign, Fuel, Sparkles, Search, X, Download } from 'lucide-react';
+import { Plus, Car, Bike, Zap, Gauge, DollarSign, Fuel, Sparkles, Search, X, Download, Sliders } from 'lucide-react';
 
 interface HomePageProps {
   cardSettings?: CardDisplaySettings;
@@ -44,6 +44,8 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [openCardConfigModal, setOpenCardConfigModal] = useState(false);
+  const [cardConfig, setCardConfig] = useState<CardDisplaySettings>(cardSettings || DEFAULT_CARD_SETTINGS);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,6 +229,12 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start">
+          <button onClick={() => setOpenCardConfigModal(true)}
+            className="flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition hover:opacity-90"
+            style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}>
+            <Sliders className="w-4 h-4" />
+            <span>Cấu hình thẻ</span>
+          </button>
           {!loading && assets.length === 0 && (
             <button onClick={handleImportSample} disabled={importing}
               className="flex items-center space-x-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg transition hover:opacity-90"
@@ -318,7 +326,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredAssets.map((asset) => (
-            <AssetCard key={asset.id} asset={asset} settings={cardSettings} />
+            <AssetCard key={asset.id} asset={asset} settings={cardConfig} />
           ))}
         </div>
 
@@ -426,6 +434,46 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
                 <button onClick={() => setOpenAddModal(false)}
                   className="px-4 py-2.5 rounded-xl text-xs font-semibold"
                   style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ─── Card Configuration Modal (Spec v5.2 §224) ─── */}
+      {openCardConfigModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={() => setOpenCardConfigModal(false)}>
+          <div className="glass-panel rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" style={{ border: '1px solid var(--border-default)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 sticky top-0 z-10 glass-panel" style={{ borderBottom: '1px solid var(--border-default)' }}>
+              <div>
+                <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Cấu hình hiển thị thẻ phương tiện</h3>
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Tùy chọn hiển thị các trường dữ liệu trên Card</p>
+              </div>
+              <button onClick={() => setOpenCardConfigModal(false)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-3 text-xs">
+              {[
+                { key: 'showPhoto', label: 'Hình ảnh phương tiện' },
+                { key: 'showType', label: 'Nhãn loại phương tiện (Ô tô, Mô tô, Xe đạp...)' },
+                { key: 'showName', label: 'Tên phương tiện & Hãng/Mẫu' },
+                { key: 'showPrice', label: 'Giá mua ban đầu' },
+                { key: 'showLicensePlate', label: 'Biển số xe' },
+                { key: 'showOdometer', label: 'Quãng đường / Odometer (km)' },
+                { key: 'showFuel', label: 'Mức nhiên liệu / Pin (%)' },
+              ].map(({ key, label }) => (
+                <label key={key} className="flex items-center justify-between p-3 rounded-xl cursor-pointer transition"
+                  style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+                  <span className="font-medium" style={{ color: 'var(--text-primary)' }}>{label}</span>
+                  <input type="checkbox" checked={!!(cardConfig as any)[key]}
+                    onChange={e => setCardConfig(p => ({ ...p, [key]: e.target.checked }))}
+                    className="w-4 h-4 rounded accent-cyan-500" />
+                </label>
+              ))}
+              <div className="pt-2">
+                <button onClick={() => setOpenCardConfigModal(false)}
+                  className="w-full py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 transition"
+                  style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                  Đóng &amp; Áp dụng
+                </button>
               </div>
             </div>
           </div>

@@ -30,12 +30,14 @@ export async function middleware(request: NextRequest) {
 
   // Refresh session
   const { data: { user } } = await supabase.auth.getUser();
+  const isDemoSession = request.cookies.has('fmms_demo_session');
+  const isAuthenticated = !!user || isDemoSession;
 
-  if (!user && !isPublic) {
+  if (!isAuthenticated && !isPublic) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  if (user && pathname === '/login') {
+  if (isAuthenticated && pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url));
   }
 

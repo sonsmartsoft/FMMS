@@ -11,6 +11,8 @@ import { getTrips, createTrip } from '@/lib/services/tripService';
 import { getParts, createPart } from '@/lib/services/partService';
 import { getInsurancePolicies, createInsurancePolicy, InsuranceRow } from '@/lib/services/insuranceService';
 import { getLoadByAsset } from '@/lib/services/loanService';
+import { createOdometerAdjustment } from '@/lib/services/odometerService';
+import { createWarrantyClaim } from '@/lib/services/warrantyService';
 import { createClient } from '@/lib/supabase/client';
 import {
   ArrowLeft, Gauge, Fuel, Wrench, DollarSign, FileText, BarChart3,
@@ -112,6 +114,9 @@ export default function AssetDetailPage() {
         setEditForm({
           name: a.name, brand: a.brand, model: a.model, year: String(a.year || ''),
           color: a.color || '', license_plate: a.license_plate || '',
+          vin: a.vin || '', engine: a.engine || '',
+          purchase_price: String(a.purchase_price || ''), current_value: String(a.current_value || ''),
+          purchase_date: a.purchase_date || '', image_url: a.image_url || '',
           current_odometer_km: String(a.current_odometer_km || 0),
           status: a.status || 'ACTIVE', description: a.description || '',
         });
@@ -200,8 +205,11 @@ export default function AssetDetailPage() {
   const [insForm, setInsForm] = useState({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', notes: '' });
   const [editForm, setEditForm] = useState({
     name: '', brand: '', model: '', year: '', color: '',
-    license_plate: '', current_odometer_km: '', status: 'ACTIVE', description: '',
+    license_plate: '', vin: '', engine: '', purchase_price: '', current_value: '',
+    purchase_date: '', image_url: '', current_odometer_km: '', status: 'ACTIVE', description: '',
   });
+  const [odoForm, setOdoForm] = useState({ new_value_km: '', reason: 'Hiệu chỉnh sai số đồng hồ' });
+  const [claimForm, setClaimForm] = useState({ item_name: '', description: '', amount_claimed: '', vendor: '' });
   const [savingEdit, setSavingEdit] = useState(false);
 
   if (loading) {
@@ -384,6 +392,12 @@ export default function AssetDetailPage() {
         year: editForm.year ? parseInt(editForm.year) : undefined,
         color: editForm.color || undefined,
         license_plate: editForm.license_plate || undefined,
+        vin: editForm.vin || undefined,
+        engine: editForm.engine || undefined,
+        purchase_price: editForm.purchase_price ? parseFloat(editForm.purchase_price) : undefined,
+        current_value: editForm.current_value ? parseFloat(editForm.current_value) : undefined,
+        purchase_date: editForm.purchase_date || undefined,
+        image_url: editForm.image_url || undefined,
         current_odometer_km: parseFloat(editForm.current_odometer_km) || 0,
         status: editForm.status as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'SOLD',
         description: editForm.description || undefined,
@@ -394,6 +408,50 @@ export default function AssetDetailPage() {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
     setSavingEdit(false);
+  };
+
+  const saveOdoAdjustment = async () => {
+    const newKm = parseFloat(odoForm.new_value_km);
+    if (!newKm || newKm < 0) {
+      alert('Vui lòng nhập số km hợp lệ');
+      return;
+    }
+    try {
+      await createOdometerAdjustment({
+        asset_id: asset.id,
+        previous_value_km: asset.current_odometer_km || 0,
+        adjustment_km: newKm - (asset.current_odometer_km || 0),
+        new_value_km: newKm,
+        reason: odoForm.reason || 'Hiệu chỉnh Odometer',
+      });
+      setAsset(p => p ? { ...p, current_odometer_km: newKm } : p);
+      setOpenModal(null);
+      alert('Đã lưu hiệu chỉnh Odometer thành công!');
+    } catch (e: any) {
+      alert(`Lỗi khi hiệu chỉnh: ${e?.message ?? 'Không lưu được'}`);
+    }
+  };
+
+  const saveClaim = async () => {
+    if (!claimForm.item_name || !claimForm.description) {
+      alert('Vui lòng nhập tên hạng mục và mô tả yêu cầu');
+      return;
+    }
+    try {
+      await createWarrantyClaim({
+        asset_id: asset.id,
+        claim_date: new Date().toISOString().split('T')[0],
+        description: `${claimForm.item_name}: ${claimForm.description}`,
+        amount_claimed: parseFloat(claimForm.amount_claimed) || 0,
+        amount_approved: 0,
+        status: 'PENDING',
+        vendor: claimForm.vendor || undefined,
+      });
+      setOpenModal(null);
+      alert('Đã gửi yêu cầu bảo hành (Claim) thành công!');
+    } catch (e: any) {
+      alert(`Lỗi khi gửi claim: ${e?.message ?? 'Không gửi được'}`);
+    }
   };
 
   /* ══════════════════════════════════════════════
@@ -446,6 +504,9 @@ export default function AssetDetailPage() {
           <button onClick={() => { setEditForm({
             name: asset.name, brand: asset.brand, model: asset.model, year: String(asset.year || ''),
             color: asset.color || '', license_plate: asset.license_plate || '',
+            vin: asset.vin || '', engine: asset.engine || '',
+            purchase_price: String(asset.purchase_price || ''), current_value: String(asset.current_value || ''),
+            purchase_date: asset.purchase_date || '', image_url: asset.image_url || '',
             current_odometer_km: String(asset.current_odometer_km || 0),
             status: asset.status || 'ACTIVE', description: asset.description || '',
           }); setOpenModal('edit'); }}
@@ -468,7 +529,9 @@ export default function AssetDetailPage() {
               <div>
                 <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>Virtual Odometer</p>
                 <p className="text-lg font-bold mt-0.5" style={{ color: 'var(--accent-cyan)' }}>{fmt(asset.current_odometer_km)} km</p>
-                <span className="text-[9px]" style={{ color: 'var(--text-faint)' }}>Source: {asset.odometer_source}</span>
+                <button onClick={() => setOpenModal('odometer')} className="text-[10px] font-bold hover:underline block mt-0.5" style={{ color: 'var(--accent-cyan)' }}>
+                  Hiệu chỉnh ODO ✎
+                </button>
               </div>
               {(asset.fuel_level_percent !== undefined) && (
                 <div className="border-l pl-4" style={{ borderColor: 'var(--border-default)' }}>
@@ -923,12 +986,18 @@ export default function AssetDetailPage() {
         {/* ═══ WARRANTY ═══ */}
         {activeTab === 'warranty' && (
           <div className="space-y-5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Sổ Bảo Hành & Sổ Claim Phụ Tùng</h3>
-              <button onClick={() => setOpenModal('warranty')}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-bold transition hover:opacity-90">
-                <Plus className="w-3.5 h-3.5" /><span>Thêm bảo hành</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => setOpenModal('claim')}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-purple-500 text-white text-xs font-bold transition hover:opacity-90">
+                  <Plus className="w-3.5 h-3.5" /><span>Tạo Yêu cầu Claim</span>
+                </button>
+                <button onClick={() => setOpenModal('warranty')}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-bold transition hover:opacity-90">
+                  <Plus className="w-3.5 h-3.5" /><span>Thêm bảo hành</span>
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
@@ -1034,20 +1103,26 @@ export default function AssetDetailPage() {
 
       {/* Fuel Modal */}
       {openModal === 'edit' && (
-        <Modal title="Sửa thông tin phương tiện" onClose={() => setOpenModal(null)}>
-          <Field label="Tên xe"><input type="text" className="theme-input" value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} /></Field>
+        <Modal title="Sửa thông tin chi tiết phương tiện" onClose={() => setOpenModal(null)}>
+          <Field label="Tên xe *"><input type="text" className="theme-input" value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} /></Field>
           <Field label="Hãng (Brand)"><input type="text" className="theme-input" value={editForm.brand} onChange={e => setEditForm(p => ({ ...p, brand: e.target.value }))} /></Field>
           <Field label="Model"><input type="text" className="theme-input" value={editForm.model} onChange={e => setEditForm(p => ({ ...p, model: e.target.value }))} /></Field>
           <Field label="Năm sản xuất"><input type="number" className="theme-input" value={editForm.year} onChange={e => setEditForm(p => ({ ...p, year: e.target.value }))} /></Field>
+          <Field label="Giá mua ban đầu (₫)"><input type="number" className="theme-input" placeholder="VD: 520000000" value={editForm.purchase_price} onChange={e => setEditForm(p => ({ ...p, purchase_price: e.target.value }))} /></Field>
+          <Field label="Giá trị ước tính hiện tại (₫)"><input type="number" className="theme-input" placeholder="VD: 490000000" value={editForm.current_value} onChange={e => setEditForm(p => ({ ...p, current_value: e.target.value }))} /></Field>
+          <Field label="Ngày mua"><input type="date" className="theme-input" value={editForm.purchase_date} onChange={e => setEditForm(p => ({ ...p, purchase_date: e.target.value }))} /></Field>
+          <Field label="Biển số xe"><input type="text" className="theme-input" value={editForm.license_plate} onChange={e => setEditForm(p => ({ ...p, license_plate: e.target.value }))} /></Field>
+          <Field label="Số khung / VIN"><input type="text" className="theme-input" value={editForm.vin} onChange={e => setEditForm(p => ({ ...p, vin: e.target.value }))} /></Field>
+          <Field label="Số máy / Động cơ"><input type="text" className="theme-input" value={editForm.engine} onChange={e => setEditForm(p => ({ ...p, engine: e.target.value }))} /></Field>
           <Field label="Màu sắc"><input type="text" className="theme-input" value={editForm.color} onChange={e => setEditForm(p => ({ ...p, color: e.target.value }))} /></Field>
-          <Field label="Biển số"><input type="text" className="theme-input" value={editForm.license_plate} onChange={e => setEditForm(p => ({ ...p, license_plate: e.target.value }))} /></Field>
+          <Field label="Link ảnh phương tiện (URL)"><input type="text" className="theme-input" placeholder="https://..." value={editForm.image_url} onChange={e => setEditForm(p => ({ ...p, image_url: e.target.value }))} /></Field>
           <Field label="Odometer (km)"><input type="number" className="theme-input" value={editForm.current_odometer_km} onChange={e => setEditForm(p => ({ ...p, current_odometer_km: e.target.value }))} /></Field>
           <Field label="Trạng thái">
             <select className="theme-select" value={editForm.status} onChange={e => setEditForm(p => ({ ...p, status: e.target.value }))}>
               {['ACTIVE', 'INACTIVE', 'MAINTENANCE', 'SOLD'].map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </Field>
-          <Field label="Mô tả"><input type="text" className="theme-input" value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} /></Field>
+          <Field label="Mô tả ghi chú"><input type="text" className="theme-input" value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} /></Field>
           <div className="flex space-x-2 pt-2">
             <button onClick={saveEdit} disabled={savingEdit} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">
               {savingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
@@ -1174,6 +1249,52 @@ export default function AssetDetailPage() {
           <Field label="Mức bồi thường (₫)"><input type="number" className="theme-input" placeholder="VD: 490000000" value={insForm.coverage_amount} onChange={e => setInsForm(p => ({ ...p, coverage_amount: e.target.value }))} /></Field>
           <div className="flex space-x-2 pt-2">
             <button onClick={saveInsurance} className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white font-bold text-xs hover:opacity-90 transition">Lưu</button>
+            <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Odometer Adjustment Modal (§204) */}
+      {openModal === 'odometer' && (
+        <Modal title="Hiệu chỉnh Odometer (Lưu nhật ký ODO Discrepancy)" onClose={() => setOpenModal(null)}>
+          <div className="p-3 rounded-xl text-xs space-y-1" style={{ background: 'var(--accent-cyan-bg)', color: 'var(--accent-cyan)' }}>
+            <p className="font-bold">Số Odometer hiện tại: {asset.current_odometer_km.toLocaleString('vi-VN')} km</p>
+            <p className="text-[11px]">Hiệu chỉnh này sẽ được lưu nhật ký Audit Log theo chuẩn v5.2 §204.</p>
+          </div>
+          <Field label="Số Odometer mới (km) *">
+            <input type="number" className="theme-input" placeholder="VD: 12900" value={odoForm.new_value_km} onChange={e => setOdoForm(p => ({ ...p, new_value_km: e.target.value }))} />
+          </Field>
+          <Field label="Lý do hiệu chỉnh *">
+            <input type="text" className="theme-input" placeholder="VD: Sai số đồng hồ, Thay cụm ODO, Cân chỉnh lại..." value={odoForm.reason} onChange={e => setOdoForm(p => ({ ...p, reason: e.target.value }))} />
+          </Field>
+          <div className="flex space-x-2 pt-2">
+            <button onClick={saveOdoAdjustment} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">
+              Lưu hiệu chỉnh Odometer
+            </button>
+            <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Warranty Claim Modal (§216) */}
+      {openModal === 'claim' && (
+        <Modal title="Tạo Yêu cầu Bảo hành / Claim (§216)" onClose={() => setOpenModal(null)}>
+          <Field label="Hạng mục bảo hành *">
+            <input type="text" className="theme-input" placeholder="VD: Lên kính tự động, Camera 360, Bình ắc-quy..." value={claimForm.item_name} onChange={e => setClaimForm(p => ({ ...p, item_name: e.target.value }))} />
+          </Field>
+          <Field label="Số tiền yêu cầu bồi thường (₫)">
+            <input type="number" className="theme-input" placeholder="VD: 1500000" value={claimForm.amount_claimed} onChange={e => setClaimForm(p => ({ ...p, amount_claimed: e.target.value }))} />
+          </Field>
+          <Field label="Đại lý / Trung tâm bảo hành">
+            <input type="text" className="theme-input" placeholder="VD: Zestech Hà Đông, Mazda Việt Nam" value={claimForm.vendor} onChange={e => setClaimForm(p => ({ ...p, vendor: e.target.value }))} />
+          </Field>
+          <Field label="Mô tả sự cố / Lý do Claim *">
+            <input type="text" className="theme-input" placeholder="Mô tả chi tiết hiện tượng lỗi..." value={claimForm.description} onChange={e => setClaimForm(p => ({ ...p, description: e.target.value }))} />
+          </Field>
+          <div className="flex space-x-2 pt-2">
+            <button onClick={saveClaim} className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white font-bold text-xs hover:opacity-90 transition">
+              Gửi Yêu cầu Claim
+            </button>
             <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
           </div>
         </Modal>

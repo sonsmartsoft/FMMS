@@ -1,9 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Car, Cpu, Sliders, Sparkles, Moon, Sun } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Car, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, ShieldCheck } from 'lucide-react';
 import { useTheme } from '@/lib/theme/ThemeContext';
+import { createClient } from '@/lib/supabase/client';
 
 interface NavbarProps {
   onOpenSettings?: () => void;
@@ -12,10 +14,35 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }) => {
   const { theme, toggleTheme } = useTheme();
+  const router = useRouter();
+  const [userEmail, setUserEmail] = useState<string>('demo@fmms.com');
+  const [userRole, setUserRole] = useState<'ADMIN' | 'MEMBER'>('ADMIN');
+  const supabase = createClient();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && user.email) {
+          setUserEmail(user.email);
+          setUserRole(user.user_metadata?.role || (user.email.includes('admin') || user.email === 'demo@fmms.com' ? 'ADMIN' : 'MEMBER'));
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch {}
+    document.cookie = 'fmms_demo_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    router.push('/login');
+    router.refresh();
+  };
 
   return (
     <header
-      className="sticky top-0 z-40 w-full glass-panel px-6 py-3.5 flex items-center justify-between"
+      className="sticky top-0 z-40 w-full glass-panel px-6 py-3 flex items-center justify-between"
       style={{ borderBottom: '1px solid var(--border-default)' }}
     >
       {/* Logo */}
@@ -92,9 +119,30 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
           <Sliders className="w-4 h-4" />
         </button>
 
-        {/* Avatar */}
-        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 flex items-center justify-center text-xs font-bold text-white shadow-md">
-          FM
+        {/* User Info & Logout Badge */}
+        <div className="flex items-center space-x-2 pl-2 border-l" style={{ borderColor: 'var(--border-default)' }}>
+          <div className="hidden sm:flex flex-col text-right">
+            <span className="text-xs font-bold truncate max-w-[130px]" style={{ color: 'var(--text-primary)' }}>
+              {userEmail.split('@')[0]}
+            </span>
+            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded w-fit ml-auto"
+              style={{
+                background: userRole === 'ADMIN' ? 'rgba(59,130,246,0.15)' : 'var(--bg-hover)',
+                color: userRole === 'ADMIN' ? '#60A5FA' : 'var(--text-muted)',
+                border: `1px solid ${userRole === 'ADMIN' ? 'rgba(59,130,246,0.3)' : 'var(--border-default)'}`,
+              }}>
+              {userRole}
+            </span>
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-xl text-rose-400 hover:bg-rose-500/10 transition border border-rose-500/20 flex items-center space-x-1"
+            title="Đăng xuất"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="text-xs font-bold hidden md:inline">Thoát</span>
+          </button>
         </div>
       </div>
     </header>
