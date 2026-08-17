@@ -1,16 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import {
-  INITIAL_ASSETS, MOCK_FUEL_LOGS, MOCK_MAINTENANCE_RECORDS,
-  MOCK_EXPENSES, MOCK_TRIPS, MOCK_LOAN, MOCK_PARTS,
-  FuelLog, PartRecord,
-} from '@/lib/data/mockData';
-import { ExpenseRecord, MaintenanceRecord, TripRecord, LoanRecord } from '@/types/mobility';
+import { Asset, ExpenseRecord, MaintenanceRecord, TripRecord, LoanRecord } from '@/types/mobility';
+import { FuelLog, getFuelLogs, createFuelLog } from '@/lib/services/fuelService';
+import { getAsset, getAssets, updateAsset } from '@/lib/services/assetService';
+import { getMaintenanceRecords, createMaintenanceRecord } from '@/lib/services/maintenanceService';
+import { getExpenses, createExpense } from '@/lib/services/expenseService';
+import { getTrips, createTrip } from '@/lib/services/tripService';
+import { getParts, createPart } from '@/lib/services/partService';
+import { getInsurancePolicies, createInsurancePolicy, InsuranceRow } from '@/lib/services/insuranceService';
+import { getLoadByAsset } from '@/lib/services/loanService';
+import { createClient } from '@/lib/supabase/client';
 import {
   ArrowLeft, Gauge, Fuel, Wrench, DollarSign, FileText, BarChart3,
-  Cpu, CheckCircle2, Plus, MapPin, Activity, Layers, Car, X,
+  Cpu, CheckCircle2, Plus, MapPin, Activity, Layers, Car, X, Pencil,
   Zap, Clock, TrendingDown, Shield, CreditCard,
 } from 'lucide-react';
 
@@ -72,18 +76,120 @@ const CAT_LABELS: Record<string, string> = {
 export default function AssetDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const asset = INITIAL_ASSETS.find((a) => a.id === params?.id) || INITIAL_ASSETS[0];
+  const assetId = (params?.id as string) ?? '';
+
+  const [asset, setAsset] = useState<Asset | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   /* ── Local state for each data list ── */
-  const [fuelLogs, setFuelLogs] = useState<FuelLog[]>(MOCK_FUEL_LOGS);
-  const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>(MOCK_MAINTENANCE_RECORDS);
-  const [expenses, setExpenses] = useState<ExpenseRecord[]>(MOCK_EXPENSES);
-  const [trips, setTrips] = useState<TripRecord[]>(MOCK_TRIPS);
-  const [parts, setParts] = useState<PartRecord[]>(MOCK_PARTS);
-  const [loan] = useState<LoanRecord>(MOCK_LOAN);
+  const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([]);
+  const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [trips, setTrips] = useState<TripRecord[]>([]);
+  const [parts, setParts] = useState<any[]>([]);
+  const [loan, setLoan] = useState<LoanRecord | null>(null);
+  const [insurances, setInsurances] = useState<any[]>([]);
+
+  /* ── Live OBD telemetry (realtime from Android app) ── */
+  const [live, setLive] = useState<{ speed: number | null; rpm: number | null; coolant: number | null; voltage: number | null }>({
+    speed: null, rpm: null, coolant: null, voltage: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const a = await getAsset(assetId);
+        if (cancelled) return;
+        if (!a) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
+        setAsset(a);
+        setEditForm({
+          name: a.name, brand: a.brand, model: a.model, year: String(a.year || ''),
+          color: a.color || '', license_plate: a.license_plate || '',
+          current_odometer_km: String(a.current_odometer_km || 0),
+          status: a.status || 'ACTIVE', description: a.description || '',
+        });
+
+        const [f, m, e, t, p, i, l] = await Promise.all([
+          getFuelLogs(assetId),
+          getMaintenanceRecords(assetId),
+          getExpenses(assetId),
+          getTrips(assetId),
+          getParts(assetId),
+          getInsurancePolicies(assetId),
+          getLoadByAsset(assetId),
+        ]);
+        if (cancelled) return;
+        setFuelLogs(f);
+        setMaintenance(m);
+        setExpenses(e);
+        setTrips(t);
+        setParts(p);
+        setInsurances(
+          i.map((r: InsuranceRow) => ({
+            id: r.id,
+            type: r.policy_type === 'COMPREHENSIVE'
+              ? 'Bảo hiểm vật chất'
+              : r.policy_type === 'MANDATORY'
+                ? 'Bảo hiểm TNDS bắt buộc'
+                : 'Khác',
+            company: r.provider,
+            policy_number: r.policy_number,
+            start_date: r.start_date,
+            expiry_date: r.expiry_date,
+            annual_fee: r.cost,
+            coverage_amount: r.coverage_amount ?? 0,
+            status: 'ACTIVE',
+          })),
+        );
+        setLoan(l ? { ...l } as LoanRecord : null);
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message ?? 'Không tải được dữ liệu');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [assetId]);
+
+  /* ── Realtime subscription: live OBD gauges from Android ── */
+  useEffect(() => {
+    if (!assetId) return;
+    const sb = createClient();
+    const ch = sb
+      .channel(`telemetry-${assetId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'telemetry_samples', filter: `asset_id=eq.${assetId}` },
+        (payload) => {
+          const r = payload.new as any;
+          setLive({
+            speed: r.speed_kmh != null ? Number(r.speed_kmh) : null,
+            rpm: r.rpm != null ? Number(r.rpm) : null,
+            coolant: r.coolant_temp_c != null ? Number(r.coolant_temp_c) : null,
+            voltage: r.battery_voltage != null ? Number(r.battery_voltage) : null,
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      sb.removeChannel(ch);
+    };
+  }, [assetId]);
+
+  const hasLive = live.speed != null || live.rpm != null || live.coolant != null || live.voltage != null;
 
   /* ── Modal open states ── */
   const [openModal, setOpenModal] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('overview');
 
   /* ── Form states ── */
   const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
@@ -91,6 +197,35 @@ export default function AssetDetailPage() {
   const [expForm, setExpForm] = useState({ date: '', category: 'FUEL', amount: '', vendor: '', odometer_km: '', description: '' });
   const [tripForm, setTripForm] = useState({ start_time: '', end_time: '', distance_km: '', start_location: '', end_location: '', fuel_used_liters: '', average_speed_kmh: '' });
   const [partForm, setPartForm] = useState({ name: '', brand: '', category: 'Điện tử', install_date: '', cost: '', odometer_km: '', warranty_months: '', notes: '' });
+  const [insForm, setInsForm] = useState({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', notes: '' });
+  const [editForm, setEditForm] = useState({
+    name: '', brand: '', model: '', year: '', color: '',
+    license_plate: '', current_odometer_km: '', status: 'ACTIVE', description: '',
+  });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="py-20 text-center" style={{ color: 'var(--text-muted)' }}>
+        <div className="mx-auto mb-3 w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--border-default)', borderTopColor: 'var(--accent-cyan)' }} />
+        <p className="font-semibold">Đang tải dữ liệu phương tiện...</p>
+      </div>
+    );
+  }
+  if (notFound || !asset) {
+    return (
+      <div className="space-y-5 pb-12">
+        <button onClick={() => router.push('/')} className="flex items-center space-x-2 text-xs font-semibold transition hover:opacity-70" style={{ color: 'var(--accent-cyan)' }}>
+          <ArrowLeft className="w-4 h-4" />
+          <span>Quay lại Dashboard gia đình</span>
+        </button>
+        <div className="py-20 text-center" style={{ color: 'var(--text-muted)' }}>
+          <Car className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="font-semibold">Không tìm thấy phương tiện hoặc bạn không có quyền truy cập</p>
+        </div>
+      </div>
+    );
+  }
 
   /* ── Tabs ── */
   const tabs = [
@@ -106,38 +241,158 @@ export default function AssetDetailPage() {
     { id: 'analytics', label: 'Phân tích TCO', show: true, icon: BarChart3 },
   ].filter((t) => t.show);
 
-  const [activeTab, setActiveTab] = useState(tabs[0].id);
-
   /* ══════════════════════════════════════════════
      SAVE HANDLERS
      ══════════════════════════════════════════════ */
-  const saveFuel = () => {
+  const saveFuel = async () => {
     const l = parseFloat(fuelForm.liters) || 0;
     const p = parseFloat(fuelForm.price_per_liter) || 0;
-    setFuelLogs([{ id: `f${Date.now()}`, date: fuelForm.date, liters: l, price_per_liter: p, total_cost: l * p, odometer_km: parseFloat(fuelForm.odometer_km) || 0, station: fuelForm.station, notes: fuelForm.notes }, ...fuelLogs]);
+    try {
+      const created = await createFuelLog({
+        asset_id: asset.id,
+        timestamp: new Date(fuelForm.date || Date.now()).toISOString(),
+        odometer_km: parseFloat(fuelForm.odometer_km) || 0,
+        fuel_liters: l,
+        price_per_liter: p,
+        station: fuelForm.station || undefined,
+        notes: fuelForm.notes || undefined,
+        tank_full: true,
+      });
+      setFuelLogs([created, ...fuelLogs]);
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
     setOpenModal(null);
     setFuelForm({ date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
   };
 
-  const saveMaint = () => {
-    setMaintenance([{ id: `m${Date.now()}`, asset_id: asset.id, maintenance_type: maintForm.maintenance_type, date: maintForm.date, odometer_km: parseFloat(maintForm.odometer_km) || 0, cost: parseFloat(maintForm.cost) || 0, vendor: maintForm.vendor, notes: maintForm.notes, next_due_km: parseFloat(maintForm.next_due_km) || undefined, next_due_date: maintForm.next_due_date || undefined, status: 'OK' }, ...maintenance]);
+  const saveMaint = async () => {
+    try {
+      const created = await createMaintenanceRecord({
+        asset_id: asset.id,
+        maintenance_type: maintForm.maintenance_type,
+        date: maintForm.date,
+        odometer_km: parseFloat(maintForm.odometer_km) || 0,
+        cost: parseFloat(maintForm.cost) || 0,
+        vendor: maintForm.vendor || undefined,
+        notes: maintForm.notes || undefined,
+        next_due_km: maintForm.next_due_km ? parseFloat(maintForm.next_due_km) : undefined,
+        next_due_date: maintForm.next_due_date || undefined,
+      });
+      setMaintenance([created, ...maintenance]);
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
     setOpenModal(null);
   };
 
-  const saveExpense = () => {
-    setExpenses([{ id: `e${Date.now()}`, asset_id: asset.id, date: expForm.date, category: expForm.category as ExpenseRecord['category'], amount: parseFloat(expForm.amount) || 0, vendor: expForm.vendor, odometer_km: parseFloat(expForm.odometer_km) || undefined, description: expForm.description, currency: 'VND' }, ...expenses]);
+  const saveExpense = async () => {
+    try {
+      const created = await createExpense({
+        asset_id: asset.id,
+        date: expForm.date,
+        category: expForm.category as ExpenseRecord['category'],
+        amount: parseFloat(expForm.amount) || 0,
+        vendor: expForm.vendor || undefined,
+        odometer_km: expForm.odometer_km ? parseFloat(expForm.odometer_km) : undefined,
+        description: expForm.description || undefined,
+      });
+      setExpenses([created, ...expenses]);
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
     setOpenModal(null);
     setExpForm({ date: '', category: 'FUEL', amount: '', vendor: '', odometer_km: '', description: '' });
   };
 
-  const saveTrip = () => {
-    setTrips([{ id: `t${Date.now()}`, asset_id: asset.id, start_time: tripForm.start_time, end_time: tripForm.end_time, distance_km: parseFloat(tripForm.distance_km) || 0, duration_seconds: 0, fuel_used_liters: parseFloat(tripForm.fuel_used_liters) || undefined, average_speed_kmh: parseFloat(tripForm.average_speed_kmh) || 0, max_speed_kmh: 0, start_location: tripForm.start_location, end_location: tripForm.end_location }, ...trips]);
+  const saveTrip = async () => {
+    try {
+      const created = await createTrip({
+        asset_id: asset.id,
+        start_time: tripForm.start_time,
+        end_time: tripForm.end_time || undefined,
+        distance_km: parseFloat(tripForm.distance_km) || 0,
+        fuel_used_liters: tripForm.fuel_used_liters ? parseFloat(tripForm.fuel_used_liters) : undefined,
+        average_speed_kmh: tripForm.average_speed_kmh ? parseFloat(tripForm.average_speed_kmh) : undefined,
+        start_location: tripForm.start_location || undefined,
+        end_location: tripForm.end_location || undefined,
+      });
+      setTrips([created, ...trips]);
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
     setOpenModal(null);
   };
 
-  const savePart = () => {
-    setParts([{ id: `p${Date.now()}`, name: partForm.name, brand: partForm.brand, category: partForm.category, install_date: partForm.install_date, cost: parseFloat(partForm.cost) || 0, odometer_km: parseFloat(partForm.odometer_km) || 0, warranty_months: parseFloat(partForm.warranty_months) || undefined, notes: partForm.notes }, ...parts]);
+  const savePart = async () => {
+    try {
+      const created = await createPart({
+        asset_id: asset.id,
+        part_name: partForm.name,
+        brand: partForm.brand || undefined,
+        supplier: partForm.category || undefined,
+        installation_date: partForm.install_date || undefined,
+        cost: parseFloat(partForm.cost) || 0,
+        installed_odometer_km: partForm.odometer_km ? parseFloat(partForm.odometer_km) : undefined,
+        notes: partForm.notes || undefined,
+      });
+      setParts([created, ...parts]);
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
     setOpenModal(null);
+  };
+
+  const saveInsurance = async () => {
+    try {
+      const created = await createInsurancePolicy({
+        asset_id: asset.id,
+        provider: insForm.company,
+        policy_number: insForm.policy_number,
+        policy_type: insForm.type.includes('TNDS') ? 'MANDATORY' : insForm.type.includes('vật chất') ? 'COMPREHENSIVE' : 'OTHER',
+        start_date: insForm.start_date,
+        expiry_date: insForm.expiry_date,
+        cost: parseFloat(insForm.annual_fee) || 0,
+        coverage_amount: parseFloat(insForm.coverage_amount) || 0,
+      });
+      setInsurances([{
+        id: created.id,
+        type: created.policy_type === 'COMPREHENSIVE' ? 'Bảo hiểm vật chất' : created.policy_type === 'MANDATORY' ? 'Bảo hiểm TNDS bắt buộc' : 'Khác',
+        company: created.provider,
+        policy_number: created.policy_number,
+        start_date: created.start_date,
+        expiry_date: created.expiry_date,
+        annual_fee: created.cost,
+        coverage_amount: created.coverage_amount ?? 0,
+        status: 'ACTIVE',
+      }, ...insurances]);
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
+    setOpenModal(null);
+    setInsForm({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', notes: '' });
+  };
+
+  const saveEdit = async () => {
+    setSavingEdit(true);
+    try {
+      const updated = await updateAsset(asset.id, {
+        name: editForm.name,
+        brand: editForm.brand,
+        model: editForm.model,
+        year: editForm.year ? parseInt(editForm.year) : undefined,
+        color: editForm.color || undefined,
+        license_plate: editForm.license_plate || undefined,
+        current_odometer_km: parseFloat(editForm.current_odometer_km) || 0,
+        status: editForm.status as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'SOLD',
+        description: editForm.description || undefined,
+      });
+      if (updated) setAsset(updated);
+      setOpenModal(null);
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
+    setSavingEdit(false);
   };
 
   /* ══════════════════════════════════════════════
@@ -151,8 +406,8 @@ export default function AssetDetailPage() {
   const totalTCO = asset.purchase_price + totalExpenses;
   const costPerKm = totalKm > 0 ? totalTCO / totalKm : 0;
   const depreciation = asset.purchase_price - asset.current_value;
-  const paidPrincipal = loan.principal - loan.current_balance;
-  const loanProgress = (paidPrincipal / loan.principal) * 100;
+  const paidPrincipal = loan ? loan.principal - loan.current_balance : 0;
+  const loanProgress = loan && loan.principal > 0 ? (paidPrincipal / loan.principal) * 100 : 0;
 
   /* ══════════════════════════════════════════════
      RENDER
@@ -185,19 +440,44 @@ export default function AssetDetailPage() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-4 p-4 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <div>
-            <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>Virtual Odometer</p>
-            <p className="text-lg font-bold mt-0.5" style={{ color: 'var(--accent-cyan)' }}>{fmt(asset.current_odometer_km)} km</p>
-            <span className="text-[9px]" style={{ color: 'var(--text-faint)' }}>Source: {asset.odometer_source}</span>
-          </div>
-          {(asset.fuel_level_percent !== undefined) && (
-            <div className="border-l pl-4" style={{ borderColor: 'var(--border-default)' }}>
-              <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>{asset.capabilities.has_battery ? 'Pin' : 'Nhiên liệu'}</p>
-              <p className="text-lg font-bold mt-0.5" style={{ color: 'var(--status-amber)' }}>{asset.fuel_level_percent}%</p>
-              <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>~{asset.estimated_range_km} km</span>
+        {/* Header Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => { setEditForm({
+            name: asset.name, brand: asset.brand, model: asset.model, year: String(asset.year || ''),
+            color: asset.color || '', license_plate: asset.license_plate || '',
+            current_odometer_km: String(asset.current_odometer_km || 0),
+            status: asset.status || 'ACTIVE', description: asset.description || '',
+          }); setOpenModal('edit'); }}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition hover:opacity-90"
+            style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}>
+            <Pencil className="w-3.5 h-3.5" /><span>Sửa thông tin</span>
+          </button>
+          <button onClick={() => setOpenModal('expense')}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition hover:opacity-90"
+            style={{ background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.3)' }}>
+            <Plus className="w-3.5 h-3.5" /><span>Thêm chi phí</span>
+          </button>
+          <button onClick={() => setOpenModal('maintenance')}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition hover:opacity-90"
+            style={{ background: 'rgba(56,189,248,0.15)', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan-border)' }}>
+            <Wrench className="w-3.5 h-3.5" /><span>Thêm bảo dưỡng</span>
+          </button>
+          <div className="p-4 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+            <div className="flex items-center space-x-4">
+              <div>
+                <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>Virtual Odometer</p>
+                <p className="text-lg font-bold mt-0.5" style={{ color: 'var(--accent-cyan)' }}>{fmt(asset.current_odometer_km)} km</p>
+                <span className="text-[9px]" style={{ color: 'var(--text-faint)' }}>Source: {asset.odometer_source}</span>
+              </div>
+              {(asset.fuel_level_percent !== undefined) && (
+                <div className="border-l pl-4" style={{ borderColor: 'var(--border-default)' }}>
+                  <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>{asset.capabilities.has_battery ? 'Pin' : 'Nhiên liệu'}</p>
+                  <p className="text-lg font-bold mt-0.5" style={{ color: 'var(--status-amber)' }}>{asset.fuel_level_percent}%</p>
+                  <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>~{asset.estimated_range_km} km</span>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -243,16 +523,21 @@ export default function AssetDetailPage() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-center">
+            {/* Extended Overview — spec §91 */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               {[
+                { label: 'Quãng đường tích lũy', value: `${fmt(asset.current_odometer_km)} km`, color: 'var(--accent-cyan)' },
+                { label: 'Trạng thái xe', value: asset.status || 'ACTIVE', color: 'var(--status-green)' },
+                { label: 'Tổng TCO', value: `${fmt(totalTCO)} ₫`, color: 'var(--status-rose)' },
+                { label: 'Chi phí / km', value: totalKm > 0 ? `${fmt(Math.round(costPerKm))} ₫/km` : 'N/A', color: 'var(--text-primary)' },
                 { label: 'Động cơ', value: asset.engine || '—' },
                 { label: 'Nhiên liệu', value: asset.fuel_type || '—' },
                 { label: 'Dung tích bình', value: asset.tank_capacity_liters ? `${asset.tank_capacity_liters}L` : (asset.battery_capacity_kwh ? `${asset.battery_capacity_kwh} kWh` : '—') },
-                { label: 'TB L/100km', value: asset.avg_consumption_l100km ? `${asset.avg_consumption_l100km} L/100km` : '—' },
+                { label: 'TB L/100km', value: asset.avg_consumption_l100km ? `${asset.avg_consumption_l100km} L/100km` : 'N/A' },
               ].map((s, i) => (
-                <div key={i} className="p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
+                <div key={i} className="p-3 rounded-xl text-center" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
-                  <p className="font-bold mt-0.5" style={{ color: 'var(--text-primary)' }}>{s.value}</p>
+                  <p className="font-bold mt-0.5" style={{ color: s.color || 'var(--text-primary)' }}>{s.value}</p>
                 </div>
               ))}
             </div>
@@ -268,19 +553,25 @@ export default function AssetDetailPage() {
         {/* ═══ OPERATION ═══ */}
         {activeTab === 'operation' && (
           <div className="space-y-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Live OBD — ZESTECH 9"</h3>
-              <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1.5" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /><span>KW906 Connected</span>
-              </span>
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Vận hành &amp; OBD</h3>
+              {asset.capabilities.has_obd
+                ? <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1.5" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /><span>OBD Connected</span>
+                  </span>
+                : <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1.5" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
+                    <span className="w-2 h-2 rounded-full" style={{ background: 'var(--text-faint)' }} /><span>OBD chưa kết nối</span>
+                  </span>
+              }
             </div>
 
+            {/* OBD Gauges — realtime từ Android app via Supabase Realtime */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
               {[
-                { label: 'Tốc độ', value: '62', unit: 'km/h', color: 'var(--accent-cyan)' },
-                { label: 'Vòng tua RPM', value: '2,150', unit: 'rpm', color: 'var(--status-purple)' },
-                { label: 'Nhiệt độ nước', value: '91', unit: '°C', color: 'var(--status-green)' },
-                { label: 'Điện áp bình', value: '14.1', unit: 'V', color: 'var(--status-amber)' },
+                { label: 'Tốc độ', value: live.speed != null ? `${Math.round(live.speed)}` : 'N/A', unit: 'km/h', color: live.speed != null ? 'var(--accent-cyan)' : 'var(--text-muted)' },
+                { label: 'Vòng tua RPM', value: live.rpm != null ? `${Math.round(live.rpm)}` : 'N/A', unit: 'rpm', color: live.rpm != null ? 'var(--accent-cyan)' : 'var(--text-muted)' },
+                { label: 'Nhiệt độ nước', value: live.coolant != null ? `${Math.round(live.coolant)}` : 'N/A', unit: '°C', color: live.coolant != null ? 'var(--accent-cyan)' : 'var(--text-muted)' },
+                { label: 'Điện áp bình', value: live.voltage != null ? live.voltage.toFixed(1) : 'N/A', unit: 'V', color: live.voltage != null ? 'var(--accent-cyan)' : 'var(--text-muted)' },
               ].map((g, i) => (
                 <div key={i} className="p-5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <span className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>{g.label}</span>
@@ -290,13 +581,25 @@ export default function AssetDetailPage() {
               ))}
             </div>
 
+            {hasLive ? (
+              <div className="p-4 rounded-xl text-xs" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)' }}>
+                <p className="font-semibold mb-1" style={{ color: 'var(--status-green)' }}>⚡ Dữ liệu OBD thời gian thực từ Android app (ZESTECH + KW906)</p>
+                <p style={{ color: 'var(--text-muted)' }}>Đang cập nhật qua Supabase Realtime mỗi giây từ ứng dụng Android.</p>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl text-xs" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
+                <p className="font-semibold mb-1" style={{ color: 'var(--status-amber)' }}>⚠️ Dữ liệu OBD chưa có</p>
+                <p style={{ color: 'var(--text-muted)' }}>Kết nối Android app với đầu OBD2 ELM327 (KW906/ZESTECH) để thấy dữ liệu thời gian thực. Các giá trị sẽ tự động cập nhật qua Supabase Realtime.</p>
+              </div>
+            )}
+
             <div className="p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
               <h4 className="text-xs font-bold uppercase" style={{ color: 'var(--accent-cyan)' }}>Virtual Odometer Strategy Ledger</h4>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                 {[
                   { label: 'Verified Dashboard ODO', value: 'N/A (Hạn chế PID)', color: 'var(--text-muted)' },
-                  { label: 'GPS Trip Accumulated', value: '12,846.2 km', color: 'var(--accent-cyan)' },
-                  { label: 'App Virtual ODO', value: '12,846 km ✓ High Confidence', color: 'var(--status-green)' },
+                  { label: 'GPS Trip Accumulated', value: `${fmt(asset.current_odometer_km)} km`, color: 'var(--accent-cyan)' },
+                  { label: 'App Virtual ODO', value: `${fmt(asset.current_odometer_km)} km ✓ High Confidence`, color: 'var(--status-green)' },
                 ].map((r, i) => (
                   <div key={i} className="p-3 rounded-lg" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
                     <span style={{ color: 'var(--text-muted)' }}>{r.label}:</span>
@@ -511,12 +814,19 @@ export default function AssetDetailPage() {
           <div className="space-y-5">
             <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Theo dõi khoản vay mua xe</h3>
 
+            {!loan ? (
+              <div className="p-6 rounded-xl text-center text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
+                <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p>Phương tiện này chưa có khoản vay.</p>
+              </div>
+            ) : (
+            <>
             <div className="p-4 rounded-xl space-y-3 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
               {[
                 { label: 'Ngân hàng', value: loan.lender },
                 { label: 'Số tiền gốc', value: `${fmt(loan.principal)} ₫` },
                 { label: 'Trả trước', value: `${fmt(loan.down_payment)} ₫` },
-                { label: 'Lãi suất', value: `${loan.interest_rate_percent}%/năm` },
+{ label: 'Lãi suất', value: `${loan.interest_rate_percent}%/năm` },
                 { label: 'Kỳ hạn', value: `${loan.term_months} tháng` },
                 { label: 'Ngày thanh toán', value: `Ngày ${loan.payment_day} hàng tháng` },
                 { label: 'Trả hàng tháng', value: `${fmt(loan.monthly_payment)} ₫`, bold: true, color: 'var(--accent-cyan)' },
@@ -539,36 +849,67 @@ export default function AssetDetailPage() {
                 <div className="h-full rounded-full transition-all" style={{ width: `${loanProgress}%`, background: 'linear-gradient(90deg, var(--accent-cyan), #3B82F6)' }} />
               </div>
             </div>
+            </>
+            )}
           </div>
         )}
 
         {/* ═══ INSURANCE ═══ */}
         {activeTab === 'insurance' && (
           <div className="space-y-5">
-            <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Bảo hiểm & Giấy tờ xe</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              {[
-                { title: 'Bảo hiểm vật chất', badge: 'CÒN HẠN', badgeColor: 'var(--status-green)', items: [['Công ty', 'Bảo Việt Insurance'], ['Số hợp đồng', 'BV-2026-12345'], ['Hạn hiệu lực', '10/01/2027'], ['Phí hằng năm', '6,500,000 ₫'], ['Mức bồi thường', '490,000,000 ₫']] },
-                { title: 'Bảo hiểm TNDS bắt buộc', badge: 'CÒN HẠN', badgeColor: 'var(--status-green)', items: [['Công ty', 'PTI'], ['Hạn hiệu lực', '10/01/2027'], ['Phí', '486,000 ₫/năm']] },
-              ].map((ins, idx) => (
-                <div key={idx} className="p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{ins.title}</p>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: `${ins.badgeColor}22`, color: ins.badgeColor }}>{ins.badge}</span>
-                  </div>
-                  {ins.items.map(([k, v], i) => (
-                    <div key={i} className="flex justify-between">
-                      <span style={{ color: 'var(--text-muted)' }}>{k}</span>
-                      <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{v}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Bảo hiểm & Giấy tờ xe</h3>
+              <button onClick={() => setOpenModal('insurance')}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-purple-500 text-white text-xs font-bold transition hover:opacity-90">
+                <Plus className="w-3.5 h-3.5" /><span>Thêm bảo hiểm</span>
+              </button>
             </div>
 
+            {/* Insurance Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              {insurances.map((ins) => {
+                const daysLeft = Math.ceil((new Date(ins.expiry_date).getTime() - Date.now()) / 86400000);
+                const sc = daysLeft < 0 ? 'var(--status-red)' : daysLeft <= 30 ? 'var(--status-amber)' : 'var(--status-green)';
+                return (
+                  <div key={ins.id} className="p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{ins.type}</p>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: `${sc}22`, color: sc }}>
+                        {daysLeft < 0 ? 'Hết hạn' : daysLeft <= 30 ? `Sắp hết (${daysLeft}d)` : 'CÒN HẠN'}
+                      </span>
+                    </div>
+                    {([
+                      ['Công ty', ins.company],
+                      ['Số HĐ', ins.policy_number],
+                      ['Hết hạn', new Date(ins.expiry_date).toLocaleDateString('vi-VN')],
+                      ['Phí/năm', ins.annual_fee > 0 ? `${fmt(ins.annual_fee)} ₫` : '—'],
+                      ['Bồi thường', ins.coverage_amount > 0 ? `${fmt(ins.coverage_amount)} ₫` : 'Theo HĐ'],
+                    ] as [string, string][]).map(([k, v], i) => (
+                      <div key={i} className="flex justify-between">
+                        <span style={{ color: 'var(--text-muted)' }}>{k}</span>
+                        <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              {insurances.length === 0 && (
+                <div className="col-span-2 py-8 text-center" style={{ color: 'var(--text-muted)' }}>
+                  <Shield className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p>Chưa có bảo hiểm — Nhấn "Thêm bảo hiểm" để thêm</p>
+                </div>
+              )}
+            </div>
+
+            {/* Registration & Specs */}
             <div className="p-4 rounded-xl space-y-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-              <p className="font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Đăng kiểm & Đăng ký</p>
-              {[['Biển số xe', '30A-888.88'], ['Đăng kiểm lần tiếp', '10/01/2028 (Xe mới - 2 năm)'], ['Đăng ký xe', 'Cục Đăng kiểm Hà Nội']].map(([k, v], i) => (
+              <p className="font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Đăng kiểm & Giấy tờ xe</p>
+              {([
+                ['Biển số xe', asset.license_plate || 'Chưa có'],
+                ['Năm sản xuất', asset.year?.toString() || '—'],
+                ['Loại phương tiện', asset.asset_type],
+                ['Hạn đăng kiểm', asset.next_maintenance_due || '—'],
+              ] as [string, string][]).map(([k, v], i) => (
                 <div key={i} className="flex justify-between">
                   <span style={{ color: 'var(--text-muted)' }}>{k}</span>
                   <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{v}</span>
@@ -639,6 +980,30 @@ export default function AssetDetailPage() {
           ═══════════════════════════════════════════ */}
 
       {/* Fuel Modal */}
+      {openModal === 'edit' && (
+        <Modal title="Sửa thông tin phương tiện" onClose={() => setOpenModal(null)}>
+          <Field label="Tên xe"><input type="text" className="theme-input" value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} /></Field>
+          <Field label="Hãng (Brand)"><input type="text" className="theme-input" value={editForm.brand} onChange={e => setEditForm(p => ({ ...p, brand: e.target.value }))} /></Field>
+          <Field label="Model"><input type="text" className="theme-input" value={editForm.model} onChange={e => setEditForm(p => ({ ...p, model: e.target.value }))} /></Field>
+          <Field label="Năm sản xuất"><input type="number" className="theme-input" value={editForm.year} onChange={e => setEditForm(p => ({ ...p, year: e.target.value }))} /></Field>
+          <Field label="Màu sắc"><input type="text" className="theme-input" value={editForm.color} onChange={e => setEditForm(p => ({ ...p, color: e.target.value }))} /></Field>
+          <Field label="Biển số"><input type="text" className="theme-input" value={editForm.license_plate} onChange={e => setEditForm(p => ({ ...p, license_plate: e.target.value }))} /></Field>
+          <Field label="Odometer (km)"><input type="number" className="theme-input" value={editForm.current_odometer_km} onChange={e => setEditForm(p => ({ ...p, current_odometer_km: e.target.value }))} /></Field>
+          <Field label="Trạng thái">
+            <select className="theme-select" value={editForm.status} onChange={e => setEditForm(p => ({ ...p, status: e.target.value }))}>
+              {['ACTIVE', 'INACTIVE', 'MAINTENANCE', 'SOLD'].map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </Field>
+          <Field label="Mô tả"><input type="text" className="theme-input" value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} /></Field>
+          <div className="flex space-x-2 pt-2">
+            <button onClick={saveEdit} disabled={savingEdit} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">
+              {savingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
+            </button>
+            <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+          </div>
+        </Modal>
+      )}
+
       {openModal === 'fuel' && (
         <Modal title="Ghi nhận đổ nhiên liệu" onClose={() => setOpenModal(null)}>
           <Field label="Ngày đổ xăng"><input type="date" className="theme-input" value={fuelForm.date} onChange={e => setFuelForm(p => ({ ...p, date: e.target.value }))} /></Field>
@@ -735,6 +1100,27 @@ export default function AssetDetailPage() {
           <Field label="Ghi chú"><input type="text" className="theme-input" value={partForm.notes} onChange={e => setPartForm(p => ({ ...p, notes: e.target.value }))} /></Field>
           <div className="flex space-x-2 pt-2">
             <button onClick={savePart} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">Lưu</button>
+            <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Insurance Modal */}
+      {openModal === 'insurance' && (
+        <Modal title="Thêm thông tin bảo hiểm" onClose={() => setOpenModal(null)}>
+          <Field label="Loại bảo hiểm">
+            <select className="theme-select" value={insForm.type} onChange={e => setInsForm(p => ({ ...p, type: e.target.value }))}>
+              {['Bảo hiểm vật chất', 'Bảo hiểm TNDS bắt buộc', 'Bảo hiểm thân xe', 'Bảo hiểm xưởng sáng', 'Khác'].map(o => <option key={o}>{o}</option>)}
+            </select>
+          </Field>
+          <Field label="Công ty bảo hiểm"><input type="text" className="theme-input" placeholder="VD: Bảo Việt, PTI, AIA..." value={insForm.company} onChange={e => setInsForm(p => ({ ...p, company: e.target.value }))} /></Field>
+          <Field label="Số hợp đồng"><input type="text" className="theme-input" placeholder="VD: BV-2026-12345" value={insForm.policy_number} onChange={e => setInsForm(p => ({ ...p, policy_number: e.target.value }))} /></Field>
+          <Field label="Ngày bắt đầu"><input type="date" className="theme-input" value={insForm.start_date} onChange={e => setInsForm(p => ({ ...p, start_date: e.target.value }))} /></Field>
+          <Field label="Ngày hết hạn"><input type="date" className="theme-input" value={insForm.expiry_date} onChange={e => setInsForm(p => ({ ...p, expiry_date: e.target.value }))} /></Field>
+          <Field label="Phí hàng năm (₫)"><input type="number" className="theme-input" placeholder="VD: 6500000" value={insForm.annual_fee} onChange={e => setInsForm(p => ({ ...p, annual_fee: e.target.value }))} /></Field>
+          <Field label="Mức bồi thường (₫)"><input type="number" className="theme-input" placeholder="VD: 490000000" value={insForm.coverage_amount} onChange={e => setInsForm(p => ({ ...p, coverage_amount: e.target.value }))} /></Field>
+          <div className="flex space-x-2 pt-2">
+            <button onClick={saveInsurance} className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white font-bold text-xs hover:opacity-90 transition">Lưu</button>
             <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
           </div>
         </Modal>

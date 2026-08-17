@@ -11,119 +11,205 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.fmms.carlogger.core.obd.OBDConnectionState
+import com.fmms.carlogger.domain.model.LiveTelemetry
+import com.fmms.carlogger.ui.DashboardUiState
+import com.fmms.carlogger.ui.DashboardViewModel
+import java.util.Locale
+
+private val DarkBackground = Color(0xFF0B0F19)
+private val CardBackground = Color(0xFF111827)
+private val CyanAccent = Color(0xFF06B6D4)
+private val AmberAccent = Color(0xFFF59E0B)
+private val EmeraldAccent = Color(0xFF10B981)
+private val RedAccent = Color(0xFFEF4444)
+private val PurpleAccent = Color(0xFFA855F7)
 
 @Composable
-fun ZestechDashboardScreen() {
-    val darkBackground = Color(0xFF0B0F19)
-    val cardBackground = Color(0xFF111827)
-    val cyanAccent = Color(0xFF06B6D4)
-    val amberAccent = Color(0xFFF59E0B)
-    val emeraldAccent = Color(0xFF10B981)
+fun DashboardScreen(vm: DashboardViewModel) {
+    val state by vm.uiState.collectAsStateWithLifecycle()
+    DashboardContent(state = state)
+}
+
+@Composable
+private fun DashboardContent(state: DashboardUiState) {
+    val t = state.telemetry
+    val conn = state.connectionState
+    val connected = conn == OBDConnectionState.CONNECTED
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(darkBackground)
+            .background(DarkBackground)
             .padding(16.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+        verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Top Header Status Bar
+        // Top header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
                 Text(
                     text = "MAZDA 2 BASE 2026",
                     color = Color.White,
                     fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    text = "30A-888.88 • OBD-II KONNWEI KW906",
+                    text = "${state.obdName ?: "OBD-II ELM327"} • ${state.elmInfo ?: "Not connected"}",
                     color = Color.Gray,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
                 )
+                if (state.hasObdMac && state.obdMac != null) {
+                    Text(
+                        text = state.obdMac!!,
+                        color = Color.Gray,
+                        fontSize = 10.sp,
+                    )
+                }
             }
 
-            Surface(
-                color = emeraldAccent.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .background(emeraldAccent, shape = RoundedCornerShape(50))
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "OBD CONNECTED",
-                        color = emeraldAccent,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                StatusBadge(connected, conn)
+                if (!state.hasObdMac) {
+                    Surface(color = AmberAccent.copy(alpha = 0.15f), shape = RoundedCornerShape(20.dp)) {
+                        Text(
+                            text = "ADD DEVICE",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            color = AmberAccent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         }
 
-        // Center Hero Range & Fuel Display
+        // Hero range + fuel + consumption
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = cardBackground)
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp),
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("ESTIMATED RANGE", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    Text("365 km", color = cyanAccent, fontSize = 36.sp, fontWeight = FontWeight.Black)
-                }
-
-                Divider(
-                    modifier = Modifier
-                        .height(50.dp)
-                        .width(1.dp),
-                    color = Color.DarkGray
+                HeroCell(
+                    label = "ESTIMATED RANGE",
+                    value = state.fuel.rangeKm?.let { "${it.toInt()} km" } ?: "RANGE",
+                    sub = state.fuel.learningNote ?: state.fuel.rangeKm?.let { "" } ?: "Learning...",
+                    color = CyanAccent,
+                    showSubAsNote = state.fuel.rangeKm == null,
+                    noteColor = AmberAccent,
                 )
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("FUEL LEVEL", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    Text("54% (23.7L)", color = amberAccent, fontSize = 36.sp, fontWeight = FontWeight.Black)
-                }
-
-                Divider(
-                    modifier = Modifier
-                        .height(50.dp)
-                        .width(1.dp),
-                    color = Color.DarkGray
+                VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = Color.DarkGray)
+                HeroCell(
+                    label = "FUEL LEVEL",
+                    value = state.fuel.levelPercent?.let { "${it.toInt()}% (${state.fuel.estimatedLiters?.let { l -> String.format(Locale.US, "%.1f", l) }}L)" }
+                        ?: "—",
+                    sub = state.fuel.source ?: "",
+                    color = AmberAccent,
+                    showSubAsNote = state.fuel.levelPercent == null,
+                    noteColor = Color.Gray,
                 )
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("AVG CONSUMPTION", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    Text("6.9 L/100km", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Black)
-                }
+                VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = Color.DarkGray)
+                HeroCell(
+                    label = "AVG CONSUMPTION",
+                    value = state.fuel.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) + " L/100km" }
+                        ?: "—",
+                    sub = state.fuel.learningNote ?: "Learning...",
+                    color = Color.White,
+                    showSubAsNote = state.fuel.consumptionL100km == null,
+                    noteColor = Color.Gray,
+                )
             }
         }
 
-        // Bottom Telemetry Gauges Grid (Speed, RPM, Coolant, Voltage)
+        // Today / trip row
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+            ) {
+                TripStatCell("TRIP", state.trip.distanceKm.let { "${String.format(Locale.US, "%.1f", it)} km" }, Color.White, null)
+                TripStatCell("DURATION", state.trip.durationSeconds.toTime(), Color.White, null)
+                TripStatCell("MAX SPEED", state.trip.maxSpeedKmh.takeIf { it > 0 }?.let { "${it.toInt()} km/h" } ?: "—", CyanAccent, null)
+                TripStatCell("ODO", state.odometer.virtualOdoKm.let { "${it.toInt()} km" }, Color.White, state.odometer.sourceStatus)
+            }
+        }
+
+        // Gauges grid
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            GaugeCard(title = "SPEED", value = "62", unit = "km/h", color = cyanAccent, modifier = Modifier.weight(1f))
-            GaugeCard(title = "RPM", value = "2,150", unit = "rpm", color = Color(0xFFA855F7), modifier = Modifier.weight(1f))
-            GaugeCard(title = "COOLANT", value = "91", unit = "°C", color = emeraldAccent, modifier = Modifier.weight(1f))
-            GaugeCard(title = "VOLTAGE", value = "14.1", unit = "V", color = amberAccent, modifier = Modifier.weight(1f))
+            GaugeCard("SPEED", t.speedKmh?.let { "${it.toInt()}" } ?: "—", "km/h", CyanAccent, Modifier.weight(1f))
+            GaugeCard("RPM", t.rpm?.let { "${it.toInt()}" } ?: "—", "rpm", PurpleAccent, Modifier.weight(1f))
+            GaugeCard("COOLANT", t.coolantTempC?.let { "${it.toInt()}°C" } ?: "—", "", EmeraldAccent, Modifier.weight(1f))
+            GaugeCard("VOLTAGE", t.batteryVoltage?.let { String.format(Locale.US, "%.1f", it) } ?: "—", "V", AmberAccent, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun StatusBadge(connected: Boolean, conn: OBDConnectionState) {
+    val (color, text) = when {
+        conn == OBDConnectionState.RECONNECTING -> RedAccent to "OBD RECONNECTING"
+        conn == OBDConnectionState.SCANNING -> AmberAccent to "SCANNING"
+        connected -> EmeraldAccent to "OBD CONNECTED"
+        conn == OBDConnectionState.ERROR -> RedAccent to "OBD ERROR"
+        else -> Color.Gray to "OBD DISCONNECTED"
+    }
+    Surface(color = color.copy(alpha = 0.2f), shape = RoundedCornerShape(20.dp)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.size(8.dp).background(color, shape = RoundedCornerShape(50)))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(text = text, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun HeroCell(
+    label: String,
+    value: String,
+    sub: String,
+    color: Color,
+    showSubAsNote: Boolean = false,
+    noteColor: Color = Color.Gray,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(value, color = color, fontSize = 32.sp, fontWeight = FontWeight.Black)
+        if (showSubAsNote) {
+            Text(sub.ifBlank { "—" }, color = noteColor, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        } else if (sub.isNotBlank()) {
+            Text(sub, color = noteColor, fontSize = 10.sp)
+        }
+    }
+}
+
+@Composable
+private fun TripStatCell(label: String, value: String, color: Color, sub: String?) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(value, color = color, fontSize = 16.sp, fontWeight = FontWeight.Black)
+        if (sub != null) {
+            Text(sub, color = Color.Gray, fontSize = 9.sp)
         }
     }
 }
@@ -133,19 +219,29 @@ fun GaugeCard(title: String, value: String, unit: String, color: Color, modifier
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF111827))
+        colors = CardDefaults.cardColors(containerColor = CardBackground),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(title, color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(value, color = color, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                Spacer(modifier = Modifier.width(2.dp))
-                Text(unit, color = Color.Gray, fontSize = 10.sp)
+                if (unit.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(unit, color = Color.Gray, fontSize = 10.sp)
+                }
             }
         }
     }
+}
+
+private fun Long.toTime(): String {
+    val s = this / 1000
+    val h = s / 3600
+    val m = (s % 3600) / 60
+    val sec = s % 60
+    return if (h > 0) String.format(Locale.US, "%dh %02dm", h, m) else String.format(Locale.US, "%02d:%02d", m, sec)
 }

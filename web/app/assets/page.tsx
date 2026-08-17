@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { INITIAL_ASSETS } from '@/lib/data/mockData';
+import { getAssets } from '@/lib/services/assetService';
+import { Asset } from '@/types/mobility';
 import { Car, Bike, Zap, Plus, Search, Filter, ChevronRight } from 'lucide-react';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -21,8 +22,28 @@ const BADGE_COLORS: Record<string, { bg: string; color: string }> = {
 export default function AssetsPage() {
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filtered = INITIAL_ASSETS.filter((a) => {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const a = await getAssets();
+        if (!cancelled) setAssets(a);
+      } catch (err: any) {
+        if (!cancelled) setError(err?.message ?? 'Không tải được dữ liệu');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filtered = assets.filter((a) => {
     const matchType = filter === 'ALL' || a.asset_type === filter;
     const matchSearch = a.name.toLowerCase().includes(search.toLowerCase()) ||
       (a.license_plate || '').toLowerCase().includes(search.toLowerCase());
@@ -36,7 +57,7 @@ export default function AssetsPage() {
         <div>
           <h1 className="text-2xl font-extrabold" style={{ color: 'var(--text-primary)' }}>Phương Tiện Gia Đình</h1>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Quản lý {INITIAL_ASSETS.length} phương tiện · Virtual Odometer đồng bộ
+            Quản lý {assets.length} phương tiện · Virtual Odometer đồng bộ
           </p>
         </div>
         <button
@@ -145,8 +166,22 @@ export default function AssetsPage() {
 
         {filtered.length === 0 && (
           <div className="py-16 text-center" style={{ color: 'var(--text-muted)' }}>
-            <Filter className="w-8 h-8 mx-auto mb-2 opacity-40" />
-            <p className="text-sm font-semibold">Không tìm thấy phương tiện</p>
+            {loading ? (
+              <>
+                <div className="mx-auto mb-3 w-8 h-8 rounded-full border-2 animate-spin" style={{ borderColor: 'var(--border-default)', borderTopColor: 'var(--accent-cyan)' }} />
+                <p className="text-sm font-semibold">Đang tải dữ liệu...</p>
+              </>
+            ) : error ? (
+              <>
+                <p className="text-sm font-semibold" style={{ color: 'var(--status-red)' }}>Không tải được dữ liệu</p>
+                <p className="text-xs mt-1">{error}</p>
+              </>
+            ) : (
+              <>
+                <Filter className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm font-semibold">Không tìm thấy phương tiện</p>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -154,10 +189,10 @@ export default function AssetsPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-center">
         {[
-          { label: 'Tổng phương tiện', value: INITIAL_ASSETS.length, color: 'var(--accent-cyan)' },
-          { label: 'Đang hoạt động', value: INITIAL_ASSETS.filter(a => a.status === 'ACTIVE').length, color: 'var(--status-green)' },
-          { label: 'Tổng km cả đội', value: `${INITIAL_ASSETS.reduce((s,a)=>s+a.current_odometer_km,0).toLocaleString('vi-VN')} km`, color: 'var(--text-primary)' },
-          { label: 'Tổng giá trị', value: `${(INITIAL_ASSETS.reduce((s,a)=>s+a.current_value,0)/1_000_000).toFixed(0)}M ₫`, color: 'var(--status-amber)' },
+          { label: 'Tổng phương tiện', value: assets.length, color: 'var(--accent-cyan)' },
+          { label: 'Đang hoạt động', value: assets.filter(a => a.status === 'ACTIVE').length, color: 'var(--status-green)' },
+          { label: 'Tổng km cả đội', value: `${assets.reduce((s,a)=>s+a.current_odometer_km,0).toLocaleString('vi-VN')} km`, color: 'var(--text-primary)' },
+          { label: 'Tổng giá trị', value: `${(assets.reduce((s,a)=>s+a.current_value,0)/1_000_000).toFixed(0)}M ₫`, color: 'var(--status-amber)' },
         ].map((s, i) => (
           <div key={i} className="p-4 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
             <p className="text-base font-extrabold" style={{ color: s.color }}>{s.value}</p>

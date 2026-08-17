@@ -1,39 +1,16 @@
 'use client';
 
-import React from 'react';
-import { INITIAL_ASSETS } from '@/lib/data/mockData';
-import { FileText, Shield, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { getAssets } from '@/lib/services/assetService';
+import { getInsurancePolicies, POLICY_TYPE_LABELS } from '@/lib/services/insuranceService';
+import { getRegistrations } from '@/lib/services/registrationService';
+import { getDocuments, DocumentRow } from '@/lib/services/documentService';
+import { FileText, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
 
-// Mock documents data
-const DOCUMENTS = [
-  {
-    asset_id: '22222222-2222-2222-2222-222222222222',
-    docs: [
-      { name: 'Đăng ký xe (Giấy chủ quyền)', issuer: 'Cục CSGT', valid_until: '2046-01-10', status: 'OK', note: 'Vĩnh viễn theo chủ' },
-      { name: 'Bảo hiểm TNDS bắt buộc', issuer: 'PTI', valid_until: '2027-01-10', status: 'OK', cost: 486000 },
-      { name: 'Bảo hiểm vật chất (Bảo Việt)', issuer: 'Bảo Việt Insurance', valid_until: '2027-01-10', status: 'OK', cost: 6500000 },
-      { name: 'Đăng kiểm (Kiểm tra định kỳ)', issuer: 'Cục Đăng kiểm VN', valid_until: '2028-01-10', status: 'OK', note: 'Xe mới — 2 năm' },
-      { name: 'Vignette / Phí đường bộ', issuer: 'Quỹ bảo trì đường bộ', valid_until: '2027-01-10', status: 'OK', cost: 1560000 },
-    ],
-  },
-  {
-    asset_id: '44444444-4444-4444-4444-444444444444',
-    docs: [
-      { name: 'Đăng ký xe điện', issuer: 'Phòng CSGT', valid_until: '2046-03-20', status: 'OK' },
-      { name: 'Bảo hiểm TNDS xe máy điện', issuer: 'Bảo Việt', valid_until: '2027-03-20', status: 'OK', cost: 146000 },
-    ],
-  },
-  {
-    asset_id: '55555555-5555-5555-5555-555555555555',
-    docs: [
-      { name: 'Đăng ký mô tô phân khối lớn', issuer: 'Phòng CSGT', valid_until: '2046-11-05', status: 'OK' },
-      { name: 'Bảo hiểm TNDS mô tô', issuer: 'PVI', valid_until: '2025-11-05', status: 'EXPIRED', cost: 486000 },
-      { name: 'Bảo hiểm vật chất (BMW)', issuer: 'AXA Insurance', valid_until: '2025-11-05', status: 'EXPIRED', cost: 9800000 },
-    ],
-  },
-];
+interface DocItem { name: string; issuer: string; valid_until?: string; cost?: number; note?: string; status: 'OK' | 'NEAR' | 'EXPIRED' }
+interface DocGroup { asset_id: string; docs: DocItem[] }
 
 const STATUS_CONFIG = {
   OK:        { label: 'Còn hạn', color: 'var(--status-green)', bg: 'rgba(52,211,153,0.12)', Icon: CheckCircle2 },
@@ -41,9 +18,65 @@ const STATUS_CONFIG = {
   EXPIRED:   { label: 'Hết hạn', color: 'var(--status-red)', bg: 'rgba(248,113,113,0.12)', Icon: AlertCircle },
 };
 
+function docStatus(validUntil?: string): 'OK' | 'NEAR' | 'EXPIRED' {
+  if (!validUntil) return 'OK';
+  const diff = new Date(validUntil).getTime() - Date.now();
+  if (diff < 0) return 'EXPIRED';
+  if (diff < 60 * 24 * 3600 * 1000) return 'NEAR';
+  return 'OK';
+}
+
 export default function DocumentsPage() {
-  const expiredCount = DOCUMENTS.flatMap(d => d.docs).filter(d => d.status === 'EXPIRED').length;
-  const totalDocs = DOCUMENTS.flatMap(d => d.docs).length;
+  const [groups, setGroups] = useState<DocGroup[]>([]);
+  const [assets, setAssets] = useState<any[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [a, insurance, regs, docs] = await Promise.all([
+          getAssets(), getInsurancePolicies(), getRegistrations(), getDocuments(),
+        ]);
+        if (cancelled) return;
+        setAssets(a);
+        const grouped = a.map(asset => {
+          const items: DocItem[] = [];
+          regs.filter(r => r.asset_id === asset.id).forEach(r => {
+            items.push({ name: 'Đăng ký xe (Giấy chủ quyền)', issuer: 'Cục CSGT', note: r.registration_number ? `Số: ${r.registration_number}` : undefined, status: 'OK' });
+            if (r.inspection_expiry) items.push({ name: 'Đăng kiểm (Kiểm tra định kỳ)', issuer: 'Cục Đăng kiểm VN', valid_until: r.inspection_expiry, cost: r.cost || undefined, status: docStatus(r.inspection_expiry) });
+            if (r.road_fee_expiry) items.push({ name: 'Vignette / Phí đường bộ', issuer: 'Quỹ bảo trì đường bộ', valid_until: r.road_fee_expiry, status: docStatus(r.road_fee_expiry) });
+          });
+          insurance.filter(i => i.asset_id === asset.id).forEach(i => {
+            items.push({
+              name: POLICY_TYPE_LABELS[i.policy_type] || i.policy_type,
+              issuer: i.provider,
+              valid_until: i.expiry_date,
+              cost: i.cost || undefined,
+              note: `Số HĐ: ${i.policy_number}`,
+              status: docStatus(i.expiry_date),
+            });
+          });
+          (docs as DocumentRow[]).filter(d => d.asset_id === asset.id).forEach(d => {
+            items.push({ name: d.title, issuer: d.document_type, valid_until: d.expiry_date, note: `Tải lên: ${fmtDate(d.created_at)}`, status: docStatus(d.expiry_date) });
+          });
+          return { asset_id: asset.id, docs: items };
+        }).filter(g => g.docs.length > 0);
+        setGroups(grouped);
+      } catch {
+        setAssets([]); setGroups([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const allDocs = groups.flatMap(d => d.docs);
+  const expiredCount = allDocs.filter(d => d.status === 'EXPIRED').length;
+  const totalDocs = allDocs.length;
+  const expiredSpecific = groups
+    .flatMap(g => g.docs.filter(d => d.status === 'EXPIRED').map(d => ({ assetId: g.asset_id, name: d.name })))
+    .slice(0, 2);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -61,14 +94,17 @@ export default function DocumentsPage() {
           <div>
             <p className="font-bold text-xs" style={{ color: 'var(--status-red)' }}>Cảnh báo: Có tài liệu đã hết hạn!</p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-              BMW S1000RR: Bảo hiểm TNDS + Bảo hiểm vật chất đã hết hạn. Vui lòng gia hạn ngay.
+              {expiredSpecific.map(d => {
+                const asset = assets.find(a => a.id === d.assetId);
+                return `${asset?.name?.split(' ')[0] || 'Xe'}: ${d.name}`;
+              }).join(' · ')}. Vui lòng gia hạn ngay.
             </p>
           </div>
         </div>
       )}
 
-      {DOCUMENTS.map(({ asset_id, docs }) => {
-        const asset = INITIAL_ASSETS.find(a => a.id === asset_id);
+      {groups.map(({ asset_id, docs }) => {
+        const asset = assets.find(a => a.id === asset_id);
         if (!asset) return null;
         return (
           <div key={asset_id} className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)' }}>
@@ -97,8 +133,8 @@ export default function DocumentsPage() {
                       <div className="min-w-0">
                         <p className="font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{doc.name}</p>
                         <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                          {doc.issuer} · Hết hạn: {fmtDate(doc.valid_until)}
-                          {(doc as any).note && ` · ${(doc as any).note}`}
+                          {doc.issuer}{doc.valid_until ? ` · Hết hạn: ${fmtDate(doc.valid_until)}` : ''}
+                          {doc.note && ` · ${doc.note}`}
                         </p>
                       </div>
                     </div>

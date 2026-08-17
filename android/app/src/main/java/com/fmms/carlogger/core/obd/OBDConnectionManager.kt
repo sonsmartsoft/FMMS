@@ -1,68 +1,111 @@
 package com.fmms.carlogger.core.obd
 
-import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothSocket
+import android.content.Context
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import java.io.InputStream
-import java.io.OutputStream
-import java.util.UUID
-
-enum class OBDConnectionState {
-    DISCONNECTED, SCANNING, CONNECTING, CONNECTED, RECONNECTING, ERROR
-}
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
- * Manages Bluetooth SPP / BLE Connection with KONNWEI KW906 ELM327 Adapter.
+ * Manages OBD transport selection (SPP vs BLE), auto-reconnect (mandatory per spec §11),
+ * and the ELM327 protocol initialization. Connection-ready clients use [elms].
  */
-class OBDConnectionManager {
+class OBDConnectionManager(
+    context: Context,
+    private val scope: CoroutineScope,
+    private val settings: () -> String?,
+    private val onStateChanged: ((OBDConnectionState) -> Unit)? = null,
+) {
+    private val appContext = context.applicationContext
+    private val transport = BluetoothClassicTransport()
 
-    private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
-
-    private val _connectionState = MutableStateFlow(OBDConnectionState.DISCONNECTED)
+    private val _connectionState = MutableStateFlow<OBDConnectionState>(OBDConnectionState.DISCONNECTED)
     val connectionState: StateFlow<OBDConnectionState> = _connectionState
 
-    private var socket: BluetoothSocket? = null
-    private var inputStream: InputStream? = null
-    private var outputStream: OutputStream? = null
+    val elms = ELM327ProtocolManager(transport)
 
-    fun connectDevice(macAddress: String): Boolean {
-        _connectionState.value = OBDConnectionState.CONNECTING
-        try {
-            val adapter = BluetoothAdapter.getDefaultAdapter() ?: return false
-            val device = adapter.getRemoteDevice(macAddress)
+    private val mutex = Mutex()
+    private var reconnectJob: Job? = null
+    private var lastMacAddress: String? = null
+    private var shouldBeConnected = false
 
-            socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
-            socket?.connect()
+    fun start() {
+        lastMacAddress = settings()
+        if (lastMacAddress.isNullOrBlank()) {
+            _connectionState.value = OBDConnectionState.DISCONNECTED
+            return
+        }
+        shouldBeConnected = true
+        attemptConnect()
+    }
 
-            inputStream = socket?.inputStream
-            outputStream = socket?.outputStream
+    fun connect(macAddress: String) {
+        lastMacAddress = macAddress
+        shouldBeConnected = true
+        attemptConnect()
+    }
 
-            _connectionState.value = OBDConnectionState.CONNECTED
-            return true
-        } catch (e: Exception) {
-            _connectionState.value = OBDConnectionState.ERROR
-            return false
+    fun disconnect(reason: String = "user") {
+        shouldBeConnected = false
+        reconnectJob?.cancel()
+        scope.launch {
+            mutex.withLock { transport.disconnect() }
+            _connectionState.value = OBDConnectionState.DISCONNECTED
         }
     }
 
-    fun sendCommand(cmd: String): String {
-        return try {
-            outputStream?.write((cmd + "\r").toByteArray())
-            outputStream?.flush()
+    /** Trigger a reconnect without user action (e.g. reboot recovery, link loss). */
+    fun requestReconnect() {
+        if (shouldBeConnected && lastMacAddress != null) attemptConnect()
+    }
 
-            val buffer = ByteArray(1024)
-            val bytes = inputStream?.read(buffer) ?: 0
-            if (bytes > 0) String(buffer, 0, bytes).trim() else ""
-        } catch (e: Exception) {
-            ""
+    private fun attemptConnect() {
+        val mac = lastMacAddress ?: return
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            while (shouldBeConnected) {
+                if (transport.isConnected()) {
+                    delay(3000)
+                    continue
+                }
+                _connectionState.value = if (_connectionState.value == OBDConnectionState.CONNECTED) {
+                    OBDConnectionState.RECONNECTING
+                } else {
+                    OBDConnectionState.CONNECTING
+                }
+                val ok = mutex.withLock {
+                    val connected = transport.connect(mac)
+                    if (connected) {
+                        try {
+                            elms.initialize()
+                        } catch (_: Exception) {
+                        }
+                    }
+                    connected && transport.isConnected()
+                }
+                if (ok) {
+                    _connectionState.value = OBDConnectionState.CONNECTED
+                    onStateChanged?.invoke(OBDConnectionState.CONNECTED)
+                    delay(3000)
+                } else {
+                    _connectionState.value = OBDConnectionState.ERROR
+                    onStateChanged?.invoke(OBDConnectionState.ERROR)
+                    delay(5000)
+                }
+            }
         }
     }
 
-    fun disconnect() {
-        try {
-            socket?.close()
-        } catch (ignored: Exception) {}
-        _connectionState.value = OBDConnectionState.DISCONNECTED
+    fun getLastMacAddress(): String? = lastMacAddress
+
+    companion object {
+        const val PREF_OBD_MAC = "obd_device_mac"
+        const val PREF_OBD_NAME = "obd_device_name"
     }
 }

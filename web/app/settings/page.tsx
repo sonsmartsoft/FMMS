@@ -15,22 +15,22 @@ const SETTINGS_CARDS = [
     tag: 'Live',
   },
   {
-    href: '#',
+    href: '/settings/ai',
     icon: Key,
     color: 'var(--status-purple)',
     bg: 'rgba(139,92,246,0.15)',
     title: 'Cấu hình AI Providers',
-    desc: 'Quản lý API Key (Gemini, OpenAI, Claude, Local LLM)',
-    tag: null,
+    desc: 'Kết nối ChatGPT2API Gateway, Gemini, OpenAI — quản lý API Key & model',
+    tag: 'Mới',
   },
   {
-    href: '#',
+    href: '/settings/health',
     icon: Database,
     color: 'var(--status-green)',
     bg: 'rgba(52,211,153,0.15)',
     title: 'Supabase Database',
-    desc: 'Project Ref: opslebsdmwsnsyfmbynf · Row Level Security',
-    tag: 'Connected',
+    desc: 'Project Ref: opslebsdmwsnsyfmbynf · Row Level Security · Auth',
+    tag: 'DB',
   },
   {
     href: '#',
@@ -113,7 +113,7 @@ export default function SettingsPage() {
               {Inner}
             </Link>
           ) : (
-            <div key={card.title} className="cursor-not-allowed opacity-80">
+            <div key={card.title} className="cursor-not-allowed opacity-75">
               {Inner}
             </div>
           );
@@ -129,7 +129,7 @@ export default function SettingsPage() {
           <div className="flex items-center space-x-4" style={{ color: 'var(--text-faint)' }}>
             <span>Next.js 14.2.25</span>
             <span>Supabase</span>
-            <span>Gemini AI</span>
+            <span>ChatGPT2API / Gemini AI</span>
           </div>
         </div>
       </div>

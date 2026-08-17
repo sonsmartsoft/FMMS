@@ -1,44 +1,48 @@
 package com.fmms.carlogger.core.odometer
 
-enum class OdometerSourceStatus {
-    ODO_KM_VERIFIED, DISTANCE_GPS, ODO_ESTIMATED, ODO_MANUAL, ODO_UNAVAILABLE
-}
-
-data class OdometerState(
-    val officialOdoKm: Double? = null,
-    val virtualOdoKm: Double = 12846.0,
-    val sourceStatus: OdometerSourceStatus = OdometerSourceStatus.ODO_ESTIMATED,
-    val confidence: String = "HIGH"
-)
+import com.fmms.carlogger.data.repository.PrefsStore
+import com.fmms.carlogger.data.repository.VehicleRepository
+import com.fmms.carlogger.domain.model.OdometerInfo
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Virtual Odometer Engine implementing 5-step fallback strategy for Mazda2 Base 2026.
+ * Virtual odometer per spec (5-step fallback):
+ * 1. VERIFIED OBD odometer  2. GPS distance accumulation  3. manual calibration
+ * Persisted via PrefsStore so it survives reboot.
  */
-class VirtualOdometerEngine {
+class VirtualOdometerEngine(
+    private val prefsStore: PrefsStore,
+    private val vehicleRepository: VehicleRepository,
+) {
 
-    private var currentVirtualOdo: Double = 12846.0
-    private var calibrationOffset: Double = 0.0
+    private val _state = MutableStateFlow(
+        OdometerInfo(prefsStore.getOdo(), "INITIAL", "—")
+    )
+    val state: StateFlow<OdometerInfo> = _state
 
-    fun calculateNewOdometer(gpsTripDeltaKm: Double, obdOdoRawKm: Double?): OdometerState {
-        return if (obdOdoRawKm != null && obdOdoRawKm > 0) {
-            OdometerState(
-                officialOdoKm = obdOdoRawKm,
-                virtualOdoKm = obdOdoRawKm,
-                sourceStatus = OdometerSourceStatus.ODO_KM_VERIFIED,
-                confidence = "VERIFIED"
-            )
-        } else {
-            currentVirtualOdo += gpsTripDeltaKm
-            OdometerState(
-                officialOdoKm = null,
-                virtualOdoKm = currentVirtualOdo + calibrationOffset,
-                sourceStatus = OdometerSourceStatus.DISTANCE_GPS,
-                confidence = "HIGH (GPS + Virtual Ledger)"
-            )
-        }
+    suspend fun onTripCompleted(distanceKm: Double, sourceStatus: String) {
+        val v = vehicleRepository.getActive()
+        val base = v?.odometerKm ?: prefsStore.getOdo()
+        val updated = base + distanceKm
+        prefsStore.setOdo(updated)
+        v?.let { vehicleRepository.updateOdometer(it.id, updated) }
+        _state.value = OdometerInfo(updated, sourceStatus, "HIGH (GPS + Ledger)")
     }
 
-    fun applyManualCalibration(actualDashboardReadingKm: Double) {
-        calibrationOffset = actualDashboardReadingKm - currentVirtualOdo
+    suspend fun setOfficialOdo(officialKm: Double) {
+        prefsStore.setOdo(officialKm)
+        vehicleRepository.getActive()?.let {
+            vehicleRepository.updateOdometer(it.id, officialKm)
+        }
+        _state.value = OdometerInfo(officialKm, "VERIFIED (OBD)", "VERIFIED")
+    }
+
+    suspend fun manualCalibration(actualDashboardKm: Double) {
+        prefsStore.setOdo(actualDashboardKm)
+        vehicleRepository.getActive()?.let {
+            vehicleRepository.updateOdometer(it.id, actualDashboardKm)
+        }
+        _state.value = OdometerInfo(actualDashboardKm, "MANUAL", "MANUAL")
     }
 }

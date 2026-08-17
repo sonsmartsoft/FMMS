@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { INITIAL_ASSETS, MOCK_MAINTENANCE_RECORDS } from '@/lib/data/mockData';
-import { MaintenanceRecord } from '@/types/mobility';
+import React, { useEffect, useState } from 'react';
+import { getAssets } from '@/lib/services/assetService';
+import { getMaintenanceRecords, createMaintenanceRecord } from '@/lib/services/maintenanceService';
+import { Asset, MaintenanceRecord } from '@/types/mobility';
 import { Wrench, Plus, X, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
@@ -15,34 +16,56 @@ const MAINT_TYPES = [
 ];
 
 export default function MaintenancePage() {
-  const [records, setRecords] = useState<MaintenanceRecord[]>([...MOCK_MAINTENANCE_RECORDS]);
+  const [records, setRecords] = useState<MaintenanceRecord[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [openModal, setOpenModal] = useState(false);
   const [form, setForm] = useState({
-    asset_id: INITIAL_ASSETS[0].id, date: '', maintenance_type: 'Thay dầu máy',
+    asset_id: '', date: '', maintenance_type: 'Thay dầu máy',
     odometer_km: '', cost: '', vendor: '', notes: '', next_due_km: '', next_due_date: '',
   });
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [a, m] = await Promise.all([getAssets(), getMaintenanceRecords()]);
+        if (cancelled) return;
+        setAssets(a);
+        setRecords(m);
+        if (a.length > 0) setForm(p => ({ ...p, asset_id: a[0].id }));
+      } catch {
+        /* rỗng */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const totalCost = records.reduce((s, r) => s + r.cost, 0);
 
-  const save = () => {
-    setRecords([{
-      id: `m${Date.now()}`,
-      asset_id: form.asset_id,
-      maintenance_type: form.maintenance_type,
-      date: form.date,
-      odometer_km: parseFloat(form.odometer_km) || 0,
-      cost: parseFloat(form.cost) || 0,
-      vendor: form.vendor,
-      notes: form.notes,
-      next_due_km: parseFloat(form.next_due_km) || undefined,
-      next_due_date: form.next_due_date || undefined,
-      status: 'OK',
-    }, ...records]);
+  const save = async () => {
+    try {
+      const created = await createMaintenanceRecord({
+        asset_id: form.asset_id || assets[0]?.id,
+        maintenance_type: form.maintenance_type,
+        date: form.date,
+        odometer_km: parseFloat(form.odometer_km) || 0,
+        cost: parseFloat(form.cost) || 0,
+        vendor: form.vendor || undefined,
+        notes: form.notes || undefined,
+        next_due_km: form.next_due_km ? parseFloat(form.next_due_km) : undefined,
+        next_due_date: form.next_due_date || undefined,
+      });
+      setRecords([created, ...records]);
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
     setOpenModal(false);
-    setForm({ asset_id: INITIAL_ASSETS[0].id, date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
+    setForm({ asset_id: form.asset_id, date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
   };
 
-  const getAssetName = (id: string) => INITIAL_ASSETS.find(a => a.id === id)?.name || id;
+  const getAssetName = (id: string) => assets.find(a => a.id === id)?.name || id;
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -81,7 +104,7 @@ export default function MaintenancePage() {
         <div>
           <p className="font-bold text-xs" style={{ color: 'var(--status-amber)' }}>Nhắc nhở bảo dưỡng tiếp theo</p>
           <ul className="mt-1 space-y-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-            {INITIAL_ASSETS.filter(a => a.next_maintenance_due).map(a => (
+            {assets.filter(a => a.next_maintenance_due).map(a => (
               <li key={a.id}>→ <strong>{a.name}</strong>: {a.next_maintenance_due}</li>
             ))}
           </ul>
@@ -135,7 +158,7 @@ export default function MaintenancePage() {
             </div>
             <div className="p-5 space-y-3">
               {[
-                { label: 'Phương tiện', el: <select className="theme-select" value={form.asset_id} onChange={e => setForm(p => ({ ...p, asset_id: e.target.value }))}>{INITIAL_ASSETS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select> },
+                { label: 'Phương tiện', el: <select className="theme-select" value={form.asset_id} onChange={e => setForm(p => ({ ...p, asset_id: e.target.value }))}>{assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select> },
                 { label: 'Ngày bảo dưỡng', el: <input type="date" className="theme-input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} /> },
                 { label: 'Loại bảo dưỡng', el: <select className="theme-select" value={form.maintenance_type} onChange={e => setForm(p => ({ ...p, maintenance_type: e.target.value }))}>{MAINT_TYPES.map(t => <option key={t}>{t}</option>)}</select> },
                 { label: 'Odometer (km)', el: <input type="number" className="theme-input" placeholder="12846" value={form.odometer_km} onChange={e => setForm(p => ({ ...p, odometer_km: e.target.value }))} /> },

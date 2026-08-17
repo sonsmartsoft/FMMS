@@ -1,64 +1,110 @@
 package com.fmms.carlogger.core.obd
 
-data class OBDDataSample(
-    val speedKmh: Float? = null,
-    val rpm: Float? = null,
-    val engineLoadPercent: Float? = null,
-    val coolantTempC: Float? = null,
-    val fuelLevelPercent: Float? = null,
-    val batteryVoltage: Float? = null,
-    val rawSource: String? = null
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+data class Elm327Info(
+    val deviceDescription: String? = null,
+    val firmwareVersion: String? = null,
+    val protocol: String? = null,
+    val elmVersion: String? = null,
+    val supportedPids: Set<String> = emptySet(),
 )
 
 /**
- * Handles ELM327 Initialization (ATZ, ATE0, ATSP0) and PID Parsers (Speed, RPM, Coolant, Load, Fuel).
+ * ELM327 wrapper: initialization (ATZ..ATSP0), adapter identification,
+ * PID discovery and command execution. Uses a Mutex so polling and
+ * diagnostics never interleave commands.
  */
-class ELM327ProtocolManager(private val obdManager: OBDConnectionManager) {
+class ELM327ProtocolManager(private val transport: OBDTransport) {
 
-    fun initializeProtocol(): Boolean {
-        obdManager.sendCommand("ATZ")
-        obdManager.sendCommand("ATE0")
-        obdManager.sendCommand("ATL0")
-        obdManager.sendCommand("ATS0")
-        obdManager.sendCommand("ATH0")
-        val protocol = obdManager.sendCommand("ATSP0")
-        return protocol.contains("OK", ignoreCase = true) || protocol.contains("ELM327", ignoreCase = true)
+    private val mutex = Mutex()
+
+    var info: Elm327Info = Elm327Info()
+        private set
+
+    val isInitialised: Boolean get() = info.supportedPids.isNotEmpty()
+
+    suspend fun initialize(): Elm327Info = mutex.withLock {
+        val infoBuilder = Elm327Info().let {
+            Elm327InfoBuilder().also { b ->
+                val atz = transport.sendCommandAndWait("ATZ") ?: ""
+                b.approxVersion = atz
+                transport.sendRaw("ATE0") // echo off
+                transport.sendRaw("ATL0") // linefeeds off
+                transport.sendRaw("ATS0") // spaces off
+                transport.sendRaw("ATH0") // headers off
+                transport.sendRaw("ATSP0") // auto protocol
+                b.deviceDescription = transport.sendCommandAndWait("AT@1", 2000)
+                b.firmware = transport.sendCommandAndWait("ATI", 2000)
+                b.protocol = transport.sendCommandAndWait("ATDPN", 2000)
+                val elmVersion = transport.sendCommandAndWait("ATI", 2000)
+                b.elmVersion = elmVersion
+            }
+        }
+        // PID discovery
+        val discoveryResponses = mutableMapOf<String, String>()
+        for (query in PidDefinitions.DISCOVERY_PIDS) {
+            val resp = transport.sendCommandAndWait(query, 2000)
+            if (!resp.isNullOrBlank() && resp.contains("41", ignoreCase = true)) {
+                discoveryResponses[query] = resp
+            }
+        }
+        val supportedByMask = PidDefinitions.discoverSupported(discoveryResponses)
+
+        // Merge with "known to exist" PIDs: even if the adapter can't tell us,
+        // RPM/SPEED/FUEL_LEVEL are cheap and critical. Filter by what we can request later.
+        val known = setOf(
+            PidDefinitions.CMD_RPM,
+            PidDefinitions.CMD_SPEED,
+            PidDefinitions.CMD_FUEL_LEVEL,
+            PidDefinitions.CMD_COOLANT,
+            PidDefinitions.CMD_VOLTAGE,
+        )
+        val supported = (supportedByMask - setOf("0101", "0103", "0100", "0120", "0140", "0160", "0180", "01A0")).toMutableSet().apply {
+            addAll(known)
+        }
+
+        info = infoBuilder.build(supported)
+        info
     }
 
-    fun parseSpeed(raw: String): Float? {
-        val clean = raw.replace(" ", "").replace(">", "").trim()
-        if (clean.startsWith("410D")) {
-            val hex = clean.substring(4, 6)
-            return hex.toIntOrNull(16)?.toFloat()
-        }
-        return null
+    suspend fun sendCommand(cmd: String): String? = mutex.withLock {
+        transport.sendCommandAndWait(cmd, 2000)
     }
 
-    fun parseRpm(raw: String): Float? {
-        val clean = raw.replace(" ", "").replace(">", "").trim()
-        if (clean.startsWith("410C") && clean.length >= 8) {
-            val a = clean.substring(4, 6).toIntOrNull(16) ?: return null
-            val b = clean.substring(6, 8).toIntOrNull(16) ?: return null
-            return ((a * 256) + b) / 4.0f
+    /** Run a single read of a PID, returns parsed value or null if unsupported/unreadable. */
+    suspend fun readPid(pid: PidDefinition): Double? {
+        if (info.supportedPids.isNotEmpty() && pid.command !in info.supportedPids) {
+            if (pid.command !in setOf(
+                    PidDefinitions.CMD_RPM,
+                    PidDefinitions.CMD_SPEED,
+                    PidDefinitions.CMD_FUEL_LEVEL,
+                    PidDefinitions.CMD_COOLANT,
+                    PidDefinitions.CMD_VOLTAGE,
+                    )
+            ) return null
         }
-        return null
+        return mutex.withLock {
+            val resp = transport.sendCommandAndWait(pid.command, 1500) ?: return@withLock null
+            if (!resp.contains("41", ignoreCase = true)) return@withLock null
+            pid.parser(resp)
+        }
     }
 
-    fun parseCoolant(raw: String): Float? {
-        val clean = raw.replace(" ", "").replace(">", "").trim()
-        if (clean.startsWith("4105") && clean.length >= 6) {
-            val a = clean.substring(4, 6).toIntOrNull(16) ?: return null
-            return (a - 40).toFloat()
-        }
-        return null
+    suspend fun shutdown() {
+        mutex.withLock { transport.sendRaw("ATPC") }
     }
 
-    fun parseFuelLevel(raw: String): Float? {
-        val clean = raw.replace(" ", "").replace(">", "").trim()
-        if (clean.startsWith("412F") && clean.length >= 6) {
-            val a = clean.substring(4, 6).toIntOrNull(16) ?: return null
-            return (a * 100.0f) / 255.0f
-        }
-        return null
+    private class Elm327InfoBuilder {
+        var approxVersion: String = ""
+        var deviceDescription: String? = null
+        var firmware: String? = null
+        var protocol: String? = null
+        var elmVersion: String? = null
+
+        fun build(supported: Set<String>): Elm327Info =
+            Elm327Info(deviceDescription, firmware, protocol, elmVersion.also { }, supported)
     }
 }

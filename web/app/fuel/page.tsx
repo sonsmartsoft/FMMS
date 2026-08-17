@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { INITIAL_ASSETS, MOCK_FUEL_LOGS, MOCK_EXPENSES } from '@/lib/data/mockData';
+import React, { useEffect, useState } from 'react';
+import { getAssets } from '@/lib/services/assetService';
+import { getFuelLogs, createFuelLog } from '@/lib/services/fuelService';
+import { Asset } from '@/types/mobility';
 import { Fuel, Zap, TrendingDown, Plus, X } from 'lucide-react';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
@@ -9,24 +11,63 @@ const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
 
 export default function FuelPage() {
   const [openModal, setOpenModal] = useState(false);
-  const [form, setForm] = useState({ asset_id: INITIAL_ASSETS[0].id, date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
-  const [logs, setLogs] = useState([...MOCK_FUEL_LOGS]);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [form, setForm] = useState({ asset_id: '', date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const fuelAssets = INITIAL_ASSETS.filter(a => a.capabilities.has_fuel || a.capabilities.has_battery);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [a, f] = await Promise.all([getAssets(), getFuelLogs()]);
+        if (cancelled) return;
+        setAssets(a);
+        setLogs(f);
+        if (a.length > 0) setForm(p => ({ ...p, asset_id: a[0].id }));
+      } catch {
+        /* sẽ hiện trạng thái rỗng */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const fuelAssets = assets.filter(a => a.capabilities.has_fuel || a.capabilities.has_battery);
   const totalFuel = logs.reduce((s, f) => s + f.total_cost, 0);
   const totalLiters = logs.reduce((s, f) => s + f.liters, 0);
-  const avgConsumption = fuelAssets[0]?.avg_consumption_l100km || 0;
 
-  const save = () => {
+  const sorted = [...logs].sort((x, y) => new Date(x.date).getTime() - new Date(y.date).getTime());
+  let accKm = 0, accL = 0;
+  for (let i = 1; i < sorted.length; i++) {
+    const d = sorted[i].odometer_km - sorted[i - 1].odometer_km;
+    if (d > 1) { accKm += d; accL += sorted[i].liters; }
+  }
+  const avgConsumption = accKm > 50 ? (accL / accKm * 100).toFixed(1) : null;
+
+  const save = async () => {
     const l = parseFloat(form.liters) || 0;
     const p = parseFloat(form.price_per_liter) || 0;
-    setLogs([{
-      id: `f${Date.now()}`, date: form.date, liters: l, price_per_liter: p,
-      total_cost: l * p, odometer_km: parseFloat(form.odometer_km) || 0,
-      station: form.station, notes: form.notes,
-    }, ...logs]);
+    try {
+      const created = await createFuelLog({
+        asset_id: form.asset_id || assets[0]?.id,
+        timestamp: new Date(form.date || Date.now()).toISOString(),
+        odometer_km: parseFloat(form.odometer_km) || 0,
+        fuel_liters: l,
+        price_per_liter: p,
+        station: form.station || undefined,
+        notes: form.notes || undefined,
+        tank_full: true,
+      });
+      setLogs([created, ...logs]);
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
     setOpenModal(false);
-    setForm({ asset_id: INITIAL_ASSETS[0].id, date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
+    setForm({ asset_id: form.asset_id, date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
   };
 
   return (
@@ -46,7 +87,7 @@ export default function FuelPage() {
         {[
           { label: 'Tổng chi phí NL', value: `${fmt(totalFuel)} ₫`, color: 'var(--status-amber)', icon: Fuel },
           { label: 'Tổng lít đổ', value: `${totalLiters.toFixed(1)} L`, color: 'var(--accent-cyan)', icon: Fuel },
-          { label: 'TB Tiêu thụ', value: `${avgConsumption} L/100km`, color: 'var(--status-green)', icon: TrendingDown },
+          { label: 'TB Tiêu thụ', value: avgConsumption ? `${avgConsumption} L/100km` : '—', color: 'var(--status-green)', icon: TrendingDown },
           { label: 'Số lần đổ', value: logs.length, color: 'var(--text-primary)', icon: Zap },
         ].map((s, i) => (
           <div key={i} className="p-4 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
