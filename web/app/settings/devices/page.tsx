@@ -3,10 +3,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Radio, Wifi, WifiOff, MapPin, Car, Clock, Gauge,
-  RefreshCw, Signal, AlertCircle, CheckCircle2,
+  RefreshCw, Signal, AlertCircle, CheckCircle2, Edit3, X, Save, Trash2,
 } from 'lucide-react';
 import { getAssets } from '@/lib/services/assetService';
 import { getDeviceLatestPositions, subscribeToLivePositions, DeviceLatestPosition } from '@/lib/services/gpsService';
+import { getDevices, updateDevice, assignDeviceToVehicle, deleteDevice, DeviceRecord } from '@/lib/services/deviceService';
 import { Asset } from '@/types/mobility';
 
 const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
@@ -26,9 +27,21 @@ function getLastSeenText(iso: string): string {
 export default function DeviceManagementPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [devices, setDevices] = useState<DeviceLatestPosition[]>([]);
+  const [registeredDevices, setRegisteredDevices] = useState<DeviceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+
+  // Edit Modal State
+  const [editingDevice, setEditingDevice] = useState<{
+    id: string;
+    name: string;
+    vehicleId: string;
+    deviceType: string;
+    macAddress: string;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -36,6 +49,8 @@ export default function DeviceManagementPage() {
       setAssets(a);
       const d = await getDeviceLatestPositions(a.map(x => x.id));
       setDevices(d);
+      const reg = await getDevices();
+      setRegisteredDevices(reg);
       setLastUpdate(new Date());
     } catch {
       // silent — empty state
@@ -44,6 +59,11 @@ export default function DeviceManagementPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // Live subscription
   useEffect(() => {
@@ -77,12 +97,71 @@ export default function DeviceManagementPage() {
     return unsub;
   }, [isLive, assets]);
 
+  const handleEditDevice = (device: DeviceLatestPosition) => {
+    const reg = registeredDevices.find(r => r.id === device.device_id);
+    setEditingDevice({
+      id: device.device_id,
+      name: device.device_name || reg?.device_name || `Tracker ${device.device_id.slice(0, 6)}`,
+      vehicleId: device.vehicle_id || reg?.vehicle_id || reg?.asset_id || '',
+      deviceType: reg?.device_type || 'GPS-TRACKER',
+      macAddress: reg?.mac_address || '',
+    });
+  };
+
+  const handleSaveDevice = async () => {
+    if (!editingDevice) return;
+    setSaving(true);
+
+    try {
+      const { success } = await assignDeviceToVehicle(
+        editingDevice.id,
+        editingDevice.vehicleId || null
+      );
+
+      await updateDevice(editingDevice.id, {
+        device_name: editingDevice.name,
+        device_type: editingDevice.deviceType,
+        mac_address: editingDevice.macAddress || null,
+      });
+
+      if (success) {
+        showToast('✓ Cập nhật thiết bị & gán xe thành công!');
+        setEditingDevice(null);
+        await load();
+      } else {
+        showToast('❌ Cập nhật thất bại. Vui lòng thử lại.');
+      }
+    } catch {
+      showToast('❌ Đã xảy ra lỗi khi lưu.');
+    }
+    setSaving(false);
+  };
+
+  const handleDeleteDevice = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa thiết bị này?')) return;
+    const { success } = await deleteDevice(id);
+    if (success) {
+      showToast('✓ Đã xóa thiết bị.');
+      await load();
+    } else {
+      showToast('❌ Thất bại khi xóa.');
+    }
+  };
+
   const assetMap = new Map(assets.map(a => [a.id, a]));
   const onlineDevices = devices.filter(isOnline);
   const offlineDevices = devices.filter(d => !isOnline(d));
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn relative">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-20 right-6 z-[10000] px-4 py-3 rounded-xl text-xs font-bold text-white shadow-2xl transition animate-bounce"
+          style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}>
+          {toastMessage}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
@@ -91,7 +170,7 @@ export default function DeviceManagementPage() {
             Quản lý Thiết bị Tracker
           </h1>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            OBD · GPS-only · Live status · Gán phương tiện
+            OBD · GPS-only · Web Nguồn Sự Thật · Gán phương tiện
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -156,12 +235,12 @@ export default function DeviceManagementPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {devices.map((d, idx) => {
+          {devices.map((d) => {
             const asset = assetMap.get(d.vehicle_id);
             const online = isOnline(d);
             const isActive = !!d.trip_id;
             return (
-              <div key={d.device_id} className="p-4 rounded-2xl space-y-3"
+              <div key={d.device_id} className="p-4 rounded-2xl space-y-3 relative group"
                 style={{
                   background: 'var(--bg-secondary)',
                   border: `1px solid ${online ? 'var(--accent-cyan-border)' : 'var(--border-default)'}`,
@@ -182,22 +261,41 @@ export default function DeviceManagementPage() {
                       </p>
                     </div>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${online ? '' : ''}`}
-                    style={{
-                      background: online ? 'rgba(16,185,129,0.15)' : 'rgba(100,116,139,0.15)',
-                      color: online ? 'var(--status-green)' : 'var(--text-muted)',
-                    }}>
-                    {online ? '● Online' : '○ Offline'}
-                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleEditDevice(d)}
+                      className="p-1.5 rounded-lg transition hover:bg-white/10"
+                      style={{ color: 'var(--accent-cyan)' }}
+                      title="Chỉnh sửa & gán xe"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                      style={{
+                        background: online ? 'rgba(16,185,129,0.15)' : 'rgba(100,116,139,0.15)',
+                        color: online ? 'var(--status-green)' : 'var(--text-muted)',
+                      }}>
+                      {online ? '● Online' : '○ Offline'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Vehicle link */}
-                <div className="flex items-center gap-2 text-xs p-2 rounded-xl"
+                <div className="flex items-center justify-between text-xs p-2 rounded-xl"
                   style={{ background: 'var(--bg-hover)' }}>
-                  <Car className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-                  <span style={{ color: 'var(--text-secondary)' }}>
-                    {asset ? `${asset.name} · ${asset.license_plate || asset.brand}` : 'Chưa gán xe'}
-                  </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Car className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                    <span className="truncate" style={{ color: 'var(--text-secondary)' }}>
+                      {asset ? `${asset.name} (${asset.license_plate || asset.brand})` : 'Chưa gán xe'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleEditDevice(d)}
+                    className="text-[10px] font-semibold text-cyan-400 hover:underline shrink-0 ml-1"
+                  >
+                    Đổi xe
+                  </button>
                 </div>
 
                 {/* Stats grid */}
@@ -215,7 +313,7 @@ export default function DeviceManagementPage() {
                     </p>
                   </div>
                   <div className="p-2 rounded-xl col-span-2" style={{ background: 'var(--bg-hover)' }}>
-                    <p style={{ color: 'var(--text-muted)' }}>Vị trí</p>
+                    <p style={{ color: 'var(--text-muted)' }}>Vị trí GPS</p>
                     <p className="font-mono text-[10px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                       {d.lat.toFixed(6)}, {d.lng.toFixed(6)}
                     </p>
@@ -223,13 +321,134 @@ export default function DeviceManagementPage() {
                 </div>
 
                 {/* Last seen */}
-                <div className="flex items-center gap-1.5 text-[10px]" style={{ color: 'var(--text-faint)' }}>
-                  <Clock className="w-3 h-3" />
-                  <span>Lần cuối: {getLastSeenText(d.recorded_at)}</span>
+                <div className="flex items-center justify-between text-[10px]" style={{ color: 'var(--text-faint)' }}>
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-3 h-3" />
+                    <span>Lần cuối: {getLastSeenText(d.recorded_at)}</span>
+                  </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* EDIT & DEVICE ASSIGNMENT MODAL */}
+      {editingDevice && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-md"
+          style={{ background: 'rgba(0,0,0,0.6)' }}>
+          <div className="w-full max-w-md p-6 rounded-2xl space-y-4 border shadow-2xl animate-scaleIn"
+            style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)' }}>
+            <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+              <h3 className="font-bold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Edit3 className="w-5 h-5 text-cyan-400" />
+                Chỉnh sửa & Gán xe cho Thiết bị
+              </h3>
+              <button onClick={() => setEditingDevice(null)} className="p-1 rounded-lg hover:bg-white/10">
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-muted)' }}>Device ID (UUID)</label>
+                <input
+                  type="text"
+                  disabled
+                  value={editingDevice.id}
+                  className="w-full p-2.5 rounded-xl font-mono text-[11px]"
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Tên thiết bị (Tracker Name)</label>
+                <input
+                  type="text"
+                  value={editingDevice.name}
+                  onChange={e => setEditingDevice({ ...editingDevice, name: e.target.value })}
+                  placeholder="VD: Tracker xe đạp Uti"
+                  className="w-full p-2.5 rounded-xl"
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Phương tiện gán (`vehicle_id`)</label>
+                <select
+                  value={editingDevice.vehicleId}
+                  onChange={e => setEditingDevice({ ...editingDevice, vehicleId: e.target.value })}
+                  className="w-full p-2.5 rounded-xl text-xs font-medium"
+                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                >
+                  <option value="">-- Chưa gán xe --</option>
+                  {assets.map(a => (
+                    <option key={a.id} value={a.id}>
+                      🚗 {a.name} ({a.license_plate || a.brand}) — {a.asset_type}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[10px] mt-1" style={{ color: 'var(--text-faint)' }}>
+                  Gán xe ở đây sẽ đồng bộ tức thì về Android app khi app gọi `get_fleet_vehicles`.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Loại thiết bị</label>
+                  <select
+                    value={editingDevice.deviceType}
+                    onChange={e => setEditingDevice({ ...editingDevice, deviceType: e.target.value })}
+                    className="w-full p-2.5 rounded-xl"
+                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="GPS-TRACKER">GPS-TRACKER (Xe đạp)</option>
+                    <option value="ELM327-BT">ELM327-BT (OBD Ô tô)</option>
+                    <option value="ZESTECH_ADAS">ZESTECH ADAS</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Bluetooth MAC (nếu có)</label>
+                  <input
+                    type="text"
+                    value={editingDevice.macAddress}
+                    onChange={e => setEditingDevice({ ...editingDevice, macAddress: e.target.value })}
+                    placeholder="AA:BB:CC:11:22:33"
+                    className="w-full p-2.5 rounded-xl font-mono text-[11px]"
+                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+              <button
+                onClick={() => handleDeleteDevice(editingDevice.id)}
+                className="px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                Xóa thiết bị
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setEditingDevice(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold hover:bg-white/10"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  Hủy
+                </button>
+                <button
+                  disabled={saving}
+                  onClick={handleSaveDevice}
+                  className="px-5 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-2"
+                  style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+                >
+                  <Save className="w-4 h-4" />
+                  {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

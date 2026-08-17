@@ -1,32 +1,40 @@
 # YÊU CẦU PHẦN WEB — Gửi cho Antigravity
 
 ## Bối cảnh
-App Android (Kotlin/Compose, package `com.fmms.carlogger`) đã hoàn thiện các tính năng: đọc OBD-II qua Bluetooth ELM327, dashboard realtime (tốc độ, RPM, nhiệt độ, điện áp), fuel estimation, trip logging, odometer, sync dữ liệu lên Supabase qua hàng đợi cục bộ (`SyncWorker`). Bước tiếp theo cần **hiển thị bản đồ trên web** và **đồng bộ vị trí GPS** từ Android lên web. Phần web chạy Next.js 14.2.25, đã deploy tại https://fmms.vercel.app/login, backend Supabase.
+App Android (Kotlin/Compose, package `com.fmms.carlogger`) đã hoàn thiện các tính năng: đọc OBD-II qua Bluetooth ELM327, dashboard realtime (tốc độ, RPM, nhiệt độ, điện áp hiển thị gauge vòng), fuel estimation, trip logging, odometer, GPS tracking mỗi 5s, chế độ GPS-only cho xe đạp (không cần OBD), song ngữ Anh–Việt, theme Dark/Light/System, sync dữ liệu lên Supabase qua hàng đợi cục bộ (`SyncWorker`, offline-first). Bước tiếp theo cần **hiển thị bản đồ trên web** và **đồng bộ vị trí GPS** từ Android lên web. Phần web chạy Next.js 14.2.25, đã deploy tại https://fmms.vercel.app/login, backend Supabase.
 
 ## Danh sách công việc cần làm ở phía web/backend
 
 ### 1. Tạo bảng `gps_track_points` trên Supabase (migration)
-- Cột: `id uuid pk default gen_random_uuid()`, `trip_id uuid null references trips(id)`, `vehicle_id uuid references vehicles(id)`, `lat double precision not null`, `lng double precision not null`, `speed_kmh real`, `recorded_at timestamptz not null default now()`.
-- Index trên `(trip_id, recorded_at)` và `(vehicle_id, recorded_at)`.
-- RLS: enable, policy `INSERT` cho user có quyền với vehicle đó (qua JWT/ownership), `SELECT` trong fleet của user.
+- Cột: `id uuid pk default gen_random_uuid()`, `trip_id uuid null references trips(id)`, `vehicle_id uuid references vehicles(id)`, `device_id uuid not null`, `device_name text null`, `lat double precision not null`, `lng double precision not null`, `speed_kmh real`, `recorded_at timestamptz not null default now()`.
+- Index trên `(trip_id, recorded_at)`, `(vehicle_id, recorded_at)` và `(device_id, recorded_at)`.
+- RLS: enable, policy `INSERT`/`SELECT` theo `vehicle_id → fleet → owner` (JWT).
 
-### 2. Supabase Edge Function `POST /gps`
-- Nhận batch điểm GPS từ Android (JSON array: `lat, lng, speed_kmh, trip_id, recorded_at`), kiểm tra quyền sở hữu vehicle, insert batch.
-- Nhận batch mẫu mỗi 5 giây khi có trip đang chạy.
+### 2. Bảng `devices` (đảm bảo schema đúng)
+- Cột: `id uuid pk` (= `device_id` do app sinh), `vehicle_id uuid fk vehicles`, `device_type` (`ELM327-BT` | `GPS-TRACKER`), `device_name text`, `mac_address text` (MAC Bluetooth của adapter; với GPS-only dùng chính `device_id`), `last_seen timestamptz`, `status`, `created_at`, `updated_at`.
+- Policy cho phép app tự đăng ký/upsert device theo mac/device_id đã được phép.
 
-### 3. Tab "MAP" trên web (trang user)
+### 3. Edge function / RPC `get_fleet_vehicles(device_id)`
+- Nhận `{ device_id }`, xác thực quyền của device trong fleet của user, trả về danh sách xe được phép gán.
+
+### 4. Edge function `POST /gps`
+- Nhận batch điểm GPS từ Android (JSON array: `id, trip_id, vehicle_id, device_id, device_name, lat, lng, speed_kmh, recorded_at`), kiểm tra quyền sở hữu vehicle, insert batch.
+- Batch mẫu mỗi 5 giây khi xe chạy.
+
+### 5. Tab "MAP" trên web (trang user)
 - Thêm tab bản đồ vào layout chính sau HOME/TRIPS/FUEL.
 - Dùng Leaflet + OpenStreetMap (`react-leaflet`) — đã chốt không dùng Google Maps để tránh phí và key.
-- Hiển thị: vị trí xe hiện tại (icon + bong bóng tên xe), vẽ route của trip đang chạy realtime, các trip đã lưu có thể chọn để replay route.
+- Hiển thị vị trí xe theo **device** (marker + bong bóng `device_name`), vẽ route của trip đang chạy realtime, các trip đã lưu có thể chọn để replay route.
 
-### 4. Replay trip trên web
+### 6. Replay trip trên web
 - Khi user chọn 1 trip trong danh sách → fetch `gps_track_points` của trip đó → vẽ polyline route trên bản đồ kèm điều khiển play/pause.
 
-### 5. Fleet live map (trang admin)
-- Admin xem vị trí realtime tất cả xe trong fleet trên 1 bản đồ.
+### 7. Fleet live map (trang admin)
+- Admin xem vị trí realtime tất cả xe/thiết bị trong fleet trên 1 bản đồ.
 - Subscribe Supabase Realtime (postgres_changes) trên bảng `gps_track_points` để cập nhật live không cần refresh.
+- Quản lý quan hệ device↔xe (đổi device sang xe khác khi cần).
 
-### 6. Endpoint `GET /vehicles/:id/gps?from=&to=` (hoặc query trực tiếp qua Supabase client)
+### 8. Endpoint `GET /vehicles/:id/gps?from=&to=` (hoặc query trực tiếp qua Supabase client)
 - Phục vụ web lấy điểm GPS theo khoảng thời gian/trip cho replay.
 
 ## Ghi chú contract (đã cố định, không thay đổi)
