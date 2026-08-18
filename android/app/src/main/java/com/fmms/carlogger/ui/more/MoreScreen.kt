@@ -261,6 +261,7 @@ private fun DiagnosticsScreen(onBack: () -> Unit) {
 @Composable
 private fun CloudScreen(onBack: () -> Unit) {
     val pending by AppContainer.syncQueueRepository.observePendingCount().collectAsStateWithLifecycle(0)
+    val recent by AppContainer.syncQueueRepository.observeRecent().collectAsStateWithLifecycle(initialValue = emptyList())
     val colors = LocalFmmsColors.current
 
     Column(
@@ -281,7 +282,31 @@ private fun CloudScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text("$pending records", color = colors.cyan, fontSize = 24.sp, fontWeight = FontWeight.Black)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Background WorkManager syncs every 15 min when online.", color = colors.textSecondary, fontSize = 12.sp)
+                Text("Live push mỗi 30s + WorkManager 15 phút khi online.", color = colors.textSecondary, fontSize = 12.sp)
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("LAST SYNC DETAILS", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(4.dp))
+                if (recent.isEmpty()) {
+                    Text("Chưa có bản ghi.", color = colors.textPrimary, fontSize = 13.sp)
+                } else {
+                    recent.take(8).forEach { e ->
+                        val err = e.lastError?.let { " 🔴 $it" } ?: ""
+                        Text(
+                            "${e.entityType}/${e.status}${err}",
+                            color = if (e.status == "PENDING" && e.lastError != null) colors.red else colors.textPrimary,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                        )
+                    }
+                }
             }
         }
     }

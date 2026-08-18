@@ -246,6 +246,8 @@ class TelemetryService : Service() {
                             val resp = pushUpsert(client, "devices", entry.payload)
                             if (resp != null && resp.isSuccessful) {
                                 AppContainer.syncQueueRepository.markSynced(entry.id)
+                            } else {
+                                AppContainer.syncQueueRepository.markFailed(entry.id, "devices HTTP ${resp?.code}: ${resp?.body?.string()?.take(180)}")
                             }
                         }
                         val pending = AppContainer.syncQueueRepository.getPendingByType("gps_track_points", limit = 500)
@@ -253,6 +255,8 @@ class TelemetryService : Service() {
                             val resp = pushUpsert(client, "gps_track_points", entry.payload)
                             if (resp != null && resp.isSuccessful) {
                                 AppContainer.syncQueueRepository.markSynced(entry.id)
+                            } else {
+                                AppContainer.syncQueueRepository.markFailed(entry.id, "gps HTTP ${resp?.code}: ${resp?.body?.string()?.take(180)}")
                             }
                         }
                         val trips = AppContainer.syncQueueRepository.getPendingByType("trips", limit = 50)
@@ -260,6 +264,8 @@ class TelemetryService : Service() {
                             val resp = pushUpsert(client, "trips", entry.payload)
                             if (resp != null && resp.isSuccessful) {
                                 AppContainer.syncQueueRepository.markSynced(entry.id)
+                            } else {
+                                AppContainer.syncQueueRepository.markFailed(entry.id, "trips HTTP ${resp?.code}: ${resp?.body?.string()?.take(180)}")
                             }
                         }
                     }

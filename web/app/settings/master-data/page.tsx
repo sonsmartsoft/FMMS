@@ -2,12 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Database, Plus, Trash2, Check, Pencil, Sliders } from 'lucide-react';
+import { ArrowLeft, Database, Plus, Trash2, Check, Pencil, Sliders, X, Save, Wrench } from 'lucide-react';
 
 export default function MasterDataPage() {
   const [maintCategories, setMaintCategories] = useState<string[]>([
-    'Thay dầu máy', 'Thay lọc dầu', 'Thay lốp xe', 'Thay phanh', 'Kiểm tra định kỳ',
-    'Thay ắc-quy', 'Vệ sinh hệ thống làm mát', 'Cân thước lái', 'Phủ Ceramic', 'Khác'
+    'Thay dầu máy', 'Thay lọc dầu / Lọc nhớt', 'Thay lọc gió động cơ', 'Thay lọc gió điều hòa',
+    'Thay bugi đánh lửa', 'Thay lốp xe', 'Kiểm tra & Thay má phanh', 'Thay ắc-quy', 'Nước làm mát', 'Thay dầu hộp số', 'Sửa chữa & Khác'
   ]);
 
   const [expCategories, setExpCategories] = useState<string[]>([
@@ -16,8 +16,11 @@ export default function MasterDataPage() {
   ]);
 
   const [vendors, setVendors] = useState<string[]>([
-    'Mazda Hà Đông', 'Mazda Giải Phóng', 'Zestech Việt Nam', 'Bảo Việt Insurance', 'PV OIL', 'Petrolimex', 'Garagi Chuyên Nghiệp'
+    'Mazda Hà Đông', 'Honda Tây Hồ', 'Zestech Việt Nam', 'Bảo hiểm Quân Đội (MIC)', 'Bảo Việt Insurance', 'PV OIL', 'Petrolimex', 'Garage Chuyên Nghiệp'
   ]);
+
+  // Edit inline modal / state
+  const [editingCategory, setEditingCategory] = useState<{ listKey: string; oldVal: string; newVal: string } | null>(null);
 
   const [newMaint, setNewMaint] = useState('');
   const [newExp, setNewExp] = useState('');
@@ -41,8 +44,10 @@ export default function MasterDataPage() {
 
   const saveToStorage = (key: string, data: any) => {
     localStorage.setItem(key, JSON.stringify(data));
+    window.dispatchEvent(new Event('fmms_master_updated'));
   };
 
+  // Category Add / Delete / Edit handlers
   const addMaint = () => {
     if (!newMaint.trim()) return;
     const updated = [...maintCategories, newMaint.trim()];
@@ -56,7 +61,7 @@ export default function MasterDataPage() {
     const updated = maintCategories.filter(c => c !== cat);
     setMaintCategories(updated);
     saveToStorage('fmms_master_maint', updated);
-    showToast('Đã xóa danh mục!');
+    showToast('Đã xóa danh mục bảo dưỡng!');
   };
 
   const addExp = () => {
@@ -91,21 +96,44 @@ export default function MasterDataPage() {
     showToast('Đã xóa nhà cung cấp!');
   };
 
+  const handleSaveInlineEdit = () => {
+    if (!editingCategory || !editingCategory.newVal.trim()) return;
+    const { listKey, oldVal, newVal } = editingCategory;
+    const val = newVal.trim();
+
+    if (listKey === 'maint') {
+      const updated = maintCategories.map(c => c === oldVal ? val : c);
+      setMaintCategories(updated);
+      saveToStorage('fmms_master_maint', updated);
+    } else if (listKey === 'exp') {
+      const updated = expCategories.map(c => c === oldVal ? val : c);
+      setExpCategories(updated);
+      saveToStorage('fmms_master_exp', updated);
+    } else if (listKey === 'vendor') {
+      const updated = vendors.map(c => c === oldVal ? val : c);
+      setVendors(updated);
+      saveToStorage('fmms_master_vendors', updated);
+    }
+
+    setEditingCategory(null);
+    showToast('Đã cập nhật tên danh mục thành công!');
+  };
+
   return (
-    <div className="space-y-6 animate-fadeIn max-w-4xl mx-auto">
+    <div className="space-y-6 animate-fadeIn max-w-5xl mx-auto px-2 sm:px-0">
       {/* Top Bar */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center space-x-3">
           <Link href="/settings" className="p-2 rounded-xl transition hover:bg-slate-500/10" style={{ color: 'var(--text-muted)' }}>
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
-            <h1 className="text-2xl font-extrabold flex items-center space-x-2.5" style={{ color: 'var(--text-primary)' }}>
+            <h1 className="text-xl sm:text-2xl font-extrabold flex items-center space-x-2.5" style={{ color: 'var(--text-primary)' }}>
               <Database className="w-6 h-6 text-cyan-400" />
-              <span>Quản Lý Danh Mục &amp; Master Data Hệ Thống (Admin Edit)</span>
+              <span>Quản Lý Danh Mục Master System (Admin CRUD)</span>
             </h1>
             <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-              Tùy chỉnh danh mục bảo dưỡng, danh mục chi phí và danh sách Đại lý / Garage cho phép người dùng chọn
+              Thêm, sửa, xóa các danh mục bảo dưỡng, loại chi phí và danh sách Đại lý / Garage hệ thống
             </p>
           </div>
         </div>
@@ -118,20 +146,54 @@ export default function MasterDataPage() {
         </div>
       )}
 
+      {/* Edit Category Modal */}
+      {editingCategory && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingCategory(null)}>
+          <div className="glass-panel rounded-2xl w-full max-w-md my-auto p-5 space-y-4 shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border-default)' }}>
+              <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Pencil className="w-4 h-4 text-cyan-400" /> Chỉnh sửa tên danh mục
+              </h3>
+              <button onClick={() => setEditingCategory(null)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-2 text-xs">
+              <label className="block font-bold" style={{ color: 'var(--text-muted)' }}>Tên danh mục mới</label>
+              <input
+                type="text"
+                className="theme-input text-xs font-semibold"
+                value={editingCategory.newVal}
+                onChange={e => setEditingCategory({ ...editingCategory, newVal: e.target.value })}
+              />
+            </div>
+            <div className="flex justify-end space-x-2 pt-2">
+              <button onClick={() => setEditingCategory(null)} className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-white/10" style={{ color: 'var(--text-muted)' }}>Hủy</button>
+              <button onClick={handleSaveInlineEdit} className="px-5 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                <Save className="w-4 h-4" /> Lưu tên mới
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 1. Maintenance Categories Master */}
-      <div className="glass-panel p-6 rounded-2xl space-y-4" style={{ border: '1px solid var(--border-default)' }}>
+      <div className="glass-panel p-5 sm:p-6 rounded-2xl space-y-4" style={{ border: '1px solid var(--border-default)' }}>
         <h3 className="font-extrabold text-sm flex items-center space-x-2" style={{ color: 'var(--text-primary)' }}>
-          <Sliders className="w-4 h-4 text-cyan-400" />
-          <span>Danh Mục Bảo Dưỡng &amp; Sửa Chữa (Maintenance Categories)</span>
+          <Wrench className="w-4 h-4 text-cyan-400" />
+          <span>Danh Mục Bảo Dưỡng &amp; Phụ Tùng (Maintenance &amp; Service Categories)</span>
         </h3>
 
         <div className="flex flex-wrap gap-2">
           {maintCategories.map(cat => (
-            <span key={cat} className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+            <span key={cat} className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-2 group transition hover:scale-105" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
               <span>{cat}</span>
-              <button onClick={() => deleteMaint(cat)} className="text-rose-400 hover:text-rose-300">
-                <Trash2 className="w-3 h-3" />
-              </button>
+              <div className="flex items-center space-x-1 ml-1 opacity-80 group-hover:opacity-100">
+                <button onClick={() => setEditingCategory({ listKey: 'maint', oldVal: cat, newVal: cat })} className="text-cyan-400 hover:text-cyan-300 p-0.5" title="Sửa tên">
+                  <Pencil className="w-3 h-3" />
+                </button>
+                <button onClick={() => deleteMaint(cat)} className="text-rose-400 hover:text-rose-300 p-0.5" title="Xóa">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
             </span>
           ))}
         </div>
@@ -140,7 +202,7 @@ export default function MasterDataPage() {
           <input
             type="text"
             className="theme-input text-xs"
-            placeholder="Tên danh mục bảo dưỡng mới..."
+            placeholder="Thêm hạng mục bảo dưỡng mới (VD: Thay lọc xăng, Phủ Ceramic)..."
             value={newMaint}
             onChange={e => setNewMaint(e.target.value)}
           />
@@ -151,7 +213,7 @@ export default function MasterDataPage() {
       </div>
 
       {/* 2. Expense Categories Master */}
-      <div className="glass-panel p-6 rounded-2xl space-y-4" style={{ border: '1px solid var(--border-default)' }}>
+      <div className="glass-panel p-5 sm:p-6 rounded-2xl space-y-4" style={{ border: '1px solid var(--border-default)' }}>
         <h3 className="font-extrabold text-sm flex items-center space-x-2" style={{ color: 'var(--text-primary)' }}>
           <Sliders className="w-4 h-4 text-purple-400" />
           <span>Danh Mục Chi Phí (Expense Categories)</span>
@@ -159,11 +221,16 @@ export default function MasterDataPage() {
 
         <div className="flex flex-wrap gap-2">
           {expCategories.map(cat => (
-            <span key={cat} className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+            <span key={cat} className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-2 group transition hover:scale-105" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
               <span>{cat}</span>
-              <button onClick={() => deleteExp(cat)} className="text-rose-400 hover:text-rose-300">
-                <Trash2 className="w-3 h-3" />
-              </button>
+              <div className="flex items-center space-x-1 ml-1 opacity-80 group-hover:opacity-100">
+                <button onClick={() => setEditingCategory({ listKey: 'exp', oldVal: cat, newVal: cat })} className="text-cyan-400 hover:text-cyan-300 p-0.5" title="Sửa tên">
+                  <Pencil className="w-3 h-3" />
+                </button>
+                <button onClick={() => deleteExp(cat)} className="text-rose-400 hover:text-rose-300 p-0.5" title="Xóa">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
             </span>
           ))}
         </div>
@@ -172,7 +239,7 @@ export default function MasterDataPage() {
           <input
             type="text"
             className="theme-input text-xs"
-            placeholder="Tên loại chi phí mới..."
+            placeholder="Tên loại chi phí mới (VD: Phạt phạt vi phạm, Đăng kiểm)..."
             value={newExp}
             onChange={e => setNewExp(e.target.value)}
           />
@@ -183,19 +250,24 @@ export default function MasterDataPage() {
       </div>
 
       {/* 3. Vendor / Garage Master */}
-      <div className="glass-panel p-6 rounded-2xl space-y-4" style={{ border: '1px solid var(--border-default)' }}>
+      <div className="glass-panel p-5 sm:p-6 rounded-2xl space-y-4" style={{ border: '1px solid var(--border-default)' }}>
         <h3 className="font-extrabold text-sm flex items-center space-x-2" style={{ color: 'var(--text-primary)' }}>
           <Sliders className="w-4 h-4 text-emerald-400" />
-          <span>Danh Sách Đại Lý / Garage / Nhà Cung Cấp (Vendor Master)</span>
+          <span>Danh Sách Đại Lý / Garage / Cây Xăng (Vendors &amp; Service Providers)</span>
         </h3>
 
         <div className="flex flex-wrap gap-2">
           {vendors.map(v => (
-            <span key={v} className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+            <span key={v} className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-2 group transition hover:scale-105" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
               <span>{v}</span>
-              <button onClick={() => deleteVendor(v)} className="text-rose-400 hover:text-rose-300">
-                <Trash2 className="w-3 h-3" />
-              </button>
+              <div className="flex items-center space-x-1 ml-1 opacity-80 group-hover:opacity-100">
+                <button onClick={() => setEditingCategory({ listKey: 'vendor', oldVal: v, newVal: v })} className="text-cyan-400 hover:text-cyan-300 p-0.5" title="Sửa tên">
+                  <Pencil className="w-3 h-3" />
+                </button>
+                <button onClick={() => deleteVendor(v)} className="text-rose-400 hover:text-rose-300 p-0.5" title="Xóa">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
             </span>
           ))}
         </div>
@@ -204,7 +276,7 @@ export default function MasterDataPage() {
           <input
             type="text"
             className="theme-input text-xs"
-            placeholder="Tên Đại lý / Garage mới..."
+            placeholder="Tên Đại lý / Garage / Cây xăng mới..."
             value={newVendor}
             onChange={e => setNewVendor(e.target.value)}
           />

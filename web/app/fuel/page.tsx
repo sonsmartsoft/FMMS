@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { getAssets } from '@/lib/services/assetService';
 import { getFuelLogs, createFuelLog, updateFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
 import { Asset } from '@/types/mobility';
@@ -183,39 +184,79 @@ export default function FuelPage() {
         ))}
       </div>
 
-      {/* Fuel Status per vehicle */}
+      {/* Rich Vehicle Info Cards */}
       {fuelAssets.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {fuelAssets.map(asset => (
-            <div key={asset.id} className="p-5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-              <div className="flex justify-between items-center mb-3">
-                <div>
-                  <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{asset.name}</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{asset.license_plate || asset.model}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {fuelAssets.map(asset => {
+            const vLogs = logs.filter(l => (l.asset_id ?? l.vehicle_id) === asset.id);
+            const vTotalCost = vLogs.reduce((s, f) => s + (f.total_cost || (parseFloat(f.fuel_liters ?? f.liters) * parseFloat(f.price_per_liter))), 0);
+            const vTotalLiters = vLogs.reduce((s, f) => s + parseFloat(f.fuel_liters ?? f.liters ?? 0), 0);
+            const vLastOdo = vLogs.length > 0 ? Math.max(...vLogs.map(f => f.odometer_km || 0)) : (asset.current_odometer_km || 0);
+            const isElectric = asset.fuel_type === 'ELECTRIC' || asset.capabilities?.has_battery;
+
+            return (
+              <div
+                key={asset.id}
+                className="glass-panel p-5 rounded-2xl space-y-3 transition hover:shadow-lg hover:border-cyan-500/50"
+                style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 flex items-center justify-center font-bold text-white shadow-sm" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                      {asset.image_url ? (
+                        <img src={asset.image_url} alt={asset.name} className="w-full h-full object-cover" />
+                      ) : (
+                        asset.name.charAt(0)
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{asset.name}</p>
+                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{asset.license_plate || `${asset.brand} ${asset.model}`}</p>
+                    </div>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${isElectric ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'}`}>
+                    {isElectric ? '⚡ ĐIỆN' : '⛽ XĂNG'}
+                  </span>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'var(--accent-cyan-bg)', color: 'var(--accent-cyan)' }}>
-                  {asset.capabilities?.has_battery ? 'ĐIỆN' : 'XĂNG'}
-                </span>
+
+                <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <div>
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Tổng chi phí NL:</span>
+                    <p className="font-bold text-xs" style={{ color: 'var(--status-amber)' }}>{fmt(vTotalCost)} ₫</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{isElectric ? 'Tổng kWh sạc:' : 'Tổng lít đổ:'}</span>
+                    <p className="font-bold text-xs" style={{ color: 'var(--accent-cyan)' }}>{vTotalLiters.toFixed(1)} {isElectric ? 'kWh' : 'L'}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Số lần đổ / sạc:</span>
+                    <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>{vLogs.length} lần</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Odometer hiện tại:</span>
+                    <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>{fmt(vLastOdo)} km</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t text-xs gap-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <button
+                    onClick={() => setAssetFilter(asset.id)}
+                    className="flex-1 py-1.5 rounded-lg text-center font-bold text-[11px] hover:bg-slate-500/10 transition"
+                    style={{ color: 'var(--accent-cyan)', border: '1px solid var(--border-default)' }}
+                  >
+                    Lọc nhật ký xe này
+                  </button>
+                  <Link
+                    href={`/assets/${asset.id}`}
+                    className="flex-1 py-1.5 rounded-lg text-center font-bold text-[11px] text-white transition hover:opacity-90"
+                    style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+                  >
+                    Xem chi tiết xe ➔
+                  </Link>
+                </div>
               </div>
-              {asset.fuel_level_percent !== undefined && (
-                <>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span style={{ color: 'var(--text-muted)' }}>{asset.capabilities?.has_battery ? 'Mức pin' : 'Mức xăng'}</span>
-                    <span className="font-bold" style={{ color: 'var(--status-amber)' }}>{asset.fuel_level_percent}% (~{asset.estimated_range_km} km)</span>
-                  </div>
-                  <div className="h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
-                    <div className="h-full rounded-full transition-all" style={{
-                      width: `${asset.fuel_level_percent}%`,
-                      background: (asset.fuel_level_percent ?? 0) > 50 ? 'var(--status-green)' : (asset.fuel_level_percent ?? 0) > 20 ? 'var(--status-amber)' : 'var(--status-red)',
-                    }} />
-                  </div>
-                </>
-              )}
-              {asset.avg_consumption_l100km && (
-                <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>TB: {asset.avg_consumption_l100km} L/100km</p>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
