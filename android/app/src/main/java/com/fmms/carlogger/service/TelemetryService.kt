@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.fmms.carlogger.AppContainer
+import com.fmms.carlogger.BuildConfig
 import com.fmms.carlogger.R
 import com.fmms.carlogger.core.database.entity.GpsTrackPointEntity
 import com.fmms.carlogger.core.obd.OBDConnectionState
@@ -24,6 +25,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Foreground telemetry service: owns OBD lifecycle, GPS, telemetry polling,
@@ -34,6 +37,7 @@ class TelemetryService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var runnerJob: Job? = null
     private var gpsJob: Job? = null
+    private var pushJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -70,6 +74,8 @@ class TelemetryService : Service() {
         val c = AppContainer
 
         c.gpsTracker.start()
+        serviceScope.launch { c.vehicleRepository.ensureDeviceRegistered() }
+        startLivePush()
         if (c.prefs.getDeviceMode() == "gps") {
             startGpsOnly()
         } else {
@@ -78,6 +84,9 @@ class TelemetryService : Service() {
             c.telemetryEngine.start()
             runnerJob = serviceScope.launch {
                 var lastOdo = c.vehicleRepository.getActive()?.odometerKm
+                var currentTripId: String? = null
+                var lastRecord = 0L
+                val batch = mutableListOf<GpsTrackPointEntity>()
 
                 c.telemetryEngine.live.collect { telemetry ->
                     c.tripEngine.feed(telemetry)
@@ -91,6 +100,50 @@ class TelemetryService : Service() {
                         if (telemetry.odometerKm != null) {
                             c.vehicleRepository.updateOdometer(vehicle.id, telemetry.odometerKm!!)
                             lastOdo = telemetry.odometerKm!!
+                        }
+
+                        // OBD mode: also record GPS trackpoints (phone GPS merged into
+                        // telemetry) so the vehicle shows up on the web map while OBD is live.
+                        val lat = telemetry.latitude
+                        val lng = telemetry.longitude
+                        if (lat != null && lng != null) {
+                            val tripState = c.tripEngine.state.value
+                            val tripActive = tripState.active
+                            currentTripId = if (tripActive) {
+                                c.tripRepository.getActiveTrip(vehicle.id)?.id ?: currentTripId
+                            } else {
+                                currentTripId
+                            }
+                            val gpsSpeed = telemetry.gpsSpeedKmh
+                            val moving = (gpsSpeed ?: 0.0) >= 1.0
+                            val now = System.currentTimeMillis()
+                            val intervalMs = c.prefs.getGpsIntervalSec() * 1000L
+                            // While moving (or during an active trip) record on the GPS
+                            // interval; when parked, still emit a slow "idle heartbeat" so
+                            // the web live map keeps showing a fresh position.
+                            val heartbeatMs = IDLE_HEARTBEAT_MS
+                            val due = if (moving || tripActive) {
+                                now - lastRecord >= intervalMs
+                            } else {
+                                now - lastRecord >= heartbeatMs
+                            }
+                            if (due) {
+                                lastRecord = now
+                                batch += GpsTrackPointEntity(
+                                    id = UUID.randomUUID().toString(),
+                                    tripId = currentTripId,
+                                    vehicleId = vehicle.id,
+                                    deviceId = c.prefs.getDeviceId(),
+                                    lat = lat,
+                                    lng = lng,
+                                    speedKmh = gpsSpeed,
+                                    recordedAt = now,
+                                )
+                            }
+                            if (batch.size >= 25 || (batch.isNotEmpty() && now - lastRecord > 60000L)) {
+                                c.gpsTrackRepository.insertAndEnqueue(batch.toList())
+                                batch.clear()
+                            }
                         }
                     }
                     updateNotification(telemetry, c.obdManager.connectionState.value)
@@ -142,7 +195,13 @@ class TelemetryService : Service() {
                     val moving = (speedKmh ?: 0.0) >= 1.0
                     val now = System.currentTimeMillis()
                     val intervalMs = c.prefs.getGpsIntervalSec() * 1000L
-                    if (vehicle != null && (moving || tripActive) && now - lastRecord >= intervalMs) {
+                    val heartbeatMs = IDLE_HEARTBEAT_MS
+                    val due = if (moving || tripActive) {
+                        now - lastRecord >= intervalMs
+                    } else {
+                        now - lastRecord >= heartbeatMs
+                    }
+                    if (vehicle != null && due) {
                         lastRecord = now
                         batch += GpsTrackPointEntity(
                             id = UUID.randomUUID().toString(),
@@ -164,6 +223,67 @@ class TelemetryService : Service() {
                 }
                 delay(1000)
             }
+        }
+    }
+
+    /**
+     * Near-real-time GPS sync: pushes pending gps_track_points to Supabase every
+     * 30s while the service runs (in addition to the 15-min WorkManager fallback).
+     * This is what makes the live map on the web actually "live".
+     */
+    private fun startLivePush() {
+        if (pushJob?.isActive == true) return
+        pushJob = serviceScope.launch {
+            val client = okhttp3.OkHttpClient()
+            while (isActive) {
+                try {
+                    if (AppContainer.prefs.getSyncEnabled()) {
+                        // Register/refresh device first so the RLS check
+                        // `EXISTS(devices WHERE id = device_id AND vehicle_id IS NOT NULL)`
+                        // succeeds before any gps_track_point insert.
+                        val devices = AppContainer.syncQueueRepository.getPendingByType("devices", limit = 20)
+                        for (entry in devices) {
+                            val resp = pushUpsert(client, "devices", entry.payload)
+                            if (resp != null && resp.isSuccessful) {
+                                AppContainer.syncQueueRepository.markSynced(entry.id)
+                            }
+                        }
+                        val pending = AppContainer.syncQueueRepository.getPendingByType("gps_track_points", limit = 500)
+                        for (entry in pending) {
+                            val resp = pushUpsert(client, "gps_track_points", entry.payload)
+                            if (resp != null && resp.isSuccessful) {
+                                AppContainer.syncQueueRepository.markSynced(entry.id)
+                            }
+                        }
+                        val trips = AppContainer.syncQueueRepository.getPendingByType("trips", limit = 50)
+                        for (entry in trips) {
+                            val resp = pushUpsert(client, "trips", entry.payload)
+                            if (resp != null && resp.isSuccessful) {
+                                AppContainer.syncQueueRepository.markSynced(entry.id)
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                    // transient network failure — retry next tick
+                }
+                delay(30_000)
+            }
+        }
+    }
+
+    private fun pushUpsert(client: okhttp3.OkHttpClient, table: String, payload: String): okhttp3.Response? {
+        val request = okhttp3.Request.Builder()
+            .url("${BuildConfig.SUPABASE_URL}/rest/v1/$table")
+            .header("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+            .header("Authorization", "Bearer ${BuildConfig.SUPABASE_PUBLISHABLE_KEY}")
+            .header("Content-Type", "application/json")
+            .header("Prefer", "resolution=merge-duplicates,return=minimal")
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .build()
+        return try {
+            client.newCall(request).execute()
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -241,6 +361,7 @@ class TelemetryService : Service() {
     override fun onDestroy() {
         runnerJob?.cancel()
         gpsJob?.cancel()
+        pushJob?.cancel()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -248,5 +369,9 @@ class TelemetryService : Service() {
     companion object {
         private const val CHANNEL_ID = "fmms_telemetry"
         private const val NOTIFICATION_ID = 1001
+
+        // Emit a GPS position every 30s even when the vehicle is parked, so the
+        // web live map always shows a fresh marker for a live tracker.
+        private const val IDLE_HEARTBEAT_MS = 30_000L
     }
 }

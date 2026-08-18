@@ -54,7 +54,7 @@ class VehicleRepository(
             engine = engine,
             fuelType = fuelType,
             tankCapacityLiters = tankCapacityLiters,
-            odometerKm = prefs.getOdo(), // seed from stored virtual odo
+            odometerKm = 0.0,
             active = true,
             createdAt = now,
             updatedAt = now,
@@ -203,6 +203,20 @@ class VehicleRepository(
         return d
     }
 
+    /**
+     * Make sure a device row is enqueued against the current (or last assigned)
+     * web vehicle so gps_track_points inserts pass the RLS device check even
+     * before the user explicitly taps "ĐỒNG BỘ". No-op if already registered.
+     */
+    suspend fun ensureDeviceRegistered(): DeviceEntity? {
+        val vehicle = vehicleDao.getActive()
+            ?: prefs.getAssignedVehicleId()?.let { vehicleDao.getById(it) }
+            ?: return null
+        val existing = deviceDao.getByVehicle(vehicle.id)
+        if (existing != null) return existing
+        return registerDeviceWithVehicle(vehicle.id, prefs.getDeviceName() ?: "Tracker")
+    }
+
     private suspend fun enqueueUpsert(vehicleId: String) {
         val v = vehicleDao.getById(vehicleId) ?: return
         val payload = JSONObject().apply {
@@ -279,7 +293,7 @@ class PrefsStore(context: Context) {
     fun getDiagEnabled(): Boolean = prefs.getBoolean("diag_logging", false)
     fun setDiagEnabled(v: Boolean) { prefs.edit().putBoolean("diag_logging", v).apply() }
 
-    fun getTripTimeoutMs(): Long = prefs.getLong("trip_timeout_ms", 3 * 60 * 1000L)
+    fun getTripTimeoutMs(): Long = prefs.getLong("trip_timeout_ms", 2 * 60 * 1000L)
     fun setTripTimeoutMs(v: Long) { prefs.edit().putLong("trip_timeout_ms", v).apply() }
 
     fun getSyncEnabled(): Boolean = prefs.getBoolean("sync_enabled", true)

@@ -48,6 +48,8 @@ class TripEngine(
     private var startLat: Double? = null
     private var startLng: Double? = null
     private var lastGpsPoint: Location? = null
+    private var prevGpsPoint: Location? = null
+    private var consumedGpsPoint: Location? = null
     private var lastEngineRunning = false
     private var stoppedSince: Long? = null
 
@@ -69,6 +71,7 @@ class TripEngine(
         if (telemetry.latitude != null && telemetry.longitude != null) {
             val p = Location("gps").apply { latitude = telemetry.latitude!!; longitude = telemetry.longitude!! }
             if (lastGpsPoint == null || distanceKm(lastGpsPoint!!, p) > 0.001) {
+                prevGpsPoint = lastGpsPoint
                 lastGpsPoint = p
             }
         }
@@ -158,10 +161,10 @@ class TripEngine(
         if (lastOdoKm != null && odo != null && odo > lastOdoKm!!) {
             distance = odo - lastOdoKm!!
         }
-        if (lastGpsPoint != null && live.latitude != null && live.longitude != null) {
-            val p = Location("gps").apply { latitude = live.latitude!!; longitude = live.longitude!! }
-            val gpsDist = distanceKm(lastGpsPoint!!, p)
+        if (prevGpsPoint != null && lastGpsPoint != null && lastGpsPoint !== consumedGpsPoint) {
+            val gpsDist = distanceKm(prevGpsPoint!!, lastGpsPoint!!)
             if (gpsDist > distance) distance = gpsDist
+            consumedGpsPoint = lastGpsPoint
         }
         lastOdoKm = odo
 

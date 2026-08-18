@@ -67,8 +67,8 @@ class DashboardViewModel : ViewModel() {
         val live = if (deviceMode == "gps") gps else telemetry
         val hasMac = c.prefs.getMac() != null
         val active = vehicles.firstOrNull { it.active } ?: vehicles.firstOrNull()
-        val odoDisplay = if (active != null && active.odometerKm > 0) {
-            OdometerInfo(active.odometerKm, "FROM VEHICLE", "VERIFIED")
+        val odoDisplay = if (active != null) {
+            OdometerInfo(active.odometerKm, "FROM VEHICLE", if (active.odometerKm > 0) "VERIFIED" else "—")
         } else {
             odo
         }

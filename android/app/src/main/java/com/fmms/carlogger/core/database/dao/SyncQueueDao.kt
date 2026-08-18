@@ -16,6 +16,9 @@ interface SyncQueueDao {
     @Query("SELECT * FROM sync_queue WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT :limit")
     suspend fun getPending(limit: Int = 500): List<SyncQueueEntity>
 
+    @Query("SELECT * FROM sync_queue WHERE status = 'PENDING' AND entity_type = :type ORDER BY created_at ASC LIMIT :limit")
+    suspend fun getPendingByType(type: String, limit: Int = 500): List<SyncQueueEntity>
+
     @Query("SELECT COUNT(*) FROM sync_queue WHERE status = 'PENDING'")
     suspend fun pendingCount(): Int
 

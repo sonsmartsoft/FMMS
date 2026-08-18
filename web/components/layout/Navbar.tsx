@@ -29,21 +29,29 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
   const supabase = createClient();
 
   useEffect(() => {
-    (async () => {
+    const syncUserData = async () => {
       try {
         const savedName = localStorage.getItem('fmms_user_name');
         const savedOrg = localStorage.getItem('fmms_org_name');
+        const savedRole = localStorage.getItem('fmms_user_role');
         if (savedName) setUserName(savedName);
         if (savedOrg) setOrgName(savedOrg);
+        if (savedRole === 'ADMIN' || savedRole === 'MEMBER') setUserRole(savedRole);
 
         const { data: { user } } = await supabase.auth.getUser();
         if (user && user.email) {
           setUserEmail(user.email);
           if (user.user_metadata?.full_name && !savedName) setUserName(user.user_metadata.full_name);
-          setUserRole(user.user_metadata?.role || (user.email.includes('admin') || user.email === 'demo@fmms.com' ? 'ADMIN' : 'MEMBER'));
+          if (!savedRole) {
+            setUserRole(user.user_metadata?.role || (user.email.includes('admin') || user.email === 'demo@fmms.com' || user.email === 'son.nt@utivina.com' ? 'ADMIN' : 'MEMBER'));
+          }
         }
       } catch {}
-    })();
+    };
+
+    syncUserData();
+    window.addEventListener('fmms_user_updated', syncUserData);
+    return () => window.removeEventListener('fmms_user_updated', syncUserData);
   }, []);
 
   const openEdit = () => {

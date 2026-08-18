@@ -7,6 +7,7 @@ import com.fmms.carlogger.core.database.entity.SyncQueueEntity
 import com.fmms.carlogger.core.database.entity.TelemetrySampleEntity
 import com.fmms.carlogger.core.database.entity.TripEntity
 import kotlinx.coroutines.flow.Flow
+import java.text.SimpleDateFormat
 import java.util.UUID
 import org.json.JSONObject
 
@@ -15,12 +16,22 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
     fun observePendingCount(): Flow<Int> = syncQueueDao.observePendingCountFlow()
     fun observeRecent(): Flow<List<SyncQueueEntity>> = syncQueueDao.observeRecent()
     suspend fun getPending(limit: Int): List<SyncQueueEntity> = syncQueueDao.getPending(limit)
+    suspend fun getPendingByType(type: String, limit: Int): List<SyncQueueEntity> =
+        syncQueueDao.getPendingByType(type, limit)
+
+    private fun iso(millis: Long?): Any {
+        if (millis == null) return JSONObject.NULL
+        return SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+            .apply { setTimeZone(java.util.TimeZone.getTimeZone("UTC")) }
+            .format(java.util.Date(millis))
+    }
 
     suspend fun enqueueTrip(trip: TripEntity) {
+        val deviceId = trip.deviceId ?: com.fmms.carlogger.AppContainer.prefs.getDeviceId()
         val payload = JSONObject().apply {
             put("id", trip.id)
-            put("vehicle_id", trip.vehicleId)
-            put("device_id", trip.deviceId ?: JSONObject.NULL)
+            put("asset_id", trip.vehicleId)
+            put("device_id", deviceId)
             put("start_time", trip.startTime)
             put("end_time", trip.endTime ?: JSONObject.NULL)
             put("start_odometer", trip.startOdometer ?: JSONObject.NULL)
@@ -38,8 +49,8 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
             put("end_latitude", trip.endLatitude ?: JSONObject.NULL)
             put("end_longitude", trip.endLongitude ?: JSONObject.NULL)
             put("status", trip.status)
-            put("created_at", trip.createdAt)
-            put("updated_at", trip.updatedAt)
+            put("created_at", iso(trip.createdAt))
+            put("updated_at", iso(trip.updatedAt))
         }.toString()
         syncQueueDao.insert(
             SyncQueueEntity(
@@ -69,7 +80,7 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
                     put("lat", p.lat)
                     put("lng", p.lng)
                     put("speed_kmh", p.speedKmh ?: JSONObject.NULL)
-                    put("recorded_at", p.recordedAt)
+                    put("recorded_at", iso(p.recordedAt))
                 }
             )
         }

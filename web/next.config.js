@@ -3,6 +3,7 @@ const path = require('path');
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  staticPageGenerationTimeout: 300,
   // react-leaflet v4 requires transpilation in Next.js
   transpilePackages: ['react-leaflet', '@react-leaflet/core'],
   images: {

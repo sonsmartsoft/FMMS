@@ -133,7 +133,7 @@ object AppContainer {
             scope = appScope,
         )
         this.fuelEngine = FuelEngine(vehicleRepository, tripRepository, fuelLogRepository)
-        this.tripEngine = TripEngine(vehicleRepository, tripRepository, appScope)
+        this.tripEngine = TripEngine(vehicleRepository, tripRepository, appScope) { prefs.getTripTimeoutMs() }
     }
 
     fun telemetryEngineState(): StateFlow<com.fmms.carlogger.domain.model.LiveTelemetry> =

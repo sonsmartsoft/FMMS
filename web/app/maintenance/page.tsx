@@ -15,6 +15,20 @@ const MAINT_TYPES = [
   'Thay lọc gió', 'Cân chỉnh bánh xe', 'Thay bugi', 'Sửa chữa', 'Khác',
 ];
 
+const MAINT_PRESETS = [
+  { name: 'Thay dầu máy (Engine Oil)', cost: '650000' },
+  { name: 'Thay lọc dầu / Lọc nhớt', cost: '220000' },
+  { name: 'Thay lọc gió động cơ', cost: '180000' },
+  { name: 'Thay lọc gió điều hòa (Cabin Air Filter)', cost: '250000' },
+  { name: 'Bugi đánh lửa (Spark Plugs)', cost: '350000' },
+  { name: 'Kiểm tra & Thay má phanh (Brake Pads)', cost: '450000' },
+  { name: 'Thay nước làm mát (Coolant)', cost: '300000' },
+  { name: 'Thay dầu hộp số (Transmission Fluid)', cost: '950000' },
+  { name: 'Bơm lốp & Cân chỉnh bánh xe', cost: '100000' },
+  { name: 'Vệ sinh buồng đốt / Kim phun', cost: '550000' },
+  { name: 'Thay ắc-quy (Battery Replace)', cost: '1800000' },
+];
+
 export default function MaintenancePage() {
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -239,36 +253,71 @@ export default function MaintenancePage() {
                 </div>
 
                 {/* Column Headers */}
-                <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider px-1 pt-1" style={{ color: 'var(--text-muted)' }}>
-                  <span className="flex-1 min-w-0">Tên dịch vụ / Phụ tùng *</span>
-                  <span className="w-32 shrink-0">Chi phí (₫) *</span>
-                  <span className="w-6 shrink-0"></span>
+                <div className="grid grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider px-1 pt-1" style={{ color: 'var(--text-muted)' }}>
+                  <div className="col-span-7">Tên Hạng Mục / Dịch Vụ Bảo Dưỡng *</div>
+                  <div className="col-span-4">Đơn Giá Nhập (₫) *</div>
+                  <div className="col-span-1"></div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {serviceItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        className="theme-input flex-1 min-w-0"
-                        placeholder="VD: Thay dầu máy, Lọc nhớt, Má phanh..."
-                        value={item.name}
-                        onChange={e => updateServiceItem(idx, 'name', e.target.value)}
-                      />
-                      <input
-                        type="number"
-                        className="theme-input w-32 shrink-0"
-                        placeholder="Giá (₫)"
-                        value={item.cost}
-                        onChange={e => updateServiceItem(idx, 'cost', e.target.value)}
-                      />
-                      {serviceItems.length > 1 ? (
-                        <button type="button" onClick={() => removeServiceItem(idx)} className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 shrink-0">
-                          <X className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <div className="w-7 shrink-0" />
-                      )}
+                    <div key={idx} className="p-2.5 rounded-xl space-y-1.5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                      <div className="grid grid-cols-12 gap-2 items-center">
+                        <div className="col-span-7">
+                          <select
+                            className="theme-select text-xs font-semibold"
+                            value={MAINT_PRESETS.some(p => p.name === item.name) ? item.name : 'OTHER'}
+                            onChange={e => {
+                              const selected = e.target.value;
+                              if (selected === 'OTHER') {
+                                updateServiceItem(idx, 'name', '');
+                              } else {
+                                const preset = MAINT_PRESETS.find(p => p.name === selected);
+                                if (preset) {
+                                  updateServiceItem(idx, 'name', preset.name);
+                                  updateServiceItem(idx, 'cost', preset.cost);
+                                }
+                              }
+                            }}
+                          >
+                            <option value="" disabled>-- Chọn dịch vụ --</option>
+                            {MAINT_PRESETS.map(p => (
+                              <option key={p.name} value={p.name}>
+                                {p.name} ({fmt(parseFloat(p.cost))} ₫)
+                              </option>
+                            ))}
+                            <option value="OTHER">✍️ Tùy chọn khác (Nhập tay...)</option>
+                          </select>
+
+                          {(!MAINT_PRESETS.some(p => p.name === item.name) || item.name === '') && (
+                            <input
+                              type="text"
+                              className="theme-input text-xs mt-1.5"
+                              placeholder="Nhập tên dịch vụ tùy chỉnh (VD: Thay xích, Bảo dưỡng giảm xóc...)"
+                              value={item.name}
+                              onChange={e => updateServiceItem(idx, 'name', e.target.value)}
+                            />
+                          )}
+                        </div>
+
+                        <div className="col-span-4">
+                          <input
+                            type="number"
+                            className="theme-input font-mono font-bold text-xs"
+                            placeholder="Nhập giá (₫)"
+                            value={item.cost}
+                            onChange={e => updateServiceItem(idx, 'cost', e.target.value)}
+                          />
+                        </div>
+
+                        <div className="col-span-1 flex justify-end">
+                          {serviceItems.length > 1 && (
+                            <button type="button" onClick={() => removeServiceItem(idx)} className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 shrink-0">
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>

@@ -1200,19 +1200,48 @@ export default function AssetDetailPage() {
       {openModal === 'maintenance' && (
         <Modal title="Thêm hạng mục bảo dưỡng" onClose={() => setOpenModal(null)}>
           <Field label="Ngày bảo dưỡng"><input type="date" className="theme-input" value={maintForm.date} onChange={e => setMaintForm(p => ({ ...p, date: e.target.value }))} /></Field>
-          <Field label="Loại bảo dưỡng">
-            <select className="theme-select" value={maintForm.maintenance_type} onChange={e => setMaintForm(p => ({ ...p, maintenance_type: e.target.value }))}>
-              {['Thay dầu máy', 'Thay lọc dầu', 'Thay lốp xe', 'Thay phanh', 'Kiểm tra định kỳ', 'Thay ắc-quy', 'Vệ sinh hệ thống làm mát', 'Sửa chữa', 'Khác'].map(o => <option key={o}>{o}</option>)}
+          <Field label="Loại hạng mục / Dịch vụ bảo dưỡng *">
+            <select
+              className="theme-select font-semibold"
+              value={maintForm.maintenance_type}
+              onChange={e => {
+                const type = e.target.value;
+                let defaultCost = maintForm.cost;
+                if (type.includes('dầu máy')) defaultCost = '650000';
+                else if (type.includes('lọc dầu') || type.includes('lọc nhớt')) defaultCost = '220000';
+                else if (type.includes('lọc gió động cơ')) defaultCost = '180000';
+                else if (type.includes('lọc gió điều hòa')) defaultCost = '250000';
+                else if (type.includes('Bugi')) defaultCost = '350000';
+                else if (type.includes('má phanh') || type.includes('Thay phanh')) defaultCost = '450000';
+                else if (type.includes('nước làm mát')) defaultCost = '300000';
+                else if (type.includes('ắc-quy')) defaultCost = '1800000';
+                setMaintForm(p => ({ ...p, maintenance_type: type, cost: defaultCost }));
+              }}
+            >
+              {[
+                'Thay dầu máy (Engine Oil - 650.000₫)',
+                'Thay lọc dầu / Lọc nhớt (220.000₫)',
+                'Thay lọc gió động cơ (180.000₫)',
+                'Thay lọc gió điều hòa (250.000₫)',
+                'Bugi đánh lửa (350.000₫)',
+                'Kiểm tra / Thay má phanh (450.000₫)',
+                'Thay nước làm mát (300.000₫)',
+                'Thay ắc-quy (1.800.000₫)',
+                'Kiểm tra định kỳ toàn bộ xe',
+                'Khác (Nhập tùy chọn)'
+              ].map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </Field>
+          <Field label="Đơn giá / Chi phí thực tế (₫) *">
+            <input type="number" className="theme-input font-mono font-bold" placeholder="VD: 650000" value={maintForm.cost} onChange={e => setMaintForm(p => ({ ...p, cost: e.target.value }))} />
+          </Field>
           <Field label="Odometer (km)"><input type="number" className="theme-input" placeholder="VD: 12846" value={maintForm.odometer_km} onChange={e => setMaintForm(p => ({ ...p, odometer_km: e.target.value }))} /></Field>
-          <Field label="Chi phí (₫)"><input type="number" className="theme-input" placeholder="VD: 1250000" value={maintForm.cost} onChange={e => setMaintForm(p => ({ ...p, cost: e.target.value }))} /></Field>
-          <Field label="Garage / Đại lý"><input type="text" className="theme-input" placeholder="VD: Mazda Hà Đông" value={maintForm.vendor} onChange={e => setMaintForm(p => ({ ...p, vendor: e.target.value }))} /></Field>
-          <Field label="Ghi chú"><input type="text" className="theme-input" value={maintForm.notes} onChange={e => setMaintForm(p => ({ ...p, notes: e.target.value }))} /></Field>
+          <Field label="Garage / Đại lý thực hiện"><input type="text" className="theme-input" placeholder="VD: Honda Tây Hồ, Garage Hà Đông" value={maintForm.vendor} onChange={e => setMaintForm(p => ({ ...p, vendor: e.target.value }))} /></Field>
+          <Field label="Ghi chú thêm"><input type="text" className="theme-input" value={maintForm.notes} onChange={e => setMaintForm(p => ({ ...p, notes: e.target.value }))} /></Field>
           <Field label="Kỳ bảo dưỡng tiếp theo (km)"><input type="number" className="theme-input" value={maintForm.next_due_km} onChange={e => setMaintForm(p => ({ ...p, next_due_km: e.target.value }))} /></Field>
           <Field label="Ngày bảo dưỡng tiếp theo"><input type="date" className="theme-input" value={maintForm.next_due_date} onChange={e => setMaintForm(p => ({ ...p, next_due_date: e.target.value }))} /></Field>
           <div className="flex space-x-2 pt-2">
-            <button onClick={saveMaint} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">Lưu</button>
+            <button onClick={saveMaint} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">Lưu bảo dưỡng</button>
             <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
           </div>
         </Modal>

@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -78,21 +80,50 @@ fun MoreScreen(vm: DashboardViewModel) {
 private fun MoreMenu(onOpen: (MoreViewModel.Page) -> Unit, vm: DashboardViewModel) {
     val colors = LocalFmmsColors.current
     val strings = LocalStrings.current
-    Column(
+    val scrollState = rememberScrollState()
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
             .padding(16.dp),
     ) {
-        Text(strings.more, color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(10.dp))
-        MenuItem(strings.liveData, "All OBD + GPS readings in real time") { onOpen(MoreViewModel.Page.Live) }
-        MenuItem(strings.vehicles, "Manage your fleet and active vehicle") { onOpen(MoreViewModel.Page.Vehicles) }
-        MenuItem(strings.diagnostics, "Raw ELM327 command / response log") { onOpen(MoreViewModel.Page.Diagnostics) }
-        MenuItem(strings.cloud, "Sync status with Supabase") { onOpen(MoreViewModel.Page.Cloud) }
-        MenuItem(strings.connection, "Pair & connect the KW906 adapter") { onOpen(MoreViewModel.Page.Connection) }
-        MenuItem(strings.device, "Cấu hình tên thiết bị, chế độ OBD / GPS-only") { onOpen(MoreViewModel.Page.Device) }
-        MenuItem(strings.settings, "App preferences, trip timeout, sync") { onOpen(MoreViewModel.Page.Settings) }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState),
+        ) {
+            Text(strings.more, color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(10.dp))
+            MenuItem(strings.liveData, "All OBD + GPS readings in real time") { onOpen(MoreViewModel.Page.Live) }
+            MenuItem(strings.vehicles, "Manage your fleet and active vehicle") { onOpen(MoreViewModel.Page.Vehicles) }
+            MenuItem(strings.diagnostics, "Raw ELM327 command / response log") { onOpen(MoreViewModel.Page.Diagnostics) }
+            MenuItem(strings.cloud, "Sync status with Supabase") { onOpen(MoreViewModel.Page.Cloud) }
+            MenuItem(strings.connection, "Pair & connect the KW906 adapter") { onOpen(MoreViewModel.Page.Connection) }
+            MenuItem(strings.device, "Cấu hình tên thiết bị, chế độ OBD / GPS-only") { onOpen(MoreViewModel.Page.Device) }
+            MenuItem(strings.settings, "App preferences, trip timeout, sync") { onOpen(MoreViewModel.Page.Settings) }
+        }
+        CustomScrollbar(scrollState, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+    }
+}
+
+@Composable
+private fun CustomScrollbar(scrollState: ScrollState, modifier: Modifier = Modifier) {
+    val colors = LocalFmmsColors.current
+    val maxValue = scrollState.maxValue
+    if (maxValue <= 0) return
+    val total = (maxValue + scrollState.viewportSize).toFloat()
+    val thumbFraction = (scrollState.viewportSize / total).coerceIn(0.1f, 1f)
+    val trackFraction = (scrollState.value / maxValue.toFloat()).coerceIn(0f, 1f)
+    val thumbOffsetFraction = trackFraction * (1f - thumbFraction)
+    val density = LocalDensity.current
+    Box(modifier = modifier.width(6.dp).padding(vertical = 8.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(thumbFraction)
+                .offset(y = with(density) { (thumbOffsetFraction * scrollState.viewportSize.toFloat()).toDp() })
+                .background(colors.surfaceVariant, shape = RoundedCornerShape(50)),
+        )
     }
 }
 
@@ -273,6 +304,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(colors.background)
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
         BackHeader(strings.settings, onBack)
@@ -568,6 +600,7 @@ private fun EditVehicleDialog(
     var plate by remember { mutableStateOf(vehicle.licensePlate) }
     var year by remember { mutableStateOf(vehicle.year.toString()) }
     var tank by remember { mutableStateOf(vehicle.tankCapacityLiters.toInt().toString()) }
+    var odo by remember { mutableStateOf(if (vehicle.odometerKm > 0) vehicle.odometerKm.toInt().toString() else "") }
     val colors = LocalFmmsColors.current
 
     AlertDialog(
@@ -586,21 +619,27 @@ private fun EditVehicleDialog(
                 OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("Year") }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
                 OutlinedTextField(value = tank, onValueChange = { tank = it }, label = { Text("Tank (L)") }, singleLine = true)
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(value = odo, onValueChange = { odo = it }, label = { Text("ODO (km) — xóa để về 0 cho xe đạp") }, singleLine = true)
             }
         },
         confirmButton = {
             Button(onClick = {
+                val newOdo = odo.toDoubleOrNull()?.takeIf { it >= 0 }
                 AppContainer.launch {
-                    AppContainer.vehicleRepository.updateVehicle(
-                        vehicle.copy(
-                            make = make.ifBlank { vehicle.make },
-                            model = model.ifBlank { vehicle.model },
-                            trim = trim.ifBlank { vehicle.trim },
-                            licensePlate = plate.ifBlank { vehicle.licensePlate },
-                            year = year.toIntOrNull() ?: vehicle.year,
-                            tankCapacityLiters = tank.toDoubleOrNull() ?: vehicle.tankCapacityLiters,
-                        )
+                    val updated = vehicle.copy(
+                        make = make.ifBlank { vehicle.make },
+                        model = model.ifBlank { vehicle.model },
+                        trim = trim.ifBlank { vehicle.trim },
+                        licensePlate = plate.ifBlank { vehicle.licensePlate },
+                        year = year.toIntOrNull() ?: vehicle.year,
+                        tankCapacityLiters = tank.toDoubleOrNull() ?: vehicle.tankCapacityLiters,
+                        odometerKm = newOdo ?: 0.0,
                     )
+                    AppContainer.vehicleRepository.updateVehicle(updated)
+                    if (updated.id == AppContainer.vehicleRepository.getActive()?.id) {
+                        AppContainer.odometerEngine.adoptVehicleOdometer()
+                    }
                 }
                 Toast.makeText(context, "Vehicle updated", Toast.LENGTH_SHORT).show()
                 onDismiss()
@@ -817,8 +856,9 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                     }
                 }
                 Spacer(modifier = Modifier.height(6.dp))
+                val assignedName = vehicles.firstOrNull { it.id == assignedId }?.displayName()
                 Text(
-                    if (assignedId != null) "Đã gán cố định → mọi dữ liệu gửi về xe id: $assignedId"
+                    if (assignedId != null) "Đã gán cố định → mọi dữ liệu gửi về xe: ${assignedName ?: "đã xóa/không khớp"}"
                     else strings.assignNote,
                     color = colors.textSecondary,
                     fontSize = 11.sp,

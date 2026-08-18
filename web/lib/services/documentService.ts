@@ -64,6 +64,13 @@ export async function createDocument(input: DocumentInput) {
   return mapDocumentRow(data);
 }
 
+export async function updateDocument(id: string, input: Partial<DocumentInput>) {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('asset_documents').update(input).eq('id', id).select().single();
+  if (error) throw error;
+  return mapDocumentRow(data);
+}
+
 export async function deleteDocument(id: string) {
   const supabase = createClient();
   const { error } = await supabase.from('asset_documents').delete().eq('id', id);
