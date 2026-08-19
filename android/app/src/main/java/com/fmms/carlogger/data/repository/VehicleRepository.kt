@@ -156,6 +156,13 @@ class VehicleRepository(
             vehicleDao.upsert(v)
             result += v
         }
+        // Prune stale web-synced vehicles that no longer exist on the web
+        // (e.g. after a dedupe). Only touch rows that came from the web
+        // (fleet_id NOT NULL); locally-created vehicles are untouched.
+        val webIds = result.map { it.id }.toSet()
+        vehicleDao.getAll()
+            .filter { it.fleetId != null && it.id !in webIds }
+            .forEach { vehicleDao.delete(it) }
         return result
     }
 
@@ -184,10 +191,10 @@ class VehicleRepository(
             put("device_type", d.deviceType)
             put("device_name", d.deviceName)
             put("mac_address", d.macAddress)
-            put("last_seen", d.lastSeen ?: JSONObject.NULL)
+            put("last_seen", iso(d.lastSeen))
             put("status", d.status)
-            put("created_at", d.createdAt)
-            put("updated_at", d.updatedAt)
+            put("created_at", iso(d.createdAt))
+            put("updated_at", iso(d.updatedAt))
         }.toString()
         syncQueueDao.insert(
             SyncQueueEntity(
@@ -217,6 +224,13 @@ class VehicleRepository(
         return registerDeviceWithVehicle(vehicle.id, prefs.getDeviceName() ?: "Tracker")
     }
 
+    private fun iso(millis: Long?): Any {
+        if (millis == null) return JSONObject.NULL
+        return java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+            .apply { setTimeZone(java.util.TimeZone.getTimeZone("UTC")) }
+            .format(java.util.Date(millis))
+    }
+
     private suspend fun enqueueUpsert(vehicleId: String) {
         val v = vehicleDao.getById(vehicleId) ?: return
         val payload = JSONObject().apply {
@@ -233,8 +247,8 @@ class VehicleRepository(
             put("tank_capacity_liters", v.tankCapacityLiters)
             put("odometer_km", v.odometerKm)
             put("active", v.active)
-            put("created_at", v.createdAt)
-            put("updated_at", v.updatedAt)
+            put("created_at", iso(v.createdAt))
+            put("updated_at", iso(v.updatedAt))
         }.toString()
         syncQueueDao.insert(
             SyncQueueEntity(

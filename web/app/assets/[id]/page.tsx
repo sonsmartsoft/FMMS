@@ -1204,29 +1204,19 @@ export default function AssetDetailPage() {
             <select
               className="theme-select font-semibold"
               value={maintForm.maintenance_type}
-              onChange={e => {
-                const type = e.target.value;
-                let defaultCost = maintForm.cost;
-                if (type.includes('dầu máy')) defaultCost = '650000';
-                else if (type.includes('lọc dầu') || type.includes('lọc nhớt')) defaultCost = '220000';
-                else if (type.includes('lọc gió động cơ')) defaultCost = '180000';
-                else if (type.includes('lọc gió điều hòa')) defaultCost = '250000';
-                else if (type.includes('Bugi')) defaultCost = '350000';
-                else if (type.includes('má phanh') || type.includes('Thay phanh')) defaultCost = '450000';
-                else if (type.includes('nước làm mát')) defaultCost = '300000';
-                else if (type.includes('ắc-quy')) defaultCost = '1800000';
-                setMaintForm(p => ({ ...p, maintenance_type: type, cost: defaultCost }));
-              }}
+              onChange={e => setMaintForm(p => ({ ...p, maintenance_type: e.target.value }))}
             >
               {[
-                'Thay dầu máy (Engine Oil - 650.000₫)',
-                'Thay lọc dầu / Lọc nhớt (220.000₫)',
-                'Thay lọc gió động cơ (180.000₫)',
-                'Thay lọc gió điều hòa (250.000₫)',
-                'Bugi đánh lửa (350.000₫)',
-                'Kiểm tra / Thay má phanh (450.000₫)',
-                'Thay nước làm mát (300.000₫)',
-                'Thay ắc-quy (1.800.000₫)',
+                'Thay dầu máy',
+                'Thay lọc dầu / Lọc nhớt',
+                'Thay lọc gió động cơ',
+                'Thay lọc gió điều hòa',
+                'Bugi đánh lửa',
+                'Kiểm tra / Thay má phanh',
+                'Thay nước làm mát',
+                'Thay ắc-quy',
+                'Thay dầu hộp số',
+                'Bơm lốp & Cân thước lái',
                 'Kiểm tra định kỳ toàn bộ xe',
                 'Khác (Nhập tùy chọn)'
               ].map(o => <option key={o} value={o}>{o}</option>)}

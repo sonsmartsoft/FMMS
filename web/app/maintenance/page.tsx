@@ -9,29 +9,16 @@ import { Wrench, Plus, X, AlertTriangle, CheckCircle2, Clock } from 'lucide-reac
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
 
-const MAINT_TYPES = [
-  'Thay dầu máy', 'Thay lọc dầu', 'Thay lốp xe', 'Kiểm tra phanh',
-  'Kiểm tra định kỳ', 'Thay ắc-quy', 'Vệ sinh hệ thống làm mát',
-  'Thay lọc gió', 'Cân chỉnh bánh xe', 'Thay bugi', 'Sửa chữa', 'Khác',
-];
-
-const MAINT_PRESETS = [
-  { name: 'Thay dầu máy (Engine Oil)', cost: '650000' },
-  { name: 'Thay lọc dầu / Lọc nhớt', cost: '220000' },
-  { name: 'Thay lọc gió động cơ', cost: '180000' },
-  { name: 'Thay lọc gió điều hòa (Cabin Air Filter)', cost: '250000' },
-  { name: 'Bugi đánh lửa (Spark Plugs)', cost: '350000' },
-  { name: 'Kiểm tra & Thay má phanh (Brake Pads)', cost: '450000' },
-  { name: 'Thay nước làm mát (Coolant)', cost: '300000' },
-  { name: 'Thay dầu hộp số (Transmission Fluid)', cost: '950000' },
-  { name: 'Bơm lốp & Cân chỉnh bánh xe', cost: '100000' },
-  { name: 'Vệ sinh buồng đốt / Kim phun', cost: '550000' },
-  { name: 'Thay ắc-quy (Battery Replace)', cost: '1800000' },
+const DEFAULT_MAINT_CATEGORIES = [
+  'Thay dầu máy', 'Thay lọc dầu / Lọc nhớt', 'Thay lọc gió động cơ', 'Thay lọc gió điều hòa',
+  'Thay bugi đánh lửa', 'Thay lốp xe', 'Kiểm tra & Thay má phanh', 'Thay ắc-quy', 'Vệ sinh hệ thống làm mát',
+  'Thay dầu hộp số', 'Bơm lốp & Cân thước lái', 'Vệ sinh buồng đốt / Kim phun', 'Sửa chữa & Khác'
 ];
 
 export default function MaintenancePage() {
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
   const [openModal, setOpenModal] = useState(false);
   const [form, setForm] = useState({
     asset_id: '', date: '', maintenance_type: 'Thay dầu máy',
@@ -55,8 +42,23 @@ export default function MaintenancePage() {
         /* rỗng */
       }
     })();
+
+    const loadMasterCategories = () => {
+      const sMaint = localStorage.getItem('fmms_master_maint');
+      if (sMaint) {
+        try {
+          const parsed = JSON.parse(sMaint);
+          if (Array.isArray(parsed) && parsed.length > 0) setCategories(parsed);
+        } catch {}
+      }
+    };
+
+    loadMasterCategories();
+    window.addEventListener('fmms_master_updated', loadMasterCategories);
+
     return () => {
       cancelled = true;
+      window.removeEventListener('fmms_master_updated', loadMasterCategories);
     };
   }, []);
 
@@ -214,7 +216,7 @@ export default function MaintenancePage() {
                 <div className="space-y-1 col-span-2">
                   <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Gói / Loại bảo dưỡng chính</label>
                   <select className="theme-select" value={form.maintenance_type} onChange={e => setForm(p => ({ ...p, maintenance_type: e.target.value }))}>
-                    {MAINT_TYPES.map(t => <option key={t}>{t}</option>)}
+                    {categories.map((t: string) => <option key={t}>{t}</option>)}
                   </select>
                 </div>
               </div>
@@ -233,21 +235,15 @@ export default function MaintenancePage() {
                 {/* Quick suggestions */}
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Thêm nhanh:</span>
-                  {[
-                    { name: 'Thay dầu máy', cost: '650000' },
-                    { name: 'Thay lọc dầu', cost: '220000' },
-                    { name: 'Thay lọc gió', cost: '180000' },
-                    { name: 'Bugi đánh lửa', cost: '350000' },
-                    { name: 'Kiểm tra phanh', cost: '150000' },
-                  ].map((s, i) => (
+                  {categories.slice(0, 6).map((cat, i) => (
                     <button
                       key={i}
                       type="button"
-                      onClick={() => setServiceItems(p => [...p, { name: s.name, cost: s.cost }])}
+                      onClick={() => setServiceItems(p => [...p, { name: cat, cost: '' }])}
                       className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80 transition"
                       style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
                     >
-                      + {s.name}
+                      + {cat}
                     </button>
                   ))}
                 </div>
@@ -266,34 +262,30 @@ export default function MaintenancePage() {
                         <div className="col-span-7">
                           <select
                             className="theme-select text-xs font-semibold"
-                            value={MAINT_PRESETS.some(p => p.name === item.name) ? item.name : 'OTHER'}
+                            value={categories.includes(item.name) ? item.name : 'OTHER'}
                             onChange={e => {
                               const selected = e.target.value;
                               if (selected === 'OTHER') {
                                 updateServiceItem(idx, 'name', '');
                               } else {
-                                const preset = MAINT_PRESETS.find(p => p.name === selected);
-                                if (preset) {
-                                  updateServiceItem(idx, 'name', preset.name);
-                                  updateServiceItem(idx, 'cost', preset.cost);
-                                }
+                                updateServiceItem(idx, 'name', selected);
                               }
                             }}
                           >
-                            <option value="" disabled>-- Chọn dịch vụ --</option>
-                            {MAINT_PRESETS.map(p => (
-                              <option key={p.name} value={p.name}>
-                                {p.name} ({fmt(parseFloat(p.cost))} ₫)
+                            <option value="" disabled>-- Chọn dịch vụ từ Master Data --</option>
+                            {categories.map(cat => (
+                              <option key={cat} value={cat}>
+                                {cat}
                               </option>
                             ))}
                             <option value="OTHER">✍️ Tùy chọn khác (Nhập tay...)</option>
                           </select>
 
-                          {(!MAINT_PRESETS.some(p => p.name === item.name) || item.name === '') && (
+                          {(!categories.includes(item.name) || item.name === '') && (
                             <input
                               type="text"
                               className="theme-input text-xs mt-1.5"
-                              placeholder="Nhập tên dịch vụ tùy chỉnh (VD: Thay xích, Bảo dưỡng giảm xóc...)"
+                              placeholder="Nhập tên dịch vụ tùy chỉnh (VD: Thay xích, Cân vành...)"
                               value={item.name}
                               onChange={e => updateServiceItem(idx, 'name', e.target.value)}
                             />
@@ -304,7 +296,7 @@ export default function MaintenancePage() {
                           <input
                             type="number"
                             className="theme-input font-mono font-bold text-xs"
-                            placeholder="Nhập giá (₫)"
+                            placeholder="Điền giá thực tế (₫)"
                             value={item.cost}
                             onChange={e => updateServiceItem(idx, 'cost', e.target.value)}
                           />
