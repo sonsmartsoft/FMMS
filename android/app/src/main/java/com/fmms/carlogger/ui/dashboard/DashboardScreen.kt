@@ -1,6 +1,7 @@
 package com.fmms.carlogger.ui.dashboard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,7 +10,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,13 +27,18 @@ import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import java.util.Locale
 
 @Composable
-fun DashboardScreen(vm: DashboardViewModel, onAddDevice: () -> Unit = {}) {
+fun DashboardScreen(
+    vm: DashboardViewModel,
+    onAddDevice: () -> Unit = {},
+    onSpeedometer: () -> Unit = {},
+    onLunar: () -> Unit = {},
+) {
     val state by vm.uiState.collectAsStateWithLifecycle()
-    DashboardContent(state = state, onAddDevice = onAddDevice)
+    DashboardContent(state = state, onAddDevice = onAddDevice, onSpeedometer = onSpeedometer, onLunar = onLunar)
 }
 
 @Composable
-private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit) {
+private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit, onSpeedometer: () -> Unit, onLunar: () -> Unit) {
     val colors = LocalFmmsColors.current
     val strings = LocalStrings.current
     val t = state.telemetry
@@ -90,6 +98,32 @@ private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit) {
                         )
                     }
                 }
+                Surface(
+                    color = colors.surface,
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = onSpeedometer,
+                ) {
+                    Text(
+                        text = "⏱",
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                        color = colors.cyan,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Surface(
+                    color = colors.surface,
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = onLunar,
+                ) {
+                    Text(
+                        text = "☾",
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                        color = colors.amber,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
 
@@ -129,14 +163,11 @@ private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.th
                 noteColor = colors.amber,
             )
             VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
-            HeroCell(
-                label = strings.fuelLevel,
-                value = state.fuel.levelPercent?.let { "${it.toInt()}% (${state.fuel.estimatedLiters?.let { l -> String.format(Locale.US, "%.1f", l) }}L)" }
-                    ?: "—",
-                sub = state.fuel.source ?: "",
-                color = colors.amber,
-                showSubAsNote = state.fuel.levelPercent == null,
-                noteColor = colors.textSecondary,
+            FuelGaugeCard(
+                levelPercent = state.fuel.levelPercent,
+                rangeKm = state.fuel.rangeKm,
+                note = state.fuel.learningNote,
+                colors = colors,
             )
             VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
             HeroCell(
@@ -233,13 +264,11 @@ private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceAround,
                 ) {
-                    HeroCell(
-                        label = strings.fuelLevel,
-                        value = state.fuel.levelPercent?.let { "${it.toInt()}%" } ?: "—",
-                        sub = state.fuel.source ?: "",
-                        color = colors.amber,
-                        showSubAsNote = state.fuel.levelPercent == null,
-                        noteColor = colors.textSecondary,
+                    FuelGaugeCard(
+                        levelPercent = state.fuel.levelPercent,
+                        rangeKm = state.fuel.rangeKm,
+                        note = state.fuel.learningNote,
+                        colors = colors,
                     )
                     HeroCell(
                         label = strings.avgConsumption,
@@ -361,6 +390,67 @@ private fun TripStatCell(label: String, value: String, color: Color, sub: String
         }
     }
 }
+
+@Composable
+private fun FuelGaugeCard(
+    levelPercent: Double?,
+    rangeKm: Double?,
+    note: String?,
+    colors: com.fmms.carlogger.ui.theme.FmmsColors,
+) {
+    val level = levelPercent?.toFloat()?.coerceIn(0f, 100f) ?: 0f
+    val ringColor = when {
+        levelPercent == null -> colors.textSecondary
+        level <= 15f -> colors.red
+        level <= 35f -> colors.amber
+        else -> colors.emerald
+    }
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(strings_label(colors), color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.height(2.dp))
+        Box(contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.size(64.dp)) {
+                val stroke = 8.dp.toPx()
+                val inset = stroke / 2
+                val arcSize = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke)
+                val topLeft = Offset(stroke / 2, stroke / 2)
+                drawArc(
+                    color = colors.surfaceVariant,
+                    startAngle = 135f,
+                    sweepAngle = 270f,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke, cap = StrokeCap.Round),
+                )
+                drawArc(
+                    color = ringColor,
+                    startAngle = 135f,
+                    sweepAngle = 270f * (level / 100f),
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke, cap = StrokeCap.Round),
+                )
+            }
+            Text(
+                if (levelPercent != null) "${levelPercent.toInt()}%" else "—",
+                color = ringColor,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            if (rangeKm != null) "${rangeKm.toInt()} km" else note?.takeIf { it.isNotBlank() } ?: "—",
+            color = colors.textSecondary,
+            fontSize = 10.sp,
+        )
+    }
+}
+
+@Composable
+private fun strings_label(colors: com.fmms.carlogger.ui.theme.FmmsColors): String = com.fmms.carlogger.ui.i18n.LocalStrings.current.fuelLevel
 
 private fun Long.toTime(): String {
     val s = this / 1000

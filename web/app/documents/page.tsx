@@ -270,13 +270,13 @@ export default function DocumentsPage() {
 
       {/* Add Document Modal */}
       {openAddModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md overflow-hidden" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
+          <div className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Thêm giấy tờ / bảo hiểm mới</h3>
-              <button onClick={() => setOpenAddModal(false)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
+              <button onClick={() => setOpenAddModal(false)} className="p-1 rounded-lg hover:bg-slate-500/10" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 space-y-3 text-xs">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs">
               <div>
                 <label className="block mb-1 font-bold" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
                 <select className="theme-select" value={docForm.asset_id} onChange={e => setDocForm(p => ({ ...p, asset_id: e.target.value }))}>
@@ -309,12 +309,12 @@ export default function DocumentsPage() {
                 <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Phí bảo hiểm / Chi phí (₫)</label>
                 <input type="number" className="theme-input" placeholder="VD: 1500000" value={docForm.cost} onChange={e => setDocForm(p => ({ ...p, cost: e.target.value }))} />
               </div>
-              <div className="flex space-x-2 pt-2">
-                <button onClick={saveDoc} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
-                  Lưu tài liệu
-                </button>
-                <button onClick={() => setOpenAddModal(false)} className="px-4 py-2.5 rounded-xl text-xs font-semibold" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
-              </div>
+            </div>
+            <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <button onClick={saveDoc} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                Lưu tài liệu
+              </button>
+              <button onClick={() => setOpenAddModal(false)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
             </div>
           </div>
         </div>
@@ -322,16 +322,16 @@ export default function DocumentsPage() {
 
       {/* Edit Document Modal */}
       {editingItem && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingItem(null)}>
-          <div className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md overflow-hidden" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingItem(null)}>
+          <div className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <Pencil className="w-4 h-4 text-cyan-400" />
                 Chỉnh sửa Giấy tờ / Bảo hiểm
               </h3>
-              <button onClick={() => setEditingItem(null)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
+              <button onClick={() => setEditingItem(null)} className="p-1 rounded-lg hover:bg-slate-500/10" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 space-y-3 text-xs">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs">
               <div>
                 <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Tên giấy tờ / Bảo hiểm</label>
                 <input type="text" className="theme-input" value={editForm.title} onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))} />
@@ -354,20 +354,20 @@ export default function DocumentsPage() {
                 <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Chi phí hàng năm (₫)</label>
                 <input type="number" className="theme-input" value={editForm.cost} onChange={e => setEditForm(p => ({ ...p, cost: e.target.value }))} />
               </div>
-              <div className="flex justify-between items-center pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteItem(editingItem)}
-                  className="px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 font-bold flex items-center gap-1.5"
-                >
-                  <Trash2 className="w-4 h-4" /> Xóa
+            </div>
+            <div className="p-4 shrink-0 border-t flex justify-between items-center z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <button
+                type="button"
+                onClick={() => handleDeleteItem(editingItem)}
+                className="px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 font-bold flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" /> Xóa
+              </button>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => setEditingItem(null)} className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-white/10" style={{ color: 'var(--text-muted)' }}>Hủy</button>
+                <button onClick={handleSaveEdit} className="px-5 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 shadow-md" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                  <Save className="w-4 h-4" /> Lưu
                 </button>
-                <div className="flex items-center space-x-2">
-                  <button onClick={() => setEditingItem(null)} className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-white/10" style={{ color: 'var(--text-muted)' }}>Hủy</button>
-                  <button onClick={handleSaveEdit} className="px-5 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
-                    <Save className="w-4 h-4" /> Lưu
-                  </button>
-                </div>
               </div>
             </div>
           </div>

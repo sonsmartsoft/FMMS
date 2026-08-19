@@ -188,16 +188,20 @@ export default function MaintenancePage() {
 
       {/* Multi-Service Maintenance Modal */}
       {openModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-lg my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(false)}>
+          <div className="glass-panel rounded-2xl w-full max-w-xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+
+            {/* Modal Sticky Header */}
+            <div className="flex items-center justify-between p-4 sm:p-5 shrink-0 border-b z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
                 <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Thêm đợt bảo dưỡng / Thay phụ tùng</h3>
                 <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Quản lý đợt bảo dưỡng gồm nhiều dịch vụ & phụ tùng</p>
               </div>
-              <button onClick={() => setOpenModal(false)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
+              <button onClick={() => setOpenModal(false)} className="p-1 rounded-lg hover:bg-slate-500/10" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 space-y-4 text-xs">
+
+            {/* Modal Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1 col-span-2">
                   <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
@@ -330,13 +334,14 @@ export default function MaintenancePage() {
                   <input type="number" className="theme-input" placeholder="17846" value={form.next_due_km} onChange={e => setForm(p => ({ ...p, next_due_km: e.target.value }))} />
                 </div>
               </div>
+            </div>
 
-              <div className="flex space-x-2 pt-2">
-                <button onClick={save} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
-                  Lưu đợt bảo dưỡng
-                </button>
-                <button onClick={() => setOpenModal(false)} className="px-4 py-2.5 rounded-xl text-xs font-semibold" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
-              </div>
+            {/* Modal Sticky Footer */}
+            <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <button onClick={save} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                Lưu đợt bảo dưỡng
+              </button>
+              <button onClick={() => setOpenModal(false)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
             </div>
           </div>
         </div>

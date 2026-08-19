@@ -327,16 +327,16 @@ export default function FuelPage() {
       {/* Add / Edit Fuel Modal */}
       {openModal && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md overflow-hidden"
           style={{ background: 'rgba(0,0,0,0.75)' }}
           onClick={() => setOpenModal(false)}
         >
           <div
-            className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[85vh] overflow-y-auto shadow-2xl"
+            className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
             style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-5" style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
+            <div className="flex items-center justify-between p-4 sm:p-5 shrink-0 border-b z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
                 <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
                   {editingId ? '✏️ Chỉnh sửa bản ghi nhiên liệu' : '⛽ Ghi nhận đổ nhiên liệu mới'}
@@ -345,11 +345,11 @@ export default function FuelPage() {
                   {editingId ? 'Cập nhật thông tin đợt đổ xăng' : 'Nhập thông tin đợt đổ xăng / sạc pin'}
                 </p>
               </div>
-              <button onClick={() => setOpenModal(false)} className="p-1.5 rounded-lg hover:bg-slate-500/10 transition" style={{ color: 'var(--text-muted)' }}>
-                <X className="w-4 h-4" />
+              <button onClick={() => setOpenModal(false)} className="p-1 rounded-lg hover:bg-slate-500/10 transition" style={{ color: 'var(--text-muted)' }}>
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-5 space-y-3.5 text-xs">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs">
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
                 <select className="theme-select" value={form.asset_id} onChange={e => setForm(p => ({ ...p, asset_id: e.target.value }))}>
@@ -388,22 +388,22 @@ export default function FuelPage() {
                 <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ghi chú</label>
                 <input type="text" className="theme-input" placeholder="Ghi chú thêm nếu cần..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
               </div>
-              <div className="flex space-x-2 pt-2">
-                <button
-                  onClick={save}
-                  className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 transition"
-                  style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
-                >
-                  {editingId ? 'Cập nhật bản ghi' : 'Lưu bản ghi'}
-                </button>
-                <button
-                  onClick={() => setOpenModal(false)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-semibold"
-                  style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
-                >
-                  Hủy
-                </button>
-              </div>
+            </div>
+            <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <button
+                onClick={save}
+                className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition"
+                style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+              >
+                {editingId ? 'Cập nhật bản ghi' : 'Lưu bản ghi'}
+              </button>
+              <button
+                onClick={() => setOpenModal(false)}
+                className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition"
+                style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
+              >
+                Hủy
+              </button>
             </div>
           </div>
         </div>

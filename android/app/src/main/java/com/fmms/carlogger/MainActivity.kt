@@ -24,11 +24,13 @@ import androidx.navigation.compose.rememberNavController
 import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.data.sync.SyncWorker
 import com.fmms.carlogger.ui.dashboard.DashboardScreen
+import com.fmms.carlogger.ui.dashboard.SpeedometerScreen
 import com.fmms.carlogger.ui.fuel.FuelScreen
 import com.fmms.carlogger.ui.i18n.En
 import com.fmms.carlogger.ui.i18n.LocalStrings
 import com.fmms.carlogger.ui.i18n.ProvideStrings
 import com.fmms.carlogger.ui.i18n.Vi
+import com.fmms.carlogger.ui.lunar.LunarCalendarScreen
 import com.fmms.carlogger.ui.more.ConnectionScreen
 import com.fmms.carlogger.ui.more.MoreScreen
 import com.fmms.carlogger.ui.stats.StatsScreen
@@ -155,6 +157,10 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
             NavHost(navController = navController, startDestination = "home") {
                 composable("home") { DashboardScreen(vm = vm, onAddDevice = {
                     navController.navigate("connection") { launchSingleTop = true }
+                }, onSpeedometer = {
+                    navController.navigate("speedometer") { launchSingleTop = true }
+                }, onLunar = {
+                    navController.navigate("lunar_calendar") { launchSingleTop = true }
                 }) }
                 composable("trips") { TripsScreen() }
                 composable("fuel") { FuelScreen() }
@@ -162,6 +168,12 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
                 composable("more") { MoreScreen(vm = vm) }
                 composable("connection") {
                     ConnectionScreen(onBack = { navController.popBackStack() })
+                }
+                composable("speedometer") {
+                    SpeedometerScreen(vm = vm, onBack = { navController.popBackStack() })
+                }
+                composable("lunar_calendar") {
+                    LunarCalendarScreen(onBack = { navController.popBackStack() })
                 }
             }
         }
