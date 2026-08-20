@@ -150,8 +150,10 @@ class TripEngine(
 
     private suspend fun updateTrip(vehicle: com.fmms.carlogger.core.database.entity.VehicleEntity, live: LiveTelemetry) {
         val now = System.currentTimeMillis()
-        val elapsed = now - startTime
-        val speed = live.speedKmh ?: 0.0
+        // end-to-end elapsed in SECONDS (startTime/now are epoch millis)
+        val elapsed = (now - startTime) / 1000
+        // Defence against bogus GPS/OBD spikes: only track plausible speeds.
+        val speed = (live.speedKmh ?: 0.0).takeIf { it.isFinite() && it in 0.0..300.0 } ?: 0.0
         if (speed > maxSpeed) maxSpeed = speed
         stoppedSince = null
 
@@ -219,6 +221,8 @@ class TripEngine(
         val dist = current.distanceKm
         if (fuelUsed > 0 && dist > 0.05) consumption = fuelUsed / dist * 100
 
+        val elapsedSeconds = (now - startTime) / 1000.0
+
         val trip = TripEntity(
             id = id,
             vehicleId = vId,
@@ -228,12 +232,12 @@ class TripEngine(
             startOdometer = startOdometer,
             endOdometer = odo,
             distanceKm = dist,
-            durationSeconds = (now - startTime),
+            durationSeconds = (now - startTime) / 1000,
             fuelStartPercent = tripRepository.getActiveTrip(vId)?.fuelStartPercent,
             fuelEndPercent = lastFuelLevel,
             fuelUsedLiters = if (fuelUsed > 0) fuelUsed else null,
             averageConsumptionL100km = consumption,
-            averageSpeedKmh = if ((now - startTime) > 0) dist / ((now - startTime) / 3600.0) else 0.0,
+            averageSpeedKmh = if (elapsedSeconds > 0) dist / (elapsedSeconds / 3600.0) else 0.0,
             maxSpeedKmh = if (maxSpeed > 0) maxSpeed else null,
             startLatitude = startLat,
             startLongitude = startLng,

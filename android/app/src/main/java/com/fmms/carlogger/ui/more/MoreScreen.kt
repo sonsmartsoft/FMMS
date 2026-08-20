@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +34,7 @@ import com.fmms.carlogger.ui.DashboardViewModel
 import com.fmms.carlogger.ui.i18n.LocalStrings
 import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -263,6 +265,7 @@ private fun CloudScreen(onBack: () -> Unit) {
     val pending by AppContainer.syncQueueRepository.observePendingCount().collectAsStateWithLifecycle(0)
     val recent by AppContainer.syncQueueRepository.observeRecent().collectAsStateWithLifecycle(initialValue = emptyList())
     val colors = LocalFmmsColors.current
+    val clipboard = LocalClipboardManager.current
 
     Column(
         modifier = Modifier
@@ -283,6 +286,27 @@ private fun CloudScreen(onBack: () -> Unit) {
                 Text("$pending records", color = colors.cyan, fontSize = 24.sp, fontWeight = FontWeight.Black)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text("Live push mỗi 30s + WorkManager 15 phút khi online.", color = colors.textSecondary, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(10.dp))
+                val syncing = remember { mutableStateOf(false) }
+                Button(
+                    onClick = {
+                        syncing.value = true
+                        AppContainer.syncNow()
+                        // stop the spinner shortly after; status flows update live
+                        kotlinx.coroutines.MainScope().launch {
+                            kotlinx.coroutines.delay(1500)
+                            syncing.value = false
+                        }
+                    },
+                    enabled = !syncing.value,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.cyan,
+                        contentColor = colors.background,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (syncing.value) "ĐANG ĐỒNG BỘ..." else "SYNC NGAY", fontWeight = FontWeight.Bold)
+                }
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
@@ -292,19 +316,30 @@ private fun CloudScreen(onBack: () -> Unit) {
             colors = CardDefaults.cardColors(containerColor = colors.surface),
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text("LAST SYNC DETAILS", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("LAST SYNC DETAILS  (chạm để copy)", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
                 if (recent.isEmpty()) {
                     Text("Chưa có bản ghi.", color = colors.textPrimary, fontSize = 13.sp)
                 } else {
                     recent.take(8).forEach { e ->
                         val err = e.lastError?.let { " 🔴 $it" } ?: ""
-                        Text(
-                            "${e.entityType}/${e.status}${err}",
-                            color = if (e.status == "PENDING" && e.lastError != null) colors.red else colors.textPrimary,
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp,
-                        )
+                        val line = "${e.entityType}/${e.status}${err}"
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                                .clickable {
+                                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(line))
+                                },
+                            color = Color.Transparent,
+                        ) {
+                            Text(
+                                line,
+                                color = if (e.status == "PENDING" && e.lastError != null) colors.red else colors.textPrimary,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                            )
+                        }
                     }
                 }
             }

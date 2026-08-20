@@ -27,6 +27,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Manual service-locator container (Clean Architecture without a DI framework —
@@ -155,5 +159,40 @@ object AppContainer {
 
     fun launch(block: suspend () -> Unit) {
         appScope.launch { block() }
+    }
+
+    /** Manual "SYNC NOW": repair stale payloads then push pending to Supabase. */
+    fun syncNow() {
+        launch {
+            if (!prefs.getSyncEnabled()) return@launch
+            syncQueueRepository.repairStalePayloads(limit = 500)
+            val client = OkHttpClient()
+            for (type in listOf("devices", "vehicles", "trips", "gps_track_points")) {
+                for (entry in syncQueueRepository.getPendingByType(type, limit = 500)) {
+                    val req = Request.Builder()
+                        .url("${BuildConfig.SUPABASE_URL}/rest/v1/$type")
+                        .header("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+                        .header("Authorization", "Bearer ${BuildConfig.SUPABASE_PUBLISHABLE_KEY}")
+                        .header("Content-Type", "application/json")
+                        .header("Prefer", "resolution=merge-duplicates,return=minimal")
+                        .post(entry.payload.toRequestBody("application/json".toMediaType()))
+                        .build()
+                    try {
+                        client.newCall(req).execute().use { resp ->
+                            if (resp.isSuccessful) {
+                                syncQueueRepository.markSynced(entry.id)
+                            } else {
+                                syncQueueRepository.markFailed(
+                                    entry.id,
+                                    "HTTP ${resp.code}: ${resp.body?.string()?.take(180)}",
+                                )
+                            }
+                        }
+                    } catch (_: Exception) {
+                        syncQueueRepository.markFailed(entry.id, "NETWORK")
+                    }
+                }
+            }
+        }
     }
 }

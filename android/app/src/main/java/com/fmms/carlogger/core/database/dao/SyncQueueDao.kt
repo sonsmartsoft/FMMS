@@ -31,6 +31,9 @@ interface SyncQueueDao {
     @Query("UPDATE sync_queue SET status = :status, retry_count = retry_count + 1, last_error = :error, synced_at = :syncedAt WHERE id = :id")
     suspend fun markStatus(id: String, status: String, error: String?, syncedAt: Long?)
 
+    @Query("UPDATE sync_queue SET payload = :payload WHERE id = :id")
+    suspend fun updatePayload(id: String, payload: String)
+
     @Query("DELETE FROM sync_queue WHERE id = :id")
     suspend fun deleteById(id: String)
 

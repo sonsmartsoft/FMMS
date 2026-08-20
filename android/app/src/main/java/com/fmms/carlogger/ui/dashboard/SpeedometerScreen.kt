@@ -59,8 +59,8 @@ fun SpeedometerScreen(vm: DashboardViewModel, onBack: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
 
         AnalogSpeedGauge(
-            speedKmh = state.telemetry.speedKmh ?: 0.0,
-            maxSpeedKmh = state.trip.maxSpeedKmh,
+            speedKmh = state.telemetry.speedKmh?.takeIf { it.isFinite() && it >= 0 } ?: 0.0,
+            maxSpeedKmh = state.trip.maxSpeedKmh?.takeIf { it.isFinite() && it > 0 } ?: 0.0,
             accent = colors.red,
         )
 
@@ -78,7 +78,7 @@ fun SpeedometerScreen(vm: DashboardViewModel, onBack: () -> Unit) {
             ) {
                 SpeedStat("Quãng đường", tripDistance(state), colors.cyan)
                 SpeedStat("Thời gian", tripTime(state), colors.textPrimary)
-                SpeedStat("Max.", state.trip.maxSpeedKmh.takeIf { it > 0 }?.let { "${it.toInt()} km/h" } ?: "0 km/h", colors.amber)
+                SpeedStat("Max.", state.trip.maxSpeedKmh.takeIf { it.isFinite() && it > 0 }?.let { "${it.toInt()} km/h" } ?: "0 km/h", colors.amber)
             }
         }
 
@@ -144,7 +144,7 @@ private fun AnalogSpeedGauge(speedKmh: Double, maxSpeedKmh: Double, accent: Colo
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.size(280.dp)) {
+            Canvas(modifier = Modifier.size(300.dp)) {
                 val stroke = 18.dp.toPx()
                 val inset = stroke / 2
                 val arcSize = androidx.compose.ui.geometry.Size(
@@ -152,6 +152,7 @@ private fun AnalogSpeedGauge(speedKmh: Double, maxSpeedKmh: Double, accent: Colo
                     size.height - stroke,
                 )
                 val topLeft = Offset(stroke / 2, stroke / 2)
+                val center = Offset(size.width / 2, size.height / 2)
                 // Track
                 drawArc(
                     color = colors.surfaceVariant,
@@ -162,6 +163,25 @@ private fun AnalogSpeedGauge(speedKmh: Double, maxSpeedKmh: Double, accent: Colo
                     size = arcSize,
                     style = Stroke(width = stroke, cap = StrokeCap.Round),
                 )
+                // Scale tick marks (major every 20, minor every 10)
+                val tickOuter = size.minDimension / 2 - 2.dp.toPx()
+                for (v in 0..220 step 10) {
+                    val frac = v / max
+                    val ang = Math.toRadians(135.0 + 270.0 * frac)
+                    val major = v % 20 == 0
+                    val tickLen = if (major) 12.dp.toPx() else 7.dp.toPx()
+                    val cos = kotlin.math.cos(ang).toFloat()
+                    val sin = kotlin.math.sin(ang).toFloat()
+                    val a = Offset(center.x + (tickOuter - tickLen) * cos, center.y + (tickOuter - tickLen) * sin)
+                    val b = Offset(center.x + tickOuter * cos, center.y + tickOuter * sin)
+                    drawLine(
+                        color = if (major) colors.textPrimary else colors.textSecondary,
+                        start = a,
+                        end = b,
+                        strokeWidth = if (major) 2.5.dp.toPx() else 1.2.dp.toPx(),
+                        cap = StrokeCap.Round,
+                    )
+                }
                 // Max marker
                 if (maxFrac > 0.01f) {
                     drawArc(
@@ -187,7 +207,6 @@ private fun AnalogSpeedGauge(speedKmh: Double, maxSpeedKmh: Double, accent: Colo
                     )
                 }
                 // Needle
-                val center = Offset(size.width / 2, size.height / 2)
                 val angleRad = Math.toRadians(135.0 + 270.0 * animated)
                 val needleLen = size.minDimension / 2 - stroke - 10.dp.toPx()
                 val end = Offset(

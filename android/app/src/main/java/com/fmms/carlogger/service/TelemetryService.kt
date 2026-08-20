@@ -86,6 +86,7 @@ class TelemetryService : Service() {
                 var lastOdo = c.vehicleRepository.getActive()?.odometerKm
                 var currentTripId: String? = null
                 var lastRecord = 0L
+                var lastFlush = System.currentTimeMillis()
                 val batch = mutableListOf<GpsTrackPointEntity>()
 
                 c.telemetryEngine.live.collect { telemetry ->
@@ -115,7 +116,10 @@ class TelemetryService : Service() {
                                 currentTripId
                             }
                             val gpsSpeed = telemetry.gpsSpeedKmh
-                            val moving = (gpsSpeed ?: 0.0) >= 1.0
+                            // Map speed: prefer GPS speed; fall back to the real OBD
+                            // speed (PID 0D) when loc.speed reports 0 while driving.
+                            val pointSpeed = gpsSpeed ?: telemetry.speedKmh
+                            val moving = (pointSpeed ?: 0.0) >= 1.0
                             val now = System.currentTimeMillis()
                             val intervalMs = c.prefs.getGpsIntervalSec() * 1000L
                             // While moving (or during an active trip) record on the GPS
@@ -136,11 +140,12 @@ class TelemetryService : Service() {
                                     deviceId = c.prefs.getDeviceId(),
                                     lat = lat,
                                     lng = lng,
-                                    speedKmh = gpsSpeed,
+                                    speedKmh = pointSpeed,
                                     recordedAt = now,
                                 )
                             }
-                            if (batch.size >= 25 || (batch.isNotEmpty() && now - lastRecord > 60000L)) {
+                            if (batch.isNotEmpty() && (batch.size >= 10 || now - lastFlush >= 15_000L)) {
+                                lastFlush = now
                                 c.gpsTrackRepository.insertAndEnqueue(batch.toList())
                                 batch.clear()
                             }
@@ -163,12 +168,28 @@ class TelemetryService : Service() {
         gpsJob = serviceScope.launch {
             var currentTripId: String? = null
             var lastRecord = 0L
+            var lastFlush = System.currentTimeMillis()
             val batch = mutableListOf<GpsTrackPointEntity>()
+            // Position-derived speed fallback: many devices report loc.speed == 0
+            // even while moving, so estimate speed from consecutive fixes.
+            var prevGps: android.location.Location? = null
+            var prevGpsAt = 0L
 
             while (isActive) {
                 val loc = c.gpsTracker.currentLocation()
                 if (loc != null) {
-                    val speedKmh = (loc.speed * 3.6).takeIf { it >= 0.1 }
+                    val now = System.currentTimeMillis()
+                    var speedKmh = (loc.speed * 3.6).takeIf { it.isFinite() && it in 0.1..400.0 }
+                    if (speedKmh == null) {
+                        val dt = now - prevGpsAt
+                        if (prevGps != null && dt >= 2000L) {
+                            val distKm = prevGps!!.distanceTo(loc) / 1000.0
+                            val est = distKm / (dt / 1000.0) * 3600.0
+                            if (est.isFinite() && est >= 0.5 && est <= 400.0) speedKmh = est
+                        }
+                    }
+                    prevGps = loc
+                    prevGpsAt = now
                     val telemetry = LiveTelemetry(
                         speedKmh = speedKmh,
                         latitude = loc.latitude,
@@ -193,7 +214,6 @@ class TelemetryService : Service() {
                     }
 
                     val moving = (speedKmh ?: 0.0) >= 1.0
-                    val now = System.currentTimeMillis()
                     val intervalMs = c.prefs.getGpsIntervalSec() * 1000L
                     val heartbeatMs = IDLE_HEARTBEAT_MS
                     val due = if (moving || tripActive) {
@@ -215,7 +235,8 @@ class TelemetryService : Service() {
                         )
                     }
 
-                    if (batch.size >= 25 || (batch.isNotEmpty() && now - lastRecord > 60000L)) {
+                    if (batch.isNotEmpty() && (batch.size >= 10 || now - lastFlush >= 15_000L)) {
+                        lastFlush = now
                         c.gpsTrackRepository.insertAndEnqueue(batch.toList())
                         batch.clear()
                     }
@@ -238,6 +259,9 @@ class TelemetryService : Service() {
             while (isActive) {
                 try {
                     if (AppContainer.prefs.getSyncEnabled()) {
+                        // Self-heal stale payloads (pre-ISO timestamps) so the 84
+                        // stuck records from before rev19 can finally sync in-place.
+                        AppContainer.syncQueueRepository.repairStalePayloads(limit = 500)
                         // Register/refresh device first so the RLS check
                         // `EXISTS(devices WHERE id = device_id AND vehicle_id IS NOT NULL)`
                         // succeeds before any gps_track_point insert.
@@ -272,7 +296,7 @@ class TelemetryService : Service() {
                 } catch (_: Exception) {
                     // transient network failure — retry next tick
                 }
-                delay(30_000)
+                delay(15_000L)
             }
         }
     }

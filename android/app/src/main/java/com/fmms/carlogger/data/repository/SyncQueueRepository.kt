@@ -105,6 +105,67 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
         syncQueueDao.markStatus(id, "PENDING", error.take(200), null)
     }
 
+    /**
+     * Tự sửa payload cũ bị lỗi code 22008: các cột timestamptz trước đây được
+     * lưu dưới dạng epoch millis thô (vd 1787112128597) khiến Postgres fail parse.
+     * Chuyển hết `last_seen/created_at/updated_at/start_time/end_time/recorded_at`
+     * sang ISO-8601 ngay trong JSON đã lưu trong queue, không cần xoá dữ liệu.
+     * Trả về số record đã sửa.
+     */
+    suspend fun repairStalePayloads(limit: Int = 500): Int {
+        var repaired = 0
+        for (entry in syncQueueDao.getPending(limit)) {
+            val fixed = repairPayload(entry.payload) ?: continue
+            if (fixed != entry.payload) {
+                syncQueueDao.updatePayload(entry.id, fixed)
+                repaired++
+            }
+        }
+        return repaired
+    }
+
+    private fun repairPayload(payload: String): String? {
+        return try {
+            when (payload.trimStart().firstOrNull()) {
+                '[' -> {
+                    val arr = org.json.JSONArray(payload)
+                    var changed = false
+                    for (i in 0 until arr.length()) {
+                        val o = arr.optJSONObject(i)
+                        if (o != null && repairObject(o)) changed = true
+                    }
+                    if (changed) arr.toString() else null
+                }
+                '{' -> {
+                    val o = JSONObject(payload)
+                    if (repairObject(o)) o.toString() else null
+                }
+                else -> null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Sửa các cột timestamp về ISO nếu đang là epoch millis 13 chữ số. */
+    private fun repairObject(o: JSONObject): Boolean {
+        var changed = false
+        TIMESTAMP_FIELDS.forEach { key ->
+            val v = o.opt(key)
+            if (v is Long && v >= 1_000_000_000_000L && v <= 9_999_999_999_999L) {
+                o.put(key, iso(v))
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    companion object {
+        private val TIMESTAMP_FIELDS = listOf(
+            "last_seen", "created_at", "updated_at", "start_time", "end_time", "recorded_at",
+        )
+    }
+
     suspend fun deleteSynced(cutoff: Long) {
         syncQueueDao.deleteOldSynced(cutoff)
     }

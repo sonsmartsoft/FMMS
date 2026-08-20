@@ -44,7 +44,27 @@ class SyncWorker(
                 return Result.success()
             }
 
-            for (entry in pending) {
+            // Self-heal: payloads enqueued before the ISO-timestamp fix still carry
+            // raw epoch millis -> Postgres rejects them with code 22008. Repair in
+            // place so the same data can finally sync instead of retrying forever.
+            c.syncQueueRepository.repairStalePayloads(limit = 200)
+
+            // Re-fetch AFTER repair — the in-memory list above still holds the
+            // broken JSON (repair only rewrites rows in the DB).
+            val fresh = c.syncQueueRepository.getPending(limit = 200)
+            if (fresh.isEmpty()) return Result.retry()
+
+            // Order matters for the RLS check on gps_track_points:
+            // the device row must exist on the web before any track point is
+            // accepted (EXISTS devices WHERE id = device_id). Process devices
+            // first, then trips, then gps batches.
+            val ordered = fresh.sortedWith(
+                compareBy<com.fmms.carlogger.core.database.entity.SyncQueueEntity>(
+                    { priorityOf(it.entityType) },
+                    { it.createdAt },
+                )
+            )
+            for (entry in ordered) {
                 val resp = if (entry.operation == "UPSERT") {
                     upsert(client, entry.entityType, entry.payload)
                 } else {
@@ -82,6 +102,13 @@ class SyncWorker(
 
     private suspend fun tryReconnect() {
         // Best-effort OBD reconnect after internet regained; harmless if blocking.
+    }
+
+    private fun priorityOf(type: String): Int = when (type) {
+        "devices" -> 0
+        "vehicles" -> 1
+        "trips" -> 2
+        else -> 3 // gps_track_points last, depends on device + trip
     }
 
     companion object {

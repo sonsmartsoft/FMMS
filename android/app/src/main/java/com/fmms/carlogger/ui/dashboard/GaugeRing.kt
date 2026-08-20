@@ -34,7 +34,8 @@ fun GaugeCard(
     currentValue: Float = 0f,
 ) {
     val colors = LocalFmmsColors.current
-    val fraction = (currentValue / maxValue).coerceIn(0f, 1f)
+    val raw = if (maxValue > 0f) currentValue / maxValue else 0f
+    val fraction = if (raw.isFinite()) raw.coerceIn(0f, 1f) else 0f
     val animated by animateFloatAsState(
         targetValue = fraction,
         animationSpec = tween(durationMillis = 600),

@@ -61,8 +61,8 @@ class GpsTracker(private val context: Context) {
         ) return null
         return try {
             @Suppress("DEPRECATION")
-            locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            (locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER))?.sanitizeSpeed()
         } catch (_: Exception) {
             null
         }
@@ -72,7 +72,7 @@ class GpsTracker(private val context: Context) {
 
     private val listener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
-            _location.value = location
+            _location.value = location.sanitizeSpeed()
         }
 
         @Deprecated("Deprecated in Java")
@@ -80,4 +80,15 @@ class GpsTracker(private val context: Context) {
         override fun onProviderEnabled(provider: String) {}
         override fun onProviderDisabled(provider: String) {}
     }
+}
+
+/**
+ * GPS chips can emit bogus speed spikes (NaN, negative, or thousands of km/h),
+ * which peg the speedometer needle and corrupt trip max-speed. Clamp anything
+ * implausible (> 400 km/h) back to 0 so telemetry stays sane.
+ */
+private fun Location.sanitizeSpeed(): Location {
+    val ok = !speed.isNaN() && speed >= 0f && speed <= 111.2f // 111.2 m/s = 400 km/h
+    if (ok) return this
+    return Location(this).apply { setSpeed(0f) }
 }

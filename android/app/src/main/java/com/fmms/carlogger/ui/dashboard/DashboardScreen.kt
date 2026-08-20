@@ -143,91 +143,97 @@ private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit, o
 private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.theme.FmmsColors, connected: Boolean, conn: OBDConnectionState, strings: FmmsStrings) {
     val t = state.telemetry
 
-    // Hero range + fuel + consumption
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surface),
+    // IMPORTANT: siblings of a Box overlap — this must be a single Column so the
+    // cards stack vertically instead of covering each other (was losing the
+    // ESTIMATED RANGE card in landscape). Scrollable in case height is short.
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically,
+        // Hero range + fuel + consumption
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
         ) {
-            HeroCell(
-                label = strings.estimatedRange,
-                value = state.fuel.rangeKm?.let { "${it.toInt()} km" } ?: strings.learning,
-                sub = state.fuel.learningNote ?: "",
-                color = colors.cyan,
-                showSubAsNote = state.fuel.rangeKm == null,
-                noteColor = colors.amber,
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HeroCell(
+                    label = strings.estimatedRange,
+                    value = state.fuel.rangeKm?.let { "${it.toInt()} km" } ?: strings.learning,
+                    sub = state.fuel.learningNote ?: "",
+                    color = colors.cyan,
+                    showSubAsNote = state.fuel.rangeKm == null,
+                    noteColor = colors.amber,
+                )
+                VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
+                FuelGaugeCard(
+                    levelPercent = state.fuel.levelPercent,
+                    rangeKm = state.fuel.rangeKm,
+                    note = state.fuel.learningNote,
+                    colors = colors,
+                )
+                VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
+                HeroCell(
+                    label = strings.avgConsumption,
+                    value = state.fuel.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) + " L/100km" }
+                        ?: "—",
+                    sub = state.fuel.learningNote ?: strings.learning,
+                    color = colors.textPrimary,
+                    showSubAsNote = state.fuel.consumptionL100km == null,
+                    noteColor = colors.textSecondary,
+                )
+            }
+        }
+
+        // Today / trip row
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+            ) {
+                TripStatCell(strings.trip, state.trip.distanceKm.let { "${String.format(Locale.US, "%.1f", it)} km" }, colors.textPrimary, null)
+                TripStatCell(strings.duration, state.trip.durationSeconds.toTime(), colors.textPrimary, null)
+                TripStatCell(strings.maxSpeed, state.trip.maxSpeedKmh.takeIf { it > 0 }?.let { "${it.toInt()} km/h" } ?: "—", colors.cyan, null)
+                TripStatCell(strings.odo, state.odometer.virtualOdoKm.let { "${it.toInt()} km" }, colors.textPrimary, state.odometer.sourceStatus)
+            }
+        }
+
+        // Gauges grid
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            GaugeCard(
+                title = strings.speed, value = t.speedKmh?.let { "${it.toInt()}" } ?: "—", unit = "km/h",
+                color = colors.cyan, modifier = Modifier.weight(1f),
+                maxValue = 220f, currentValue = t.speedKmh?.toFloat() ?: 0f,
             )
-            VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
-            FuelGaugeCard(
-                levelPercent = state.fuel.levelPercent,
-                rangeKm = state.fuel.rangeKm,
-                note = state.fuel.learningNote,
-                colors = colors,
+            GaugeCard(
+                title = strings.rpm, value = t.rpm?.let { "${it.toInt()}" } ?: "—", unit = "rpm",
+                color = colors.purple, modifier = Modifier.weight(1f),
+                maxValue = 8000f, currentValue = t.rpm?.toFloat() ?: 0f,
             )
-            VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
-            HeroCell(
-                label = strings.avgConsumption,
-                value = state.fuel.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) + " L/100km" }
-                    ?: "—",
-                sub = state.fuel.learningNote ?: strings.learning,
-                color = colors.textPrimary,
-                showSubAsNote = state.fuel.consumptionL100km == null,
-                noteColor = colors.textSecondary,
+            GaugeCard(
+                title = strings.coolant, value = t.coolantTempC?.let { "${it.toInt()}°C" } ?: "—", unit = "",
+                color = colors.emerald, modifier = Modifier.weight(1f),
+                maxValue = 140f, currentValue = t.coolantTempC?.toFloat() ?: 0f,
+            )
+            GaugeCard(
+                title = strings.voltage, value = t.batteryVoltage?.let { String.format(Locale.US, "%.1f", it) } ?: "—", unit = "V",
+                color = colors.amber, modifier = Modifier.weight(1f),
+                maxValue = 16f, currentValue = t.batteryVoltage?.toFloat() ?: 0f,
             )
         }
-    }
-
-    Spacer(modifier = Modifier.height(10.dp))
-
-    // Today / trip row
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surface),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-        ) {
-            TripStatCell(strings.trip, state.trip.distanceKm.let { "${String.format(Locale.US, "%.1f", it)} km" }, colors.textPrimary, null)
-            TripStatCell(strings.duration, state.trip.durationSeconds.toTime(), colors.textPrimary, null)
-            TripStatCell(strings.maxSpeed, state.trip.maxSpeedKmh.takeIf { it > 0 }?.let { "${it.toInt()} km/h" } ?: "—", colors.cyan, null)
-            TripStatCell(strings.odo, state.odometer.virtualOdoKm.let { "${it.toInt()} km" }, colors.textPrimary, state.odometer.sourceStatus)
-        }
-    }
-
-    Spacer(modifier = Modifier.height(10.dp))
-
-    // Gauges grid
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        GaugeCard(
-            title = strings.speed, value = t.speedKmh?.let { "${it.toInt()}" } ?: "—", unit = "km/h",
-            color = colors.cyan, modifier = Modifier.weight(1f),
-            maxValue = 220f, currentValue = t.speedKmh?.toFloat() ?: 0f,
-        )
-        GaugeCard(
-            title = strings.rpm, value = t.rpm?.let { "${it.toInt()}" } ?: "—", unit = "rpm",
-            color = colors.purple, modifier = Modifier.weight(1f),
-            maxValue = 8000f, currentValue = t.rpm?.toFloat() ?: 0f,
-        )
-        GaugeCard(
-            title = strings.coolant, value = t.coolantTempC?.let { "${it.toInt()}°C" } ?: "—", unit = "",
-            color = colors.emerald, modifier = Modifier.weight(1f),
-            maxValue = 140f, currentValue = t.coolantTempC?.toFloat() ?: 0f,
-        )
-        GaugeCard(
-            title = strings.voltage, value = t.batteryVoltage?.let { String.format(Locale.US, "%.1f", it) } ?: "—", unit = "V",
-            color = colors.amber, modifier = Modifier.weight(1f),
-            maxValue = 16f, currentValue = t.batteryVoltage?.toFloat() ?: 0f,
-        )
     }
 }
 
