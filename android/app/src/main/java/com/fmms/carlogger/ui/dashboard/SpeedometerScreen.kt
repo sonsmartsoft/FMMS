@@ -17,6 +17,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -182,6 +184,22 @@ private fun AnalogSpeedGauge(speedKmh: Double, maxSpeedKmh: Double, accent: Colo
                         cap = StrokeCap.Round,
                     )
                 }
+                // Tick labels (numbers along the scale, just inside the tick ring)
+                val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = colors.textSecondary.toArgb()
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    textSize = 11.sp.toPx()
+                    typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+                }
+                val labelRadius = tickOuter - 27.dp.toPx()
+                for (v in 0..220 step 20) {
+                    val frac = v / max
+                    val ang = Math.toRadians(135.0 + 270.0 * frac)
+                    val x = center.x + labelRadius * kotlin.math.cos(ang).toFloat()
+                    val yBaseline = center.y + labelRadius * kotlin.math.sin(ang).toFloat() -
+                        (labelPaint.ascent() + labelPaint.descent()) / 2f
+                    drawContext.canvas.nativeCanvas.drawText(v.toString(), x, yBaseline, labelPaint)
+                }
                 // Max marker
                 if (maxFrac > 0.01f) {
                     drawArc(
@@ -231,8 +249,6 @@ private fun AnalogSpeedGauge(speedKmh: Double, maxSpeedKmh: Double, accent: Colo
                 Text("km/h", color = colors.textSecondary, fontSize = 14.sp)
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("0  20  40  60  80  100  120  140  160  180  200  220", color = colors.textSecondary, fontSize = 9.sp)
     }
 }
 

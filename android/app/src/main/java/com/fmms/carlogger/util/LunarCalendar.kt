@@ -151,4 +151,54 @@ object LunarCalendar {
 
     /** Ngày âm được nhấn mạnh (mồng 1, rằm 15). */
     fun isHighlightLunarDay(lunarDay: Int): Boolean = lunarDay == 1 || lunarDay == 15
+
+    // ------------------------------------------------------------------
+    // Helper hiển thị (dùng chung Dashboard + Lịch)
+    // ------------------------------------------------------------------
+    private val THIEN_CAN = listOf("Giáp", "Ất", "Bính", "Đinh", "Mậu", "Kỷ", "Canh", "Tân", "Nhâm", "Quý")
+    private val DIA_CHI = listOf("Tý", "Sửu", "Dần", "Mão", "Thìn", "Tỵ", "Ngọ", "Mùi", "Thân", "Dậu", "Tuất", "Hợi")
+    val LUNAR_MONTH_NAMES = arrayOf(
+        "", "Giêng", "Hai", "Ba", "Tư", "Năm", "Sáu", "Bảy", "Tám", "Chín", "Mười", "Một", "Chạp",
+    )
+
+    /** Can-Chi của năm âm lịch, VD: "Giáp Thìn". */
+    fun canChiYear(lunarYear: Int): String {
+        val can = THIEN_CAN[((lunarYear - 4).mod(10) + 10).mod(10)]
+        val chi = DIA_CHI[((lunarYear - 4).mod(12) + 12).mod(12)]
+        return "$can $chi"
+    }
+
+    /** Tên ngày âm: Mùng 1 / Mồng 5 / 13 / Rằm... */
+    fun lunarDayLabel(l: LunarDate): String = when {
+        l.day == 1 -> "Mùng 1"
+        l.day < 10 -> "Mồng ${l.day}"
+        l.day == 15 -> "Rằm"
+        else -> l.day.toString()
+    }
+
+    /** "tháng Giêng" / "tháng nhuận Giêng". */
+    fun lunarMonthLabel(l: LunarDate): String {
+        val name = if (l.month in 1..12) LUNAR_MONTH_NAMES[l.month] else ""
+        return (if (l.isLeapMonth) "tháng nhuận " else "tháng ") + name
+    }
+
+    /** Chuyển thể sang nhãn "Mồng 5 tháng Giêng năm Giáp Thìn". */
+    fun fullLunarLabel(l: LunarDate): String =
+        "${lunarDayLabel(l)} ${lunarMonthLabel(l)} năm ${canChiYear(l.year)}"
+
+    /** Thứ tiếng Việt đầy đủ: "Thứ hai" ... "Chủ nhật". */
+    fun weekdayVi(dd: Int, mm: Int, yy: Int): String {
+        val c = Calendar.getInstance()
+        c.clear()
+        c.set(yy, mm - 1, dd)
+        return when (c.get(Calendar.DAY_OF_WEEK)) {
+            Calendar.SUNDAY -> "Chủ nhật"
+            Calendar.MONDAY -> "Thứ hai"
+            Calendar.TUESDAY -> "Thứ ba"
+            Calendar.WEDNESDAY -> "Thứ tư"
+            Calendar.THURSDAY -> "Thứ năm"
+            Calendar.FRIDAY -> "Thứ sáu"
+            else -> "Thứ bảy"
+        }
+    }
 }

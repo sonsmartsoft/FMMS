@@ -24,6 +24,9 @@ import com.fmms.carlogger.ui.DashboardViewModel
 import com.fmms.carlogger.ui.i18n.FmmsStrings
 import com.fmms.carlogger.ui.i18n.LocalStrings
 import com.fmms.carlogger.ui.theme.LocalFmmsColors
+import com.fmms.carlogger.util.LunarCalendar
+import kotlinx.coroutines.delay
+import java.util.Calendar
 import java.util.Locale
 
 @Composable
@@ -208,6 +211,8 @@ private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.th
             }
         }
 
+        DateClockCard(colors = colors)
+
         // Gauges grid
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -304,6 +309,8 @@ private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.
                 TripStatCell(strings.odo, state.odometer.virtualOdoKm.let { "${it.toInt()} km" }, colors.textPrimary, null)
             }
         }
+
+        DateClockCard(colors = colors)
 
         // Gauges 2x2
         Row(
@@ -464,4 +471,69 @@ private fun Long.toTime(): String {
     val m = (s % 3600) / 60
     val sec = s % 60
     return if (h > 0) String.format(Locale.US, "%dh %02dm", h, m) else String.format(Locale.US, "%02d:%02d", m, sec)
+}
+
+/** Đồng hồ + ngày dương lịch + âm lịch hiện tại (chạy thời gian thực). */
+@Composable
+private fun DateClockCard(colors: com.fmms.carlogger.ui.theme.FmmsColors) {
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1000)
+        }
+    }
+    val cal = remember(now) { Calendar.getInstance().apply { timeInMillis = now } }
+    val d = cal.get(Calendar.DAY_OF_MONTH)
+    val m = cal.get(Calendar.MONTH) + 1
+    val y = cal.get(Calendar.YEAR)
+    val lunar = remember(now) { LunarCalendar.convert(d, m, y) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ClockCell(
+                label = "GIỜ",
+                value = String.format(
+                    Locale.US, "%02d:%02d:%02d",
+                    cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), cal.get(Calendar.SECOND),
+                ),
+                color = colors.cyan,
+            )
+            VerticalDivider(modifier = Modifier.height(40.dp).width(1.dp), color = colors.divider)
+            ClockCell(
+                label = "DƯƠNG LỊCH",
+                value = String.format(Locale.US, "%02d/%02d/%04d", d, m, y),
+                color = colors.textPrimary,
+                sub = LunarCalendar.weekdayVi(d, m, y),
+            )
+            VerticalDivider(modifier = Modifier.height(40.dp).width(1.dp), color = colors.divider)
+            ClockCell(
+                label = if (lunar.isLeapMonth) "ÂM LỊCH (Nhuận)" else "ÂM LỊCH",
+                value = LunarCalendar.lunarDayLabel(lunar) + " " + LunarCalendar.lunarMonthLabel(lunar),
+                color = colors.amber,
+                sub = "năm ${LunarCalendar.canChiYear(lunar.year)}",
+            )
+        }
+    }
+}
+
+@Composable
+private fun ClockCell(label: String, value: String, color: Color, sub: String? = null) {
+    val colors = LocalFmmsColors.current
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, color = colors.textSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(value, color = color, fontSize = 17.sp, fontWeight = FontWeight.Black)
+        if (!sub.isNullOrBlank()) {
+            Text(sub, color = colors.textSecondary, fontSize = 10.sp)
+        }
+    }
 }
