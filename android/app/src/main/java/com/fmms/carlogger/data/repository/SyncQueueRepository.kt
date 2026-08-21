@@ -206,6 +206,11 @@ class TripRepository(
         syncQueueRepository.enqueueTrip(trip)
     }
 
+    /** Hoàn tất chuyến quá ngắn (<0.05 km) chỉ ở máy — không đồng bộ để tránh rác trên server. */
+    suspend fun completeLocalOnly(trip: TripEntity) {
+        tripDao.upsert(trip)
+    }
+
     suspend fun getBetween(vehicleId: String, from: Long, to: Long): List<TripEntity> =
         tripDao.getBetween(vehicleId, from, to)
 

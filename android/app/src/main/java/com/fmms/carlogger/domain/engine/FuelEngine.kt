@@ -75,4 +75,6 @@ class FuelLogRepository(
     suspend fun getFullTankEvents(vehicleId: String) = fuelLogDao.getFullTankEvents(vehicleId)
     suspend fun totalsBetween(vehicleId: String, from: Long, to: Long) =
         fuelLogDao.getTotalsBetween(vehicleId, from, to).firstOrNull()
+    suspend fun getBetween(vehicleId: String, from: Long, to: Long) =
+        fuelLogDao.getBetween(vehicleId, from, to)
 }

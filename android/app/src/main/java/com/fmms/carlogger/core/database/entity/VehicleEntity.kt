@@ -20,6 +20,7 @@ data class VehicleEntity(
     @ColumnInfo(name = "fuel_type") val fuelType: String,
     @ColumnInfo(name = "tank_capacity_liters") val tankCapacityLiters: Double,
     @ColumnInfo(name = "odometer_km") val odometerKm: Double,
+    @ColumnInfo(name = "image_url") val imageUrl: String? = null,
     val active: Boolean,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,

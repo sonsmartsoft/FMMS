@@ -729,6 +729,18 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
     var syncingWeb by remember { mutableStateOf(false) }
     var webSynced by remember { mutableStateOf(false) }
 
+    // Khóa bảo vệ: SYNC xe từ web / gán xe yêu cầu mật khẩu
+    var showPassDialog by remember { mutableStateOf(false) }
+    var passInput by remember { mutableStateOf("") }
+    var passError by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun requirePassword(action: () -> Unit) {
+        pendingAction = action
+        passInput = ""
+        passError = false
+        showPassDialog = true
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -845,18 +857,20 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
 
                 Button(
                     onClick = {
-                        syncingWeb = true
-                        AppContainer.launch {
-                            val synced = AppContainer.vehicleRepository.pullWebVehicles()
-                            webSynced = true
-                            syncingWeb = false
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(
-                                    context,
-                                    if (synced.isNotEmpty()) "Đã đồng bộ ${synced.size} xe từ web"
-                                    else "Không có xe từ web — tạo xe trên web trước",
-                                    Toast.LENGTH_SHORT,
-                                ).show()
+                        requirePassword {
+                            syncingWeb = true
+                            AppContainer.launch {
+                                val synced = AppContainer.vehicleRepository.pullWebVehicles()
+                                webSynced = true
+                                syncingWeb = false
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(
+                                        context,
+                                        if (synced.isNotEmpty()) "Đã đồng bộ ${synced.size} xe từ web"
+                                        else "Không có xe từ web — tạo xe trên web trước",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
                             }
                         }
                     },
@@ -872,29 +886,21 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                 } else {
                     vehicles.forEach { v ->
                         val isAssigned = v.id == assignedId
+                        val assignAction: () -> Unit = {
+                            assignedId = v.id
+                            prefs.setAssignedVehicleId(v.id)
+                            AppContainer.launch {
+                                AppContainer.vehicleRepository.setActive(v.id)
+                                AppContainer.odometerEngine.adoptVehicleOdometer()
+                                AppContainer.vehicleRepository.registerDeviceWithVehicle(v.id, prefs.getDeviceName() ?: "Tracker")
+                            }
+                            Toast.makeText(context, "Đã gán: ${v.displayName()}", Toast.LENGTH_SHORT).show()
+                        }
                         Row(
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                assignedId = v.id
-                                prefs.setAssignedVehicleId(v.id)
-                                AppContainer.launch {
-                                    AppContainer.vehicleRepository.setActive(v.id)
-                                    AppContainer.odometerEngine.adoptVehicleOdometer()
-                                    AppContainer.vehicleRepository.registerDeviceWithVehicle(v.id, prefs.getDeviceName() ?: "Tracker")
-                                }
-                                Toast.makeText(context, "Đã gán: ${v.displayName()}", Toast.LENGTH_SHORT).show()
-                            },
+                            modifier = Modifier.fillMaxWidth().clickable { requirePassword(assignAction) },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            RadioButton(selected = isAssigned, onClick = {
-                                assignedId = v.id
-                                prefs.setAssignedVehicleId(v.id)
-                                AppContainer.launch {
-                                    AppContainer.vehicleRepository.setActive(v.id)
-                                    AppContainer.odometerEngine.adoptVehicleOdometer()
-                                    AppContainer.vehicleRepository.registerDeviceWithVehicle(v.id, prefs.getDeviceName() ?: "Tracker")
-                                }
-                                Toast.makeText(context, "Đã gán: ${v.displayName()}", Toast.LENGTH_SHORT).show()
-                            })
+                            RadioButton(selected = isAssigned, onClick = { requirePassword(assignAction) })
                             Spacer(modifier = Modifier.width(4.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
@@ -924,6 +930,46 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                     fontSize = 11.sp,
                 )
             }
+        }
+
+        if (showPassDialog) {
+            AlertDialog(
+                onDismissRequest = { showPassDialog = false },
+                title = { Text("Mật khẩu", color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) },
+                text = {
+                    Column {
+                        Text("Nhập mật khẩu để đồng bộ xe / gán xe", color = colors.textSecondary, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = passInput,
+                            onValueChange = { passInput = it; passError = false },
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            isError = passError,
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        if (passError) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Sai mật khẩu — thử lại", color = colors.red, fontSize = 11.sp)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (passInput == "0075") {
+                            showPassDialog = false
+                            pendingAction?.invoke()
+                            pendingAction = null
+                        } else {
+                            passError = true
+                        }
+                    }) { Text("OK", color = colors.cyan, fontWeight = FontWeight.Bold) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPassDialog = false }) { Text("HỦY", color = colors.textSecondary) }
+                },
+                containerColor = colors.surface,
+            )
         }
     }
 }

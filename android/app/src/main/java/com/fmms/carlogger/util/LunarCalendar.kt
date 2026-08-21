@@ -201,4 +201,80 @@ object LunarCalendar {
             else -> "Thứ bảy"
         }
     }
+
+    // ------------------------------------------------------------------
+    // VẠN NIÊN — Can-Chi ngày/tháng, Trực, Hoàng đạo/Hắc đạo, Giờ HD, Tuổi xung
+    // Công thức chuẩn: Can-Chi ngày từ Julian Day (Hồ Ngọc Đức);
+    // Trực & sao ngày theo chu kỳ 12 chi khởi từ chi của tháng âm lịch;
+    // giờ hoàng đạo theo tương quan chi giờ - chi ngày.
+    // ------------------------------------------------------------------
+
+    data class VanNien(
+        val dayCanChi: String,
+        val monthCanChi: String,
+        val truc: String,
+        val trucNote: String,
+        val isHoangDaoDay: Boolean,
+        val dayStar: String,
+        val goodHours: List<String>,
+        val xungChi: String,
+    )
+
+    private val TRUC_NAMES = listOf("Kiến", "Trừ", "Mãn", "Bình", "Định", "Chấp", "Phá", "Nguy", "Thành", "Thu", "Khai", "Bế")
+    private val STAR_NAMES = listOf(
+        "Thanh Long", "Minh Đường", "Thiên Hình", "Chu Tước",
+        "Kim Quỹ", "Kim Đường", "Bạch Hổ", "Ngọc Đường",
+        "Thiên Lao", "Huyền Vũ", "Tư Mệnh", "Câu Trận",
+    )
+    private val HOANG_DAO_IDX = setOf(0, 1, 4, 5, 8, 9)
+
+    /** Vạn niên của một ngày dương lịch. */
+    fun vanNien(dd: Int, mm: Int, yy: Int): VanNien {
+        val jdn = jdFromDate(dd, mm, yy)
+        val dCan = ((jdn + 9) % 10 + 10) % 10
+        val dChi = ((jdn + 1) % 12 + 12) % 12
+
+        val lunar = convert(dd, mm, yy)
+        val yCan = ((lunar.year - 4) % 10 + 10) % 10
+        val mCan = (((yCan % 5) * 2 + 2 + (lunar.month - 1)) % 10 + 10) % 10
+        val mChi = ((lunar.month + 1) % 12 + 12) % 12
+
+        val trucIdx = ((dChi - mChi) % 12 + 12) % 12
+        val starIdx = ((dChi - mChi) % 12 + 12) % 12
+        val goodHours = (0..11)
+            .filter { (((it - dChi) % 12 + 12) % 12) in HOANG_DAO_IDX }
+            .map { "${DIA_CHI[it]} (${hourRange(it)})" }
+
+        return VanNien(
+            dayCanChi = "${THIEN_CAN[dCan]} ${DIA_CHI[dChi]}",
+            monthCanChi = "${THIEN_CAN[mCan]} ${DIA_CHI[mChi]}",
+            truc = TRUC_NAMES[trucIdx],
+            trucNote = trucNote(trucIdx),
+            isHoangDaoDay = starIdx in HOANG_DAO_IDX,
+            dayStar = STAR_NAMES[starIdx],
+            goodHours = goodHours,
+            xungChi = DIA_CHI[(dChi + 6) % 12],
+        )
+    }
+
+    private fun hourRange(chi: Int): String = when (chi) {
+        0 -> "23h-01h"; 1 -> "01h-03h"; 2 -> "03h-05h"; 3 -> "05h-07h"
+        4 -> "07h-09h"; 5 -> "09h-11h"; 6 -> "11h-13h"; 7 -> "13h-15h"
+        8 -> "15h-17h"; 9 -> "17h-19h"; 10 -> "19h-21h"; else -> "21h-23h"
+    }
+
+    private fun trucNote(i: Int): String = when (i) {
+        0 -> "Thuận lợi khởi sự, khai trương, xuất hành"
+        1 -> "Tốt chữa bệnh, dọn dẹp, loại bỏ cái cũ"
+        2 -> "Tốt cầu tài, cúng lễ, mừng thành tựu"
+        3 -> "Ngày cân bằng, thuận hòa, việc bình thường"
+        4 -> "Tốt ký kết, ổn định, an cư"
+        5 -> "Tốt thi cử, thăng tiến, giữ chức trách"
+        6 -> "Kỵ khai đầu; chỉ nên phá dỡ, tháo cũ"
+        7 -> "Kỵ xuất hành, khởi sự; đề phòng rủi ro"
+        8 -> "Tốt cưới hỏi, hoàn thành, chôn cất"
+        9 -> "Tốt thu hoạch, tích trữ, mua bất động sản"
+        10 -> "Tốt khai trương, mở cửa, gặp gỡ"
+        else -> "Nên bảo quản, đóng cửa, tránh phiêu lưu"
+    }
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MaxOBD</string>
+    <string name="rail_unpinned">Đã bỏ ghim — tự ẩn sau 6 giây</string>
+    <string name="rail_pinned">Đã ghim thanh điều hướng</string>
+    <string name="rail_hidden">Đã ẩn — vuốt từ mép trái để mở lại</string>
+</resources>

@@ -7,15 +7,37 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -38,6 +60,7 @@ import com.fmms.carlogger.ui.theme.FmmsTheme
 import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import com.fmms.carlogger.ui.theme.ThemeMode
 import com.fmms.carlogger.ui.trips.TripsScreen
+import com.fmms.carlogger.ui.weather.WeatherScreen
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Route
@@ -119,63 +142,195 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
     val colors = LocalFmmsColors.current
     val strings = LocalStrings.current
 
-    Scaffold(
-        containerColor = colors.background,
-        bottomBar = {
-            NavigationBar(containerColor = colors.surface) {
-                destinations.forEach { dest ->
-                    val label = when (dest.label) {
-                        "home" -> strings.home
-                        "trips" -> strings.trips
-                        "fuel" -> strings.fuel
-                        "stats" -> strings.stats
-                        else -> strings.more
-                    }
-                    NavigationBarItem(
-                        selected = currentRoute == dest.route,
-                        onClick = {
-                            navController.navigate(dest.route) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
+    fun labelOf(dest: TopLevelDestination): String = when (dest.label) {
+        "home" -> strings.home
+        "trips" -> strings.trips
+        "fuel" -> strings.fuel
+        "stats" -> strings.stats
+        else -> strings.more
+    }
+
+    // Bấm icon điều hướng khi đang mở màn phụ (tốc độ / lịch / thời tiết)
+    // sẽ tự đóng màn phụ và chuyển tới đích.
+    fun goTo(dest: TopLevelDestination) {
+        navController.navigate(dest.route) {
+            popUpTo(navController.graph.startDestinationId) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    androidx.compose.foundation.layout.BoxWithConstraints {
+        val isLandscape = maxWidth >= 560.dp
+
+        if (isLandscape) {
+            // MÀN NGANG / TABLET: thanh điều hướng DỌC bên trái, có chế độ ghim / tự ẩn
+            val context = androidx.compose.ui.platform.LocalContext.current
+            var railPinned by rememberSaveable { mutableStateOf(true) }
+            var railTempOpen by rememberSaveable { mutableStateOf(false) }
+
+            fun railToast(msg: String) =
+                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+
+            LaunchedEffect(railPinned, railTempOpen) {
+                android.util.Log.d("FmmsRail", "state pinned=$railPinned tempOpen=$railTempOpen")
+                if (!railPinned && railTempOpen) {
+                    kotlinx.coroutines.delay(6000)
+                    railTempOpen = false
+                    railToast(context.getString(com.fmms.carlogger.R.string.rail_hidden))
+                }
+            }
+
+            Row(modifier = Modifier.fillMaxSize().background(colors.background)) {
+                if (railPinned || railTempOpen) {
+                    Box {
+                        NavigationRail(containerColor = colors.surface) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            destinations.forEach { dest ->
+                                NavigationRailItem(
+                                    selected = currentRoute == dest.route,
+                                    onClick = { goTo(dest) },
+                                    icon = { Icon(dest.icon, contentDescription = labelOf(dest)) },
+                                    label = { Text(labelOf(dest), style = MaterialTheme.typography.labelSmall) },
+                                )
                             }
-                        },
-                        icon = { Icon(dest.icon, contentDescription = label) },
-                        label = {
-                            Text(label, style = MaterialTheme.typography.labelMedium)
-                        },
-                    )
+                        }
+                        // Chấm nhỏ ở đáy rail (vùng bấm 40dp): đặc cyan = ghim, rỗng = tự ẩn
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 6.dp)
+                                .size(40.dp)
+                                .clickable {
+                                    android.util.Log.d("FmmsRail", "dot tapped, was pinned=$railPinned")
+                                    if (railPinned) {
+                                        railPinned = false
+                                        railTempOpen = true
+                                        railToast(context.getString(com.fmms.carlogger.R.string.rail_unpinned))
+                                    } else {
+                                        railPinned = true
+                                        railTempOpen = false
+                                        railToast(context.getString(com.fmms.carlogger.R.string.rail_pinned))
+                                    }
+                                },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (railPinned) colors.cyan.copy(alpha = 0.9f)
+                                        else Color.Transparent
+                                    )
+                                    .then(
+                                        if (railPinned) Modifier
+                                        else Modifier.border(1.5.dp, colors.cyan.copy(alpha = 0.7f), CircleShape)
+                                    ),
+                            )
+                        }
+                    }
+                } else {
+                    // Đã tự ẩn — KHÔNG hiển thị gì; vuốt từ mép trái để mở lại
+                    Box(modifier = Modifier.width(0.dp))
+                }
+                Box(modifier = Modifier.weight(1f)) {
+                    FmmsNavHost(navController = navController, vm = vm)
+                    // Dải cảm ứng vô hình ở mép trái màn hình: vuốt sang phải mở rail
+                    if (!(railPinned || railTempOpen)) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .fillMaxHeight()
+                                .width(28.dp)
+                                .pointerInput(Unit) {
+                                    var accumulated = 0f
+                                    detectHorizontalDragGestures(
+                                        onDragStart = { accumulated = 0f },
+                                        onDragEnd = { accumulated = 0f },
+                                        onDragCancel = { accumulated = 0f },
+                                    ) { _, dragAmount ->
+                                        accumulated += dragAmount
+                                        if (accumulated > 90f) {
+                                            android.util.Log.d("FmmsRail", "edge swipe open")
+                                            railTempOpen = true
+                                            accumulated = 0f
+                                        }
+                                    }
+                                },
+                        )
+                    }
                 }
             }
-        },
-    ) { padding ->
-        androidx.compose.foundation.layout.Box(
-            modifier = androidx.compose.ui.Modifier
-                .padding(padding)
-                .background(colors.background)
-        ) {
-            NavHost(navController = navController, startDestination = "home") {
-                composable("home") { DashboardScreen(vm = vm, onAddDevice = {
-                    navController.navigate("connection") { launchSingleTop = true }
-                }, onSpeedometer = {
-                    navController.navigate("speedometer") { launchSingleTop = true }
-                }, onLunar = {
-                    navController.navigate("lunar_calendar") { launchSingleTop = true }
-                }) }
-                composable("trips") { TripsScreen() }
-                composable("fuel") { FuelScreen() }
-                composable("stats") { StatsScreen() }
-                composable("more") { MoreScreen(vm = vm) }
-                composable("connection") {
-                    ConnectionScreen(onBack = { navController.popBackStack() })
-                }
-                composable("speedometer") {
-                    SpeedometerScreen(vm = vm, onBack = { navController.popBackStack() })
-                }
-                composable("lunar_calendar") {
-                    LunarCalendarScreen(onBack = { navController.popBackStack() })
+        } else {
+            // MÀN DỌC: thanh điều hướng dưới, có chữ
+            Scaffold(
+                containerColor = colors.background,
+                bottomBar = {
+                    NavigationBar(containerColor = colors.surface) {
+                        destinations.forEach { dest ->
+                            NavigationBarItem(
+                                selected = currentRoute == dest.route,
+                                onClick = { goTo(dest) },
+                                icon = { Icon(dest.icon, contentDescription = labelOf(dest)) },
+                                label = { Text(labelOf(dest), style = MaterialTheme.typography.labelMedium) },
+                            )
+                        }
+                    }
+                },
+            ) { padding ->
+                androidx.compose.foundation.layout.Box(
+                    modifier = androidx.compose.ui.Modifier
+                        .padding(padding)
+                        .background(colors.background)
+                ) {
+                    FmmsNavHost(navController = navController, vm = vm)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FmmsNavHost(navController: androidx.navigation.NavHostController, vm: DashboardViewModel) {
+    NavHost(navController = navController, startDestination = "home") {
+        composable("home") { DashboardScreen(vm = vm, onAddDevice = {
+            navController.navigate("connection") { launchSingleTop = true }
+        }, onSpeedometer = {
+            navController.navigate("speedometer") { launchSingleTop = true }
+        }, onLunar = {
+            navController.navigate("lunar_calendar") { launchSingleTop = true }
+        }, onWeather = {
+            navController.navigate("weather") { launchSingleTop = true }
+        }, onOpenDate = { y, m, d ->
+            navController.navigate("lunar_calendar?y=$y&m=$m&d=$d") { launchSingleTop = true }
+        }) }
+        composable("trips") { TripsScreen() }
+        composable("fuel") { FuelScreen() }
+        composable("stats") { StatsScreen() }
+        composable("more") { MoreScreen(vm = vm) }
+        composable("connection") {
+            ConnectionScreen(onBack = { navController.popBackStack() })
+        }
+        composable("speedometer") {
+            SpeedometerScreen(vm = vm)
+        }
+        composable(
+            route = "lunar_calendar?y={y}&m={m}&d={d}",
+            arguments = listOf(
+                androidx.navigation.navArgument("y") { type = androidx.navigation.NavType.IntType; defaultValue = 0 },
+                androidx.navigation.navArgument("m") { type = androidx.navigation.NavType.IntType; defaultValue = 0 },
+                androidx.navigation.navArgument("d") { type = androidx.navigation.NavType.IntType; defaultValue = 0 },
+            ),
+        ) { entry ->
+            LunarCalendarScreen(
+                initialY = entry.arguments?.getInt("y") ?: 0,
+                initialM = entry.arguments?.getInt("m") ?: 0,
+                initialD = entry.arguments?.getInt("d") ?: 0,
+            )
+        }
+        composable("weather") {
+            WeatherScreen(vm = vm)
         }
     }
 }

@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Mazda2 Logger</string>
+    <string name="app_name">MaxOBD</string>
+    <string name="rail_unpinned">Unpinned — auto-hides in 6s</string>
+    <string name="rail_pinned">Navigation bar pinned</string>
+    <string name="rail_hidden">Hidden — swipe from left edge to reopen</string>
 </resources>

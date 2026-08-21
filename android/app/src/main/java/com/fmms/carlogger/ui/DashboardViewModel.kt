@@ -28,6 +28,9 @@ data class DashboardUiState(
     val elmInfo: String? = null,
     val vehicleName: String = "XE CỦA TÔI",
     val vehicleSubtitle: String = "",
+    val vehicleImageUrl: String? = null,
+    val gpsAvailable: Boolean = false,
+    val elmProtocol: String = "",
     val deviceMode: String = "obd",
 )
 
@@ -87,13 +90,14 @@ class DashboardViewModel : ViewModel() {
                     it.protocol?.takeIf { p -> p.isNotBlank() },
                 ).joinToString(" • ")
             },
+            elmProtocol = c.obdManager.elms.info.protocol?.takeIf { it.isNotBlank() } ?: "",
+            gpsAvailable = live.latitude != null && live.longitude != null,
             vehicleName = active?.displayName() ?: "XE CỦA TÔI",
-            vehicleSubtitle = active?.let {
-                listOfNotNull(
-                    it.licensePlate.takeIf { p -> p.isNotBlank() },
-                    it.year.toString(),
-                ).joinToString(" • ")
-            } ?: "",
+            vehicleSubtitle = active?.licensePlate
+                ?.trim()
+                ?.takeIf { it.isNotBlank() && it != "-" && it != "—" }
+                ?: "",
+            vehicleImageUrl = active?.imageUrl,
             deviceMode = deviceMode,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardUiState())

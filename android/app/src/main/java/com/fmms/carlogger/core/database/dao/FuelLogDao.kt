@@ -34,5 +34,13 @@ interface FuelLogDao {
     )
     suspend fun getTotalsBetween(vehicleId: String, from: Long, to: Long): List<FuelTotalsRow>
 
+    @Query(
+        """
+        SELECT * FROM fuel_logs WHERE vehicle_id = :vehicleId AND timestamp >= :from AND timestamp <= :to
+        ORDER BY timestamp ASC
+        """
+    )
+    suspend fun getBetween(vehicleId: String, from: Long, to: Long): List<FuelLogEntity>
+
     data class FuelTotalsRow(val liters: Double, val cost: Double)
 }

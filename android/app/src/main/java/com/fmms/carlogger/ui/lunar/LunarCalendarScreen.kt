@@ -34,16 +34,19 @@ private const val TAG = "LunarCal"
  *  Layout tự thích ứng: dọc = 1 cột (lịch trên, chi tiết dưới); ngang/tablet = 2 cột song song.
  *  Toàn bộ nội dung luôn cuộn được khi không đủ chỗ. */
 @Composable
-fun LunarCalendarScreen(onBack: () -> Unit) {
+fun LunarCalendarScreen(initialY: Int = 0, initialM: Int = 0, initialD: Int = 0) {
     val colors = LocalFmmsColors.current
     val now = remember { Calendar.getInstance() }
     val todaySolar = now.get(Calendar.DAY_OF_MONTH)
 
-    var year by rememberSaveable { mutableIntStateOf(now.get(Calendar.YEAR)) }
-    var month by rememberSaveable { mutableIntStateOf(now.get(Calendar.MONTH) + 1) }
+    // Mở từ Dashboard với ngày cụ thể (bấm vào ô ngày dương/âm), nếu không thì hôm nay
+    val hasInitial = initialY > 0 && initialM in 1..12 && initialD in 1..31
+
+    var year by rememberSaveable { mutableIntStateOf(if (hasInitial) initialY else now.get(Calendar.YEAR)) }
+    var month by rememberSaveable { mutableIntStateOf(if (hasInitial) initialM else now.get(Calendar.MONTH) + 1) }
     var selY by rememberSaveable { mutableIntStateOf(year) }
     var selM by rememberSaveable { mutableIntStateOf(month) }
-    var selD by rememberSaveable { mutableIntStateOf(todaySolar) }
+    var selD by rememberSaveable { mutableIntStateOf(if (hasInitial) initialD else todaySolar) }
 
     val grid = remember(year, month) { LunarCalendar.monthGrid(year, month) }
     val todayLunar = remember { LunarCalendar.today() }
@@ -78,14 +81,21 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
                         AppContainer.tripRepository.getBetween(vehicle.id, from, to)
                     }.onFailure { Log.w(TAG, "getBetween(${vehicle.id}) failed", it) }
                         .getOrElse { emptyList() }
-                    Log.d(TAG, "vehicle ${vehicle.id.take(8)} trips=${trips.size}")
-                    if (trips.isEmpty()) null else VehicleDayStats(
+                    val fuels = runCatching {
+                        AppContainer.fuelLogRepository.getBetween(vehicle.id, from, to)
+                    }.onFailure { Log.w(TAG, "fuel getBetween(${vehicle.id}) failed", it) }
+                        .getOrElse { emptyList() }
+                    Log.d(TAG, "vehicle ${vehicle.id.take(8)} trips=${trips.size} fuels=${fuels.size}")
+                    if (trips.isEmpty() && fuels.isEmpty()) null else VehicleDayStats(
                         vehicleId = vehicle.id,
                         vehicleName = vehicle.name.ifBlank { vehicle.licensePlate.ifBlank { "Xe ${vehicle.id.take(6)}" } },
                         tripCount = trips.size,
                         distanceKm = trips.sumOf { it.distanceKm },
                         durationSeconds = trips.sumOf { it.durationSeconds },
                         maxSpeedKmh = trips.mapNotNull { it.maxSpeedKmh }.maxOrNull() ?: 0.0,
+                        fuelCount = fuels.size,
+                        fuelLiters = fuels.sumOf { it.fuelLiters },
+                        fuelCost = fuels.sumOf { it.totalCost ?: 0.0 },
                     )
                 }.also { Log.d(TAG, "result rows=${it.size}") }
             } catch (e: Exception) {
@@ -114,7 +124,6 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     HeaderRow(now, year, month, todaySolar,
-                        onBack = onBack,
                         onPrev = { month -= 1; if (month == 0) { month = 12; year -= 1 }; selY = year; selM = month; selD = 1 },
                         onNext = { month += 1; if (month == 13) { month = 1; year += 1 }; selY = year; selM = month; selD = 1 },
                         onToday = { year = now.get(Calendar.YEAR); month = now.get(Calendar.MONTH) + 1; selY = year; selM = month; selD = todaySolar },
@@ -130,6 +139,8 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
                     verticalArrangement = Arrangement.Top,
                 ) {
                     DayDetailCard(selY, selM, selD, loading, errorMsg, statsByVehicle, colors)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    VanNienCard(selY, selM, selD, colors)
                 }
             }
         } else {
@@ -141,7 +152,6 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
                     .padding(16.dp),
             ) {
                 HeaderRow(now, year, month, todaySolar,
-                    onBack = onBack,
                     onPrev = { month -= 1; if (month == 0) { month = 12; year -= 1 }; selY = year; selM = month; selD = 1 },
                     onNext = { month += 1; if (month == 13) { month = 1; year += 1 }; selY = year; selM = month; selD = 1 },
                     onToday = { year = now.get(Calendar.YEAR); month = now.get(Calendar.MONTH) + 1; selY = year; selM = month; selD = todaySolar },
@@ -152,6 +162,8 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
                 MonthGrid(grid, year, month, selY, selM, selD, todaySolar, now, colors) { d -> selD = d }
                 Spacer(modifier = Modifier.height(16.dp))
                 DayDetailCard(selY, selM, selD, loading, errorMsg, statsByVehicle, colors)
+                Spacer(modifier = Modifier.height(12.dp))
+                VanNienCard(selY, selM, selD, colors)
             }
         }
     }
@@ -163,7 +175,6 @@ private fun HeaderRow(
     year: Int,
     month: Int,
     todaySolar: Int,
-    onBack: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onToday: () -> Unit,
@@ -172,14 +183,21 @@ private fun HeaderRow(
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
     ) {
-        IconButton(onClick = onBack) { Text("✕", color = colors.textPrimary, fontSize = 20.sp) }
-        Spacer(modifier = Modifier.weight(1f))
         TextButton(onClick = onPrev) { Text("◀", color = colors.cyan, fontSize = 18.sp) }
-        Text("HÔM NAY", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.width(4.dp))
+        // Nút HÔM NAY — bấm để quay về tháng hiện tại và chọn ngày hôm nay
+        TextButton(onClick = onToday) {
+            Text(
+                "HÔM NAY",
+                color = colors.cyan,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Black,
+            )
+        }
+        Spacer(modifier = Modifier.width(4.dp))
         TextButton(onClick = onNext) { Text("▶", color = colors.cyan, fontSize = 18.sp) }
-        Spacer(modifier = Modifier.weight(1f))
-        IconButton(onClick = onToday) { Text("↻", color = colors.cyan, fontSize = 18.sp) }
     }
 }
 
@@ -272,6 +290,9 @@ private data class VehicleDayStats(
     val distanceKm: Double,
     val durationSeconds: Long,
     val maxSpeedKmh: Double,
+    val fuelCount: Int = 0,
+    val fuelLiters: Double = 0.0,
+    val fuelCost: Double = 0.0,
 )
 
 @Composable
@@ -378,13 +399,83 @@ private fun DayDetailCard(
                     color = colors.amber,
                     fontSize = 12.sp,
                 )
-                statsList.isEmpty() -> Text("Không có hành trình trong ngày này.", color = colors.textSecondary, fontSize = 12.sp)
+                statsList.isEmpty() -> Text("Không có hành trình / đổ xăng trong ngày này.", color = colors.textSecondary, fontSize = 12.sp)
                 else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     statsList.forEach { s ->
                         VehicleDayRow(stats = s, colors = colors)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun VanNienCard(selY: Int, selM: Int, selD: Int, colors: FmmsColors) {
+    val vn = remember(selY, selM, selD) { LunarCalendar.vanNien(selD, selM, selY) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+            Text(
+                "VẠN NIÊN",
+                color = colors.textSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("NGÀY", color = colors.textSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text(vn.dayCanChi, color = colors.cyan, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("THÁNG", color = colors.textSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text(vn.monthCanChi, color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("TRỰC", color = colors.textSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text(vn.truc, color = colors.amber, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(vn.trucNote, color = colors.textSecondary, fontSize = 11.sp)
+
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = colors.divider)
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (vn.isHoangDaoDay) "NGÀY HOÀNG ĐẠO" else "NGÀY HẮC ĐẠO",
+                    color = if (vn.isHoangDaoDay) Color(0xFF34D399) else Color(0xFFF87171),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Black,
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sao: ${vn.dayStar}", color = colors.textPrimary, fontSize = 12.sp)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("GIỜ HOÀNG ĐẠO", color = colors.textSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                vn.goodHours.joinToString("  •  "),
+                color = Color(0xFF34D399),
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Tuổi xung: ${vn.xungChi}",
+                color = colors.amber,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }
@@ -407,6 +498,18 @@ private fun VehicleDayRow(stats: VehicleDayStats, colors: FmmsColors) {
                 DayCell("QUÃNG ĐƯỜNG", String.format(Locale.US, "%.1f km", stats.distanceKm), colors.cyan)
                 DayCell("THỜI GIAN", dayDuration(stats.durationSeconds), colors.textPrimary)
                 DayCell("TỐC ĐỘ MAX", if (stats.maxSpeedKmh > 0) "${stats.maxSpeedKmh.toInt()} km/h" else "—", colors.amber)
+            }
+            if (stats.fuelCount > 0) {
+                Spacer(modifier = Modifier.height(6.dp))
+                HorizontalDivider(color = colors.divider)
+                Spacer(modifier = Modifier.height(6.dp))
+                val cost = if (stats.fuelCost > 0) " • ${String.format(Locale.US, "%,.0f₫", stats.fuelCost)}" else ""
+                Text(
+                    "⛽ Đổ xăng: ${stats.fuelCount} lần • ${String.format(Locale.US, "%.1f lít", stats.fuelLiters)}$cost",
+                    color = Color(0xFF34D399),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }

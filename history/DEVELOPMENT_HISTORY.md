@@ -184,6 +184,58 @@ Chi tiết web task còn dở: xem `docs/WEB_TASKS_FOR_ANTIGRAVITY.md` và audit
   (`VehicleDayStats`: vehicleId, vehicleName, tripCount, distanceKm, durationSeconds, maxSpeedKmh)
 - Data: `VehicleRepository.getAll()` × `TripDao.getBetween(vehicleId, from, to)` — bỏ xe không có chuyến
 - Tên xe fallback: `name.ifBlank { licensePlate.ifBlank { "Xe ${id.take(6)}" } }`
+- rev31+: thêm fuelCount/fuelLiters/fuelCost vào `VehicleDayStats` — dòng "⛽ Đổ xăng: N lần • X lít • Y₫"
+  (query `FuelLogDao.getBetween`); rev32+: nhận tham số `initialY/M/D` từ Dashboard (bấm ô DƯƠNG LỊCH mở đúng ngày)
+
+### 6.5. Vạn niên (rev30) — `util/LunarCalendar.kt` + `VanNienCard`
+- `data class VanNien` + `fun vanNien(dd,mm,yy)`: ngày/tháng Can-Chi, Trực (+ghi chú), sao HD,
+  ngày HĐ/HD, giờ hoàng đạo, tuổi xung. Formulas đã verify qua ADB đối chiếu tay:
+  ngày can=(jdn+9)%10 chi=(jdn+1)%12; tháng mCan=((yCan%5)*2+2+(month-1))%10 với yCan=(lunarYear-4)%10,
+  mChi=(month+1)%12 (ngũ hổ độn nguyệt); Trực=(dayChi−monthChi+24)%12; sao HD index {0,1,4,5,8,9};
+  giờ HD theo (hourChi−dayChi)%12∈HD set; xung=chi+6
+- Card hiển thị dưới DayDetailCard cả 2 layout ngang/dọc
+
+### 6.6. Thời tiết (rev30–32) — `ui/weather/WeatherScreen.kt` + `data/repository/WeatherRepository.kt`
+- Nguồn: Open-Meteo (free, không key) — current/hourly/daily + uv_index, surface_pressure, sunrise/sunset
+- Nền gradient theo trạng thái (`weatherGradient(code,isDay)`); dải nhiệt độ 7 ngày gradient màu
+  theo thang iOS (stops 0/10/18/24/30/38/45°C), vị trí+độ rộng theo min/max tuần
+- Header: 📍 tên vị trí (Geocoder reverse: subLocality/locality/subAdminArea/adminArea, take 2)
+  + mô tả WMO văn phong tiếng Việt ("Đang nắng/Đang mưa...")
+- Card CHI TIẾT grid 3×2: UV/Gió/Độ ẩm/Áp suất/Mặt trời mọc/lặn
+
+### 6.7. Điều hướng màn ngang (rev32–33) — MainActivity `FmmsApp`
+- Landscape/tablet: NavigationRail dọc trái, portrait: bottom bar. `goTo()` dùng
+  popUpTo(startDestination)+saveState/restoreState (nav icon tự đóng màn phụ)
+- Chế độ ghim/tự ẩn: chấm nhỏ 10dp đáy rail (**vùng bấm 40dp**), đặc cyan = ghim,
+  rỗng = tự ẩn sau **6 giây**; khi ẩn: vuốt từ mép trái (Box 28dp, drag >90f) mở lại
+- Toast thông báo chuyển chế độ, string resources EN (`values/strings.xml`) + VI (`values-vi/`)
+  → ăn theo ngôn ngữ hệ thống
+
+### 6.8. Dashboard header xe (rev34–36)
+- Chỉ hiện **tên xe** + **biển số** (nếu có và ≠ "-"/"—"); ẩn năm/MAC/OBD info
+- Khi OBD CONNECTED: dòng `Biển số | Tên OBD | Protocol | Connected` (rev37)
+- Badge GPS TRACKING: chấm **nhấp nháy** xanh (có fix GPS: lat/lng ≠ null) / đỏ (mất GPS) (rev37)
+- App display name đổi thành **MaxOBD** (manifest label = @string/app_name)
+
+### 6.9. Ảnh đại diện xe từ web (rev35–36)
+- Supabase `assets.image_url` → Room v4 (migration `MIGRATION_3_4` ALTER TABLE ADD COLUMN image_url)
+  → parse trong `pullWebVehicles()` + payload sync ngược
+- UI dùng Coil AsyncImage (đã test render OK) — hiện đã BỎ khỏi header theo yêu cầu user,
+  giữ nguyên code sync/migration để dùng lại khi cần
+
+### 6.10. Khóa mật khẩu SYNC/gán xe (rev37) — MoreScreen `DeviceConfigScreen`
+- Nút "SYNC VEHICLES FROM WEB" + click gán xe (Row/RadioButton) yêu cầu dialog mật khẩu
+  (user đặt, hardcode trong MoreScreen.kt). Sai → "Sai mật khẩu — thử lại"
+- Đã test ADB: dialog hiện đúng, sai pass báo lỗi; user xác nhận pass đúng hoạt động
+
+### 6.11. Virtual odometer (fix live 2026-08-21)
+- Nguyên nhân MTB2 hiển thị 0 km: trigger migration 0004 KHÔNG tồn tại trên live
+  (fail giữa chừng ở trigger expenses) → `assets.virtual_odometer_km` không bao giờ cập nhật
+- Fix: function idempotent tính LẠI tổng từ trips (không cộng dồn) + DROP/CREATE
+  trigger_update_asset_odometer + backfill UPDATE từ SUM(trips) — user chạy SQL Editor
+- Verify: app SYNC về `MTB2 = 8.77 km` = đúng tổng trips COMPLETED có km (3.10+0.43+0.04+5.20)
+- App-side (rev30): TripEngine sub-threshold (<0.05km) gọi `completeLocalOnly`
+  (SyncQueueRepository.TripRepository) — không sync chuyến rác distance=0 nữa
 
 ---
 
@@ -254,7 +306,7 @@ ANDROID_HOME="$HOME/Library/Android/sdk" ./gradlew :app:assembleDebug -q
 cp app/build/outputs/apk/debug/app-debug.apk android/releases/FMMS_revNN.apk
 ```
 
-- Version naming: `FMMS_revNN.apk` (hiện tại tới **rev28**)
+- Version naming: `FMMS_revNN.apk` (hiện tại tới **rev37**)
 - Debug keystore ký mặc định; user sideload trực tiếp
 - ⚠️ Trước đây APK lưu ra `~/Downloads/` (rev20–27) — từ rev28 trở đi PHẢI vào `android/releases/`
 
@@ -278,22 +330,35 @@ GPS tracking, live map, trip replay, tracker device management
 - `0bd76f3` lịch click ngày + số trên vòng speedo + đồng hồ dashboard (rev27)
 - `a221b7d` per-vehicle calendar detail + OBD ATSP6 priority (rev28)
 
+**Giai đoạn 5 — rev30→rev37 (commit 2026-08-21, sau rev29):**
+- **rev30** Vạn niên đầy đủ (Can-Chi/Trực/sao/giờ HD/xung) + route Weather + GPS thật Open-Meteo
+- **rev31** Weather UV/áp suất/mọc-lặn; lịch thêm dòng ⛽ đổ xăng trong ngày; HÔM NAY thành nút;
+  Speedometer thêm panel KPI ĐỘNG CƠ • OBD; bỏ nút ✕/↻ các màn phụ
+- **rev32** Rail ngang ghim/tự ẩn/vuốt mép mở; weather nền gradient + dải nhiệt độ 7 ngày kiểu iOS
+  + tên vị trí Geocoder; bấm ô DƯƠNG LỊCH/ÂM LỊCH trên Dashboard mở lịch đúng ngày
+- **rev33** Chấm rail vùng bấm 40dp; tự ẩn 6s; Toast thông báo chuyển chế độ
+- **rev34** Toast theo ngôn ngữ hệ thống (values-vi); app đổi tên **MaxOBD**; header xe có avatar
+- **rev35** Ảnh đại diện xe từ web `assets.image_url` (Room v4 + Coil) — đã test, sau đó tạm bỏ khỏi UI
+- **rev36** Header gọn: chỉ tên xe + biển số (ẩn năm/MAC/OBD info); fix stale dex cache javac " 2.class"
+- **rev37** Chấm GPS nhấp nháy xanh/đỏ; dòng OBD info khi connected; mật khẩu khóa SYNC/gán xe
+
 ---
 
-## 10. TRẠNG THÁI HIỆN TẠI & VIỆC CẦN LÀM TIẾP
+## 10. TRẠNG THÁI HIỆN TẾ & VIỆC CẦN LÀM TIẾP
 
-### Đã hoàn tất (verified trên live)
-- ✅ Migration 0008 deploy: cột mới + index + GRANT + 2 cron jobs đăng ký (jobid 1, 2)
-- ✅ Backfill + rebuild daily_summaries sau khi fix trips ×1000 (data sạch, verified 2026-08-21)
-- ✅ Android rev28 build + push code
+### Đã hoàn tất (verified 2026-08-21)
+- ✅ rev30→rev37 build + cài + test ADB (0 crash), APK trong `android/releases/`, đã commit
+- ✅ Virtual odometer fix live: trigger + backfill, MTB2 = 8.77 km (verify qua app SYNC)
+- ✅ Cron jobs daily_summaries chạy ổn định
 
-### Đang chờ test / TODO
-1. ⏳ **User cài rev28 test OBD** với adapter mới (VIN MM7DL2SAAVW949603).
-   Nếu fail → wire BLE transport, hoặc log chi tiết AT-responses để chẩn đoán
-2. ⏳ Cron jobs mới đăng ký hôm nay — chưa qua 1 đêm chạy thật; sáng mai check
-   `SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;`
+### Đang chờ / TODO
+1. ⏳ **TPMS ZESHTECH BLE**: chưa có tài liệu giao thức quảng cáo (OEM không publish).
+   Kế hoạch rev38: thêm màn "TPMS học cảm biến" quét BLE thô (MAC/tên/RSSI/hex adv),
+   user wake sensor → bắt hex → phân tích cấu trúc byte → viết parser áp suất/nhiệt độ
+2. ⏳ OBD thật: user test adapter với Mazda2 (VIN MM7DL2SAAVW949603) — panel KPI sẵn sàng
 3. 📋 Web: các task còn dở liệt kê trong `docs/WEB_TASKS_FOR_ANTIGRAVITY.md` + audit v5.5
-4. 💡 Ý tưởng chưa làm: BLE OBD, export báo cáo, notification bảo dưỡng...
+4. 💡 Ý tưởng chưa làm: BLE OBD transport, export báo cáo, notification bảo dưỡng,
+   hiển thị lại avatar xe từ image_url khi user muốn
 
 ---
 

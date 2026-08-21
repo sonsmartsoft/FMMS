@@ -1,9 +1,19 @@
 package com.fmms.carlogger.ui.dashboard
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -11,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
@@ -35,13 +46,15 @@ fun DashboardScreen(
     onAddDevice: () -> Unit = {},
     onSpeedometer: () -> Unit = {},
     onLunar: () -> Unit = {},
+    onOpenDate: (Int, Int, Int) -> Unit = { _, _, _ -> },
+    onWeather: () -> Unit = {},
 ) {
     val state by vm.uiState.collectAsStateWithLifecycle()
-    DashboardContent(state = state, onAddDevice = onAddDevice, onSpeedometer = onSpeedometer, onLunar = onLunar)
+    DashboardContent(state = state, onAddDevice = onAddDevice, onSpeedometer = onSpeedometer, onLunar = onLunar, onWeather = onWeather, onOpenDate = onOpenDate)
 }
 
 @Composable
-private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit, onSpeedometer: () -> Unit, onLunar: () -> Unit) {
+private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit, onSpeedometer: () -> Unit, onLunar: () -> Unit, onWeather: () -> Unit, onOpenDate: (Int, Int, Int) -> Unit) {
     val colors = LocalFmmsColors.current
     val strings = LocalStrings.current
     val t = state.telemetry
@@ -69,23 +82,24 @@ private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit, o
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                 )
-                Text(
-                    text = state.vehicleSubtitle.ifBlank { "${state.obdName ?: "OBD-II ELM327"} • ${state.elmInfo ?: strings.notConnected}" },
-                    color = colors.textSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                )
-                if (state.hasObdMac && state.obdMac != null) {
+                val infoLine = listOfNotNull(
+                    state.vehicleSubtitle.takeIf { it.isNotBlank() },
+                    state.obdName?.trim()?.takeIf { connected && it.isNotEmpty() },
+                    state.elmProtocol.trim().takeIf { connected && it.isNotEmpty() },
+                    strings.obdConnected.takeIf { connected },
+                ).joinToString("   |   ")
+                if (infoLine.isNotBlank()) {
                     Text(
-                        text = state.obdMac!!,
+                        text = infoLine,
                         color = colors.textSecondary,
-                        fontSize = 10.sp,
+                        fontSize = 12.sp,
+                        maxLines = 1,
                     )
                 }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                StatusBadge(connected, conn, state.deviceMode, strings)
+                StatusBadge(connected, conn, state.deviceMode, strings, state.gpsAvailable)
                 if (!state.hasObdMac && state.deviceMode == "obd") {
                     Surface(
                         color = colors.amber.copy(alpha = 0.15f),
@@ -127,6 +141,19 @@ private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit, o
                         fontWeight = FontWeight.Bold,
                     )
                 }
+                Surface(
+                    color = colors.surface,
+                    shape = RoundedCornerShape(20.dp),
+                    onClick = onWeather,
+                ) {
+                    Text(
+                        text = "⛅",
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                        color = colors.cyan,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
 
@@ -134,16 +161,16 @@ private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit, o
         BoxWithConstraints {
             val narrow = maxWidth < 560.dp
             if (narrow) {
-                NarrowLayout(state, colors, connected, conn, strings)
+                NarrowLayout(state, colors, connected, conn, strings, onOpenDate)
             } else {
-                WideLayout(state, colors, connected, conn, strings)
+                WideLayout(state, colors, connected, conn, strings, onOpenDate)
             }
         }
     }
 }
 
 @Composable
-private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.theme.FmmsColors, connected: Boolean, conn: OBDConnectionState, strings: FmmsStrings) {
+private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.theme.FmmsColors, connected: Boolean, conn: OBDConnectionState, strings: FmmsStrings, onOpenDate: (Int, Int, Int) -> Unit = { _, _, _ -> }) {
     val t = state.telemetry
 
     // IMPORTANT: siblings of a Box overlap — this must be a single Column so the
@@ -211,8 +238,6 @@ private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.th
             }
         }
 
-        DateClockCard(colors = colors)
-
         // Gauges grid
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -239,11 +264,13 @@ private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.th
                 maxValue = 16f, currentValue = t.batteryVoltage?.toFloat() ?: 0f,
             )
         }
+
+        DateClockCard(colors = colors, onOpenDate = onOpenDate)
     }
 }
 
 @Composable
-private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.theme.FmmsColors, connected: Boolean, conn: OBDConnectionState, strings: FmmsStrings) {
+private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.theme.FmmsColors, connected: Boolean, conn: OBDConnectionState, strings: FmmsStrings, onOpenDate: (Int, Int, Int) -> Unit = { _, _, _ -> }) {
     val t = state.telemetry
 
     Column(
@@ -310,8 +337,6 @@ private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.
             }
         }
 
-        DateClockCard(colors = colors)
-
         // Gauges 2x2
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -343,26 +368,41 @@ private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.
                 maxValue = 16f, currentValue = t.batteryVoltage?.toFloat() ?: 0f,
             )
         }
+
+        DateClockCard(colors = colors, onOpenDate = onOpenDate)
     }
 }
 
 @Composable
-private fun StatusBadge(connected: Boolean, conn: OBDConnectionState, deviceMode: String, strings: FmmsStrings) {
+private fun StatusBadge(connected: Boolean, conn: OBDConnectionState, deviceMode: String, strings: FmmsStrings, gpsAvailable: Boolean) {
     val colors = LocalFmmsColors.current
     val (color, text) = when {
-        deviceMode == "gps" -> colors.emerald to strings.gpsTracking
+        deviceMode == "gps" -> if (gpsAvailable) colors.emerald to strings.gpsTracking else colors.red to strings.gpsTracking
         conn == OBDConnectionState.RECONNECTING -> colors.red to strings.obdReconnecting
         conn == OBDConnectionState.SCANNING -> colors.amber to strings.scanning
         connected -> colors.emerald to strings.obdConnected
         conn == OBDConnectionState.ERROR -> colors.red to strings.obdError
         else -> colors.textSecondary to strings.obdDisconnected
     }
+    // Chấm nhấp nháy ở chế độ GPS: xanh = có fix, đỏ = mất tín hiệu
+    val dotAlpha = if (deviceMode == "gps") {
+        val transition = rememberInfiniteTransition(label = "gpsDot")
+        transition.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(700, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "gpsDotAlpha",
+        ).value
+    } else 1f
     Surface(color = color.copy(alpha = 0.2f), shape = RoundedCornerShape(20.dp)) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(modifier = Modifier.size(8.dp).background(color, shape = RoundedCornerShape(50)))
+            Box(modifier = Modifier.size(8.dp).background(color.copy(alpha = dotAlpha), shape = RoundedCornerShape(50)))
             Spacer(modifier = Modifier.width(6.dp))
             Text(text = text, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
@@ -473,9 +513,13 @@ private fun Long.toTime(): String {
     return if (h > 0) String.format(Locale.US, "%dh %02dm", h, m) else String.format(Locale.US, "%02d:%02d", m, sec)
 }
 
-/** Đồng hồ + ngày dương lịch + âm lịch hiện tại (chạy thời gian thực). */
+/** Đồng hồ + ngày dương lịch + âm lịch hiện tại (chạy thời gian thực).
+ *  Bấm vào ô DƯƠNG LỊCH hoặc ÂM LỊCH sẽ mở màn lịch âm đúng ngày đó. */
 @Composable
-private fun DateClockCard(colors: com.fmms.carlogger.ui.theme.FmmsColors) {
+private fun DateClockCard(
+    colors: com.fmms.carlogger.ui.theme.FmmsColors,
+    onOpenDate: (Int, Int, Int) -> Unit = { _, _, _ -> },
+) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -513,6 +557,7 @@ private fun DateClockCard(colors: com.fmms.carlogger.ui.theme.FmmsColors) {
                 value = String.format(Locale.US, "%02d/%02d/%04d", d, m, y),
                 color = colors.textPrimary,
                 sub = LunarCalendar.weekdayVi(d, m, y),
+                onClick = { onOpenDate(y, m, d) },
             )
             VerticalDivider(modifier = Modifier.height(40.dp).width(1.dp), color = colors.divider)
             ClockCell(
@@ -520,15 +565,19 @@ private fun DateClockCard(colors: com.fmms.carlogger.ui.theme.FmmsColors) {
                 value = LunarCalendar.lunarDayLabel(lunar) + " " + LunarCalendar.lunarMonthLabel(lunar),
                 color = colors.amber,
                 sub = "năm ${LunarCalendar.canChiYear(lunar.year)}",
+                onClick = { onOpenDate(y, m, d) },
             )
         }
     }
 }
 
 @Composable
-private fun ClockCell(label: String, value: String, color: Color, sub: String? = null) {
+private fun ClockCell(label: String, value: String, color: Color, sub: String? = null, onClick: (() -> Unit)? = null) {
     val colors = LocalFmmsColors.current
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
+    ) {
         Text(label, color = colors.textSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(2.dp))
         Text(value, color = color, fontSize = 17.sp, fontWeight = FontWeight.Black)

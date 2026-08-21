@@ -151,6 +151,7 @@ class VehicleRepository(
                 fuelType = o.optString("fuel_type").takeIf { it.isNotBlank() } ?: "",
                 tankCapacityLiters = o.optDouble("tank_capacity_liters", 0.0),
                 odometerKm = o.optDouble("odometer_km", 0.0),
+                imageUrl = o.optString("image_url").takeIf { it.isNotBlank() },
                 active = false,
                 createdAt = now,
                 updatedAt = now,
@@ -248,6 +249,7 @@ class VehicleRepository(
             put("fuel_type", v.fuelType)
             put("tank_capacity_liters", v.tankCapacityLiters)
             put("odometer_km", v.odometerKm)
+            put("image_url", v.imageUrl ?: JSONObject.NULL)
             put("active", v.active)
             put("created_at", iso(v.createdAt))
             put("updated_at", iso(v.updatedAt))
@@ -294,6 +296,18 @@ class PrefsStore(context: Context) {
     /** Device mode: "obd" = ELM327 adapter (car) | "gps" = GPS-only tracker (bike). */
     fun getDeviceMode(): String = prefs.getString("device_mode", "obd") ?: "obd"
     fun setDeviceMode(mode: String) { prefs.edit().putString("device_mode", mode).apply() }
+
+    /** Package names của các app ngoài được ghim vào dải phím tắt màn TỐC ĐỘ. */
+    fun getAppShortcuts(): List<String> =
+        prefs.getString("app_shortcuts", null)
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?: emptyList()
+
+    fun setAppShortcuts(list: List<String>) {
+        prefs.edit().putString("app_shortcuts", list.joinToString(",")).apply()
+    }
 
     /** GPS trackpoint recording interval in seconds. */
     fun getGpsIntervalSec(): Int = prefs.getInt("gps_interval_sec", 5).coerceIn(2, 60)

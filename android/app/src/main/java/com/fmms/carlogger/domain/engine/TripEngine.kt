@@ -251,8 +251,8 @@ class TripEngine(
             tripRepository.completeAndEnqueue(trip)
             if (odo != null) vehicleRepository.updateOdometer(vId, odo)
         } else {
-            // sub-threshold: discard (avoid noise trips)
-            tripRepository.completeAndEnqueue(trip)
+            // Chuyến quá ngắn: chỉ lưu local, không đồng bộ (tránh rác + lệch odometer server)
+            tripRepository.completeLocalOnly(trip)
         }
 
         tripId = null
