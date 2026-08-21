@@ -44,9 +44,9 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
     )) }
     val (selY, selM, selD) = selected
 
-    var stats by remember { mutableStateOf<DayStats?>(null) }
+    var statsByVehicle by remember { mutableStateOf<List<VehicleDayStats>>(emptyList()) }
     LaunchedEffect(selY, selM, selD) {
-        stats = withContext(Dispatchers.IO) {
+        statsByVehicle = withContext(Dispatchers.IO) {
             try {
                 val c = Calendar.getInstance()
                 c.clear()
@@ -54,11 +54,12 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
                 c.set(Calendar.MILLISECOND, 0)
                 val from = c.timeInMillis
                 val to = from + 24L * 3600 * 1000 - 1
-                val v = AppContainer.vehicleRepository.getActive()
-                if (v == null) DayStats(0, 0.0, 0L, 0.0)
-                else {
-                    val trips = AppContainer.tripRepository.getBetween(v.id, from, to)
-                    DayStats(
+                val vehicles = AppContainer.vehicleRepository.getAll()
+                vehicles.mapNotNull { vehicle ->
+                    val trips = AppContainer.tripRepository.getBetween(vehicle.id, from, to)
+                    if (trips.isEmpty()) null else VehicleDayStats(
+                        vehicleId = vehicle.id,
+                        vehicleName = vehicle.name.ifBlank { vehicle.licensePlate.ifBlank { "Xe ${vehicle.id.take(6)}" } },
                         tripCount = trips.size,
                         distanceKm = trips.sumOf { it.distanceKm },
                         durationSeconds = trips.sumOf { it.durationSeconds },
@@ -66,7 +67,7 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
                     )
                 }
             } catch (e: Exception) {
-                DayStats(0, 0.0, 0L, 0.0)
+                emptyList()
             }
         }
     }
@@ -169,11 +170,13 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        DayDetailCard(selY, selM, selD, stats, colors)
+        DayDetailCard(selY, selM, selD, statsByVehicle, colors)
     }
 }
 
-private data class DayStats(
+private data class VehicleDayStats(
+    val vehicleId: String,
+    val vehicleName: String,
     val tripCount: Int,
     val distanceKm: Double,
     val durationSeconds: Long,
@@ -236,7 +239,7 @@ private fun LunarCell(
 }
 
 @Composable
-private fun DayDetailCard(selY: Int, selM: Int, selD: Int, stats: DayStats?, colors: FmmsColors) {
+private fun DayDetailCard(selY: Int, selM: Int, selD: Int, statsList: List<VehicleDayStats>, colors: FmmsColors) {
     val isToday = Calendar.getInstance().let {
         it.get(Calendar.DAY_OF_MONTH) == selD && it.get(Calendar.MONTH) + 1 == selM && it.get(Calendar.YEAR) == selY
     }
@@ -268,22 +271,37 @@ private fun DayDetailCard(selY: Int, selM: Int, selD: Int, stats: DayStats?, col
             HorizontalDivider(color = colors.divider)
             Spacer(modifier = Modifier.height(10.dp))
 
-            when {
-                stats == null -> Text("Đang tải...", color = colors.textSecondary, fontSize = 12.sp)
-                stats.tripCount == 0 -> Text(
-                    "Không có hành trình trong ngày này.",
-                    color = colors.textSecondary,
-                    fontSize = 12.sp,
-                )
-                else -> Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                ) {
-                    DayCell("CHUYẾN", "${stats.tripCount}", colors.textPrimary)
-                    DayCell("QUÃNG ĐƯỜNG", String.format(Locale.US, "%.1f km", stats.distanceKm), colors.cyan)
-                    DayCell("THỜI GIAN", dayDuration(stats.durationSeconds), colors.textPrimary)
-                    DayCell("TỐC ĐỘ MAX", if (stats.maxSpeedKmh > 0) "${stats.maxSpeedKmh.toInt()} km/h" else "—", colors.amber)
+            if (statsList.isEmpty()) {
+                Text("Không có hành trình trong ngày này.", color = colors.textSecondary, fontSize = 12.sp)
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    statsList.forEach { s ->
+                        VehicleDayRow(stats = s, colors = colors)
+                    }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VehicleDayRow(stats: VehicleDayStats, colors: FmmsColors) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface.copy(alpha = 0.7f)),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(stats.vehicleName, color = colors.cyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround,
+            ) {
+                DayCell("CHUYẾN", "${stats.tripCount}", colors.textPrimary)
+                DayCell("QUÃNG ĐƯỜNG", String.format(Locale.US, "%.1f km", stats.distanceKm), colors.cyan)
+                DayCell("THỜI GIAN", dayDuration(stats.durationSeconds), colors.textPrimary)
+                DayCell("TỐC ĐỘ MAX", if (stats.maxSpeedKmh > 0) "${stats.maxSpeedKmh.toInt()} km/h" else "—", colors.amber)
             }
         }
     }

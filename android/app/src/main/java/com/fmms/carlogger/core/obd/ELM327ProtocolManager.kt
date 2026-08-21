@@ -13,9 +13,14 @@ data class Elm327Info(
 )
 
 /**
- * ELM327 wrapper: initialization (ATZ..ATSP0), adapter identification,
+ * ELM327 wrapper: initialization (ATZ..ATSPx), adapter identification,
  * PID discovery and command execution. Uses a Mutex so polling and
  * diagnostics never interleave commands.
+ * 
+ * Protocol fallback: tries ATSP6 (ISO 15765-4 CAN 11-bit 500k) FIRST by default,
+ * then ATSP0 (auto), then other CAN protocols (ATSP7/8/9) if PID discovery
+ * returns too few critical PIDs. This handles adapters that don't auto-detect
+ * correctly on some vehicles.
  */
 class ELM327ProtocolManager(private val transport: OBDTransport) {
 
@@ -27,22 +32,48 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
     val isInitialised: Boolean get() = info.supportedPids.isNotEmpty()
 
     suspend fun initialize(): Elm327Info = mutex.withLock {
-        val infoBuilder = Elm327Info().let {
-            Elm327InfoBuilder().also { b ->
-                val atz = transport.sendCommandAndWait("ATZ") ?: ""
-                b.approxVersion = atz
-                transport.sendRaw("ATE0") // echo off
-                transport.sendRaw("ATL0") // linefeeds off
-                transport.sendRaw("ATS0") // spaces off
-                transport.sendRaw("ATH0") // headers off
-                transport.sendRaw("ATSP0") // auto protocol
-                b.deviceDescription = transport.sendCommandAndWait("AT@1", 2000)
-                b.firmware = transport.sendCommandAndWait("ATI", 2000)
-                b.protocol = transport.sendCommandAndWait("ATDPN", 2000)
-                val elmVersion = transport.sendCommandAndWait("ATI", 2000)
-                b.elmVersion = elmVersion
+        // Protocol candidates in order: CAN 11b/500k FIRST -> auto -> 29b/500k -> 11b/250k -> 29b/250k
+        val protocolCandidates = listOf(
+            "ATSP6",  // ISO 15765-4 CAN (11-bit ID, 500 kbaud) — DEFAULT/PRIORITY
+            "ATSP0",  // Auto
+            "ATSP7",  // ISO 15765-4 CAN (29-bit ID, 500 kbaud)
+            "ATSP8",  // ISO 15765-4 CAN (11-bit ID, 250 kbaud)
+            "ATSP9",  // ISO 15765-4 CAN (29-bit ID, 250 kbaud)
+        )
+
+        var bestInfo: Elm327Info? = null
+        var bestCriticalCount = -1
+
+        for (protoCmd in protocolCandidates) {
+            val attemptInfo = tryInitializeWithProtocol(protoCmd)
+            val criticalCount = countCriticalPids(attemptInfo.supportedPids)
+            if (criticalCount > bestCriticalCount) {
+                bestCriticalCount = criticalCount
+                bestInfo = attemptInfo.copy(protocol = protoCmd.substringAfter("ATSP"))
+                if (criticalCount >= 3) break // đủ RPM/SPEED/COOLANT/FUEL_LEVEL
             }
+            // small delay giữa các lần thử
+            delay(200)
         }
+
+        info = bestInfo ?: Elm327Info()
+        info
+    }
+
+    private suspend fun tryInitializeWithProtocol(protoCmd: String): Elm327Info {
+        val infoBuilder = Elm327InfoBuilder()
+        val atz = transport.sendCommandAndWait("ATZ") ?: ""
+        infoBuilder.approxVersion = atz
+        transport.sendRaw("ATE0")
+        transport.sendRaw("ATL0")
+        transport.sendRaw("ATS0")
+        transport.sendRaw("ATH0")
+        transport.sendRaw(protoCmd) // force protocol
+        infoBuilder.deviceDescription = transport.sendCommandAndWait("AT@1", 2000)
+        infoBuilder.firmware = transport.sendCommandAndWait("ATI", 2000)
+        infoBuilder.protocol = transport.sendCommandAndWait("ATDPN", 2000)
+        infoBuilder.elmVersion = transport.sendCommandAndWait("ATI", 2000)
+
         // PID discovery
         val discoveryResponses = mutableMapOf<String, String>()
         for (query in PidDefinitions.DISCOVERY_PIDS) {
@@ -53,8 +84,7 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
         }
         val supportedByMask = PidDefinitions.discoverSupported(discoveryResponses)
 
-        // Merge with "known to exist" PIDs: even if the adapter can't tell us,
-        // RPM/SPEED/FUEL_LEVEL are cheap and critical. Filter by what we can request later.
+        // Merge with "known to exist" PIDs
         val known = setOf(
             PidDefinitions.CMD_RPM,
             PidDefinitions.CMD_SPEED,
@@ -66,8 +96,17 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
             addAll(known)
         }
 
-        info = infoBuilder.build(supported)
-        info
+        return infoBuilder.build(supported)
+    }
+
+    private fun countCriticalPids(pids: Set<String>): Int {
+        val critical = setOf(
+            PidDefinitions.CMD_RPM,
+            PidDefinitions.CMD_SPEED,
+            PidDefinitions.CMD_COOLANT,
+            PidDefinitions.CMD_FUEL_LEVEL,
+        )
+        return pids.count { it in critical }
     }
 
     suspend fun sendCommand(cmd: String): String? = mutex.withLock {
@@ -109,6 +148,6 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
         var elmVersion: String? = null
 
         fun build(supported: Set<String>): Elm327Info =
-            Elm327Info(deviceDescription, firmware, protocol, elmVersion.also { }, supported)
+            Elm327Info(deviceDescription, firmware, protocol, elmVersion, supported)
     }
 }

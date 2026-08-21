@@ -25,6 +25,8 @@ class VehicleRepository(
 
     fun observeAll(): Flow<List<VehicleEntity>> = vehicleDao.observeAll()
 
+    suspend fun getAll(): List<VehicleEntity> = vehicleDao.getAll()
+
     suspend fun getActive(): VehicleEntity? = vehicleDao.getActive()
 
     suspend fun getById(id: String): VehicleEntity? = vehicleDao.getById(id)
