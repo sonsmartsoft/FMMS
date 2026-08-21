@@ -1,15 +1,16 @@
 package com.fmms.carlogger.ui.lunar
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,25 +28,33 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Locale
 
-/** Âm lịch — lưới tháng dương lịch; bấm vào ngày xem chi tiết hành trình + âm lịch. */
+private const val TAG = "LunarCal"
+
+/** Âm lịch — lưới tháng dương lịch; bấm vào ngày xem chi tiết hành trình + âm lịch.
+ *  Layout tự thích ứng: dọc = 1 cột (lịch trên, chi tiết dưới); ngang/tablet = 2 cột song song.
+ *  Toàn bộ nội dung luôn cuộn được khi không đủ chỗ. */
 @Composable
 fun LunarCalendarScreen(onBack: () -> Unit) {
     val colors = LocalFmmsColors.current
-    val now = Calendar.getInstance()
-    var year by remember { mutableStateOf(now.get(Calendar.YEAR)) }
-    var month by remember { mutableStateOf(now.get(Calendar.MONTH) + 1) }
+    val now = remember { Calendar.getInstance() }
     val todaySolar = now.get(Calendar.DAY_OF_MONTH)
+
+    var year by rememberSaveable { mutableIntStateOf(now.get(Calendar.YEAR)) }
+    var month by rememberSaveable { mutableIntStateOf(now.get(Calendar.MONTH) + 1) }
+    var selY by rememberSaveable { mutableIntStateOf(year) }
+    var selM by rememberSaveable { mutableIntStateOf(month) }
+    var selD by rememberSaveable { mutableIntStateOf(todaySolar) }
+
     val grid = remember(year, month) { LunarCalendar.monthGrid(year, month) }
     val todayLunar = remember { LunarCalendar.today() }
 
-    // (year, month, day) của ngày được chọn; mặc định là hôm nay
-    var selected by remember { mutableStateOf(Triple(
-        now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1, todaySolar,
-    )) }
-    val (selY, selM, selD) = selected
-
+    var loading by remember { mutableStateOf(true) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
     var statsByVehicle by remember { mutableStateOf<List<VehicleDayStats>>(emptyList()) }
+
     LaunchedEffect(selY, selM, selD) {
+        loading = true
+        errorMsg = null
         statsByVehicle = withContext(Dispatchers.IO) {
             try {
                 val c = Calendar.getInstance()
@@ -54,9 +63,22 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
                 c.set(Calendar.MILLISECOND, 0)
                 val from = c.timeInMillis
                 val to = from + 24L * 3600 * 1000 - 1
-                val vehicles = AppContainer.vehicleRepository.getAll()
-                vehicles.mapNotNull { vehicle ->
-                    val trips = AppContainer.tripRepository.getBetween(vehicle.id, from, to)
+                Log.d(TAG, "load day $selY-%02d-%02d from=$from to=$to".format(selM, selD))
+
+                // Xe active TRƯỚC (đường dữ liệu đã chạy đúng ở rev27), sau đó các xe khác.
+                val active = AppContainer.vehicleRepository.getActive()
+                val all = runCatching { AppContainer.vehicleRepository.getAll() }
+                    .onFailure { Log.w(TAG, "getAll() failed", it) }
+                    .getOrElse { emptyList() }
+                Log.d(TAG, "vehicles: active=${active?.id} allCount=${all.size}")
+                val ordered = (listOfNotNull(active) + all).distinctBy { it.id }
+
+                ordered.mapNotNull { vehicle ->
+                    val trips = runCatching {
+                        AppContainer.tripRepository.getBetween(vehicle.id, from, to)
+                    }.onFailure { Log.w(TAG, "getBetween(${vehicle.id}) failed", it) }
+                        .getOrElse { emptyList() }
+                    Log.d(TAG, "vehicle ${vehicle.id.take(8)} trips=${trips.size}")
                     if (trips.isEmpty()) null else VehicleDayStats(
                         vehicleId = vehicle.id,
                         vehicleName = vehicle.name.ifBlank { vehicle.licensePlate.ifBlank { "Xe ${vehicle.id.take(6)}" } },
@@ -65,112 +87,181 @@ fun LunarCalendarScreen(onBack: () -> Unit) {
                         durationSeconds = trips.sumOf { it.durationSeconds },
                         maxSpeedKmh = trips.mapNotNull { it.maxSpeedKmh }.maxOrNull() ?: 0.0,
                     )
-                }
+                }.also { Log.d(TAG, "result rows=${it.size}") }
             } catch (e: Exception) {
+                Log.e(TAG, "load day stats failed", e)
+                errorMsg = e.message ?: e.javaClass.simpleName
                 emptyList()
             }
         }
+        loading = false
     }
 
-    Column(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.background)
-            .padding(16.dp),
+            .background(colors.background),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) { Text("✕", color = colors.textPrimary, fontSize = 20.sp) }
-            Spacer(modifier = Modifier.weight(1f))
-            TextButton(onClick = {
-                month -= 1
-                if (month == 0) { month = 12; year -= 1 }
-                selected = Triple(year, month, 1)
-            }) { Text("◀", color = colors.cyan, fontSize = 18.sp) }
-            Text("HÔM NAY", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            TextButton(onClick = {
-                month += 1
-                if (month == 13) { month = 1; year += 1 }
-                selected = Triple(year, month, 1)
-            }) { Text("▶", color = colors.cyan, fontSize = 18.sp) }
-            Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = {
-                year = now.get(Calendar.YEAR)
-                month = now.get(Calendar.MONTH) + 1
-                selected = Triple(year, month, todaySolar)
-            }) { Text("↻", color = colors.cyan, fontSize = 18.sp) }
-        }
+        val isWide = maxWidth >= 480.dp && maxWidth > maxHeight
 
-        Text(
-            text = String.format(Locale.US, "%d", month) + " / " + year,
-            color = colors.cyan,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Black,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "Âm lịch hôm nay: ${LunarCalendar.fullLunarLabel(todayLunar)}",
-            color = colors.textSecondary,
-            fontSize = 12.sp,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Weekday header
-        Row(modifier = Modifier.fillMaxWidth()) {
-            listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN").forEach { w ->
-                Text(
-                    w,
-                    color = colors.textSecondary,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
+        if (isWide) {
+            // NGANG / TABLET: 2 cột — lịch bên trái, chi tiết ngày bên phải
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    HeaderRow(now, year, month, todaySolar,
+                        onBack = onBack,
+                        onPrev = { month -= 1; if (month == 0) { month = 12; year -= 1 }; selY = year; selM = month; selD = 1 },
+                        onNext = { month += 1; if (month == 13) { month = 1; year += 1 }; selY = year; selM = month; selD = 1 },
+                        onToday = { year = now.get(Calendar.YEAR); month = now.get(Calendar.MONTH) + 1; selY = year; selM = month; selD = todaySolar },
+                        colors = colors,
+                    )
+                    MonthTitle(month, year, todayLunar, colors)
+                    WeekdayHeader(colors)
+                    MonthGrid(grid, year, month, selY, selM, selD, todaySolar, now, colors) { d -> selD = d }
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(
                     modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                )
+                    verticalArrangement = Arrangement.Top,
+                ) {
+                    DayDetailCard(selY, selM, selD, loading, errorMsg, statsByVehicle, colors)
+                }
             }
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-
-        val leadingEmpty = firstDow(year, month)
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(7),
-            userScrollEnabled = false,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            items(leadingEmpty) { _ ->
-                LunarCell(
-                    solarDay = null, lunar = null, isToday = false, isSelected = false,
-                    onClick = null, colors = colors,
-                )
-            }
-            items(grid.size) { idx ->
-                val solar = idx + 1
-                val lunar = grid[solar]
-                val isToday = solar == todaySolar && year == now.get(Calendar.YEAR) && month == now.get(Calendar.MONTH) + 1
-                LunarCell(
-                    solarDay = solar,
-                    lunar = lunar,
-                    isToday = isToday,
-                    isSelected = solar == selD && month == selM && year == selY,
-                    onClick = {
-                        selected = Triple(year, month, solar)
-                    },
+        } else {
+            // DỌC (mặc định): 1 cột — lịch trên, chi tiết dưới, cuộn được
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+            ) {
+                HeaderRow(now, year, month, todaySolar,
+                    onBack = onBack,
+                    onPrev = { month -= 1; if (month == 0) { month = 12; year -= 1 }; selY = year; selM = month; selD = 1 },
+                    onNext = { month += 1; if (month == 13) { month = 1; year += 1 }; selY = year; selM = month; selD = 1 },
+                    onToday = { year = now.get(Calendar.YEAR); month = now.get(Calendar.MONTH) + 1; selY = year; selM = month; selD = todaySolar },
                     colors = colors,
                 )
+                MonthTitle(month, year, todayLunar, colors)
+                WeekdayHeader(colors)
+                MonthGrid(grid, year, month, selY, selM, selD, todaySolar, now, colors) { d -> selD = d }
+                Spacer(modifier = Modifier.height(16.dp))
+                DayDetailCard(selY, selM, selD, loading, errorMsg, statsByVehicle, colors)
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(16.dp))
+@Composable
+private fun HeaderRow(
+    now: Calendar,
+    year: Int,
+    month: Int,
+    todaySolar: Int,
+    onBack: () -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onToday: () -> Unit,
+    colors: FmmsColors,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack) { Text("✕", color = colors.textPrimary, fontSize = 20.sp) }
+        Spacer(modifier = Modifier.weight(1f))
+        TextButton(onClick = onPrev) { Text("◀", color = colors.cyan, fontSize = 18.sp) }
+        Text("HÔM NAY", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        TextButton(onClick = onNext) { Text("▶", color = colors.cyan, fontSize = 18.sp) }
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(onClick = onToday) { Text("↻", color = colors.cyan, fontSize = 18.sp) }
+    }
+}
 
-        DayDetailCard(selY, selM, selD, statsByVehicle, colors)
+@Composable
+private fun MonthTitle(month: Int, year: Int, todayLunar: LunarCalendar.LunarDate, colors: FmmsColors) {
+    Text(
+        text = String.format(Locale.US, "%d", month) + " / " + year,
+        color = colors.cyan,
+        fontSize = 26.sp,
+        fontWeight = FontWeight.Black,
+        modifier = Modifier.fillMaxWidth(),
+        textAlign = TextAlign.Center,
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        text = "Âm lịch hôm nay: ${LunarCalendar.fullLunarLabel(todayLunar)}",
+        color = colors.textSecondary,
+        fontSize = 12.sp,
+        modifier = Modifier.fillMaxWidth(),
+        textAlign = TextAlign.Center,
+    )
+    Spacer(modifier = Modifier.height(16.dp))
+}
+
+@Composable
+private fun WeekdayHeader(colors: FmmsColors) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        listOf("T2", "T3", "T4", "T5", "T6", "T7", "CN").forEach { w ->
+            Text(
+                w,
+                color = colors.textSecondary,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(6.dp))
+}
+
+/** Lưới ngày tĩnh (không lazy) — an toàn trong bố cục cuộn được. */
+@Composable
+private fun MonthGrid(
+    grid: Map<Int, LunarCalendar.LunarDate>,
+    year: Int,
+    month: Int,
+    selY: Int,
+    selM: Int,
+    selD: Int,
+    todaySolar: Int,
+    now: Calendar,
+    colors: FmmsColors,
+    onSelect: (Int) -> Unit,
+) {
+    val leadingEmpty = firstDow(year, month)
+    val cells: List<Int?> = List(leadingEmpty) { null } + (1..grid.size).toList()
+    cells.chunked(7).forEach { week ->
+        Row(modifier = Modifier.fillMaxWidth()) {
+            week.forEach { solar ->
+                if (solar == null) {
+                    LunarCell(
+                        solarDay = null, lunar = null, isToday = false, isSelected = false,
+                        onClick = null, colors = colors,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    val lunar = grid[solar]
+                    val isToday = solar == todaySolar && year == now.get(Calendar.YEAR) && month == now.get(Calendar.MONTH) + 1
+                    LunarCell(
+                        solarDay = solar,
+                        lunar = lunar,
+                        isToday = isToday,
+                        isSelected = solar == selD && month == selM && year == selY,
+                        onClick = { onSelect(solar) },
+                        colors = colors,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            repeat(7 - week.size) { Spacer(modifier = Modifier.weight(1f)) }
+        }
     }
 }
 
@@ -191,6 +282,7 @@ private fun LunarCell(
     isSelected: Boolean,
     onClick: (() -> Unit)?,
     colors: FmmsColors,
+    modifier: Modifier = Modifier,
 ) {
     val bg = when {
         isSelected -> colors.cyan.copy(alpha = 0.28f)
@@ -203,7 +295,7 @@ private fun LunarCell(
         else -> Color.Transparent
     }
     Box(
-        modifier = Modifier
+        modifier = modifier
             .aspectRatio(1f)
             .padding(2.dp)
             .clip(RoundedCornerShape(10.dp))
@@ -239,7 +331,15 @@ private fun LunarCell(
 }
 
 @Composable
-private fun DayDetailCard(selY: Int, selM: Int, selD: Int, statsList: List<VehicleDayStats>, colors: FmmsColors) {
+private fun DayDetailCard(
+    selY: Int,
+    selM: Int,
+    selD: Int,
+    loading: Boolean,
+    errorMsg: String?,
+    statsList: List<VehicleDayStats>,
+    colors: FmmsColors,
+) {
     val isToday = Calendar.getInstance().let {
         it.get(Calendar.DAY_OF_MONTH) == selD && it.get(Calendar.MONTH) + 1 == selM && it.get(Calendar.YEAR) == selY
     }
@@ -271,10 +371,15 @@ private fun DayDetailCard(selY: Int, selM: Int, selD: Int, statsList: List<Vehic
             HorizontalDivider(color = colors.divider)
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (statsList.isEmpty()) {
-                Text("Không có hành trình trong ngày này.", color = colors.textSecondary, fontSize = 12.sp)
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            when {
+                loading -> Text("Đang tải...", color = colors.textSecondary, fontSize = 12.sp)
+                errorMsg != null -> Text(
+                    "Lỗi tải dữ liệu: $errorMsg",
+                    color = colors.amber,
+                    fontSize = 12.sp,
+                )
+                statsList.isEmpty() -> Text("Không có hành trình trong ngày này.", color = colors.textSecondary, fontSize = 12.sp)
+                else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     statsList.forEach { s ->
                         VehicleDayRow(stats = s, colors = colors)
                     }
