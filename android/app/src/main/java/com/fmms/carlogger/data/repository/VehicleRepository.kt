@@ -309,6 +309,10 @@ class PrefsStore(context: Context) {
         prefs.edit().putString("app_shortcuts", list.joinToString(",")).apply()
     }
 
+    /** Rail ngang: ghim hay tự ẩn (persist qua các lần mở app). */
+    fun getRailPinned(): Boolean = prefs.getBoolean("rail_pinned", true)
+    fun setRailPinned(v: Boolean) { prefs.edit().putBoolean("rail_pinned", v).apply() }
+
     /** GPS trackpoint recording interval in seconds. */
     fun getGpsIntervalSec(): Int = prefs.getInt("gps_interval_sec", 5).coerceIn(2, 60)
     fun setGpsIntervalSec(sec: Int) { prefs.edit().putInt("gps_interval_sec", sec).apply() }

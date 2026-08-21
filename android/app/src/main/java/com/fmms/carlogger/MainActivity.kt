@@ -166,7 +166,7 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
         if (isLandscape) {
             // MÀN NGANG / TABLET: thanh điều hướng DỌC bên trái, có chế độ ghim / tự ẩn
             val context = androidx.compose.ui.platform.LocalContext.current
-            var railPinned by rememberSaveable { mutableStateOf(true) }
+            var railPinned by rememberSaveable { mutableStateOf(AppContainer.prefs.getRailPinned()) }
             var railTempOpen by rememberSaveable { mutableStateOf(false) }
 
             fun railToast(msg: String) =
@@ -205,10 +205,12 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
                                     android.util.Log.d("FmmsRail", "dot tapped, was pinned=$railPinned")
                                     if (railPinned) {
                                         railPinned = false
+                                        AppContainer.prefs.setRailPinned(false)
                                         railTempOpen = true
                                         railToast(context.getString(com.fmms.carlogger.R.string.rail_unpinned))
                                     } else {
                                         railPinned = true
+                                        AppContainer.prefs.setRailPinned(true)
                                         railTempOpen = false
                                         railToast(context.getString(com.fmms.carlogger.R.string.rail_pinned))
                                     }
