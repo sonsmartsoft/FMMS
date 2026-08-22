@@ -331,6 +331,10 @@ class PrefsStore(context: Context) {
     fun getMapStyle(): String = prefs.getString("carui_map_style", "night") ?: "night"
     fun setMapStyle(style: String) { prefs.edit().putString("carui_map_style", style).apply() }
 
+    /** Map đang phóng toàn màn hình trong tab Car UI không. */
+    fun getMapFull(): Boolean = prefs.getBoolean("carui_map_full", false)
+    fun setMapFull(full: Boolean) { prefs.edit().putBoolean("carui_map_full", full).apply() }
+
     /** Rail ngang: ghim hay tự ẩn (persist qua các lần mở app). */
     fun getRailPinned(): Boolean = prefs.getBoolean("rail_pinned", true)
     fun setRailPinned(v: Boolean) { prefs.edit().putBoolean("rail_pinned", v).apply() }

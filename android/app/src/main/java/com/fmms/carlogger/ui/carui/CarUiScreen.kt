@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -36,12 +38,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -148,7 +154,15 @@ fun CarUiScreen(vm: DashboardViewModel) {
         var mediaMode by rememberSaveable { mutableStateOf(AppContainer.prefs.getMediaMode()) }
         LaunchedEffect(mediaMode) { AppContainer.prefs.setMediaMode(mediaMode) }
 
-        if (isWide) {
+        var mapFull by rememberSaveable { mutableStateOf(AppContainer.prefs.getMapFull()) }
+        LaunchedEffect(mapFull) { AppContainer.prefs.setMapFull(mapFull) }
+
+        if (mediaMode == "map" && mapFull) {
+            // Bản đồ tràn toàn khung — ẩn đồng hồ/tốc độ/gauge để lái tập trung
+            Box(Modifier.fillMaxSize().padding(12.dp)) {
+                MediaFrame(vm, colors, s, frameHeight = null, mode = mediaMode, onModeChange = { mediaMode = it }, isFull = mapFull, onToggleFull = { mapFull = !mapFull })
+            }
+        } else if (isWide) {
             // MÀN NGANG (gắn trên xe): trên = cụm đồng hồ trái + khung media phải,
             // dưới = dải gauge full-width. Tốc độ tự co theo chỗ trống để không chèn thẻ khác.
             Column(
@@ -171,7 +185,7 @@ fun CarUiScreen(vm: DashboardViewModel) {
                         FooterCard(state.trip.distanceKm, state.trip.durationSeconds, t.odometerSavedKm, t.odometerKm, t.gpsAccuracy, s, colors, compact = true)
                     }
                     Box(Modifier.weight(0.58f).fillMaxHeight()) {
-                        MediaFrame(vm, colors, s, frameHeight = null, mode = mediaMode, onModeChange = { mediaMode = it })
+                        MediaFrame(vm, colors, s, frameHeight = null, mode = mediaMode, onModeChange = { mediaMode = it }, isFull = mapFull, onToggleFull = { mapFull = !mapFull })
                     }
                 }
                 GaugeRow(t.coolantTempC, t.fuelLevelPercent, fuelColor, t.batteryVoltage, t.engineLoadPercent, s, colors)
@@ -189,7 +203,7 @@ fun CarUiScreen(vm: DashboardViewModel) {
                 }
                 GaugeRow(t.coolantTempC, t.fuelLevelPercent, fuelColor, t.batteryVoltage, t.engineLoadPercent, s, colors)
                 FooterCard(state.trip.distanceKm, state.trip.durationSeconds, t.odometerSavedKm, t.odometerKm, t.gpsAccuracy, s, colors)
-                MediaFrame(vm, colors, s, frameHeight = 320.dp, mode = mediaMode, onModeChange = { mediaMode = it })
+                MediaFrame(vm, colors, s, frameHeight = 320.dp, mode = mediaMode, onModeChange = { mediaMode = it }, isFull = false, onToggleFull = {})
             }
         }
     }
@@ -322,6 +336,8 @@ private fun MediaFrame(
     frameHeight: Dp?,
     mode: String,
     onModeChange: (String) -> Unit,
+    isFull: Boolean,
+    onToggleFull: () -> Unit,
 ) {
     val context = LocalContext.current
     var shortcuts by remember { mutableStateOf(AppContainer.prefs.getAppShortcuts()) }
@@ -394,7 +410,7 @@ private fun MediaFrame(
         } else if (mode == "web") {
             WebPane(colors, s)
         } else {
-            MapPane(vm, colors, s)
+            MapPane(vm, colors, s, isFull = isFull, onToggleFull = onToggleFull)
         }
     }
 
@@ -504,6 +520,11 @@ private fun WebPane(colors: FmmsColors, s: FmmsStrings) {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.loadsImagesAutomatically = true
+                    // Co trang theo đúng bề rộng khung + cho phóng to bằng cử chỉ
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = true
+                    settings.builtInZoomControls = true
+                    settings.displayZoomControls = false
                     // Giữ mọi link http(s) trong khung; CHẶN intent:// market://... để
                     // các trang như YouTube không ép mở app ngoài.
                     webViewClient = object : WebViewClient() {
@@ -619,17 +640,49 @@ private class MapHolder(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MapPane(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings) {
+private fun MapPane(
+    vm: DashboardViewModel,
+    colors: FmmsColors,
+    s: FmmsStrings,
+    isFull: Boolean,
+    onToggleFull: () -> Unit,
+) {
     val context = LocalContext.current
     var holder by remember { mutableStateOf<MapHolder?>(null) }
     var follow by rememberSaveable { mutableStateOf(true) }
-    // (km, phút) của tuyến đang chỉ đường; null = không có route
-    var routeInfo by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    val scope = rememberCoroutineScope()
-    // callback từ AndroidView factory sang state Compose (tap chọn điểm đến)
-    val onMapTap = remember { mutableStateOf<(GeoPoint) -> Unit>({}) }
+    var route by remember { mutableStateOf<OsrmRoute?>(null) }
+    var destPoint by remember { mutableStateOf<GeoPoint?>(null) }
+    var navigating by remember { mutableStateOf(false) }
+    var stepIdx by remember { mutableStateOf(0) }
+    // (nội dung rẽ, khoảng cách còn lại)
+    var banner by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var query by remember { mutableStateOf("") }
+    var searching by remember { mutableStateOf(false) }
     var nightStyle by rememberSaveable { mutableStateOf(AppContainer.prefs.getMapStyle() != "day") }
     var toastMsg by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val rerouting = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    val onMapTap = remember { mutableStateOf<(GeoPoint) -> Unit>({}) }
+    var tts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
+
+    DisposableEffect(Unit) {
+        val t = android.speech.tts.TextToSpeech(context) {}
+        tts = t
+        onDispose {
+            t.stop()
+            t.shutdown()
+            tts = null
+        }
+    }
+
+    fun speak(text: String) {
+        val t = tts ?: return
+        try {
+            t.setLanguage(if (s.isVietnamese) java.util.Locale("vi", "VN") else java.util.Locale.US)
+            t.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "fmms_nav")
+        } catch (_: Exception) {
+        }
+    }
 
     fun applyStyle(map: org.osmdroid.views.MapView, night: Boolean) {
         if (night) {
@@ -642,6 +695,75 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings) 
         map.invalidate()
     }
 
+    fun clearRoute() {
+        route = null
+        destPoint = null
+        navigating = false
+        banner = null
+        stepIdx = 0
+        tts?.stop()
+        holder?.let { h ->
+            h.routeLine.isEnabled = false
+            h.destMarker.isEnabled = false
+            h.map.invalidate()
+        }
+    }
+
+    fun startNav() {
+        val r = route ?: return
+        navigating = true
+        follow = true
+        stepIdx = 0
+        r.steps.firstOrNull()?.let {
+            banner = it.text to fmtDist(it.meters)
+            speak(it.text)
+        }
+        holder?.map?.controller?.zoomTo(18.5)
+    }
+
+    fun stopNav() {
+        navigating = false
+        banner = null
+        tts?.stop()
+        holder?.map?.controller?.zoomTo(17.0)
+    }
+
+    fun submitSearch() {
+        val q = query.trim()
+        if (q.isEmpty() || searching) return
+        searching = true
+        scope.launch {
+            val gp = geocode(q)
+            searching = false
+            if (gp == null) {
+                toastMsg = s.addrNotFound
+            } else {
+                query = ""
+                onMapTap.value(gp)
+            }
+        }
+    }
+
+    // Mỗi lần có vị trí mới khi đang dẫn đường: kiểm tra lạc đường + bước rẽ tiếp theo
+    fun navTick(r: OsrmRoute, gp: GeoPoint) {
+        val next = stepIdx + 1
+        if (next < r.steps.size) {
+            val ns = r.steps[next]
+            val remain = gp.distanceToAsDouble(ns.location)
+            if (remain < 30.0) {
+                stepIdx = next
+                banner = ns.text to fmtDist(ns.meters)
+                speak(ns.text)
+            } else if (banner != null) {
+                banner = Pair(banner!!.first, fmtDist(remain))
+            }
+        } else if (gp.distanceToAsDouble(r.points.last()) < 40.0) {
+            banner = s.navArrive to ""
+            speak(s.navArrive)
+            navigating = false
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
@@ -652,12 +774,7 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings) 
                 cfg.osmdroidBasePath = java.io.File(ctx.cacheDir, "osmdroid")
 
                 val map = org.osmdroid.views.MapView(ctx)
-                if (nightStyle) {
-                    map.setTileSource(cartoDarkSource())
-                    applyNightLift(map)
-                } else {
-                    map.setTileSource(cartoVoyagerSource())
-                }
+                applyStyle(map, nightStyle)
                 map.setMultiTouchControls(true)
                 map.zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
                 map.controller.setZoom(17.0)
@@ -724,7 +841,49 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings) 
             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
         )
 
-        // Nút nổi kiểu Google Maps: lớp bản đồ + định vị + zoom
+        // ===== Thanh tìm kiếm kiểu Google Maps =====
+        Row(
+            Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 10.dp, end = 10.dp, top = 10.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(colors.surfaceVariant)
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Search, contentDescription = null, tint = colors.cyan, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.weight(1f)) {
+                if (query.isEmpty()) {
+                    Text(s.mapSearchHint, color = colors.textSecondary, fontSize = 13.sp, maxLines = 1)
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = colors.textPrimary),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { submitSearch() }),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (route != null || query.isNotEmpty()) {
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Clear search",
+                    tint = colors.textSecondary,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .combinedClickable(onClick = {
+                            query = ""
+                            clearRoute()
+                        }),
+                )
+            }
+        }
+
+        // ===== Cột nút phải kiểu Google Maps =====
         Column(
             Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 26.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -733,6 +892,9 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings) 
                 nightStyle = !nightStyle
                 AppContainer.prefs.setMapStyle(if (nightStyle) "night" else "day")
                 holder?.let { applyStyle(it.map, nightStyle) }
+            }
+            MapFab(icon = if (isFull) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen, tint = colors.textPrimary, colors = colors) {
+                onToggleFull()
             }
             MapFab(icon = Icons.Filled.MyLocation, tint = if (follow) colors.cyan else colors.textSecondary, colors = colors) {
                 follow = !follow
@@ -750,41 +912,92 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings) 
             }
         }
 
-        // Thẻ chỉ đường kiểu Google Maps: quãng đường • thời gian + nút xoá
-        routeInfo?.let { (km, min) ->
+        // ===== Banner chỉ đạo đường (khi đang dẫn đường) =====
+        banner?.let { b ->
             Row(
                 Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 26.dp)
-                    .clip(RoundedCornerShape(22.dp))
+                    .align(Alignment.TopCenter)
+                    .padding(top = 54.dp)
+                    .clip(RoundedCornerShape(20.dp))
                     .background(colors.surfaceVariant)
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.Navigation, null, tint = Color(0xFFFFB300), modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.Navigation, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(b.second, color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    String.format("%.1f km • %.0f %s", km, min, if (s.isVietnamese) "phút" else "min"),
+                    b.first,
                     color = colors.textPrimary,
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    modifier = Modifier.widthIn(max = 300.dp),
                 )
-                Spacer(Modifier.width(10.dp))
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = "Clear route",
-                    tint = colors.textSecondary,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .combinedClickable(onClick = {
-                            routeInfo = null
-                            holder?.let { h ->
-                                h.routeLine.isEnabled = false
-                                h.destMarker.isEnabled = false
-                                h.map.invalidate()
-                            }
-                        }),
-                )
+            }
+        }
+
+        // ===== Thẻ lộ trình dưới cùng =====
+        route?.let { r ->
+            if (!navigating) {
+                Row(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 26.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(colors.surfaceVariant)
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Navigation, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        String.format("%.1f km • %.0f %s", r.km, r.minutes, if (s.isVietnamese) "phút" else "min"),
+                        color = colors.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    // Nút bắt đầu dẫn đường
+                    Box(
+                        Modifier
+                            .clip(CircleShape)
+                            .background(Color(0xFF14243A))
+                            .combinedClickable(onClick = { startNav() })
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(3.dp))
+                            Text(s.navStart, color = Color(0xFFFFB300), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = "Clear route",
+                        tint = colors.textSecondary,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .combinedClickable(onClick = { clearRoute() }),
+                    )
+                }
+            } else {
+                // Nút kết thúc dẫn đường
+                Row(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 26.dp)
+                        .clip(CircleShape)
+                        .background(colors.surfaceVariant)
+                        .combinedClickable(onClick = { stopNav() })
+                        .padding(horizontal = 16.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Filled.Close, contentDescription = null, tint = colors.red, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(s.navStop, color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
 
@@ -809,15 +1022,17 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings) 
         )
     }
 
-    // Tap trên map = đặt đích + gọi OSRM chỉ đường từ vị trí hiện tại
+    // Tap trên map hoặc tìm kiếm = đặt đích → gọi OSRM vẽ lộ trình
     LaunchedEffect(Unit) {
         val handler: (GeoPoint) -> Unit = handlerFun@{ gp ->
             val h = holder ?: return@handlerFun
+            destPoint = gp
             h.destMarker.position = gp
             h.destMarker.isEnabled = true
             h.destMarker.title = s.destPin
             h.map.invalidate()
-            routeInfo = null
+            banner = null
+            stepIdx = 0
             scope.launch {
                 val st = vm.uiState.value.telemetry
                 val sLat = st.latitude
@@ -826,22 +1041,23 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings) 
                     toastMsg = s.routeNoPath
                     return@launch
                 }
-                val result = fetchRoute(sLat to sLng, gp)
+                searching = true
+                val result = fetchRoute(sLat to sLng, gp, s.isVietnamese)
+                searching = false
                 if (result == null) {
                     toastMsg = s.routeNoPath
                 } else {
-                    val (pts, km, min) = result
-                    h.routeLine.setPoints(pts)
+                    route = result
+                    h.routeLine.setPoints(result.points)
                     h.routeLine.isEnabled = true
                     h.map.invalidate()
-                    routeInfo = km to min
                 }
             }
         }
         onMapTap.value = handler
     }
 
-    // Cập nhật marker/vệt chạy theo telemetry
+    // Cập nhật marker/vệt chạy theo telemetry + logic dẫn đường
     holder?.let { h ->
         LaunchedEffect(h, follow) {
             vm.uiState.collect { st ->
@@ -855,19 +1071,52 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings) 
                     h.trail.addPoint(gp)
                 }
                 if (follow) h.map.controller.animateTo(gp)
+
+                val r = route
+                if (navigating && r != null && !rerouting.get()) {
+                    val dNear = nearestDistMeters(r.points, gp)
+                    val dst = destPoint
+                    if (dNear > 70.0 && dst != null && rerouting.compareAndSet(false, true)) {
+                        // Lạc đường >70 m → tính lại lộ trình lặng lẽ
+                        scope.launch {
+                            val fresh = fetchRoute(gp.latitude to gp.longitude, dst, s.isVietnamese)
+                            rerouting.set(false)
+                            if (fresh != null) {
+                                route = fresh
+                                h.routeLine.setPoints(fresh.points)
+                                h.routeLine.isEnabled = true
+                                stepIdx = 0
+                                fresh.steps.firstOrNull()?.let { f0 ->
+                                    banner = f0.text to fmtDist(f0.meters)
+                                    speak(f0.text)
+                                }
+                                h.map.invalidate()
+                            }
+                        }
+                    } else {
+                        navTick(r, gp)
+                    }
+                }
             }
         }
     }
 }
 
+/** Một bước rẽ trong lộ trình. */
+private class NavStep(val location: GeoPoint, val meters: Double, val text: String)
+
+/** Lộ trình OSRM: điểm geometry + tổng quãng đường/thời gian + các bước rẽ. */
+private class OsrmRoute(val points: List<GeoPoint>, val km: Double, val minutes: Double, val steps: List<NavStep>)
+
 /**
- * Gọi OSRM miễn phí (FOSSGIS trước, demo server dự phòng) để lấy lộ trình lái xe.
- * Trả về (điểm geometry, km, phút) hoặc null nếu lỗi/mất mạng.
+ * Gọi OSRM miễn phí (FOSSGIS trước, demo server dự phòng) lấy lộ trình lái xe
+ * kèm từng bước rẽ (steps=true). Trả về null nếu lỗi/mất mạng.
  */
 private suspend fun fetchRoute(
     start: Pair<Double, Double>,
     end: GeoPoint,
-): Triple<List<GeoPoint>, Double, Double>? = withContext(Dispatchers.IO) {
+    vn: Boolean,
+): OsrmRoute? = withContext(Dispatchers.IO) {
     val servers = listOf(
         "https://routing.openstreetmap.de/routed-car",
         "https://router.project-osrm.org",
@@ -876,27 +1125,44 @@ private suspend fun fetchRoute(
         try {
             val url = "$base/route/v1/driving/" +
                 "${start.second},${start.first};${end.longitude},${end.latitude}" +
-                "?overview=full&geometries=geojson"
-            val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
-                connectTimeout = 8000
-                readTimeout = 12000
-                setRequestProperty("User-Agent", "fmms-carlogger")
-            }
+                "?overview=full&geometries=geojson&steps=true"
+            val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            conn.connectTimeout = 8000
+            conn.readTimeout = 12000
+            conn.setRequestProperty("User-Agent", "fmms-carlogger")
             @Suppress("BlockingMethodInNonTransactionalContext")
             val body = conn.inputStream.bufferedReader().use { it.readText() }
             conn.disconnect()
             val json = org.json.JSONObject(body)
-            val route = json.getJSONArray("routes").getJSONObject(0)
-            val coords = route.getJSONObject("geometry").getJSONArray("coordinates")
+            val routeJ = json.getJSONArray("routes").getJSONObject(0)
+            val coords = routeJ.getJSONObject("geometry").getJSONArray("coordinates")
             val pts = ArrayList<GeoPoint>(coords.length())
             for (i in 0 until coords.length()) {
                 val cxy = coords.getJSONArray(i)
                 pts.add(GeoPoint(cxy.getDouble(1), cxy.getDouble(0)))
             }
-            return@withContext Triple(
+            val steps = ArrayList<NavStep>()
+            val legs = routeJ.getJSONArray("legs")
+            if (legs.length() > 0) {
+                val stepsJ = legs.getJSONObject(0).getJSONArray("steps")
+                for (i in 0 until stepsJ.length()) {
+                    val st = stepsJ.getJSONObject(i)
+                    val man = st.optJSONObject("maneuver") ?: continue
+                    val locA = man.getJSONArray("location")
+                    steps.add(
+                        NavStep(
+                            GeoPoint(locA.getDouble(1), locA.getDouble(0)),
+                            st.getDouble("distance"),
+                            osrmStepText(st, vn),
+                        ),
+                    )
+                }
+            }
+            return@withContext OsrmRoute(
                 pts,
-                route.getDouble("distance") / 1000.0,
-                route.getDouble("duration") / 60.0,
+                routeJ.getDouble("distance") / 1000.0,
+                routeJ.getDouble("duration") / 60.0,
+                steps,
             )
         } catch (_: Exception) {
             continue
@@ -905,6 +1171,76 @@ private suspend fun fetchRoute(
     null
 }
 
+/** Đổi một bước maneuver của OSRM thành câu chỉ dẫn tiếng Việt/Anh. */
+private fun osrmStepText(step: org.json.JSONObject, vn: Boolean): String {
+    val m = step.optJSONObject("maneuver")
+    val type = m?.optString("type") ?: ""
+    val mod = m?.optString("modifier") ?: ""
+    val name = step.optString("name", "")
+    val onto = if (name.isBlank()) "" else if (vn) " vào $name" else " onto $name"
+    return when (type) {
+        "depart" -> if (vn) "Xuất phát$onto" else "Start$onto"
+        "arrive" -> if (vn) "Đến nơi" else "You have arrived"
+        "turn", "end of road" -> when (mod) {
+            "left" -> if (vn) "Rẽ trái$onto" else "Turn left$onto"
+            "right" -> if (vn) "Rẽ phải$onto" else "Turn right$onto"
+            "slight left" -> if (vn) "Chếch trái$onto" else "Bear left$onto"
+            "slight right" -> if (vn) "Chếch phải$onto" else "Bear right$onto"
+            "sharp left" -> if (vn) "Quẹo gắt trái$onto" else "Sharp left$onto"
+            "sharp right" -> if (vn) "Quẹo gắt phải$onto" else "Sharp right$onto"
+            "uturn" -> if (vn) "Quay đầu" else "Make a U-turn"
+            else -> if (vn) "Tiếp tục$onto" else "Continue$onto"
+        }
+        "continue" -> if (mod == "uturn") if (vn) "Quay đầu" else "Make a U-turn"
+        else if (vn) "Tiếp tục$onto" else "Continue$onto"
+        "new name" -> if (vn) "Đi tiếp$onto" else "Continue$onto"
+        "merge" -> if (vn) "Nhập làn$onto" else "Merge$onto"
+        "fork" -> when (mod) {
+            "left" -> if (vn) "Đi nhánh trái$onto" else "Keep left$onto"
+            "right" -> if (vn) "Đi nhánh phải$onto" else "Keep right$onto"
+            else -> if (vn) "Đi theo nhánh$onto" else "Follow the fork$onto"
+        }
+        "roundabout", "rotary" -> if (vn) "Vào vòng xâu$onto" else "Take the roundabout$onto"
+        else -> if (vn) "Tiếp tục$onto" else "Continue$onto"
+    }
+}
+
+/** "350 m" nếu < ~1 km, ngược lại "1.2 km". */
+private fun fmtDist(meters: Double): String =
+    if (meters < 950.0) String.format("%.0f m", meters) else String.format("%.1f km", meters / 1000.0)
+
+/** Khoảng cách gần nhất từ p tới danh sách điểm polyline (xấp xỉ điểm-điểm). */
+private fun nearestDistMeters(pts: List<GeoPoint>, p: GeoPoint): Double {
+    var best = Double.MAX_VALUE
+    for (q in pts) {
+        val d = q.distanceToAsDouble(p)
+        if (d < best) best = d
+    }
+    return best
+}
+
+/** Geocode địa chỉ → toạ độ qua Nominatim (miễn phí, cần User-Agent riêng). */
+private suspend fun geocode(query: String): GeoPoint? = withContext(Dispatchers.IO) {
+    try {
+        val url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
+            java.net.URLEncoder.encode(query, "UTF-8")
+        val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        conn.connectTimeout = 8000
+        conn.readTimeout = 12000
+        conn.setRequestProperty("User-Agent", "fmms-carlogger")
+        @Suppress("BlockingMethodInNonTransactionalContext")
+        val body = conn.inputStream.bufferedReader().use { it.readText() }
+        conn.disconnect()
+        val arr = org.json.JSONArray(body)
+        if (arr.length() == 0) null
+        else {
+            val o = arr.getJSONObject(0)
+            GeoPoint(o.getString("lat").toDouble(), o.getString("lon").toDouble())
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
 /** Nguồn tile tối của CARTO (dựa trên dữ liệu OpenStreetMap). */
 private fun cartoDarkSource() = org.osmdroid.tileprovider.tilesource.XYTileSource(
     "CARTO_DARK",
@@ -950,9 +1286,15 @@ private fun cartoVoyagerSource() = org.osmdroid.tileprovider.tilesource.XYTileSo
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun MapFab(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, colors: FmmsColors, onClick: () -> Unit) {
+private fun MapFab(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: Color,
+    colors: FmmsColors,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     Box(
-        Modifier
+        modifier
             .size(38.dp)
             .clip(CircleShape)
             .background(colors.surface)

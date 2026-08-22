@@ -230,6 +230,11 @@ data class FmmsStrings(
     val webUrlHint: String,
     val destPin: String,
     val routeNoPath: String,
+    val mapSearchHint: String,
+    val addrNotFound: String,
+    val navStart: String,
+    val navStop: String,
+    val navArrive: String,
     /** true khi đang chọn tiếng Việt (chọn thứ/lunar weekday). */
     val isVietnamese: Boolean = false,
 )
@@ -331,6 +336,8 @@ val En = FmmsStrings(
     caruiTab = "CAR UI", mediaAppTab = "APPS", mediaWebTab = "WEB", mediaMapTab = "MAP",
     webUrlHint = "Enter address…",
     destPin = "Destination", routeNoPath = "No route found",
+    mapSearchHint = "Search destination…", addrNotFound = "Address not found",
+    navStart = "START", navStop = "END", navArrive = "You have arrived",
 )
 
 val Vi = FmmsStrings(
@@ -430,6 +437,8 @@ val Vi = FmmsStrings(
     caruiTab = "Ô TÔ", mediaAppTab = "ỨNG DỤNG", mediaWebTab = "WEB", mediaMapTab = "BẢN ĐỒ",
     webUrlHint = "Nhập địa chỉ…",
     destPin = "Đích", routeNoPath = "Không tìm được đường đi",
+    mapSearchHint = "Tìm địa chỉ đến…", addrNotFound = "Không tìm thấy địa chỉ",
+    navStart = "BẮT ĐẦU", navStop = "KẾT THÚC", navArrive = "Đã đến nơi",
     isVietnamese = true,
 )
 
