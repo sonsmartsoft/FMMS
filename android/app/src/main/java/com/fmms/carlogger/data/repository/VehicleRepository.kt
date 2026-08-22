@@ -318,6 +318,10 @@ class PrefsStore(context: Context) {
         prefs.edit().putString("app_shortcuts", list.joinToString(",")).apply()
     }
 
+    /** URL trang web hiển thị trong khung WEB của tab Car UI. */
+    fun getLastWebUrl(): String? = prefs.getString("carui_web_url", null)
+    fun setLastWebUrl(url: String) { prefs.edit().putString("carui_web_url", url).apply() }
+
     /** Rail ngang: ghim hay tự ẩn (persist qua các lần mở app). */
     fun getRailPinned(): Boolean = prefs.getBoolean("rail_pinned", true)
     fun setRailPinned(v: Boolean) { prefs.edit().putBoolean("rail_pinned", v).apply() }

@@ -413,3 +413,38 @@ GPS tracking, live map, trip replay, tracker device management
 1. TPMS ZESTECH BLE (rev38 kế hoạch cũ): màn học cảm biến quét BLE thô.
 2. Test xe thật: kết nối KW906 → xem live PID + ODO live tăng theo quãng đường.
 3. Web tasks: `docs/WEB_TASKS_FOR_ANTIGRAVITY.md`.
+
+---
+
+## 13. REV58 — TAB "CAR UI" HỌC TỪ APP LILY + KHUNG APP/WEB (2026-08-22)
+
+### Bối cảnh
+User mở app **Lily** (`com.sensornotes.xiaozhi`, label 'Lily' — car dashboard ngang: đồng hồ +
+âm lịch trái, tốc độ khổng lồ xanh giữa, map nửa phải, chip lối tắt dưới) và yêu cầu làm
+tab tương tự. Model AI không xem được ảnh → học layout qua uiautomator dump + phân tích
+màu PNG bằng PIL (nền sáng #e0e9f3, số tốc độ xanh #1a73e8).
+
+### Đã làm (verify ADB trên máy thật, 0 crash)
+- ✅ **Tab mới CAR UI / Ô TÔ** (icon DirectionsCar) ở vị trí thứ 2 trong nav dọc + rail ngang.
+- ✅ `ui/carui/CarUiScreen.kt`: ClockCard (giờ lớn + ngày + chip âm lịch VI luôn tiếng Việt),
+  SpeedHero (số tốc độ 92sp + vòng cung Canvas 270° đổi màu cyan→amber→red theo 120 km/h,
+  chip số tay nếu có), GaugeRow 4 ô (Nhiệt nước ≥95 vàng/≥110 đỏ, Xăng theo % màu cảnh báo,
+  Điện áp <11.8V đỏ, Tải động cơ), FooterCard (ODO saved+live, quãng đường/thời gian hành
+  trình, chấm GPS ±m). Portrait cuộn dọc; landscape = trái cụm đồng hồ / phải khung media.
+- ✅ **Khung đa phương tiện thay cho map của Lily** (user không cần map): 2 chip
+  ỨNG DỤNG | WEB.
+  - APPS: lưới 3 cột tile app đã ghim — dùng chung danh sách `app_shortcuts` với dải phím
+    tắt màn Tốc độ; bấm mở app thật (verify: bấm Browser → mở Samsung Internet), giữ để bỏ ghim.
+  - WEB: OutlinedTextField URL + WebView nhúng (JS on, tự thêm https://, lưu prefs
+    `carui_web_url`) — verify load wikipedia.org OK.
+- ✅ Tách code dùng chung `ui/common/AppShortcuts.kt`: ShortcutApp, launchableApps(),
+  launchApp() (trả Boolean), DrawableIconView(), AppPickerDialog(). SpeedometerScreen bỏ
+  bản private, import từ common (cùng danh sách ghim, cùng dialog).
+- ✅ i18n keys mới: caruiTab, mediaAppTab, mediaWebTab, webUrlHint (EN/VI).
+- ✅ APK `android/releases/FMMS_rev58.apk` (apksigner verify OK).
+
+### Quyết định thiết kế (theo user)
+- Cam hành trình 360 của xe đã có app riêng trên head unit Android → KHÔNG stream camera
+  trực tiếp vào app; khung APPS chính là chỗ bấm mở app cam đó.
+- Android không cho nhúng app khác trong app mình → app ngoài mở fullscreen bằng intent;
+  chỉ web là nhúng được (WebView).

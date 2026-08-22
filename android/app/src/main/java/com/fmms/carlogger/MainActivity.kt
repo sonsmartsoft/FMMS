@@ -46,6 +46,7 @@ import androidx.navigation.compose.rememberNavController
 import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.data.sync.SyncWorker
 import com.fmms.carlogger.ui.dashboard.DashboardScreen
+import com.fmms.carlogger.ui.carui.CarUiScreen
 import com.fmms.carlogger.ui.dashboard.SpeedometerScreen
 import com.fmms.carlogger.ui.fuel.FuelScreen
 import com.fmms.carlogger.ui.i18n.En
@@ -63,6 +64,7 @@ import com.fmms.carlogger.ui.trips.TripsScreen
 import com.fmms.carlogger.ui.weather.WeatherScreen
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.BarChart
@@ -72,6 +74,7 @@ private data class TopLevelDestination(val route: String, val label: String, val
 
 private val destinations = listOf(
     TopLevelDestination("home", "home", Icons.Filled.Home),
+    TopLevelDestination("carui", "carui", Icons.Filled.DirectionsCar),
     TopLevelDestination("trips", "trips", Icons.Filled.Route),
     TopLevelDestination("fuel", "fuel", Icons.Filled.LocalGasStation),
     TopLevelDestination("stats", "stats", Icons.Filled.BarChart),
@@ -144,6 +147,7 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
 
     fun labelOf(dest: TopLevelDestination): String = when (dest.label) {
         "home" -> strings.home
+        "carui" -> strings.caruiTab
         "trips" -> strings.trips
         "fuel" -> strings.fuel
         "stats" -> strings.stats
@@ -314,6 +318,9 @@ private fun FmmsNavHost(navController: androidx.navigation.NavHostController, vm
         }, onOpenDate = { y, m, d ->
             navController.navigate("lunar_calendar?y=$y&m=$m&d=$d") { launchSingleTop = true }
         }) }
+        composable("carui") {
+            CarUiScreen(vm = vm)
+        }
         composable("trips") { TripsScreen() }
         composable("fuel") { FuelScreen() }
         composable("stats") { StatsScreen() }

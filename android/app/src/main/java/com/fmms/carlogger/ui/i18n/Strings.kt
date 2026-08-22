@@ -222,6 +222,11 @@ data class FmmsStrings(
     // Trip toasts
     val tripStartToast: String,
     val tripEndToast: String,
+    // Car UI tab
+    val caruiTab: String,
+    val mediaAppTab: String,
+    val mediaWebTab: String,
+    val webUrlHint: String,
     /** true khi đang chọn tiếng Việt (chọn thứ/lunar weekday). */
     val isVietnamese: Boolean = false,
 )
@@ -320,6 +325,8 @@ val En = FmmsStrings(
     lblDay = "DAY", lblMonth = "MONTH", lblTruc = "ZHI",
     starFmt = "Star: %s", auspiciousHours = "AUSPICIOUS HOURS",
     tripStartToast = "● Trip started", tripEndToast = "■ Trip ended",
+    caruiTab = "CAR UI", mediaAppTab = "APPS", mediaWebTab = "WEB",
+    webUrlHint = "Enter address…",
 )
 
 val Vi = FmmsStrings(
@@ -416,6 +423,8 @@ val Vi = FmmsStrings(
     lblDay = "NGÀY", lblMonth = "THÁNG", lblTruc = "TRỰC",
     starFmt = "Sao: %s", auspiciousHours = "GIỜ HOÀNG ĐẠO",
     tripStartToast = "● Bắt đầu ghi hành trình", tripEndToast = "■ Đã kết thúc hành trình",
+    caruiTab = "Ô TÔ", mediaAppTab = "ỨNG DỤNG", mediaWebTab = "WEB",
+    webUrlHint = "Nhập địa chỉ…",
     isVietnamese = true,
 )
 

@@ -40,10 +40,10 @@ import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.domain.model.LiveTelemetry
 import com.fmms.carlogger.ui.DashboardUiState
 import com.fmms.carlogger.ui.DashboardViewModel
+import com.fmms.carlogger.ui.common.launchableApps
 import com.fmms.carlogger.ui.theme.FmmsColors
 import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import java.util.Locale
-
 /**
  * Analog speedometer (dark FMMS theme): big circular gauge 0→220 km/h with a red
  * needle, a MINI gauge (1/3 size) beside it showing a selectable OBD metric
@@ -573,23 +573,6 @@ private fun GaugeCanvas(
 // App shortcut strip
 // ---------------------------------------------------------------------
 
-private data class ShortcutApp(val packageName: String, val label: String, val icon: Drawable?)
-
-private fun launchableApps(context: android.content.Context): List<ShortcutApp> {
-    val pm = context.packageManager
-    val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-    return pm.queryIntentActivities(intent, 0)
-        .asSequence()
-        .mapNotNull { info ->
-            val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
-            if (pkg == context.packageName) null
-            else ShortcutApp(pkg, info.loadLabel(pm)?.toString() ?: pkg, info.loadIcon(pm))
-        }
-        .distinctBy { it.packageName }
-        .sortedBy { it.label.lowercase(Locale.US) }
-        .toList()
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AppShortcutStrip(colors: FmmsColors) {
@@ -652,10 +635,8 @@ private fun AppShortcutStrip(colors: FmmsColors) {
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (app?.icon != null) {
-                                android.widget.ImageView(context).apply { app.icon.let { setImageDrawable(it) } }.let { iv ->
-                                    AndroidViewFromImageView(iv)
-                                }
+                            if (app != null) {
+                                com.fmms.carlogger.ui.common.DrawableIconView(app.icon, size = 34)
                             } else {
                                 Text("?", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Black)
                             }
@@ -686,7 +667,7 @@ private fun AppShortcutStrip(colors: FmmsColors) {
     }
 
     if (showPicker) {
-        AppPickerDialog(
+        com.fmms.carlogger.ui.common.AppPickerDialog(
             colors = colors,
             onDismiss = { showPicker = false },
             onPick = { app ->
@@ -695,65 +676,6 @@ private fun AppShortcutStrip(colors: FmmsColors) {
             },
         )
     }
-}
-
-/** Wrapper hiển thị Drawable icon của app ngoài trong Compose. */
-@Composable
-private fun AndroidViewFromImageView(iv: android.widget.ImageView) {
-    androidx.compose.ui.viewinterop.AndroidView(
-        factory = { iv },
-        modifier = Modifier.size(34.dp),
-    )
-}
-
-@Composable
-@OptIn(ExperimentalFoundationApi::class)
-private fun AppPickerDialog(colors: FmmsColors, onDismiss: () -> Unit, onPick: (ShortcutApp) -> Unit) {
-    val s = com.fmms.carlogger.ui.i18n.LocalStrings.current
-
-    val context = LocalContext.current
-    val apps = remember { runCatching { launchableApps(context) }.getOrElse { emptyList() } }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(s.closeBtn, color = colors.cyan) }
-        },
-        title = { Text(s.chooseAppToPin, color = colors.textPrimary, fontSize = 16.sp) },
-        text = {
-            if (apps.isEmpty()) {
-                Text(s.noAppsFound, color = colors.textSecondary, fontSize = 13.sp)
-            } else {
-                LazyColumn(modifier = Modifier.size(width = 280.dp, height = 360.dp)) {
-                    items(apps, key = { it.packageName }) { app ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .combinedClickable(onClick = { onPick(app) })
-                                .padding(vertical = 6.dp, horizontal = 4.dp),
-                        ) {
-                            app.icon?.let { drawable ->
-                                androidx.compose.ui.viewinterop.AndroidView(
-                                    factory = { ctx -> android.widget.ImageView(ctx).apply { setImageDrawable(drawable) } },
-                                    modifier = Modifier.size(32.dp),
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                app.label,
-                                color = colors.textPrimary,
-                                fontSize = 13.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-    )
 }
 
 // ---------------------------------------------------------------------
