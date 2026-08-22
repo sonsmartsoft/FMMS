@@ -58,6 +58,9 @@ val LightFmmsColors = FmmsColors(
 
 val LocalFmmsColors = staticCompositionLocalOf { DarkFmmsColors }
 
+/** true khi đang dùng bảng màu tối (map cần biết để lọc màu tile). */
+val LocalDarkTheme = staticCompositionLocalOf { true }
+
 @Composable
 fun FmmsTheme(dark: Boolean, content: @Composable () -> Unit) {
     val colors = if (dark) DarkFmmsColors else LightFmmsColors
@@ -82,7 +85,10 @@ fun FmmsTheme(dark: Boolean, content: @Composable () -> Unit) {
             onPrimary = Color.White,
         )
     }
-    CompositionLocalProvider(LocalFmmsColors provides colors) {
+    CompositionLocalProvider(
+        LocalFmmsColors provides colors,
+        LocalDarkTheme provides dark,
+    ) {
         MaterialTheme(colorScheme = scheme, content = content)
     }
 }

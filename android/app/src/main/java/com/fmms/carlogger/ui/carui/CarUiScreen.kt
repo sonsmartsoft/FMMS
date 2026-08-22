@@ -36,6 +36,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -54,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -77,6 +80,7 @@ import com.fmms.carlogger.ui.theme.FmmsColors
 import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import com.fmms.carlogger.util.LunarCalendar
 import kotlinx.coroutines.delay
+import org.osmdroid.util.GeoPoint
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -153,7 +157,7 @@ fun CarUiScreen(vm: DashboardViewModel) {
                         FooterCard(state.trip.distanceKm, state.trip.durationSeconds, t.odometerSavedKm, t.odometerKm, t.gpsAccuracy, s, colors, compact = true)
                     }
                     Box(Modifier.weight(0.58f).fillMaxHeight()) {
-                        MediaFrame(colors, s, frameHeight = null)
+                        MediaFrame(vm, colors, s, frameHeight = null)
                     }
                 }
                 GaugeRow(t.coolantTempC, t.fuelLevelPercent, fuelColor, t.batteryVoltage, t.engineLoadPercent, s, colors)
@@ -171,7 +175,7 @@ fun CarUiScreen(vm: DashboardViewModel) {
                 }
                 GaugeRow(t.coolantTempC, t.fuelLevelPercent, fuelColor, t.batteryVoltage, t.engineLoadPercent, s, colors)
                 FooterCard(state.trip.distanceKm, state.trip.durationSeconds, t.odometerSavedKm, t.odometerKm, t.gpsAccuracy, s, colors)
-                MediaFrame(colors, s, frameHeight = 320.dp)
+                MediaFrame(vm, colors, s, frameHeight = 320.dp)
             }
         }
     }
@@ -297,7 +301,7 @@ private fun SpeedHero(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MediaFrame(colors: FmmsColors, s: FmmsStrings, frameHeight: Dp?) {
+private fun MediaFrame(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings, frameHeight: Dp?) {
     val context = LocalContext.current
     var mode by rememberSaveable { mutableStateOf("app") }
     var shortcuts by remember { mutableStateOf(AppContainer.prefs.getAppShortcuts()) }
@@ -323,11 +327,13 @@ private fun MediaFrame(colors: FmmsColors, s: FmmsStrings, frameHeight: Dp?) {
         .background(colors.surface)
 
     Column(frameModifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-        // Header: hai chip chuyển chế độ
+        // Header: ba chip chuyển chế độ
         Row(verticalAlignment = Alignment.CenterVertically) {
             ModeChip(s.mediaAppTab, mode == "app", colors) { mode = "app" }
             Spacer(Modifier.width(8.dp))
             ModeChip(s.mediaWebTab, mode == "web", colors) { mode = "web" }
+            Spacer(Modifier.width(8.dp))
+            ModeChip(s.mediaMapTab, mode == "map", colors) { mode = "map" }
         }
         Spacer(Modifier.height(8.dp))
 
@@ -365,8 +371,10 @@ private fun MediaFrame(colors: FmmsColors, s: FmmsStrings, frameHeight: Dp?) {
                     }
                 }
             }
-        } else {
+        } else if (mode == "web") {
             WebPane(colors, s)
+        } else {
+            MapPane(vm, colors)
         }
     }
 
@@ -545,6 +553,161 @@ private fun WebPane(colors: FmmsColors, s: FmmsStrings) {
 
     DisposableEffect(Unit) {
         onDispose { webView?.destroy(); webView = null }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Khung MAP: OpenStreetMap miễn phí (osmdroid), chấm vị trí + vệt hành trình
+// ---------------------------------------------------------------------
+
+/** Gom các đối tượng osmdroid cần cập nhật runtime. */
+private class MapHolder(
+    val map: org.osmdroid.views.MapView,
+    val marker: org.osmdroid.views.overlay.Marker,
+    val trail: org.osmdroid.views.overlay.Polyline,
+    val myLoc: org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay,
+)
+
+@Composable
+private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
+    val context = LocalContext.current
+    val dark = com.fmms.carlogger.ui.theme.LocalDarkTheme.current
+    var holder by remember { mutableStateOf<MapHolder?>(null) }
+    var follow by rememberSaveable { mutableStateOf(true) }
+
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { ctx ->
+                // Cấu hình osmdroid TRƯỚC khi tạo MapView:
+                // user-agent riêng (bắt buộc bởi chính sách tile OSM) + cache app-private.
+                val cfg = org.osmdroid.config.Configuration.getInstance()
+                cfg.userAgentValue = ctx.packageName
+                cfg.osmdroidBasePath = java.io.File(ctx.cacheDir, "osmdroid")
+
+                val map = org.osmdroid.views.MapView(ctx)
+                map.setTileSource(org.osmdroid.tileprovider.tilesource.TileSourceFactory.MAPNIK)
+                map.setMultiTouchControls(true)
+                map.zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
+                map.controller.setZoom(17.0)
+                map.controller.setCenter(GeoPoint(21.028, 105.834)) // Hà Nội khi chưa có GPS
+
+                val myLoc = org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay(
+                    org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider(ctx), map,
+                )
+                myLoc.enableMyLocation()
+                myLoc.isDrawAccuracyEnabled = true
+
+                // Icon xe = chấm cyan viền trắng vẽ bằng code
+                val bmp = android.graphics.Bitmap.createBitmap(28, 28, android.graphics.Bitmap.Config.ARGB_8888)
+                val c = android.graphics.Canvas(bmp)
+                val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = android.graphics.Color.WHITE
+                }
+                c.drawCircle(14f, 14f, 13f, paint)
+                paint.color = colors.cyan.toArgb()
+                c.drawCircle(14f, 14f, 9f, paint)
+
+                val marker = org.osmdroid.views.overlay.Marker(map).apply {
+                    icon = android.graphics.drawable.BitmapDrawable(ctx.resources, bmp)
+                    setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_CENTER, org.osmdroid.views.overlay.Marker.ANCHOR_CENTER)
+                    isEnabled = false
+                    title = "FMMS"
+                }
+                val trail = org.osmdroid.views.overlay.Polyline(map).apply {
+                    outlinePaint.color = colors.cyan.toArgb()
+                    outlinePaint.strokeWidth = 7f
+                }
+                map.overlays.add(trail)
+                map.overlays.add(marker)
+                map.overlays.add(myLoc)
+
+                if (dark) applyDarkTileFilter(map)
+
+                holder = MapHolder(map, marker, trail, myLoc)
+                map
+            },
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
+        )
+
+        // Nút nổi kiểu Google Maps: định vị + zoom
+        Column(
+            Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 26.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            MapFab(icon = Icons.Filled.MyLocation, tint = if (follow) colors.cyan else colors.textSecondary, colors = colors) {
+                follow = !follow
+                if (follow) {
+                    holder?.let { h ->
+                        h.myLoc.myLocation?.let { h.map.controller.animateTo(it) }
+                    }
+                }
+            }
+            MapFab(icon = Icons.Filled.Add, tint = colors.textPrimary, colors = colors) {
+                holder?.map?.controller?.zoomIn()
+            }
+            MapFab(icon = Icons.Filled.Remove, tint = colors.textPrimary, colors = colors) {
+                holder?.map?.controller?.zoomOut()
+            }
+        }
+
+        // Attribution bắt buộc của OpenStreetMap
+        Text(
+            "© OpenStreetMap contributors",
+            color = colors.textSecondary,
+            fontSize = 9.sp,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 10.dp, bottom = 6.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(colors.surface.copy(alpha = 0.75f))
+                .padding(horizontal = 5.dp, vertical = 1.dp),
+        )
+    }
+
+    // Cập nhật marker/vệt chạy theo telemetry
+    holder?.let { h ->
+        LaunchedEffect(h, follow) {
+            vm.uiState.collect { st ->
+                val lat = st.telemetry.latitude ?: return@collect
+                val lng = st.telemetry.longitude ?: return@collect
+                val gp = GeoPoint(lat, lng)
+                h.marker.position = gp
+                h.marker.isEnabled = true
+                val last = h.trail.actualPoints.lastOrNull() as? GeoPoint
+                if (last == null || last.distanceToAsDouble(gp) > 5.0) {
+                    h.trail.addPoint(gp)
+                }
+                if (follow) h.map.controller.animateTo(gp)
+            }
+        }
+    }
+}
+
+/** Lọc màu tile OSM → tông tối giống Google Maps đêm (giữ xanh nước/vùng cây). */
+private fun applyDarkTileFilter(map: org.osmdroid.views.MapView) {
+    val invert = android.graphics.ColorMatrix(
+        floatArrayOf(
+            -0.72f, 0.43f, 0.29f, 0f, 0.78f,
+            -0.15f, 0.79f, 0.36f, 0f, 0.72f,
+            0.05f, 0.30f, 0.65f, 0f, 0.66f,
+            0f, 0f, 0f, 1f, 0f,
+        ),
+    )
+    map.overlayManager.tilesOverlay.setColorFilter(android.graphics.ColorMatrixColorFilter(invert))
+}
+
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun MapFab(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, colors: FmmsColors, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(38.dp)
+            .clip(CircleShape)
+            .background(colors.surface)
+            .combinedClickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
     }
 }
 

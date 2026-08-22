@@ -101,4 +101,7 @@ dependencies {
     // Network (Supabase PostgREST / Google Sheets)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Bản đồ miễn phí (OpenStreetMap) cho tab Car UI - khung MAP
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
 }

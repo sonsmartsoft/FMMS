@@ -470,3 +470,16 @@ màu PNG bằng PIL (nền sáng #e0e9f3, số tốc độ xanh #1a73e8).
   nền tối #0b1117 (YT mobile dark theo system night) chứ không trắng trống.
 - Lưu ý ADB: Samsung tiếp tục tự bật lại accelerometer_rotation nhiều lần trong phiên —
   phải set lại trước mỗi lần test xoay.
+
+### rev61 — khung MAP trong tab Car UI (APPS | WEB | MAP)
+- MediaFrame giờ có **3 chế độ**: APPS / WEB / **MAP** (thay vì chỉ 2) — đúng vị trí map
+  của app Lily nhưng dùng OpenStreetMap miễn phí (osmdroid 6.1.20), không cần API key.
+- `MapPane`: tile OSM MAPNIK; chấm vị trí tôi (MyLocationNewOverlay + vòng accuracy);
+  marker xe = chấm cyan viền trắng vẽ bằng Canvas; vệt hành trình Polyline cyan (thêm
+  điểm khi di chuyển >5 m, theo telemetry flow); nút nổi định vị (bật/tắt follow) +
+  zoom in/out kiểu Google Maps; attribution "© OpenStreetMap contributors" bắt buộc.
+- **Chế độ tối**: `LocalDarkTheme` mới trong FmmsTheme → lọc ColorMatrix tile OSM thành
+  tông tối (giữ phân biệt xanh lá/nước). User agent = packageName, cache trong
+  `cacheDir/osmdroid` → không cần quyền storage.
+- Verify ADB: chip MAP render tile thật (pixel-sample 952 màu khác nhau, xanh lá/dương/be
+  đảo màu), attribution hiện, xoay ngang OK, crash buffer 0. APK rev61.
