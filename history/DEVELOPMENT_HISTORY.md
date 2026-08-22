@@ -3,7 +3,7 @@
 > **Mục đích:** Tài liệu bàn giao (handoff) — giúp AI/kỹ sư mới đọc hiểu toàn bộ dự án,
 > các quyết định kỹ thuật, lỗi đã gặp và cách xử lý mà không cần đào lại git history.
 >
-> **Cập nhật lần cuối:** 2026-08-21 (sau commit `a221b7d`, APK rev28)
+> **Cập nhật lần cuối:** 2026-08-22 (APK rev57, versionCode 2 / v1.1.0)
 
 ---
 
@@ -374,3 +374,42 @@ GPS tracking, live map, trip replay, tracker device management
 6. Khi sửa Android: build xong phải `apksigner verify` trước khi giao user
 7. Schema DB: ưu tiên đọc `supabase/migrations/0001_initial_schema.sql` để biết shape bảng gốc
    (nhiều bảng có sẵn từ đầu, đừng CREATE lại)
+
+---
+
+## 12. REV52–REV57 — I18N TOÀN DIỆN, WEATHER GPS-FIX, ODO TÁCH 2 NGUỒN (2026-08-22)
+
+### Đã hoàn tất + verify ADB (0 crash trong logcat -b crash)
+- ✅ **Weather dùng last-known location** (`GpsTracker.lastKnownAny()`: passive/network/gps) +
+  disk cache `fmms_weather` (JSON + fetchedAt, tươi ≤15 phút dùng lại ngay khi mở app).
+  Refresh nếu di chuyển >3 km so với lần fetch trước; fix treo "Đang định vị" lúc mới bật app.
+- ✅ **ODO tách 2 nguồn**: `LiveTelemetry.odometerKm` = chỉ live ECU (PID 01A6);
+  `odometerSavedKm` = chuỗi lưu (prefs `last_ecu_odo_km` trong file `ecu_odo` → fallback
+  `vehicle.odometerKm`). Mini gauge dưới vòng = SAVED; ô KPI "ĐỘNG CƠ • OBD" = LIVE.
+  `TelemetryEngine.refreshEcuOdometer()` cập nhật cả hai + persist; màn THIẾT BỊ ghi
+  "Hiện tại: N km (nguồn ECU PID 01A6)". Verify trên máy: 2623 km từ ECU thật.
+- ✅ **i18n sweep ~45 key mới** vào FmmsStrings: MoreScreen (menu + 8 trang con),
+  LiveData/Vehicles/AddVehicleDialog/EditVehicleDialog/Diagnostics/Connection/Device,
+  SpeedometerScreen (mini gauge resolver), MainActivity toasts, theme selector (Tối/Sáng/
+  Theo hệ thống), nút LƯU. **LunarCalendar giữ thuần Việt có chủ đích** (lịch vạn niên).
+- ✅ **Màu mức xăng theo %**: <10% đỏ + nhấp nháy, ≤50% vàng, >50% xanh — áp ở
+  FuelGaugeCard (Dashboard), KPI MỨC XĂNG, MiniObdGauge metric FUEL.
+- ✅ **BackHandler MORE menu**: BACK phần cứng ở trang con → về Menu; tại Menu → thoát app.
+- ✅ `versionCode=2, versionName="1.1.0"`; release ký debug keystore → cài đè được bản debug.
+- ✅ **Test VI mode toàn màn qua ADB** (taptext helper `/tmp/taptext.py`, `/tmp/t2.py`):
+  Dashboard / Trips / Fuel / Stats / More+8 con / Cloud (4 bản ghi chờ) / Vehicles /
+  Connection / Device / Weather (VI + DỰ BÁO THEO GIỜ + 7 NGÀY TỚI) / Lunar / Analog
+  (RPM-NHIỆT NƯỚC-MỨC XĂNG-ĐIỆN ÁP-TẢI ĐỘNG CƠ-ODO). Đổi ngôn ngữ realtime hoạt động.
+
+### Lưu ý vận hành test
+- Samsung A52 **tự bật lại `accelerometer_rotation=1`** → máy nằm nghiêng là xoay ngang,
+  swipe ADB trượt mục tiêu. Trước mỗi phiên: `settings put system accelerometer_rotation 0`
+  + `user_rotation 0`; kiểm tra `dumpsys window | grep mRotation`.
+- BACK ở Dashboard = thoát app (đúng thiết kế); launcher Google feed cũng có card thời tiết
+  "27° Tam Hợp" dễ nhầm khi dump ngoài app — luôn kiểm tra mCurrentFocus trước khi tap.
+- APK: `android/releases/FMMS_rev57.apk` (đã apksigner verify, build-tools 34).
+
+### TODO tiếp theo
+1. TPMS ZESTECH BLE (rev38 kế hoạch cũ): màn học cảm biến quét BLE thô.
+2. Test xe thật: kết nối KW906 → xem live PID + ODO live tăng theo quãng đường.
+3. Web tasks: `docs/WEB_TASKS_FOR_ANTIGRAVITY.md`.

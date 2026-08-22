@@ -21,6 +21,8 @@ data class LiveTelemetry(
     val stft: Double? = null,
     val ltft: Double? = null,
     val odometerKm: Double? = null,
+    /** ODO lưu lại (lần đọc ECU cuối / DB) — hiển thị cả khi mất kết nối. */
+    val odometerSavedKm: Double? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
     val gpsSpeedKmh: Double? = null,
@@ -28,6 +30,9 @@ data class LiveTelemetry(
     val connectionQuality: String = "OK",
     val dataQuality: DataQuality = DataQuality.UNAVAILABLE,
     val rawSource: String = "NONE",
+    val gear: Int? = null,
+    /** Nhãn số để hiển thị: "P" khi đứng yên (máy nổ), "D1".."D6" khi chạy. */
+    val gearLabel: String? = null,
     val timestamp: Long = System.currentTimeMillis(),
 )
 
@@ -36,6 +41,8 @@ data class FuelEstimate(
     val estimatedLiters: Double? = null,
     val rangeKm: Double? = null,
     val consumptionL100km: Double? = null,
+    /** true => đang dùng mức tiêu thụ chuẩn HĐH (chưa học đủ dữ liệu). */
+    val isFallback: Boolean = false,
     val accumulatorFuelUsedLiters: Double = 0.0,
     val source: String = "—",
     val learningNote: String? = null,

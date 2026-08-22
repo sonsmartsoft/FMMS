@@ -57,7 +57,10 @@ class FuelViewModel : ViewModel() {
         viewModelScope.launch {
             _saving.value = true
             val vehicle = c.vehicleRepository.getActive() ?: return@launch
-            val odo = c.odometerEngine.state.value.virtualOdoKm
+            // ODO thật từ ECU (01A6) đã đồng bộ vào vehicle.odometerKm; chỉ dùng
+            // virtual khi chưa có số thật.
+            val odo = vehicle.odometerKm.takeIf { it > 0 }
+                ?: c.odometerEngine.state.value.virtualOdoKm
             val now = System.currentTimeMillis()
             val log = FuelLogEntity(
                 id = java.util.UUID.randomUUID().toString(),

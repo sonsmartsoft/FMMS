@@ -18,6 +18,11 @@ class FuelEngine(
     private val fuelLogRepository: FuelLogRepository,
 ) {
 
+    companion object {
+        /** Mức tiêu thụ trung bình theo nhà sản xuất (Mazda2 AT 2026). */
+        const val FALLBACK_L100KM = 6.5
+    }
+
     private val _estimate = MutableStateFlow(FuelEstimate())
     val estimate: StateFlow<FuelEstimate> = _estimate
 
@@ -32,9 +37,11 @@ class FuelEngine(
 
         if (telemetry.fuelRateLph != null) lastFuelRate = telemetry.fuelRateLph
 
-        // Fuel consumption estimate: from last-trips consumption if available, else default
-        val consumption = estimateConsumption(vehicle.id)
-        val rangeKm = if (estimatedLiters != null && consumption != null && consumption > 0) {
+        // Ưu tiên mức tiêu thụ học từ chính các chuyến đi; khi chưa đủ dữ liệu
+        // (hoặc số học ra bất hợp lý) fallback về chuẩn nhà sản xuất 6.5 L/100km.
+        val learned = estimateConsumption(vehicle.id)
+        val consumption = learned ?: FALLBACK_L100KM
+        val rangeKm = if (estimatedLiters != null && consumption > 0) {
             estimatedLiters / consumption * 100
         } else null
 
@@ -44,22 +51,32 @@ class FuelEngine(
                 estimatedLiters = estimatedLiters,
                 rangeKm = rangeKm,
                 consumptionL100km = consumption,
+                isFallback = learned == null,
                 accumulatorFuelUsedLiters = accumulatedLiters,
                 source = if (levelPercent != null) "OBD PID 012F" else "—",
-                learningNote = if (rangeKm == null) "RANGE — Learning..." else null,
+                // UI tự compose ghi chú theo ngôn ngữ hiện tại (isFallback).
+                learningNote = null,
             )
         }
     }
 
     private suspend fun estimateConsumption(vehicleId: String): Double? {
-        // Last 500 km of completed trips if we have odometer data
+        // Last completed trips with odometer data; exclude degenerate rows
+        // (distance ~0 nhưng vẫn tích xăng khi để máy nổ) otherwise the
+        // average explodes (L/100km in the thousands).
         val trips = tripRepository.getWithOdometer()
-        val withOdo = trips.filter { it.endOdometer != null && it.startOdometer != null && it.fuelUsedLiters != null }
+        val withOdo = trips.filter {
+            it.endOdometer != null && it.startOdometer != null &&
+                it.fuelUsedLiters != null && it.distanceKm > 0.2
+        }
         if (withOdo.size >= 3) {
             val lastTrips = withOdo.takeLast(10)
             val dist = lastTrips.sumOf { it.distanceKm }
             val fuel = lastTrips.sumOf { it.fuelUsedLiters ?: 0.0 }
-            if (fuel > 0 && dist > 0) return fuel / dist * 100
+            if (fuel > 0 && dist > 0) {
+                val c = fuel / dist * 100
+                return if (c in 0.5..40.0) c else null // sanity: xe con hợp lý 4-15
+            }
         }
         return null
     }

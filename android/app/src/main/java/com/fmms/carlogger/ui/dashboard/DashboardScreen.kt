@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,90 +69,89 @@ private fun DashboardContent(state: DashboardUiState, onAddDevice: () -> Unit, o
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Top header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                Text(
-                    text = state.vehicleName,
-                    color = colors.textPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                )
-                val infoLine = listOfNotNull(
-                    state.vehicleSubtitle.takeIf { it.isNotBlank() },
-                    state.obdName?.trim()?.takeIf { connected && it.isNotEmpty() },
-                    state.elmProtocol.trim().takeIf { connected && it.isNotEmpty() },
-                    strings.obdConnected.takeIf { connected },
-                ).joinToString("   |   ")
-                if (infoLine.isNotBlank()) {
+        // Top header — 1 hàng trên màn rộng, 3 dòng trên màn hẹp (portrait):
+        // Tên xe / Biển số / ● OBD ... + 3 icon
+        androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val narrowHeader = maxWidth < 560.dp
+            if (narrowHeader) {
+                Column {
                     Text(
-                        text = infoLine,
-                        color = colors.textSecondary,
-                        fontSize = 12.sp,
+                        text = state.vehicleName,
+                        color = colors.textPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                StatusBadge(connected, conn, state.deviceMode, strings, state.gpsAvailable)
-                if (!state.hasObdMac && state.deviceMode == "obd") {
-                    Surface(
-                        color = colors.amber.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(20.dp),
-                        onClick = onAddDevice,
+                    val plate = state.vehicleSubtitle.takeIf { it.isNotBlank() }
+                    if (plate != null) {
+                        Text(plate, color = colors.textSecondary, fontSize = 12.sp)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = strings.addDevice,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            color = colors.amber,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
+                        StatusBadge(connected, conn, state.deviceMode, strings, state.gpsAvailable)
+                        HeaderActions(
+                            state = state,
+                            colors = colors,
+                            strings = strings,
+                            onAddDevice = onAddDevice,
+                            onSpeedometer = onSpeedometer,
+                            onLunar = onLunar,
+                            onWeather = onWeather,
                         )
                     }
                 }
-                Surface(
-                    color = colors.surface,
-                    shape = RoundedCornerShape(20.dp),
-                    onClick = onSpeedometer,
+            } else {
+                // Ngang 2 dòng:
+                //   Mazda2 AT 2026
+                //   19B-213.87 | KONNWEI | ISO 15765-4 CAN 11-BIT 500K ● OBD CONNECTED
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = "⏱",
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                        color = colors.cyan,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                Surface(
-                    color = colors.surface,
-                    shape = RoundedCornerShape(20.dp),
-                    onClick = onLunar,
-                ) {
-                    Text(
-                        text = "☾",
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                        color = colors.amber,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-                Surface(
-                    color = colors.surface,
-                    shape = RoundedCornerShape(20.dp),
-                    onClick = onWeather,
-                ) {
-                    Text(
-                        text = "⛅",
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                        color = colors.cyan,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = state.vehicleName,
+                            color = colors.textPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val plate = state.vehicleSubtitle.takeIf { it.isNotBlank() }
+                            if (plate != null) {
+                                Text(plate, color = colors.textSecondary, fontSize = 12.sp, maxLines = 1)
+                            }
+                            val obdDevice = state.obdName?.trim()?.takeIf { connected && it.isNotEmpty() }
+                            if (obdDevice != null) {
+                                HeaderSeparator(colors)
+                                Text(obdDevice, color = colors.textSecondary, fontSize = 12.sp, maxLines = 1)
+                            }
+                            val proto = com.fmms.carlogger.core.obd.elmProtocolName(state.elmProtocol)
+                                ?.takeIf { connected && state.elmProtocol.isNotBlank() }
+                            if (proto != null) {
+                                HeaderSeparator(colors)
+                                Text(proto, color = colors.textSecondary, fontSize = 12.sp, maxLines = 1)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            StatusBadge(connected, conn, state.deviceMode, strings, state.gpsAvailable)
+                        }
+                    }
+                    HeaderActions(
+                        state = state,
+                        colors = colors,
+                        strings = strings,
+                        onAddDevice = onAddDevice,
+                        onSpeedometer = onSpeedometer,
+                        onLunar = onLunar,
+                        onWeather = onWeather,
                     )
                 }
             }
@@ -195,11 +195,12 @@ private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.th
             ) {
                 HeroCell(
                     label = strings.estimatedRange,
-                    value = state.fuel.rangeKm?.let { "${it.toInt()} km" } ?: strings.learning,
+                    value = state.fuel.rangeKm?.let { "${it.toInt()}" } ?: strings.learning,
                     sub = state.fuel.learningNote ?: "",
                     color = colors.cyan,
                     showSubAsNote = state.fuel.rangeKm == null,
                     noteColor = colors.amber,
+                    unit = if (state.fuel.rangeKm != null) "km" else null,
                 )
                 VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
                 FuelGaugeCard(
@@ -211,12 +212,12 @@ private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.th
                 VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
                 HeroCell(
                     label = strings.avgConsumption,
-                    value = state.fuel.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) + " L/100km" }
-                        ?: "—",
-                    sub = state.fuel.learningNote ?: strings.learning,
+                    value = state.fuel.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) } ?: "—",
+                    sub = fuelSubNote(state, strings),
                     color = colors.textPrimary,
-                    showSubAsNote = state.fuel.consumptionL100km == null,
+                    showSubAsNote = state.fuel.consumptionL100km == null || state.fuel.isFallback,
                     noteColor = colors.textSecondary,
+                    unit = if (state.fuel.consumptionL100km != null) "L/100km" else null,
                 )
             }
         }
@@ -247,6 +248,7 @@ private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.th
                 title = strings.speed, value = t.speedKmh?.let { "${it.toInt()}" } ?: "—", unit = "km/h",
                 color = colors.cyan, modifier = Modifier.weight(1f),
                 maxValue = 220f, currentValue = t.speedKmh?.toFloat() ?: 0f,
+                badge = t.gearLabel,
             )
             GaugeCard(
                 title = strings.rpm, value = t.rpm?.let { "${it.toInt()}" } ?: "—", unit = "rpm",
@@ -291,11 +293,12 @@ private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.
             ) {
                 HeroCell(
                     label = strings.estimatedRange,
-                    value = state.fuel.rangeKm?.let { "${it.toInt()} km" } ?: strings.learning,
+                    value = state.fuel.rangeKm?.let { "${it.toInt()}" } ?: strings.learning,
                     sub = state.fuel.learningNote ?: "",
                     color = colors.cyan,
                     showSubAsNote = state.fuel.rangeKm == null,
                     noteColor = colors.amber,
+                    unit = if (state.fuel.rangeKm != null) "km" else null,
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
@@ -310,11 +313,12 @@ private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.
                     )
                     HeroCell(
                         label = strings.avgConsumption,
-                        value = state.fuel.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) + " L/100km" } ?: "—",
-                        sub = state.fuel.learningNote ?: strings.learning,
+                        value = state.fuel.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) } ?: "—",
+                        sub = fuelSubNote(state, strings),
                         color = colors.textPrimary,
-                        showSubAsNote = state.fuel.consumptionL100km == null,
+                        showSubAsNote = state.fuel.consumptionL100km == null || state.fuel.isFallback,
                         noteColor = colors.textSecondary,
+                        unit = if (state.fuel.consumptionL100km != null) "L/100km" else null,
                     )
                 }
             }
@@ -346,6 +350,7 @@ private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.
                 title = strings.speed, value = t.speedKmh?.let { "${it.toInt()}" } ?: "—", unit = "km/h",
                 color = colors.cyan, modifier = Modifier.weight(1f),
                 maxValue = 220f, currentValue = t.speedKmh?.toFloat() ?: 0f,
+                badge = t.gearLabel,
             )
             GaugeCard(
                 title = strings.rpm, value = t.rpm?.let { "${it.toInt()}" } ?: "—", unit = "rpm",
@@ -369,7 +374,79 @@ private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.
             )
         }
 
-        DateClockCard(colors = colors, onOpenDate = onOpenDate)
+        DateClockCard(colors = colors, onOpenDate = onOpenDate, compact = true)
+    }
+}
+
+/** Ghi chú dưới ô tiêu thụ: fallback HĐH / đang học / trống khi có số học thật. */
+private fun fuelSubNote(state: DashboardUiState, strings: FmmsStrings): String = when {
+    state.fuel.consumptionL100km == null -> strings.learning
+    state.fuel.isFallback -> strings.fallbackConsumptionNote
+    else -> ""
+}
+
+@Composable
+private fun HeaderSeparator(colors: com.fmms.carlogger.ui.theme.FmmsColors) {
+    Text(
+        "|",
+        color = colors.textSecondary.copy(alpha = 0.5f),
+        fontSize = 12.sp,
+        modifier = Modifier.padding(horizontal = 6.dp),
+    )
+}
+
+@Composable
+private fun HeaderActions(
+    state: DashboardUiState,
+    colors: com.fmms.carlogger.ui.theme.FmmsColors,
+    strings: FmmsStrings,
+    onAddDevice: () -> Unit,
+    onSpeedometer: () -> Unit,
+    onLunar: () -> Unit,
+    onWeather: () -> Unit,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (!state.hasObdMac && state.deviceMode == "obd") {
+            Surface(
+                color = colors.amber.copy(alpha = 0.15f),
+                shape = RoundedCornerShape(20.dp),
+                onClick = onAddDevice,
+            ) {
+                Text(
+                    text = strings.addDevice,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    color = colors.amber,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+        }
+        HeaderChip("⏱", colors.cyan, onClick = onSpeedometer)
+        Spacer(modifier = Modifier.width(10.dp))
+        HeaderChip("☾", colors.amber, onClick = onLunar)
+        Spacer(modifier = Modifier.width(10.dp))
+        HeaderChip("⛅", colors.cyan, onClick = onWeather)
+    }
+}
+
+@Composable
+private fun HeaderChip(symbol: String, color: Color, onClick: () -> Unit) {
+    Surface(
+        color = LocalFmmsColors.current.surface,
+        shape = RoundedCornerShape(20.dp),
+        onClick = onClick,
+    ) {
+        Text(
+            text = symbol,
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+            color = color,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -384,9 +461,9 @@ private fun StatusBadge(connected: Boolean, conn: OBDConnectionState, deviceMode
         conn == OBDConnectionState.ERROR -> colors.red to strings.obdError
         else -> colors.textSecondary to strings.obdDisconnected
     }
-    // Chấm nhấp nháy ở chế độ GPS: xanh = có fix, đỏ = mất tín hiệu
-    val dotAlpha = if (deviceMode == "gps") {
-        val transition = rememberInfiniteTransition(label = "gpsDot")
+    // Chấm nhấp nháy: GPS (xanh = có fix, đỏ = mất tín hiệu) và OBD khi đã kết nối
+    val dotAlpha = if (deviceMode == "gps" || connected) {
+        val transition = rememberInfiniteTransition(label = "statusDot")
         transition.animateFloat(
             initialValue = 0.25f,
             targetValue = 1f,
@@ -394,7 +471,7 @@ private fun StatusBadge(connected: Boolean, conn: OBDConnectionState, deviceMode
                 animation = tween(700, easing = LinearEasing),
                 repeatMode = RepeatMode.Reverse,
             ),
-            label = "gpsDotAlpha",
+            label = "statusDotAlpha",
         ).value
     } else 1f
     Surface(color = color.copy(alpha = 0.2f), shape = RoundedCornerShape(20.dp)) {
@@ -417,12 +494,26 @@ private fun HeroCell(
     color: Color,
     showSubAsNote: Boolean = false,
     noteColor: Color = Color.Gray,
+    unit: String? = null,
 ) {
     val colors = LocalFmmsColors.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(2.dp))
-        Text(value, color = color, fontSize = 32.sp, fontWeight = FontWeight.Black)
+        // Số và đơn vị tách riêng để giá trị dài (vd 2622.5) không chiếm nửa card.
+        androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.Bottom) {
+            Text(value, color = color, fontSize = 24.sp, fontWeight = FontWeight.Black)
+            if (!unit.isNullOrBlank()) {
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    unit,
+                    color = color.copy(alpha = 0.75f),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 3.dp),
+                )
+            }
+        }
         if (showSubAsNote) {
             Text(sub.ifBlank { "—" }, color = noteColor, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         } else if (sub.isNotBlank()) {
@@ -452,16 +543,27 @@ private fun FuelGaugeCard(
     colors: com.fmms.carlogger.ui.theme.FmmsColors,
 ) {
     val level = levelPercent?.toFloat()?.coerceIn(0f, 100f) ?: 0f
+    // Ngưỡng cảnh báo xăng: <10% đỏ NHẤP NHÁY, 10–50% vàng, >50% xanh
+    val low = levelPercent != null && levelPercent.isFinite() && levelPercent < 10.0
     val ringColor = when {
         levelPercent == null -> colors.textSecondary
-        level <= 15f -> colors.red
-        level <= 35f -> colors.amber
+        levelPercent < 10.0 -> colors.red
+        levelPercent <= 50.0 -> colors.amber
         else -> colors.emerald
     }
+    val blinkAlpha = if (low) {
+        val t = rememberInfiniteTransition(label = "fuelBlink")
+        t.animateFloat(
+            initialValue = 0.2f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(450, easing = LinearEasing), RepeatMode.Reverse),
+            label = "fuelBlinkAlpha",
+        ).value
+    } else 1f
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(strings_label(colors), color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(2.dp))
-        Box(contentAlignment = Alignment.Center) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.graphicsLayer { this.alpha = blinkAlpha }) {
             Canvas(modifier = Modifier.size(64.dp)) {
                 val stroke = 8.dp.toPx()
                 val inset = stroke / 2
@@ -519,6 +621,7 @@ private fun Long.toTime(): String {
 private fun DateClockCard(
     colors: com.fmms.carlogger.ui.theme.FmmsColors,
     onOpenDate: (Int, Int, Int) -> Unit = { _, _, _ -> },
+    compact: Boolean = false,
 ) {
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -527,6 +630,7 @@ private fun DateClockCard(
             delay(1000)
         }
     }
+    val strings = LocalStrings.current
     val cal = remember(now) { Calendar.getInstance().apply { timeInMillis = now } }
     val d = cal.get(Calendar.DAY_OF_MONTH)
     val m = cal.get(Calendar.MONTH) + 1
@@ -539,50 +643,63 @@ private fun DateClockCard(
         colors = CardDefaults.cardColors(containerColor = colors.surface),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = if (compact) 9.dp else 12.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ClockCell(
-                label = "GIỜ",
+                label = strings.clock,
                 value = String.format(
                     Locale.US, "%02d:%02d:%02d",
                     cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), cal.get(Calendar.SECOND),
                 ),
                 color = colors.cyan,
+                compact = compact,
             )
-            VerticalDivider(modifier = Modifier.height(40.dp).width(1.dp), color = colors.divider)
+            VerticalDivider(modifier = Modifier.height(if (compact) 32.dp else 40.dp).width(1.dp), color = colors.divider)
             ClockCell(
-                label = "DƯƠNG LỊCH",
+                label = strings.solarDate,
                 value = String.format(Locale.US, "%02d/%02d/%04d", d, m, y),
                 color = colors.textPrimary,
-                sub = LunarCalendar.weekdayVi(d, m, y),
+                sub = if (strings.isVietnamese) LunarCalendar.weekdayVi(d, m, y) else weekdayEn(cal.get(Calendar.DAY_OF_WEEK)),
                 onClick = { onOpenDate(y, m, d) },
+                compact = compact,
             )
-            VerticalDivider(modifier = Modifier.height(40.dp).width(1.dp), color = colors.divider)
+            VerticalDivider(modifier = Modifier.height(if (compact) 32.dp else 40.dp).width(1.dp), color = colors.divider)
             ClockCell(
-                label = if (lunar.isLeapMonth) "ÂM LỊCH (Nhuận)" else "ÂM LỊCH",
+                label = if (lunar.isLeapMonth) strings.lunarLeap else strings.lunarDate,
                 value = LunarCalendar.lunarDayLabel(lunar) + " " + LunarCalendar.lunarMonthLabel(lunar),
                 color = colors.amber,
-                sub = "năm ${LunarCalendar.canChiYear(lunar.year)}",
+                sub = "${strings.yearPrefix} ${LunarCalendar.canChiYear(lunar.year)}",
                 onClick = { onOpenDate(y, m, d) },
+                compact = compact,
             )
         }
     }
 }
 
+private fun weekdayEn(dayOfWeek: Int): String = when (dayOfWeek) {
+    Calendar.SUNDAY -> "Sunday"
+    Calendar.MONDAY -> "Monday"
+    Calendar.TUESDAY -> "Tuesday"
+    Calendar.WEDNESDAY -> "Wednesday"
+    Calendar.THURSDAY -> "Thursday"
+    Calendar.FRIDAY -> "Friday"
+    else -> "Saturday"
+}
+
 @Composable
-private fun ClockCell(label: String, value: String, color: Color, sub: String? = null, onClick: (() -> Unit)? = null) {
+private fun ClockCell(label: String, value: String, color: Color, sub: String? = null, onClick: (() -> Unit)? = null, compact: Boolean = false) {
     val colors = LocalFmmsColors.current
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
     ) {
-        Text(label, color = colors.textSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = colors.textSecondary, fontSize = if (compact) 9.sp else 10.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(2.dp))
-        Text(value, color = color, fontSize = 17.sp, fontWeight = FontWeight.Black)
+        Text(value, color = color, fontSize = if (compact) 15.sp else 17.sp, fontWeight = FontWeight.Black)
         if (!sub.isNullOrBlank()) {
-            Text(sub, color = colors.textSecondary, fontSize = 10.sp)
+            Text(sub, color = colors.textSecondary, fontSize = if (compact) 9.sp else 10.sp)
         }
     }
 }

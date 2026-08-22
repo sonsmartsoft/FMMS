@@ -31,6 +31,13 @@ class TripEngine(
     private val tripTimeoutMs: () -> Long = { 3 * 60 * 1000L },
 ) {
 
+    companion object {
+        /** Bằng chứng động cơ phải duy trì liên tục bao lâu mới bắt đầu chuyến. */
+        const val START_DEBOUNCE_MS = 4_000L
+        /** Chuyến ACTIVE sau restart mới hơn thế này thì nhận lại (resume). */
+        const val ADOPT_WINDOW_MS = 10 * 60 * 1000L
+    }
+
     private val _state = MutableStateFlow(TripLiveState())
     val state: StateFlow<TripLiveState> = _state
 
@@ -52,15 +59,87 @@ class TripEngine(
     private var consumedGpsPoint: Location? = null
     private var lastEngineRunning = false
     private var stoppedSince: Long? = null
+    private var engineEvidenceSince: Long? = null
+    private var lastTripPersistAt = 0L
 
     private var processorJob: Job? = null
 
     fun start() {
         if (processorJob?.isActive == true) return
         processorJob = scope.launch {
+            recoverOrphanedTrips()
             while (isActive) {
-                evaluate()
+                try {
+                    evaluate()
+                } catch (_: Exception) {
+                    // Never let a transient DB/IO error kill the trip processor —
+                    // otherwise trips would stay ACTIVE forever.
+                }
                 delay(1000)
+            }
+        }
+    }
+
+    /**
+     * Sau khi process chết/restart, các row ACTIVE cũ sẽ mồ côi (không ai đóng).
+     * - Chuyến mới hơn [ADOPT_WINDOW_MS]: nhận lại làm chuyến hiện tại (resume).
+     * - Chuyến cũ hơn: đóng lại local; nếu rác (0 km) thì xóa hẳn.
+     */
+    private suspend fun recoverOrphanedTrips() {
+        val vehicle = vehicleRepository.getActive() ?: return
+        val now = System.currentTimeMillis()
+        val orphans = tripRepository.getAllActiveTrips()
+        android.util.Log.d("FmmsTrip", "recoverOrphanedTrips: ${orphans.size} active row(s) total, current vehicle ${vehicle.id}")
+        for (orphan in orphans) {
+            if (orphan.vehicleId != vehicle.id) {
+                // Row của xe cũ/khác — không bao giờ adopt; rác thì xóa, còn dữ liệu thì đóng.
+                if (orphan.distanceKm <= 0.05 && (orphan.maxSpeedKmh ?: 0.0) < 5.0) {
+                    android.util.Log.d("FmmsTrip", "delete foreign phantom ${orphan.id} veh=${orphan.vehicleId}")
+                    tripRepository.deleteById(orphan.id)
+                } else {
+                    tripRepository.completeLocalOnly(
+                        orphan.copy(
+                            endTime = orphan.updatedAt,
+                            durationSeconds = ((orphan.updatedAt - orphan.startTime) / 1000).coerceAtLeast(orphan.durationSeconds),
+                            status = "COMPLETED",
+                        )
+                    )
+                }
+                continue
+            }
+            if (tripId == null && now - orphan.startTime <= ADOPT_WINDOW_MS &&
+                (orphan.distanceKm > 0.05 || (orphan.maxSpeedKmh ?: 0.0) >= 5.0)
+            ) {
+                android.util.Log.d("FmmsTrip", "adopt trip ${orphan.id} dist=${orphan.distanceKm}")
+                tripId = orphan.id
+                startTime = orphan.startTime
+                startOdometer = orphan.startOdometer
+                lastOdoKm = orphan.endOdometer ?: orphan.startOdometer ?: vehicle.odometerKm
+                lastFuelLevel = orphan.fuelStartPercent
+                accumulatedFuelUsed = orphan.fuelUsedLiters ?: 0.0
+                maxSpeed = orphan.maxSpeedKmh ?: 0.0
+                startLat = orphan.startLatitude
+                startLng = orphan.startLongitude
+                _state.value = TripLiveState(
+                    active = true,
+                    distanceKm = orphan.distanceKm,
+                    durationSeconds = orphan.durationSeconds,
+                    maxSpeedKmh = maxSpeed,
+                    startLatitude = startLat,
+                    startLongitude = startLng,
+                )
+            } else if (orphan.distanceKm <= 0.05 && (orphan.maxSpeedKmh ?: 0.0) < 5.0) {
+                android.util.Log.d("FmmsTrip", "delete phantom ${orphan.id} start=${orphan.startTime}")
+                tripRepository.deleteById(orphan.id)
+            } else {
+                android.util.Log.d("FmmsTrip", "close stale ${orphan.id} dist=${orphan.distanceKm}")
+                tripRepository.completeLocalOnly(
+                    orphan.copy(
+                        endTime = orphan.updatedAt,
+                        durationSeconds = ((orphan.updatedAt - orphan.startTime) / 1000).coerceAtLeast(orphan.durationSeconds),
+                        status = "COMPLETED",
+                    )
+                )
             }
         }
     }
@@ -85,19 +164,30 @@ class TripEngine(
         }
 
         val live = latestTelemetry
-        val engineRunning = (live.rpm != null && live.rpm!! > 0) || (live.speedKmh != null && live.speedKmh!! > 1.0)
+        val now = System.currentTimeMillis()
+        // Bằng chứng động cơ thật: idle ~640-760 rpm nên ngưỡng 300 lọc nhiễu
+        // ignition-ON/adapter (rpm 0-vài chục). Tốc độ >3 km/h cũng là bằng chứng.
+        val engineEvidence = (live.rpm != null && live.rpm!! > 300) ||
+            (live.speedKmh != null && live.speedKmh!! > 3.0)
+        val engineRunning = engineEvidence && run {
+            if (engineEvidenceSince == null) engineEvidenceSince = now
+            now - engineEvidenceSince!! >= START_DEBOUNCE_MS
+        }
+        if (!engineEvidence) engineEvidenceSince = null
         val moved = movedSinceLast(live)
 
         when {
-            // START
-            !lastEngineRunning && engineRunning && tripId == null -> startTrip(vehicle.id, vehicle, live)
+            // START — chỉ khi bằng chứng duy trì liên tục (chống phantom)
+            !lastEngineRunning && engineRunning && tripId == null -> {
+                startTrip(vehicle.id, vehicle, live)
+                engineEvidenceSince = null
+            }
 
             // UPDATE
             tripId != null && (engineRunning || moved) -> updateTrip(vehicle, live)
 
             // STOP
             tripId != null && !engineRunning && !moved -> {
-                val now = System.currentTimeMillis()
                 if (stoppedSince == null) stoppedSince = now
                 if (now - stoppedSince!! > tripTimeoutMs()) {
                     closeActiveTrip(vehicleId, vehicle.id)
@@ -260,11 +350,14 @@ class TripEngine(
         _state.value = TripLiveState()
     }
 
+    /**
+     * "Moving" = real speed, not GPS jitter. Stationary GPS drift (< 3 km/h,
+     * up to tens of metres) must NOT keep a stopped trip alive forever.
+     */
     private fun movedSinceLast(live: LiveTelemetry): Boolean {
-        if (live.latitude == null || live.longitude == null) return false
-        val last = lastGpsPoint ?: return false
-        val p = Location("gps").apply { latitude = live.latitude!!; longitude = live.longitude!! }
-        return distanceKm(last, p) > 0.02
+        val obdSpeed = live.speedKmh ?: 0.0
+        val gpsSpeed = live.gpsSpeedKmh ?: 0.0
+        return obdSpeed > 3.0 || gpsSpeed > 3.0
     }
 
     private fun distanceKm(a: Location, b: Location): Double = a.distanceTo(b) / 1000.0

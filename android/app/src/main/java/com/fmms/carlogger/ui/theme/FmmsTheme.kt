@@ -99,9 +99,9 @@ object ThemeMode {
         else -> true
     }
 
-    fun label(mode: String): String = when (mode) {
-        LIGHT -> "Sáng (Light)"
-        SYSTEM -> "Theo hệ thống"
-        else -> "Tối (Dark)"
+    fun label(mode: String, s: com.fmms.carlogger.ui.i18n.FmmsStrings): String = when (mode) {
+        LIGHT -> s.light
+        SYSTEM -> s.system
+        else -> s.dark
     }
 }

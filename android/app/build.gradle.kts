@@ -8,12 +8,17 @@ android {
     namespace = "com.fmms.carlogger"
     compileSdk = 34
 
+    // Build dir ngoài vùng iCloud-sync (~/Documents) — sync tạo file trùng
+    // " 2.class"/" 2.dex" làm D8 fail "defined multiple times".
+    layout.buildDirectory.set(file(
+        "/var/folders/z9/l4ns5bmx58s_vbsrt6vpd34c0000gn/T/opencode/fmms-android-build/app"))
+
     defaultConfig {
         applicationId = "com.fmms.carlogger"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -25,10 +30,22 @@ android {
         buildConfigField("String", "MAZDA2_ASSET_ID", "\"22222222-2222-2222-2222-222222222222\"")
     }
 
+    signingConfigs {
+        create("release") {
+            // Dùng debug keystore để release cài đè được lên bản debug đã cài
+            // (cùng chữ ký) — không phải uninstall mất dữ liệu.
+            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

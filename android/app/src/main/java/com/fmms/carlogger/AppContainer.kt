@@ -128,6 +128,9 @@ object AppContainer {
             scope = appScope,
             settings = { prefs.getMac() },
         )
+        this.obdManager.elms.onLog = { cmd, resp ->
+            diagLog.logRaw(cmd, resp ?: "TIMEOUT")
+        }
 
         // Layer: engines
         this.telemetryEngine = TelemetryEngine(
@@ -135,6 +138,8 @@ object AppContainer {
             gpsTracker = gpsTracker,
             diagLogOutput = if (prefs.getDiagEnabled()) diagLog else null,
             scope = appScope,
+            vehicleRepository = vehicleRepository,
+            odoStore = context.getSharedPreferences("ecu_odo", android.content.Context.MODE_PRIVATE),
         )
         this.fuelEngine = FuelEngine(vehicleRepository, tripRepository, fuelLogRepository)
         this.tripEngine = TripEngine(vehicleRepository, tripRepository, appScope) { prefs.getTripTimeoutMs() }
@@ -161,38 +166,11 @@ object AppContainer {
         appScope.launch { block() }
     }
 
-    /** Manual "SYNC NOW": repair stale payloads then push pending to Supabase. */
+    /** Manual "SYNC NOW": purge orphans + repair payloads + push pending to Supabase. */
     fun syncNow() {
         launch {
             if (!prefs.getSyncEnabled()) return@launch
-            syncQueueRepository.repairStalePayloads(limit = 500)
-            val client = OkHttpClient()
-            for (type in listOf("devices", "vehicles", "trips", "gps_track_points")) {
-                for (entry in syncQueueRepository.getPendingByType(type, limit = 500)) {
-                    val req = Request.Builder()
-                        .url("${BuildConfig.SUPABASE_URL}/rest/v1/$type")
-                        .header("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
-                        .header("Authorization", "Bearer ${BuildConfig.SUPABASE_PUBLISHABLE_KEY}")
-                        .header("Content-Type", "application/json")
-                        .header("Prefer", "resolution=merge-duplicates,return=minimal")
-                        .post(entry.payload.toRequestBody("application/json".toMediaType()))
-                        .build()
-                    try {
-                        client.newCall(req).execute().use { resp ->
-                            if (resp.isSuccessful) {
-                                syncQueueRepository.markSynced(entry.id)
-                            } else {
-                                syncQueueRepository.markFailed(
-                                    entry.id,
-                                    "HTTP ${resp.code}: ${resp.body?.string()?.take(180)}",
-                                )
-                            }
-                        }
-                    } catch (_: Exception) {
-                        syncQueueRepository.markFailed(entry.id, "NETWORK")
-                    }
-                }
-            }
+            com.fmms.carlogger.data.sync.SyncWorker.pushPendingNow(this@AppContainer)
         }
     }
 }

@@ -50,6 +50,7 @@ class MoreViewModel(private val dashboard: DashboardViewModel) : ViewModel() {
         object Settings : Page()
         object Connection : Page()
         object Device : Page()
+        object Tpms : Page()
     }
 
     private val _page = MutableStateFlow<Page>(Page.Menu)
@@ -65,6 +66,10 @@ class MoreViewModel(private val dashboard: DashboardViewModel) : ViewModel() {
 fun MoreScreen(vm: DashboardViewModel) {
     val moreVm: MoreViewModel = viewModel { MoreViewModel(dashboard = vm) }
     val page by moreVm.page.collectAsStateWithLifecycle()
+    // Nút BACK cứng: đang ở trang con thì quay về menu MORE thay vì thoát app
+    androidx.activity.compose.BackHandler(enabled = page != MoreViewModel.Page.Menu) {
+        moreVm.back()
+    }
 
     when (page) {
         is MoreViewModel.Page.Menu -> MoreMenu(onOpen = moreVm::open, vm = vm)
@@ -75,6 +80,7 @@ fun MoreScreen(vm: DashboardViewModel) {
         is MoreViewModel.Page.Settings -> SettingsScreen(onBack = moreVm::back)
         is MoreViewModel.Page.Connection -> ConnectionScreen(onBack = moreVm::back)
         is MoreViewModel.Page.Device -> DeviceConfigScreen(onBack = moreVm::back)
+        is MoreViewModel.Page.Tpms -> com.fmms.carlogger.ui.tpms.TpmsScanScreen(onBack = moreVm::back)
     }
 }
 
@@ -96,13 +102,14 @@ private fun MoreMenu(onOpen: (MoreViewModel.Page) -> Unit, vm: DashboardViewMode
         ) {
             Text(strings.more, color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(10.dp))
-            MenuItem(strings.liveData, "All OBD + GPS readings in real time") { onOpen(MoreViewModel.Page.Live) }
-            MenuItem(strings.vehicles, "Manage your fleet and active vehicle") { onOpen(MoreViewModel.Page.Vehicles) }
-            MenuItem(strings.diagnostics, "Raw ELM327 command / response log") { onOpen(MoreViewModel.Page.Diagnostics) }
-            MenuItem(strings.cloud, "Sync status with Supabase") { onOpen(MoreViewModel.Page.Cloud) }
-            MenuItem(strings.connection, "Pair & connect the KW906 adapter") { onOpen(MoreViewModel.Page.Connection) }
-            MenuItem(strings.device, "Cấu hình tên thiết bị, chế độ OBD / GPS-only") { onOpen(MoreViewModel.Page.Device) }
-            MenuItem(strings.settings, "App preferences, trip timeout, sync") { onOpen(MoreViewModel.Page.Settings) }
+            MenuItem(strings.liveData, strings.liveDataDesc) { onOpen(MoreViewModel.Page.Live) }
+            MenuItem(strings.vehicles, strings.vehiclesDesc) { onOpen(MoreViewModel.Page.Vehicles) }
+            MenuItem(strings.diagnostics, strings.diagnosticsDesc) { onOpen(MoreViewModel.Page.Diagnostics) }
+            MenuItem(strings.cloud, strings.cloudDesc) { onOpen(MoreViewModel.Page.Cloud) }
+            MenuItem(strings.connection, strings.connectionDesc) { onOpen(MoreViewModel.Page.Connection) }
+            MenuItem(strings.device, strings.deviceDesc) { onOpen(MoreViewModel.Page.Device) }
+            MenuItem("TPMS", strings.tpmsDesc) { onOpen(MoreViewModel.Page.Tpms) }
+            MenuItem(strings.settings, strings.settingsDesc) { onOpen(MoreViewModel.Page.Settings) }
         }
         CustomScrollbar(scrollState, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
     }
@@ -147,13 +154,14 @@ private fun MenuItem(title: String, subtitle: String, onClick: () -> Unit) {
 
 @Composable
 private fun BackHeader(title: String, onBack: () -> Unit) {
+    val strings = LocalStrings.current
     val colors = LocalFmmsColors.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextButton(onClick = onBack) { Text("‹ Back", color = colors.cyan) }
+        TextButton(onClick = onBack) { Text(strings.backChip, color = colors.cyan) }
         Spacer(modifier = Modifier.width(8.dp))
         Text(title, color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
@@ -161,6 +169,7 @@ private fun BackHeader(title: String, onBack: () -> Unit) {
 
 @Composable
 private fun LiveDataScreen(vm: DashboardViewModel, onBack: () -> Unit) {
+    val strings = LocalStrings.current
     val state by vm.uiState.collectAsStateWithLifecycle()
     val t = state.telemetry
     val colors = LocalFmmsColors.current
@@ -171,7 +180,7 @@ private fun LiveDataScreen(vm: DashboardViewModel, onBack: () -> Unit) {
             .background(colors.background)
             .padding(16.dp),
     ) {
-        BackHeader("LIVE DATA", onBack)
+        BackHeader(strings.liveData, onBack)
         Spacer(modifier = Modifier.height(8.dp))
         LiveGrid(
             "RPM" to (t.rpm?.let { "${it.toInt()}" } ?: "N/A"),
@@ -218,6 +227,7 @@ private fun LiveGrid(vararg cells: Pair<String, String>) {
 
 @Composable
 private fun DiagnosticsScreen(onBack: () -> Unit) {
+    val strings = LocalStrings.current
     val entries by AppContainer.diagLog.entries.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var crashLog by remember { mutableStateOf<String?>(null) }
@@ -229,7 +239,7 @@ private fun DiagnosticsScreen(onBack: () -> Unit) {
             .background(colors.background)
             .padding(16.dp),
     ) {
-        BackHeader("DIAGNOSTICS", onBack)
+        BackHeader(strings.diagnostics, onBack)
         Spacer(modifier = Modifier.height(8.dp))
 
         if (crashLog == null && entries.isEmpty()) {
@@ -239,7 +249,7 @@ private fun DiagnosticsScreen(onBack: () -> Unit) {
                     .weight(1f),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("No diagnostic entries. Enable diag logging in Settings, then connect OBD.", color = colors.textSecondary)
+                Text(strings.diagEmpty, color = colors.textSecondary)
             }
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
@@ -254,8 +264,8 @@ private fun DiagnosticsScreen(onBack: () -> Unit) {
                 crashLog = com.fmms.carlogger.FmmsApplication.crashLogPath(context)
                     .takeIf { it.exists() }?.readText()?.let { "--- CRASH LOG ---\n$it" }
                     ?: "No crash log found."
-            }) { Text("SHOW CRASH LOG") }
-            OutlinedButton(onClick = { AppContainer.diagLog.clear() }) { Text("CLEAR") }
+            }) { Text(strings.showCrashLog) }
+            OutlinedButton(onClick = { AppContainer.diagLog.clear() }) { Text(strings.clearLbl) }
         }
     }
 }
@@ -265,6 +275,7 @@ private fun CloudScreen(onBack: () -> Unit) {
     val pending by AppContainer.syncQueueRepository.observePendingCount().collectAsStateWithLifecycle(0)
     val recent by AppContainer.syncQueueRepository.observeRecent().collectAsStateWithLifecycle(initialValue = emptyList())
     val colors = LocalFmmsColors.current
+    val strings = LocalStrings.current
     val clipboard = LocalClipboardManager.current
 
     Column(
@@ -273,7 +284,7 @@ private fun CloudScreen(onBack: () -> Unit) {
             .background(colors.background)
             .padding(16.dp),
     ) {
-        BackHeader("CLOUD", onBack)
+        BackHeader(strings.cloud, onBack)
         Spacer(modifier = Modifier.height(12.dp))
         Card(
             modifier = Modifier.fillMaxWidth(),
@@ -281,11 +292,11 @@ private fun CloudScreen(onBack: () -> Unit) {
             colors = CardDefaults.cardColors(containerColor = colors.surface),
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text("PENDING SYNC", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(strings.pendingSync, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("$pending records", color = colors.cyan, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                Text(strings.recordsCountFmt.format(pending), color = colors.cyan, fontSize = 24.sp, fontWeight = FontWeight.Black)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Live push mỗi 30s + WorkManager 15 phút khi online.", color = colors.textSecondary, fontSize = 12.sp)
+                Text(strings.syncHint, color = colors.textSecondary, fontSize = 12.sp)
                 Spacer(modifier = Modifier.height(10.dp))
                 val syncing = remember { mutableStateOf(false) }
                 Button(
@@ -305,7 +316,7 @@ private fun CloudScreen(onBack: () -> Unit) {
                     ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(if (syncing.value) "ĐANG ĐỒNG BỘ..." else "SYNC NGAY", fontWeight = FontWeight.Bold)
+                    Text(if (syncing.value) strings.syncingNow else strings.syncNow, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -316,10 +327,10 @@ private fun CloudScreen(onBack: () -> Unit) {
             colors = CardDefaults.cardColors(containerColor = colors.surface),
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text("LAST SYNC DETAILS  (chạm để copy)", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(strings.lastSyncTapCopy, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
                 if (recent.isEmpty()) {
-                    Text("Chưa có bản ghi.", color = colors.textPrimary, fontSize = 13.sp)
+                    Text(strings.noRecordsYet, color = colors.textPrimary, fontSize = 13.sp)
                 } else {
                     recent.take(8).forEach { e ->
                         val err = e.lastError?.let { " 🔴 $it" } ?: ""
@@ -455,7 +466,7 @@ private fun ThemeSelector(current: String, onSelect: (String) -> Unit) {
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
             Text(
-                "Chế độ hiển thị (Theme)",
+                com.fmms.carlogger.ui.i18n.LocalStrings.current.themeLabel,
                 color = colors.textPrimary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -472,7 +483,7 @@ private fun ThemeSelector(current: String, onSelect: (String) -> Unit) {
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        com.fmms.carlogger.ui.theme.ThemeMode.label(mode),
+                        com.fmms.carlogger.ui.theme.ThemeMode.label(mode, com.fmms.carlogger.ui.i18n.LocalStrings.current),
                         color = colors.textPrimary,
                         fontSize = 14.sp,
                     )
@@ -503,6 +514,7 @@ private fun SettingRow(title: String, checked: Boolean, onChange: (Boolean) -> U
 
 @Composable
 private fun VehiclesScreen(onBack: () -> Unit) {
+    val strings = LocalStrings.current
     val context = LocalContext.current
     val vehicles by AppContainer.vehicleRepository.observeAll().collectAsStateWithLifecycle(emptyList())
     val colors = LocalFmmsColors.current
@@ -521,8 +533,8 @@ private fun VehiclesScreen(onBack: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BackHeader("VEHICLES", onBack)
-            Button(onClick = { showAdd = true }) { Text("+ ADD") }
+            BackHeader(strings.vehicles, onBack)
+            Button(onClick = { showAdd = true }) { Text(strings.addPlus) }
         }
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -577,7 +589,7 @@ private fun VehiclesScreen(onBack: () -> Unit) {
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton(onClick = { editing = v }) {
-                                Text("EDIT TÊN XE", color = colors.cyan, fontSize = 12.sp)
+                                Text(strings.editVehicleNameBtn, color = colors.cyan, fontSize = 12.sp)
                             }
                         }
                     }
@@ -596,6 +608,7 @@ private fun VehiclesScreen(onBack: () -> Unit) {
 
 @Composable
 private fun AddVehicleDialog(onDismiss: () -> Unit) {
+    val strings = LocalStrings.current
     val context = LocalContext.current
     var make by remember { mutableStateOf("Mazda") }
     var model by remember { mutableStateOf("Mazda 2 AT") }
@@ -607,20 +620,20 @@ private fun AddVehicleDialog(onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Vehicle", color = colors.textPrimary) },
+        title = { Text(strings.addVehicle, color = colors.textPrimary) },
         text = {
             Column {
-                OutlinedTextField(value = make, onValueChange = { make = it }, label = { Text("Make (Hãng)") }, singleLine = true)
+                OutlinedTextField(value = make, onValueChange = { make = it }, label = { Text(strings.fldMake) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Model (Tên xe)") }, singleLine = true)
+                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text(strings.fldModel) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = trim, onValueChange = { trim = it }, label = { Text("Phiên bản (Trim)") }, singleLine = true)
+                OutlinedTextField(value = trim, onValueChange = { trim = it }, label = { Text(strings.fldTrim) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = plate, onValueChange = { plate = it }, label = { Text("License plate") }, singleLine = true)
+                OutlinedTextField(value = plate, onValueChange = { plate = it }, label = { Text(strings.fldPlate) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("Year") }, singleLine = true)
+                OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text(strings.fldYear) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = tank, onValueChange = { tank = it }, label = { Text("Tank (L)") }, singleLine = true)
+                OutlinedTextField(value = tank, onValueChange = { tank = it }, label = { Text(strings.fldTank) }, singleLine = true)
             }
         },
         confirmButton = {
@@ -638,7 +651,7 @@ private fun AddVehicleDialog(onDismiss: () -> Unit) {
                         tankCapacityLiters = tank.toDoubleOrNull() ?: 44.0,
                     )
                 }
-                Toast.makeText(context, "Vehicle added", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, strings.vehicleAdded, Toast.LENGTH_SHORT).show()
                 onDismiss()
             }) { Text("SAVE") }
         },
@@ -654,6 +667,7 @@ private fun EditVehicleDialog(
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
+    val strings = LocalStrings.current
     var make by remember { mutableStateOf(vehicle.make) }
     var model by remember { mutableStateOf(vehicle.model) }
     var trim by remember { mutableStateOf(vehicle.trim) }
@@ -665,22 +679,22 @@ private fun EditVehicleDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Sửa thông tin xe", color = colors.textPrimary) },
+        title = { Text(strings.editVehicle, color = colors.textPrimary) },
         text = {
             Column {
-                OutlinedTextField(value = make, onValueChange = { make = it }, label = { Text("Make (Hãng)") }, singleLine = true)
+                OutlinedTextField(value = make, onValueChange = { make = it }, label = { Text(strings.fldMake) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text("Model (Tên xe)") }, singleLine = true)
+                OutlinedTextField(value = model, onValueChange = { model = it }, label = { Text(strings.fldModel) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = trim, onValueChange = { trim = it }, label = { Text("Phiên bản (Trim)") }, singleLine = true)
+                OutlinedTextField(value = trim, onValueChange = { trim = it }, label = { Text(strings.fldTrim) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = plate, onValueChange = { plate = it }, label = { Text("License plate") }, singleLine = true)
+                OutlinedTextField(value = plate, onValueChange = { plate = it }, label = { Text(strings.fldPlate) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text("Year") }, singleLine = true)
+                OutlinedTextField(value = year, onValueChange = { year = it }, label = { Text(strings.fldYear) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = tank, onValueChange = { tank = it }, label = { Text("Tank (L)") }, singleLine = true)
+                OutlinedTextField(value = tank, onValueChange = { tank = it }, label = { Text(strings.fldTank) }, singleLine = true)
                 Spacer(modifier = Modifier.height(6.dp))
-                OutlinedTextField(value = odo, onValueChange = { odo = it }, label = { Text("ODO (km) — xóa để về 0 cho xe đạp") }, singleLine = true)
+                OutlinedTextField(value = odo, onValueChange = { odo = it }, label = { Text(strings.fldOdoClear) }, singleLine = true)
             }
         },
         confirmButton = {
@@ -701,7 +715,7 @@ private fun EditVehicleDialog(
                         AppContainer.odometerEngine.adoptVehicleOdometer()
                     }
                 }
-                Toast.makeText(context, "Vehicle updated", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, strings.vehicleUpdated, Toast.LENGTH_SHORT).show()
                 onDismiss()
             }) { Text("SAVE") }
         },
@@ -774,10 +788,56 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                 Text(deviceId, color = colors.cyan, fontSize = 12.sp)
                 if (prefs.getDeviceMode() == "obd") {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("MAC (OBD): ${obdMac ?: "chưa chọn adapter"}", color = colors.textSecondary, fontSize = 11.sp)
+                    Text(strings.macObdFmt.format(obdMac ?: strings.noAdapterSelected), color = colors.textSecondary, fontSize = 11.sp)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(strings.deviceIdNote, color = colors.textSecondary, fontSize = 11.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Hiệu chuẩn ODO: khi ECU không hỗ trợ PID 01A6, nhập số ODO trên đồng hồ táp
+        val activeVehicle = vehicles.firstOrNull { it.active } ?: vehicles.firstOrNull()
+        var odoInput by remember { mutableStateOf("") }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(strings.odometerLbl, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    strings.odoEcuNote.format(activeVehicle?.odometerKm?.let { String.format(java.util.Locale.US, "%.0f km", it) } ?: "—"),
+                    color = colors.textSecondary,
+                    fontSize = 11.sp,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = odoInput,
+                        onValueChange = { odoInput = it.filter { ch -> ch.isDigit() }.take(7) },
+                        label = { Text(strings.realOdoKm, color = colors.textSecondary) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            odoInput.toDoubleOrNull()?.let { km ->
+                                AppContainer.launch {
+                                    AppContainer.odometerEngine.manualCalibration(km)
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        Toast.makeText(context, strings.odoSetFmt.format("${km.toInt()} km"), Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                odoInput = ""
+                            }
+                        },
+                        enabled = odoInput.toDoubleOrNull()?.let { it > 0 } == true,
+                    ) { Text(strings.save) }
+                }
             }
         }
 
@@ -866,8 +926,8 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                                 withContext(Dispatchers.Main) {
                                     Toast.makeText(
                                         context,
-                                        if (synced.isNotEmpty()) "Đã đồng bộ ${synced.size} xe từ web"
-                                        else "Không có xe từ web — tạo xe trên web trước",
+                                        if (synced.isNotEmpty()) strings.syncedFromWeb.format(synced.size)
+                                        else strings.noVehiclesFromWeb,
                                         Toast.LENGTH_SHORT,
                                     ).show()
                                 }
@@ -876,7 +936,7 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                     },
                     enabled = !syncingWeb,
                 ) {
-                    Text(if (syncingWeb) "ĐANG ĐỒNG BỘ..." else strings.syncWeb)
+                    Text(if (syncingWeb) strings.syncingNow else strings.syncWeb)
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -894,7 +954,7 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                                 AppContainer.odometerEngine.adoptVehicleOdometer()
                                 AppContainer.vehicleRepository.registerDeviceWithVehicle(v.id, prefs.getDeviceName() ?: "Tracker")
                             }
-                            Toast.makeText(context, "Đã gán: ${v.displayName()}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, strings.assignedFmt.format(v.displayName()), Toast.LENGTH_SHORT).show()
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth().clickable { requirePassword(assignAction) },
@@ -924,7 +984,7 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                 Spacer(modifier = Modifier.height(6.dp))
                 val assignedName = vehicles.firstOrNull { it.id == assignedId }?.displayName()
                 Text(
-                    if (assignedId != null) "Đã gán cố định → mọi dữ liệu gửi về xe: ${assignedName ?: "đã xóa/không khớp"}"
+                    if (assignedId != null) strings.assignedFixedFmt.format(assignedName ?: "—")
                     else strings.assignNote,
                     color = colors.textSecondary,
                     fontSize = 11.sp,
@@ -935,10 +995,10 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
         if (showPassDialog) {
             AlertDialog(
                 onDismissRequest = { showPassDialog = false },
-                title = { Text("Mật khẩu", color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) },
+                title = { Text(strings.passwordTitle, color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) },
                 text = {
                     Column {
-                        Text("Nhập mật khẩu để đồng bộ xe / gán xe", color = colors.textSecondary, fontSize = 12.sp)
+                        Text(strings.enterPasswordNote, color = colors.textSecondary, fontSize = 12.sp)
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = passInput,
@@ -950,7 +1010,7 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
                         )
                         if (passError) {
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text("Sai mật khẩu — thử lại", color = colors.red, fontSize = 11.sp)
+                            Text(strings.wrongPassword, color = colors.red, fontSize = 11.sp)
                         }
                     }
                 },
@@ -975,7 +1035,9 @@ private fun DeviceConfigScreen(onBack: () -> Unit) {
 }
 
 @Composable
-fun ConnectionScreen(onBack: () -> Unit) {    val context = LocalContext.current
+fun ConnectionScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val strings = LocalStrings.current
     val vm: ConnectionViewModel = viewModel()
     val devices by vm.devices.collectAsStateWithLifecycle(emptyList())
     val scanning by vm.scanning.collectAsStateWithLifecycle(false)
@@ -988,7 +1050,7 @@ fun ConnectionScreen(onBack: () -> Unit) {    val context = LocalContext.current
             .background(colors.background)
             .padding(16.dp),
     ) {
-        BackHeader("OBD CONNECTION", onBack)
+        BackHeader(strings.connection, onBack)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             "Status: ${state.name}",
@@ -996,14 +1058,14 @@ fun ConnectionScreen(onBack: () -> Unit) {    val context = LocalContext.current
             fontSize = 15.sp,
             fontWeight = FontWeight.SemiBold,
         )
-        Text("Pair the KW906 in Android Bluetooth settings first, then choose it below.", color = colors.textSecondary, fontSize = 12.sp)
+        Text(strings.pairHint, color = colors.textSecondary, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(10.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { vm.scan() }) {
                 Text(if (scanning) "SCANNING..." else "SCAN BLUETOOTH")
             }
-            Button(onClick = { vm.disconnect() }) { Text("DISCONNECT") }
+            Button(onClick = { vm.disconnect() }) { Text(strings.disconnectBtn) }
         }
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -1024,12 +1086,12 @@ fun ConnectionScreen(onBack: () -> Unit) {    val context = LocalContext.current
                             Text(device.name, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                             Text(device.address, color = colors.textSecondary, fontSize = 12.sp)
                         }
-                        Text("Tap to connect", color = colors.cyan, fontSize = 12.sp)
+                        Text(strings.tapToConnect, color = colors.cyan, fontSize = 12.sp)
                     }
                 }
             }
             if (devices.isEmpty()) {
-                item { Text("No paired devices found. Enable Bluetooth.", color = colors.textSecondary, modifier = Modifier.padding(8.dp)) }
+                item { Text(strings.noPairedDevices, color = colors.textSecondary, modifier = Modifier.padding(8.dp)) }
             }
         }
     }
@@ -1132,6 +1194,15 @@ class ConnectionViewModel : ViewModel() {
 
     fun disconnect() {
         viewModelScope.launch { c.obdManager.disconnect() }
+    }
+
+    /** Forget the paired adapter: disconnect, clear saved MAC + name. */
+    fun unlink() {
+        viewModelScope.launch {
+            c.obdManager.disconnect()
+            c.prefs.setMac(null)
+            c.prefs.setDeviceName(null)
+        }
     }
 
     override fun onCleared() {

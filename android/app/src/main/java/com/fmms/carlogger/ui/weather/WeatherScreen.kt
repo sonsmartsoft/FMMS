@@ -1,5 +1,6 @@
 package com.fmms.carlogger.ui.weather
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -21,6 +22,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fmms.carlogger.data.repository.WeatherData
 import com.fmms.carlogger.data.repository.WeatherRepository
 import com.fmms.carlogger.ui.DashboardViewModel
+import com.fmms.carlogger.ui.i18n.FmmsStrings
+import com.fmms.carlogger.ui.i18n.LocalStrings
 import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -33,6 +36,7 @@ import java.util.Locale
 @Composable
 fun WeatherScreen(vm: DashboardViewModel) {
     val colors = LocalFmmsColors.current
+    val strings = LocalStrings.current
     val state by vm.uiState.collectAsStateWithLifecycle()
     val lat = state.telemetry.latitude
     val lon = state.telemetry.longitude
@@ -42,6 +46,7 @@ fun WeatherScreen(vm: DashboardViewModel) {
     var error by remember { mutableStateOf<String?>(null) }
     var placeName by remember { mutableStateOf<String?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    var lastFetchKey by remember { mutableStateOf<String?>(null) } // chống fetch trùng
 
     // Địa danh ngược từ GPS: "Phường/Xã, Tỉnh/Thành" — không có thì fallback tọa độ
     LaunchedEffect(lat, lon) {
@@ -62,19 +67,56 @@ fun WeatherScreen(vm: DashboardViewModel) {
         placeName = name
     }
 
-    LaunchedEffect(lat, lon) {
-        if (lat != null && lon != null && (data == null ||
-                System.currentTimeMillis() - data!!.fetchedAt > 15 * 60 * 1000L)
-        ) {
-            loading = true
-            error = null
-            val result = withContext(Dispatchers.IO) {
-                com.fmms.carlogger.data.repository.WeatherRepository.fetchSync(lat, lon)
-            }
-            if (result != null) data = result
-            else if (data == null) error = "Không tải được thời tiết (kiểm tra mạng / GPS)"
-            loading = false
+    // Lần mở đầu: cache đĩa hiện NGAY + fetch bằng vị trí cuối hệ điều hành
+    // (last-known) — KHÔNG chờ GPS fix mới như trước.
+    LaunchedEffect(Unit) {
+        if (data == null) {
+            withContext(Dispatchers.IO) { WeatherRepository.loadDiskCache(context) }?.let { data = it }
         }
+        if (data != null && System.currentTimeMillis() - data!!.fetchedAt <= 15 * 60 * 1000L) {
+            return@LaunchedEffect // cache còn tươi, khỏi fetch
+        }
+        val coord = lat?.let { la -> lon?.let { lo -> la to lo } }
+            ?: lastKnownAny(context)?.let { it.latitude to it.longitude }
+        if (coord == null) return@LaunchedEffect // chưa có gì — đợi effect(lat,lon)
+        lastFetchKey = "%.4f,%.4f".format(coord.first, coord.second)
+        loading = true
+        error = null
+        val result = withContext(Dispatchers.IO) {
+            WeatherRepository.fetchSync(coord.first, coord.second)
+        }
+        if (result != null) {
+            data = result
+            WeatherRepository.saveDiskCache(context, result)
+        } else if (data == null) {
+            error = strings.weatherLoadError
+        }
+        loading = false
+    }
+
+    // GPS sống lại / đổi nơi đáng kể (>3km): refresh nền
+    LaunchedEffect(lat, lon) {
+        if (lat == null || lon == null) return@LaunchedEffect
+        val key = "%.4f,%.4f".format(lat, lon)
+        val movedFar = data != null && (
+            (lat - data!!.latitude) * (lat - data!!.latitude) +
+                (lon - data!!.longitude) * (lon - data!!.longitude) > 0.0016
+            )
+        val stale = data == null || System.currentTimeMillis() - data!!.fetchedAt > 15 * 60 * 1000L
+        if ((!stale && !movedFar) || lastFetchKey == key) return@LaunchedEffect
+        lastFetchKey = key
+        loading = data == null
+        error = null
+        val result = withContext(Dispatchers.IO) {
+            WeatherRepository.fetchSync(lat, lon)
+        }
+        if (result != null) {
+            data = result
+            WeatherRepository.saveDiskCache(context, result)
+        } else if (data == null) {
+            error = strings.weatherLoadError
+        }
+        loading = false
     }
 
     // Nền mô phỏng theo trạng thái thời tiết thực (nắng/mây/mưa/dông/tuyết/đêm)
@@ -92,7 +134,7 @@ fun WeatherScreen(vm: DashboardViewModel) {
     ) {
         // Header — đóng bằng cách bấm icon trên thanh điều hướng
         Text(
-            "THỜI TIẾT",
+            strings.weatherTitle,
             color = Color.White,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
@@ -101,24 +143,24 @@ fun WeatherScreen(vm: DashboardViewModel) {
         )
 
         when {
-            data == null && loading -> Text("Đang tải...", color = Color.White, fontSize = 14.sp)
+            data == null && loading -> Text(strings.loading, color = Color.White, fontSize = 14.sp)
             data == null && error != null -> Text(error!!, color = colors.amber, fontSize = 13.sp, textAlign = TextAlign.Center)
             data == null -> Text(
-                "Đang chờ tín hiệu GPS để xác định vị trí...",
+                strings.waitingLocation,
                 color = Color.White.copy(alpha = 0.8f),
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center,
             )
-            else -> WeatherBody(data!!, placeName)
+            else -> WeatherBody(data!!, placeName, strings)
         }
     }
 }
 
 @Composable
-private fun WeatherBody(data: WeatherData, placeName: String?) {
+private fun WeatherBody(data: WeatherData, placeName: String?, s: FmmsStrings) {
     val colors = LocalFmmsColors.current
     val cur = data.current
-    val wmo = wmoDesc(cur.code, cur.isDay)
+    val wmo = wmoDesc(cur.code, cur.isDay, s)
 
     Spacer(modifier = Modifier.height(8.dp))
     // Tên vị trí (Geocoder) — fallback tọa độ
@@ -146,10 +188,13 @@ private fun WeatherBody(data: WeatherData, placeName: String?) {
         fontSize = 16.sp,
         fontWeight = FontWeight.SemiBold,
     )
-    Text("Cao ${data.daily.firstOrNull()?.max?.toInt() ?: "—"}° / Thấp ${data.daily.firstOrNull()?.min?.toInt() ?: "—"}°",
-        color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
+    val t0 = data.daily.firstOrNull()
     Text(
-        "Cảm giác như ${cur.apparentTemp.toInt()}° • Độ ẩm ${cur.humidity}% • Gió ${cur.windKmh.toInt()} km/h",
+        if (t0 != null) s.highLowFmt.format(t0.max.toInt(), t0.min.toInt()) else "—",
+        color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp,
+    )
+    Text(
+        s.feelsLikeFmt.format(cur.apparentTemp.toInt(), cur.humidity, cur.windKmh.toInt()),
         color = Color.White.copy(alpha = 0.7f),
         fontSize = 12.sp,
     )
@@ -160,18 +205,18 @@ private fun WeatherBody(data: WeatherData, placeName: String?) {
     val today = data.daily.firstOrNull()
     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f))) {
         Column(Modifier.padding(12.dp)) {
-            Text("CHI TIẾT", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text(s.detailsLbl, color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                DetailTile("☀️ UV", cur.uvIndex?.let { String.format(Locale.US, "%.1f", it) } ?: "—", Modifier.weight(1f))
-                DetailTile("💨 GIÓ", "${cur.windKmh.toInt()} km/h", Modifier.weight(1f))
-                DetailTile("💧 ĐỘ ẨM", "${cur.humidity}%", Modifier.weight(1f))
+                DetailTile(s.lblUv, cur.uvIndex?.let { String.format(Locale.US, "%.1f", it) } ?: "—", Modifier.weight(1f))
+                DetailTile(s.lblWind, "${cur.windKmh.toInt()} km/h", Modifier.weight(1f))
+                DetailTile(s.lblHumidity, "${cur.humidity}%", Modifier.weight(1f))
             }
             Spacer(Modifier.height(12.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                DetailTile("🔽 ÁP SUẤT", cur.pressureHpa?.let { "${it.toInt()} hPa" } ?: "—", Modifier.weight(1f))
-                DetailTile("🌅 MẶT TRỜI MỌC", today?.sunrise?.let { hhmm(it) } ?: "—", Modifier.weight(1f))
-                DetailTile("🌇 MẶT TRỜI LẶN", today?.sunset?.let { hhmm(it) } ?: "—", Modifier.weight(1f))
+                DetailTile(s.lblPressure, cur.pressureHpa?.let { "${it.toInt()} hPa" } ?: "—", Modifier.weight(1f))
+                DetailTile(s.lblSunrise, today?.sunrise?.let { hhmm(it) } ?: "—", Modifier.weight(1f))
+                DetailTile(s.lblSunset, today?.sunset?.let { hhmm(it) } ?: "—", Modifier.weight(1f))
             }
         }
     }
@@ -181,7 +226,7 @@ private fun WeatherBody(data: WeatherData, placeName: String?) {
     // Theo giờ — 24h tới
     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f))) {
         Column(Modifier.padding(12.dp)) {
-            Text("DỰ BÁO THEO GIỜ", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text(s.hourlyForecast, color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             val upcoming = upcomingHours(data)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -189,7 +234,7 @@ private fun WeatherBody(data: WeatherData, placeName: String?) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(hourLabel(h.time), color = Color.White, fontSize = 11.sp)
                         Spacer(Modifier.height(4.dp))
-                        Text(wmoDesc(h.code, true).emoji, fontSize = 22.sp)
+                        Text(wmoDesc(h.code, true, s).emoji, fontSize = 22.sp)
                         Spacer(Modifier.height(4.dp))
                         Text("${h.temp.toInt()}°", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         if (h.precipProb > 20) {
@@ -211,7 +256,7 @@ private fun WeatherBody(data: WeatherData, placeName: String?) {
     val span = (gMax - gMin).takeIf { it > 0.5 } ?: 1.0
     Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.08f))) {
         Column(Modifier.padding(12.dp)) {
-            Text("7 NGÀY TỚI", color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text(s.next7Days, color = Color.White.copy(alpha = 0.7f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(6.dp))
             data.daily.forEachIndexed { i, d ->
                 Row(
@@ -219,13 +264,13 @@ private fun WeatherBody(data: WeatherData, placeName: String?) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        dayLabel(d.date, i),
+                        dayLabel(d.date, i, s),
                         color = Color.White,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1.4f),
                     )
-                    Text(wmoDesc(d.code, true).emoji, fontSize = 20.sp, modifier = Modifier.weight(0.8f), textAlign = TextAlign.Center)
+                    Text(wmoDesc(d.code, true, s).emoji, fontSize = 20.sp, modifier = Modifier.weight(0.8f), textAlign = TextAlign.Center)
                     if (d.precipProb > 20) {
                         Text("💧${d.precipProb}%", color = colors.cyan, fontSize = 10.sp, modifier = Modifier.weight(1f))
                     } else {
@@ -345,22 +390,14 @@ private fun hourLabel(iso: String): String {
     return if (h == 0) "00h" else "${h}h"
 }
 
-private fun dayLabel(date: String, index: Int): String {
-    if (index == 0) return "Hôm nay"
+private fun dayLabel(date: String, index: Int, s: FmmsStrings): String {
+    if (index == 0) return s.todayShort
     return try {
         val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val d = fmt.parse(date)!!
         val cal = Calendar.getInstance().apply { time = d }
-        val dow = when (cal.get(Calendar.DAY_OF_WEEK)) {
-            Calendar.MONDAY -> "Thứ 2"
-            Calendar.TUESDAY -> "Thứ 3"
-            Calendar.WEDNESDAY -> "Thứ 4"
-            Calendar.THURSDAY -> "Thứ 5"
-            Calendar.FRIDAY -> "Thứ 6"
-            Calendar.SATURDAY -> "Thứ 7"
-            else -> "CN"
-        }
-        dow
+        // Calendar: SUN=1..SAT=7 -> mảng Mon-first: (dow+5)%7
+        s.weekdays[(cal.get(Calendar.DAY_OF_WEEK) + 5) % 7]
     } catch (e: Exception) {
         date
     }
@@ -368,18 +405,45 @@ private fun dayLabel(date: String, index: Int): String {
 
 private data class Wmo(val emoji: String, val vi: String)
 
-private fun wmoDesc(code: Int, isDay: Boolean): Wmo = when (code) {
-    0 -> Wmo(if (isDay) "☀️" else "🌙", if (isDay) "Đang nắng" else "Trời quang")
-    1 -> Wmo(if (isDay) "🌤️" else "🌙", "Ít mây")
-    2 -> Wmo("⛅", "Có mây")
-    3 -> Wmo("☁️", "Nhiều mây")
-    45, 48 -> Wmo("🌫️", "Sương mù")
-    in 51..57 -> Wmo("🌦️", "Đang mưa phùn")
-    in 61..67 -> Wmo("🌧️", "Đang mưa")
-    in 71..77 -> Wmo("🌨️", "Có tuyết rơi")
-    in 80..82 -> Wmo("🌧️", "Mưa rào")
-    85, 86 -> Wmo("🌨️", "Mưa tuyết")
-    95 -> Wmo("⛈️", "Đang có dông")
-    96, 99 -> Wmo("⛈️", "Dông kèm mưa đá")
+private fun wmoDesc(code: Int, isDay: Boolean, s: FmmsStrings): Wmo = when (code) {
+    0 -> Wmo(if (isDay) "☀️" else "🌙", if (isDay) s.wmoClearDay else s.wmoClearNight)
+    1 -> Wmo(if (isDay) "🌤️" else "🌙", s.wmoFewClouds)
+    2 -> Wmo("⛅", s.wmoCloudy)
+    3 -> Wmo("☁️", s.wmoOvercast)
+    45, 48 -> Wmo("🌫️", s.wmoFog)
+    in 51..57 -> Wmo("🌦️", s.wmoDrizzle)
+    in 61..67 -> Wmo("🌧️", s.wmoRain)
+    in 71..77 -> Wmo("🌨️", s.wmoSnow)
+    in 80..82 -> Wmo("🌧️", s.wmoShowers)
+    85, 86 -> Wmo("🌨️", s.wmoSnowShowers)
+    95 -> Wmo("⛈️", s.wmoThunder)
+    96, 99 -> Wmo("⛈️", s.wmoHail)
     else -> Wmo("🌡️", "—")
+}
+
+/**
+ * Vị trí cuối cùng Hệ điều hành đã biết (passive/network/gps) — lấy ngay lập tức,
+ * không cần chờ GPS fix mới. Chọn điểm MỚI NHẤT trong các provider.
+ */
+@SuppressLint("MissingPermission")
+private fun lastKnownAny(context: android.content.Context): android.location.Location? {
+    val fine = androidx.core.content.ContextCompat.checkSelfPermission(
+        context, android.Manifest.permission.ACCESS_FINE_LOCATION
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    val coarse = androidx.core.content.ContextCompat.checkSelfPermission(
+        context, android.Manifest.permission.ACCESS_COARSE_LOCATION
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    if (!fine && !coarse) return null
+    return try {
+        val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+        listOf(
+            android.location.LocationManager.PASSIVE_PROVIDER,
+            android.location.LocationManager.NETWORK_PROVIDER,
+            android.location.LocationManager.GPS_PROVIDER,
+        ).mapNotNull { p -> runCatching { lm.getLastKnownLocation(p) }.getOrNull() }
+            .filter { it.latitude != 0.0 || it.longitude != 0.0 }
+            .maxByOrNull { it.time }
+    } catch (_: Exception) {
+        null
+    }
 }

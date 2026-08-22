@@ -2,6 +2,7 @@ package com.fmms.carlogger.ui.dashboard
 
 import android.content.Intent
 import android.graphics.drawable.Drawable
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -51,6 +52,7 @@ import java.util.Locale
  */
 @Composable
 fun SpeedometerScreen(vm: DashboardViewModel) {
+    val s = com.fmms.carlogger.ui.i18n.LocalStrings.current
     val state by vm.uiState.collectAsStateWithLifecycle()
     val colors = LocalFmmsColors.current
 
@@ -63,7 +65,7 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
     ) {
         // Header — đóng bằng cách bấm icon trên thanh điều hướng
         Text(
-            "TỐC ĐỘ",
+            s.speed,
             color = colors.textPrimary,
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
@@ -93,6 +95,7 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
                             speedKmh = state.telemetry.speedKmh?.takeIf { it.isFinite() && it >= 0 } ?: 0.0,
                             maxSpeedKmh = state.trip.maxSpeedKmh?.takeIf { it.isFinite() && it > 0 } ?: 0.0,
                             accent = colors.red,
+                            gearLabel = state.telemetry.gearLabel,
                         )
                         Spacer(modifier = Modifier.width(14.dp))
                         MiniObdGauge(
@@ -106,6 +109,7 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
                         telemetry = state.telemetry,
                         modifier = Modifier.width((areaWidth * 0.44f).coerceAtMost(420.dp)),
                         colors = colors,
+                        s = s,
                     )
                 }
             } else {
@@ -120,6 +124,7 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
                             speedKmh = state.telemetry.speedKmh?.takeIf { it.isFinite() && it >= 0 } ?: 0.0,
                             maxSpeedKmh = state.trip.maxSpeedKmh?.takeIf { it.isFinite() && it > 0 } ?: 0.0,
                             accent = colors.red,
+                            gearLabel = state.telemetry.gearLabel,
                         )
                         Spacer(modifier = Modifier.width(14.dp))
                         MiniObdGauge(
@@ -133,6 +138,7 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
                         telemetry = state.telemetry,
                         modifier = Modifier.fillMaxWidth(),
                         colors = colors,
+                        s = s,
                     )
                 }
             }
@@ -150,8 +156,8 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceAround,
             ) {
-                SpeedStat("Quãng đường", tripDistance(state), colors.cyan)
-                SpeedStat("Thời gian", tripTime(state), colors.textPrimary)
+                SpeedStat(s.distance, tripDistance(state), colors.cyan)
+                SpeedStat(s.duration, tripTime(state), colors.textPrimary)
                 SpeedStat("Max.", state.trip.maxSpeedKmh.takeIf { it.isFinite() && it > 0 }?.let { "${it.toInt()} km/h" } ?: "0 km/h", colors.amber)
             }
         }
@@ -171,9 +177,9 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Row(horizontalArrangement = Arrangement.SpaceAround) {
-                    SpeedStat("Quãng đường", tripDistance(state), colors.textPrimary)
-                    SpeedStat("Độ chính xác", accuracy(state), colors.textPrimary)
-                    SpeedStat("Cao độ", "—", colors.textPrimary)
+                    SpeedStat(s.distance, tripDistance(state), colors.textPrimary)
+                    SpeedStat(s.accuracyLbl, accuracy(state), colors.textPrimary)
+                    SpeedStat(s.altitudeLbl, "—", colors.textPrimary)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider(color = colors.divider)
@@ -190,7 +196,8 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        if (hasFix) "GPS ĐÃ KẾT NỐI" else "Đang tìm tín hiệu GPS...",
+                        if (hasFix) com.fmms.carlogger.ui.i18n.LocalStrings.current.gpsConnected
+                        else com.fmms.carlogger.ui.i18n.LocalStrings.current.gpsSearching,
                         color = if (hasFix) colors.emerald else colors.amber,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -214,7 +221,7 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
 // ---------------------------------------------------------------------
 
 @Composable
-private fun AnalogSpeedGauge(modifier: Modifier, speedKmh: Double, maxSpeedKmh: Double, accent: Color) {
+private fun AnalogSpeedGauge(modifier: Modifier, speedKmh: Double, maxSpeedKmh: Double, accent: Color, gearLabel: String? = null) {
     val colors = LocalFmmsColors.current
     val frac = (speedKmh / 220.0).toFloat().coerceIn(0f, 1f)
     val animated by animateFloatAsState(
@@ -243,6 +250,15 @@ private fun AnalogSpeedGauge(modifier: Modifier, speedKmh: Double, maxSpeedKmh: 
                 fontWeight = FontWeight.Black,
             )
             Text("km/h", color = colors.textSecondary, fontSize = (gaugeSize.value * 0.047f).sp)
+            if (gearLabel != null) {
+                Spacer(modifier = Modifier.height((gaugeSize.value * 0.02f).dp))
+                Text(
+                    gearLabel,
+                    color = colors.cyan,
+                    fontSize = (gaugeSize.value * 0.075f).sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
     }
 }
@@ -260,15 +276,34 @@ private data class MiniMetric(
 
 private val miniMetrics = listOf(
     MiniMetric("RPM", "rpm", 8000.0) { it.rpm },
-    MiniMetric("NHIỆT NƯỚC", "°C", 140.0) { it.coolantTempC },
-    MiniMetric("MỨC XĂNG", "%", 100.0) { it.fuelLevelPercent },
-    MiniMetric("ĐIỆN ÁP", "V", 16.0) { it.batteryVoltage },
-    MiniMetric("TẢI ĐỘNG CƠ", "%", 100.0) { it.engineLoadPercent },
+    MiniMetric("COOLANT", "°C", 140.0) { it.coolantTempC },
+    MiniMetric("FUEL", "%", 100.0) { it.fuelLevelPercent },
+    MiniMetric("VOLTAGE", "V", 16.0) { it.batteryVoltage },
+
+    MiniMetric("LOAD", "%", 100.0) { it.engineLoadPercent },
 )
+
+/** Nhãn metric theo ngôn ngữ đang chọn (label trong list là key EN). */
+
+/** Màu mức xăng: <10% đỏ, ≤50% vàng, >50% xanh; null → xám. */
+private fun fuelLevelColor(pct: Double?, colors: FmmsColors): Color = when {
+    pct == null || !pct.isFinite() -> colors.textSecondary
+    pct < 10.0 -> colors.red
+    pct <= 50.0 -> colors.amber
+    else -> colors.emerald
+}
+
+private fun miniLabel(key: String, s: com.fmms.carlogger.ui.i18n.FmmsStrings): String = when (key) {
+    "COOLANT" -> s.coolantLbl
+    "FUEL" -> s.fuelLvlShort
+    "VOLTAGE" -> s.voltageLbl
+    "LOAD" -> s.engineLoadLbl
+    else -> key
+}
 
 /** Panel chỉ số động cơ dạng KPI số to — đặt bên phải gauge ở màn rộng. */
 @Composable
-private fun EngineKpiPanel(telemetry: LiveTelemetry, modifier: Modifier = Modifier, colors: FmmsColors) {
+private fun EngineKpiPanel(telemetry: LiveTelemetry, modifier: Modifier = Modifier, colors: FmmsColors, s: com.fmms.carlogger.ui.i18n.FmmsStrings) {
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
@@ -276,7 +311,7 @@ private fun EngineKpiPanel(telemetry: LiveTelemetry, modifier: Modifier = Modifi
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
             Text(
-                "ĐỘNG CƠ • OBD",
+                s.engineObdPanel,
                 color = colors.textSecondary,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
@@ -284,17 +319,30 @@ private fun EngineKpiPanel(telemetry: LiveTelemetry, modifier: Modifier = Modifi
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
                 KpiCell("RPM", telemetry.rpm?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.0f", it) } ?: "—", "", colors.cyan, Modifier.weight(1f), colors)
-                KpiCell("NHIỆT NƯỚC", telemetry.coolantTempC?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.0f", it) } ?: "—", "°C", colors.amber, Modifier.weight(1f), colors)
+                KpiCell(s.coolantLbl, telemetry.coolantTempC?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.0f", it) } ?: "—", "°C", colors.amber, Modifier.weight(1f), colors)
             }
             Spacer(modifier = Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                KpiCell("MỨC XĂNG", telemetry.fuelLevelPercent?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.0f", it) } ?: "—", "%", Color(0xFF34D399), Modifier.weight(1f), colors)
-                KpiCell("ĐIỆN ÁP", telemetry.batteryVoltage?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.1f", it) } ?: "—", "V", colors.purple, Modifier.weight(1f), colors)
+                run {
+                    val pct = telemetry.fuelLevelPercent
+                    val fc = fuelLevelColor(pct, colors)
+                    val blink = if (pct != null && pct.isFinite() && pct < 10.0) {
+                        androidx.compose.animation.core.rememberInfiniteTransition(label = "fuelKpi").animateFloat(
+                            initialValue = 0.2f, targetValue = 1f,
+                            animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                                androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.LinearEasing),
+                                androidx.compose.animation.core.RepeatMode.Reverse),
+                            label = "fuelKpiA").value
+                    } else 1f
+                    KpiCell(s.fuelLvlShort, pct?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.0f", it) } ?: "—", "%", fc.copy(alpha = blink), Modifier.weight(1f), colors)
+                }
+                KpiCell(s.voltageLbl, telemetry.batteryVoltage?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.1f", it) } ?: "—", "V", colors.purple, Modifier.weight(1f), colors)
             }
             Spacer(modifier = Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                KpiCell("TẢI ĐỘNG CƠ", telemetry.engineLoadPercent?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.0f", it) } ?: "—", "%", colors.textPrimary, Modifier.weight(1f), colors)
-                Spacer(Modifier.weight(1f))
+                KpiCell(s.engineLoadLbl, telemetry.engineLoadPercent?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.0f", it) } ?: "—", "%", colors.textPrimary, Modifier.weight(1f), colors)
+                // ODO thật từ ECU (PID 01A6) — fallback odometer xe đã lưu
+                KpiCell("ODO", telemetry.odometerKm?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.1f", it) } ?: "—", "km", colors.emerald, Modifier.weight(1f), colors)
             }
         }
     }
@@ -317,10 +365,24 @@ private fun KpiCell(label: String, value: String, unit: String, color: Color, mo
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MiniObdGauge(telemetry: LiveTelemetry, size: Dp, colors: FmmsColors) {
+    val s = com.fmms.carlogger.ui.i18n.LocalStrings.current
     var index by rememberSaveable { mutableIntStateOf(0) }
     val metric = miniMetrics[index % miniMetrics.size]
     val raw = metric.value(telemetry)
     val display = raw?.takeIf { it.isFinite() }
+    // Mức xăng: màu theo ngưỡng (<10% đỏ nháy / ≤50% vàng / >50% xanh)
+    val isFuelMetric = metric.label == "FUEL"
+    val fuelColor = fuelLevelColor(telemetry.fuelLevelPercent, colors)
+    val fuelBlink = if (isFuelMetric && display != null && display < 10.0) {
+        androidx.compose.animation.core.rememberInfiniteTransition(label = "fuelMini").animateFloat(
+            initialValue = 0.2f, targetValue = 1f,
+            animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                androidx.compose.animation.core.tween(450, easing = androidx.compose.animation.core.LinearEasing),
+                androidx.compose.animation.core.RepeatMode.Reverse),
+            label = "fuelMiniA").value
+    } else 1f
+    val gaugeAccent = if (isFuelMetric) fuelColor.copy(alpha = fuelBlink) else colors.purple
+    val valueColor = if (isFuelMetric) fuelColor.copy(alpha = fuelBlink) else colors.cyan
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         BoxWithConstraints(
@@ -335,7 +397,7 @@ private fun MiniObdGauge(telemetry: LiveTelemetry, size: Dp, colors: FmmsColors)
                 maxValue = metric.maxValue,
                 value = (display ?: 0.0).coerceIn(0.0, metric.maxValue),
                 markerValue = null,
-                accent = colors.purple,
+                accent = gaugeAccent,
                 tickStep = 6,
                 majorStep = Int.MAX_VALUE,
                 labelStep = null,
@@ -343,7 +405,7 @@ private fun MiniObdGauge(telemetry: LiveTelemetry, size: Dp, colors: FmmsColors)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     display?.let { String.format(Locale.US, "%.0f", it) } ?: "—",
-                    color = colors.cyan,
+                    color = valueColor,
                     fontSize = (size.value * 0.2f).sp,
                     fontWeight = FontWeight.Black,
                 )
@@ -352,17 +414,35 @@ private fun MiniObdGauge(telemetry: LiveTelemetry, size: Dp, colors: FmmsColors)
         }
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            metric.label,
+            miniLabel(metric.label, s),
             color = colors.textSecondary,
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
         )
-        Text(
-            "chạm để đổi",
-            color = colors.textSecondary.copy(alpha = 0.6f),
-            fontSize = 8.sp,
-        )
+        // ODO lưu lại (lần đọc ECU cuối / DB) — hiển thị cả khi mất kết nối
+        Spacer(modifier = Modifier.height(3.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "ODO ",
+                color = colors.textSecondary,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                telemetry.odometerSavedKm?.takeIf { it.isFinite() }
+                    ?.let { String.format(Locale.US, "%.1f", it) } ?: "—",
+                color = colors.textPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Black,
+            )
+            Text(
+                " km",
+                color = colors.textSecondary,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 
@@ -513,6 +593,7 @@ private fun launchableApps(context: android.content.Context): List<ShortcutApp> 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AppShortcutStrip(colors: FmmsColors) {
+    val s = com.fmms.carlogger.ui.i18n.LocalStrings.current
     val context = LocalContext.current
     var shortcuts by remember { mutableStateOf(AppContainer.prefs.getAppShortcuts()) }
     var showPicker by remember { mutableStateOf(false) }
@@ -562,11 +643,11 @@ private fun AppShortcutStrip(colors: FmmsColors) {
                                             context.packageManager.getLaunchIntentForPackage(pkg)
                                                 ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                 ?.let { context.startActivity(it) }
-                                        }.onFailure { toast = "Không mở được app" }
+                                        }.onFailure { toast = s.cannotOpenApp }
                                     },
                                     onLongClick = {
                                         save(shortcuts - pkg)
-                                        toast = "Đã bỏ ghim ${app?.label ?: pkg}"
+                                        toast = s.unpinnedFmt.format(app?.label ?: pkg)
                                     },
                                 ),
                             contentAlignment = Alignment.Center,
@@ -628,6 +709,8 @@ private fun AndroidViewFromImageView(iv: android.widget.ImageView) {
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun AppPickerDialog(colors: FmmsColors, onDismiss: () -> Unit, onPick: (ShortcutApp) -> Unit) {
+    val s = com.fmms.carlogger.ui.i18n.LocalStrings.current
+
     val context = LocalContext.current
     val apps = remember { runCatching { launchableApps(context) }.getOrElse { emptyList() } }
 
@@ -635,12 +718,12 @@ private fun AppPickerDialog(colors: FmmsColors, onDismiss: () -> Unit, onPick: (
         onDismissRequest = onDismiss,
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("ĐÓNG", color = colors.cyan) }
+            TextButton(onClick = onDismiss) { Text(s.closeBtn, color = colors.cyan) }
         },
-        title = { Text("Chọn ứng dụng để ghim", color = colors.textPrimary, fontSize = 16.sp) },
+        title = { Text(s.chooseAppToPin, color = colors.textPrimary, fontSize = 16.sp) },
         text = {
             if (apps.isEmpty()) {
-                Text("Không tìm thấy ứng dụng nào.", color = colors.textSecondary, fontSize = 13.sp)
+                Text(s.noAppsFound, color = colors.textSecondary, fontSize = 13.sp)
             } else {
                 LazyColumn(modifier = Modifier.size(width = 280.dp, height = 360.dp)) {
                     items(apps, key = { it.packageName }) { app ->

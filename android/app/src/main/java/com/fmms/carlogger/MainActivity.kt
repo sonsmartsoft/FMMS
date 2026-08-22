@@ -160,6 +160,20 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
         }
     }
 
+    // Toast chỉ khi BẮT ĐẦU ghi và KẾT THÚC ghi hành trình (yêu cầu: bỏ toast rail)
+    val tripToastContext = androidx.compose.ui.platform.LocalContext.current
+    var tripWasActive by rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        AppContainer.tripEngine.state.collect { st ->
+            if (st.active && !tripWasActive) {
+                android.widget.Toast.makeText(tripToastContext, strings.tripStartToast, android.widget.Toast.LENGTH_SHORT).show()
+            } else if (!st.active && tripWasActive) {
+                android.widget.Toast.makeText(tripToastContext, strings.tripEndToast, android.widget.Toast.LENGTH_SHORT).show()
+            }
+            tripWasActive = st.active
+        }
+    }
+
     androidx.compose.foundation.layout.BoxWithConstraints {
         val isLandscape = maxWidth >= 560.dp
 
@@ -169,15 +183,10 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
             var railPinned by rememberSaveable { mutableStateOf(AppContainer.prefs.getRailPinned()) }
             var railTempOpen by rememberSaveable { mutableStateOf(false) }
 
-            fun railToast(msg: String) =
-                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-
             LaunchedEffect(railPinned, railTempOpen) {
-                android.util.Log.d("FmmsRail", "state pinned=$railPinned tempOpen=$railTempOpen")
                 if (!railPinned && railTempOpen) {
                     kotlinx.coroutines.delay(6000)
                     railTempOpen = false
-                    railToast(context.getString(com.fmms.carlogger.R.string.rail_hidden))
                 }
             }
 
@@ -207,12 +216,10 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
                                         railPinned = false
                                         AppContainer.prefs.setRailPinned(false)
                                         railTempOpen = true
-                                        railToast(context.getString(com.fmms.carlogger.R.string.rail_unpinned))
                                     } else {
                                         railPinned = true
                                         AppContainer.prefs.setRailPinned(true)
                                         railTempOpen = false
-                                        railToast(context.getString(com.fmms.carlogger.R.string.rail_pinned))
                                     }
                                 },
                             contentAlignment = Alignment.Center,

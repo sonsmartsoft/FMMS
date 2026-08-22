@@ -76,6 +76,14 @@ class BluetoothClassicTransport : OBDTransport {
         val out = output ?: return@withContext null
         val inStream = input ?: return@withContext null
         try {
+            // Drain stale bytes left over from a late/aborted previous response,
+            // otherwise answers desync from their commands (next command reads
+            // the previous command's reply).
+            val sink = ByteArray(1024)
+            while (inStream.available() > 0) {
+                if (inStream.read(sink) <= 0) break
+            }
+
             out.write((cmd + "\r").toByteArray(Charsets.US_ASCII))
             out.flush()
 

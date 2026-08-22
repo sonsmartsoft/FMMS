@@ -65,6 +65,51 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
         )
     }
 
+    /** Enqueue one OBD telemetry sample for cloud sync (web table telemetry_samples). */
+    suspend fun enqueueTelemetrySample(sample: TelemetrySampleEntity) {
+        val deviceId = sample.deviceId ?: com.fmms.carlogger.AppContainer.prefs.getDeviceId()
+        fun num(v: Double?): Any = v ?: JSONObject.NULL
+        val payload = JSONObject().apply {
+            put("id", sample.id)
+            put("asset_id", sample.vehicleId)
+            put("device_id", deviceId)
+            put("trip_id", JSONObject.NULL)
+            put("timestamp", iso(sample.timestamp))
+            put("rpm", num(sample.rpm))
+            put("speed_kmh", num(sample.speedKmh))
+            put("engine_load_percent", num(sample.engineLoadPercent))
+            put("coolant_temp_c", num(sample.coolantTempC))
+            put("intake_temp_c", num(sample.intakeTempC))
+            put("maf_gps", num(sample.mafGps))
+            put("throttle_percent", num(sample.throttlePercent))
+            put("fuel_level_percent", num(sample.fuelLevelPercent))
+            put("fuel_rate_lph", num(sample.fuelRateLph))
+            put("battery_voltage", num(sample.batteryVoltage))
+            put("engine_runtime_seconds", sample.engineRuntimeSeconds?.toInt() ?: JSONObject.NULL)
+            put("stft", num(sample.stft))
+            put("ltft", num(sample.ltft))
+            put("odometer_km", num(sample.odometerKm))
+            put("latitude", num(sample.latitude))
+            put("longitude", num(sample.longitude))
+            put("gps_speed_kmh", num(sample.gpsSpeedKmh))
+            put("gps_accuracy", num(sample.gpsAccuracy))
+            put("connection_quality", sample.connectionQuality)
+            put("data_quality", sample.dataQuality)
+            put("raw_source", sample.rawSource)
+        }.toString()
+        syncQueueDao.insert(
+            SyncQueueEntity(
+                id = UUID.randomUUID().toString(),
+                vehicleId = sample.vehicleId,
+                entityType = "telemetry_samples",
+                entityId = sample.id,
+                operation = "UPSERT",
+                payload = payload,
+                createdAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
     suspend fun enqueueGpsPoints(points: List<com.fmms.carlogger.core.database.entity.GpsTrackPointEntity>) {
         if (points.isEmpty()) return
         val deviceName = com.fmms.carlogger.AppContainer.prefs.getDeviceName()
@@ -122,6 +167,54 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
             }
         }
         return repaired
+    }
+
+    /**
+     * Xóa các row PENDING thuộc xe cũ/khác xe hiện tại (payload mồ côi sau khi
+     * đổi vehicle id) hoặc payload trips định dạng cũ dùng key "vehicle_id".
+     * Trả về số row đã xóa.
+     */
+    suspend fun purgeOrphanedPayloads(currentVehicleId: String): Int {
+        var removed = 0
+        for (entry in syncQueueDao.getPending(limit = 1000)) {
+            val owner = ownerOf(entry.entityType, entry.payload) ?: continue
+            if (owner != currentVehicleId) {
+                syncQueueDao.deleteById(entry.id)
+                removed++
+            }
+        }
+        return removed
+    }
+
+    /** Trả về UUID xe mà payload này thuộc về; null nếu không xác định (vd devices). */
+    private fun ownerOf(entityType: String, payload: String): String? {
+        return try {
+            when (entityType) {
+                "devices" -> null
+                "vehicles" -> JSONObject(payload).optString("id").ifEmpty { null }
+                "trips" -> {
+                    val o = JSONObject(payload)
+                    // Định dạng cũ sai schema (vehicle_id) -> coi như mồ côi để purge.
+                    if (o.has("vehicle_id")) "\u0000stale" else o.optString("asset_id").ifEmpty { null }
+                }
+                else -> {
+                    val arr = org.json.JSONArray(payload)
+                    var owner: String? = null
+                    var mixed = false
+                    for (i in 0 until arr.length()) {
+                        val o = arr.optJSONObject(i) ?: continue
+                        val v = o.optString("asset_id", "").ifEmpty { o.optString("vehicle_id", "") }
+                        if (v.isNotEmpty()) {
+                            if (owner != null && v != owner) mixed = true
+                            if (owner == null) owner = v
+                        }
+                    }
+                    if (mixed) null else owner
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun repairPayload(payload: String): String? {
@@ -196,6 +289,15 @@ class TripRepository(
     fun observeByVehicle(vehicleId: String): Flow<List<TripEntity>> = tripDao.observeByVehicle(vehicleId)
 
     suspend fun getActiveTrip(vehicleId: String): TripEntity? = tripDao.getActiveTrip(vehicleId)
+
+    suspend fun getActiveTrips(vehicleId: String): List<TripEntity> = tripDao.getActiveTrips(vehicleId)
+
+    suspend fun getAllActiveTrips(): List<TripEntity> = tripDao.getAllActiveTrips()
+
+    /** Xóa chuyến rác (phantom) — không đồng bộ, chỉ local. */
+    suspend fun deleteById(id: String) {
+        tripDao.deleteById(id)
+    }
 
     suspend fun startTrip(trip: TripEntity) {
         tripDao.upsert(trip)

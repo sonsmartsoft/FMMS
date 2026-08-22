@@ -27,6 +27,7 @@ object PidDefinitions {
     const val CMD_RUNTIME = "0131"
     const val CMD_VOLTAGE = "0142"
     const val CMD_FUEL_RATE = "015E"
+    const val CMD_ODOMETER = "01A6"
 
     /** Discovery commands per spec §13. */
     val DISCOVERY_PIDS: List<String> = listOf("0100", "0120", "0140", "0160", "0180", "01A0")
@@ -51,21 +52,58 @@ object PidDefinitions {
     private fun clean(response: String): String =
         response.replace(Regex("[^0-9A-Fa-f]"), "").replace(">", "").trim()
 
-    /** Expects "41XX" + data bytes. Returns first 2 hex chars as Int. */
-    private fun decodeOne(response: String, pid: String): Int? {
+    /**
+     * Locate the data payload that follows the "41XX" service echo, tolerating
+     * CAN headers ("7E8 03 41 0D 00"), spaces/newlines and multi-ECU answers.
+     */
+    private fun serviceData(response: String, pid: String): String? {
         val c = clean(response)
-        if (!c.startsWith("41" + pid.substring(2))) return null
-        return c.substring(4, 6).toIntOrNull(16)
+        val idx = c.indexOf("41" + pid.substring(2))
+        if (idx < 0) return null
+        return c.substring(idx + 4)
     }
+
+    /** Expects "41XX" + data bytes. Returns first 2 hex chars as Int. */
+    private fun decodeOne(response: String, pid: String): Int? =
+        serviceData(response, pid)?.let { it.take(2).toIntOrNull(16) }
 
     /** Expects "41XX" + 4 hex data bytes. Returns two Ints. */
     private fun decodeTwo(response: String, pid: String): Pair<Int, Int>? {
-        val c = clean(response)
-        if (!c.startsWith("41" + pid.substring(2))) return null
-        if (c.length < 12) return null
-        val a = c.substring(4, 6).toIntOrNull(16) ?: return null
-        val b = c.substring(6, 8).toIntOrNull(16) ?: return null
+        val d = serviceData(response, pid) ?: return null
+        if (d.length < 4) return null
+        val a = d.substring(0, 2).toIntOrNull(16) ?: return null
+        val b = d.substring(2, 4).toIntOrNull(16) ?: return null
         return a to b
+    }
+
+    /**
+     * Decode ECU odometer (PID 01A6, 32-bit). J1979DA scale is ambiguous across
+     * implementations (0.1 km/bit vs 1 km/bit), so both candidates are checked
+     * against a reference (last known good / vehicle odo) and the closest
+     * plausible one wins. Returns km or null.
+     */
+    fun decodeOdometer(response: String, referenceKm: Double?): Double? {
+        val d = serviceData(response, CMD_ODOMETER) ?: return null
+        if (d.length < 8) return null
+        var raw = 0L
+        for (i in 0 until 4) {
+            val b = d.substring(i * 2, i * 2 + 2).toIntOrNull(16) ?: return null
+            raw = (raw shl 8) or b.toLong()
+        }
+        if (raw <= 0L) return null
+        val c1 = raw / 10.0
+        val c2 = raw.toDouble()
+        fun plausible(v: Double) = v > 10.0 && v < 3_000_000.0
+        val ref = referenceKm?.takeIf { it > 0 }
+        return when {
+            ref != null && plausible(c1) && plausible(c2) ->
+                if (kotlin.math.abs(c1 - ref) <= kotlin.math.abs(c2 - ref)) c1 else c2
+            ref != null && plausible(c1) && kotlin.math.abs(c1 - ref) < 5_000.0 -> c1
+            ref != null && plausible(c2) && kotlin.math.abs(c2 - ref) < 5_000.0 -> c2
+            ref == null && plausible(c1) -> c1
+            ref == null && plausible(c2) -> c2
+            else -> null
+        }
     }
 
     /**
@@ -75,16 +113,27 @@ object PidDefinitions {
     fun discoverSupported(responses: Map<String, String>): Set<String> {
         val supported = mutableSetOf<String>()
         responses.forEach { (query, response) ->
-            val c = clean(response)
-            if (!c.startsWith("41" + query.substring(2))) return@forEach
-            if (c.length < 12) return@forEach
-            val base = Integer.parseInt(query.substring(2, 4), 16) // e.g. 0x00, 0x20
-            val bytes = (0..3).map { i -> c.substring(6 + i * 2, 8 + i * 2).toIntOrNull(16) ?: 0 }
-            bytes.forEachIndexed { byteIndex, byte ->
-                for (bit in 7 downTo 0) {
-                    if (byte and (1 shl bit) != 0) {
-                        val pid = (base + byteIndex * 8 + (7 - bit)).toString(16).padStart(2, '0')
-                        supported += "01$pid"
+            // Multi-ECU adapters answer with one line per ECU. Parse each line
+            // separately — concatenating them corrupts byte offsets and can
+            // produce short strings that crash substring() below.
+            val lines = response.split(Regex("[\r\n]+"))
+                .map { clean(it) }
+            for (c in lines) {
+                // Tolerate CAN headers ("7E803...") by locating the service echo.
+                val marker = "41" + query.substring(2)
+                val idx = c.indexOf(marker)
+                if (idx < 0) continue
+                val d = c.substring(idx + 4)
+                // 4 data bytes = 8 hex chars minimum.
+                if (d.length < 8) continue
+                val base = Integer.parseInt(query.substring(2, 4), 16) // e.g. 0x00, 0x20
+                val bytes = (0..3).map { i -> d.substring(i * 2, 2 + i * 2).toIntOrNull(16) ?: 0 }
+                bytes.forEachIndexed { byteIndex, byte ->
+                    for (bit in 7 downTo 0) {
+                        if (byte and (1 shl bit) != 0) {
+                            val pid = (base + byteIndex * 8 + (7 - bit)).toString(16).padStart(2, '0')
+                            supported += "01$pid"
+                        }
                     }
                 }
             }

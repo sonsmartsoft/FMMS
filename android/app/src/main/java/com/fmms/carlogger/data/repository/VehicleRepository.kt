@@ -67,8 +67,17 @@ class VehicleRepository(
         return v
     }
 
+    private var lastOdoPushAt: Long = 0L
+
     suspend fun updateOdometer(id: String, odo: Double) {
         vehicleDao.updateOdometer(id, odo, System.currentTimeMillis())
+        // Push the new odometer to the web, throttled to once per minute —
+        // this runs on every telemetry cycle when the engine is live.
+        val now = System.currentTimeMillis()
+        if (now - lastOdoPushAt > 60_000) {
+            lastOdoPushAt = now
+            enqueueUpsert(id)
+        }
     }
 
     suspend fun updateVehicle(v: VehicleEntity) {

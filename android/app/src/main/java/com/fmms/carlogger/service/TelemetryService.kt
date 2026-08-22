@@ -99,8 +99,13 @@ class TelemetryService : Service() {
                         persistSample(vehicle.id, telemetry, lastOdo)
                         // Odometer sync: prefer verified OBD; else trip-range accumulation handled by TripEngine
                         if (telemetry.odometerKm != null) {
-                            c.vehicleRepository.updateOdometer(vehicle.id, telemetry.odometerKm!!)
-                            lastOdo = telemetry.odometerKm!!
+                            val newOdo = telemetry.odometerKm!!
+                            val prev = vehicle.odometerKm
+                            // Guard: từ chối bước nhảy phi lý (decode sai / ECU lạ)
+                            if (prev <= 0 || (newOdo >= prev - 500 && newOdo <= prev + 5000)) {
+                                c.vehicleRepository.updateOdometer(vehicle.id, newOdo)
+                                lastOdo = newOdo
+                            }
                         }
 
                         // OBD mode: also record GPS trackpoints (phone GPS merged into
@@ -116,9 +121,8 @@ class TelemetryService : Service() {
                                 currentTripId
                             }
                             val gpsSpeed = telemetry.gpsSpeedKmh
-                            // Map speed: prefer GPS speed; fall back to the real OBD
-                            // speed (PID 0D) when loc.speed reports 0 while driving.
-                            val pointSpeed = gpsSpeed ?: telemetry.speedKmh
+                            // Tốc độ OBD (PID 0D) là chuẩn; GPS chỉ để định vị web.
+                            val pointSpeed = telemetry.speedKmh ?: gpsSpeed
                             val moving = (pointSpeed ?: 0.0) >= 1.0
                             val now = System.currentTimeMillis()
                             val intervalMs = c.prefs.getGpsIntervalSec() * 1000L
@@ -348,7 +352,16 @@ class TelemetryService : Service() {
             rawSource = telemetry.rawSource,
         )
         c.telemetryRepository.insertAll(listOf(sample))
+        // Cloud sync: push a sample at most every ~20 s so the web sees live
+        // OBD data without flooding the sync queue (poll cycle is ~2.5 s).
+        val now = System.currentTimeMillis()
+        if (now - lastTelemetryPushAt > 20_000) {
+            lastTelemetryPushAt = now
+            c.syncQueueRepository.enqueueTelemetrySample(sample)
+        }
     }
+
+    private var lastTelemetryPushAt = 0L
 
     private fun updateNotification(telemetry: LiveTelemetry, state: OBDConnectionState) {
         val nm = getSystemService(NotificationManager::class.java)

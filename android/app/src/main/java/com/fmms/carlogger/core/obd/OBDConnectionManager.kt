@@ -23,7 +23,9 @@ class OBDConnectionManager(
     private val onStateChanged: ((OBDConnectionState) -> Unit)? = null,
 ) {
     private val appContext = context.applicationContext
-    private val transport = BluetoothClassicTransport()
+    // BLE GATT transport — the KW906's Classic SPP mode stalls/PAGE_TIMEOUTs,
+    // while the vendor MAXOBD app proves the GATT mode is stable.
+    private val transport = BleOBDTransport(appContext)
 
     private val _connectionState = MutableStateFlow<OBDConnectionState>(OBDConnectionState.DISCONNECTED)
     val connectionState: StateFlow<OBDConnectionState> = _connectionState
@@ -41,6 +43,7 @@ class OBDConnectionManager(
             _connectionState.value = OBDConnectionState.DISCONNECTED
             return
         }
+        if (shouldBeConnected && reconnectJob?.isActive == true) return // already running
         shouldBeConnected = true
         attemptConnect()
     }
@@ -71,13 +74,40 @@ class OBDConnectionManager(
         reconnectJob = scope.launch {
             while (shouldBeConnected) {
                 if (transport.isConnected()) {
+                    // Socket alive. If the ELM never finished initialising, retry
+                    // init instead of idling forever on a "connected but mute" link.
+                    if (!elms.isInitialised) {
+                        _connectionState.value = OBDConnectionState.RECONNECTING
+                        mutex.withLock {
+                            try {
+                                elms.initialize()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                elms.onLog?.invoke("INIT_ERROR", e.message ?: e.javaClass.simpleName)
+                            }
+                        }
+                        if (elms.isInitialised) {
+                            _connectionState.value = OBDConnectionState.CONNECTED
+                            onStateChanged?.invoke(OBDConnectionState.CONNECTED)
+                        }
+                        delay(3000)
+                        continue
+                    }
                     // Even when the socket reports connected, verify the link is
                     // actually alive: a stale socket (silent BT drop) must trigger
-                    // a real reconnect, not sit idle forever.
-                    if (!isLinkAlive()) {
-                        _connectionState.value = OBDConnectionState.RECONNECTING
-                        mutex.withLock { transport.disconnect() }
-                        continue
+                    // a real reconnect, not sit idle forever. Skip the probe when
+                    // the adapter answered recently — that alone proves the link.
+                    val recentRx = System.currentTimeMillis() - elms.lastRxMs < 15_000
+                    if (!recentRx && !isLinkAlive()) {
+                        // Cheap clones stall for seconds under load; require two
+                        // consecutive failed probes before dropping the link.
+                        delay(2000)
+                        if (!isLinkAlive()) {
+                            _connectionState.value = OBDConnectionState.RECONNECTING
+                            mutex.withLock { transport.disconnect() }
+                            continue
+                        }
                     }
                     delay(3000)
                     continue
@@ -87,17 +117,22 @@ class OBDConnectionManager(
                 } else {
                     OBDConnectionState.CONNECTING
                 }
+                var initOk = false
                 val ok = mutex.withLock {
                     val connected = transport.connect(mac)
                     if (connected) {
                         try {
                             elms.initialize()
+                            initOk = elms.isInitialised
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
                         } catch (_: Exception) {
+                            initOk = false
                         }
                     }
                     connected && transport.isConnected()
                 }
-                if (ok) {
+                if (ok && initOk) {
                     _connectionState.value = OBDConnectionState.CONNECTED
                     onStateChanged?.invoke(OBDConnectionState.CONNECTED)
                     delay(3000)

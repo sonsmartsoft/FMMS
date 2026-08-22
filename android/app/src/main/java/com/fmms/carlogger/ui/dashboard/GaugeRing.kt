@@ -3,6 +3,7 @@ package com.fmms.carlogger.ui.dashboard
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,6 +33,8 @@ fun GaugeCard(
     modifier: Modifier = Modifier,
     maxValue: Float = 1f,
     currentValue: Float = 0f,
+    /** Nhãn phụ góc trên phải (vd số máy "P"/"D3"). */
+    badge: String? = null,
 ) {
     val colors = LocalFmmsColors.current
     val raw = if (maxValue > 0f) currentValue / maxValue else 0f
@@ -52,6 +55,18 @@ fun GaugeCard(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(contentAlignment = Alignment.Center) {
+                if (!badge.isNullOrBlank()) {
+                    Text(
+                        text = badge,
+                        color = color,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .background(color.copy(alpha = 0.15f), androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
                 Canvas(modifier = Modifier.size(96.dp)) {
                     val stroke = 10.dp.toPx()
                     val inset = stroke / 2
