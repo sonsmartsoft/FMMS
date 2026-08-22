@@ -129,25 +129,32 @@ fun CarUiScreen(vm: DashboardViewModel) {
         val isWide = maxWidth >= 560.dp
 
         if (isWide) {
-            // MÀN NGANG (gắn trên xe): trái = cụm đồng hồ, phải = khung media như map của Lily
-            Row(
+            // MÀN NGANG (gắn trên xe): trên = cụm đồng hồ trái + khung media phải,
+            // dưới = dải gauge full-width. Tốc độ tự co theo chỗ trống để không chèn thẻ khác.
+            Column(
                 Modifier.fillMaxSize().padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Column(
-                    Modifier.weight(0.42f).fillMaxHeight(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    ClockCard(timeFmt.format(now), dateFmt.format(now), lunarShort, colors)
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        SpeedHero(speedText, animatedFraction, arcColor, t.gearLabel, colors, heroSize = 230.dp)
+                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(
+                        Modifier.weight(0.42f).fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        ClockCard(timeFmt.format(now), dateFmt.format(now), lunarShort, colors, compact = true)
+                        BoxWithConstraints(
+                            Modifier.weight(1f).fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            val heroSize = minOf(maxWidth * 0.88f, maxHeight * 0.96f)
+                            SpeedHero(speedText, animatedFraction, arcColor, t.gearLabel, colors, heroSize = heroSize)
+                        }
+                        FooterCard(state.trip.distanceKm, state.trip.durationSeconds, t.odometerSavedKm, t.odometerKm, t.gpsAccuracy, s, colors, compact = true)
                     }
-                    GaugeRow(t.coolantTempC, t.fuelLevelPercent, fuelColor, t.batteryVoltage, t.engineLoadPercent, s, colors)
-                    FooterCard(state.trip.distanceKm, state.trip.durationSeconds, t.odometerSavedKm, t.odometerKm, t.gpsAccuracy, s, colors)
+                    Box(Modifier.weight(0.58f).fillMaxHeight()) {
+                        MediaFrame(colors, s, frameHeight = null)
+                    }
                 }
-                Box(Modifier.weight(0.58f).fillMaxHeight()) {
-                    MediaFrame(colors, s, frameHeight = null)
-                }
+                GaugeRow(t.coolantTempC, t.fuelLevelPercent, fuelColor, t.batteryVoltage, t.engineLoadPercent, s, colors)
             }
         } else {
             Column(
@@ -173,20 +180,46 @@ fun CarUiScreen(vm: DashboardViewModel) {
 // ---------------------------------------------------------------------
 
 @Composable
-private fun ClockCard(time: String, dateLine: String, lunarLine: String, colors: FmmsColors) {
+private fun ClockCard(
+    time: String,
+    dateLine: String,
+    lunarLine: String,
+    colors: FmmsColors,
+    compact: Boolean = false,
+) {
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(if (compact) 16.dp else 20.dp))
             .background(colors.surface)
-            .padding(horizontal = 18.dp, vertical = 10.dp),
+            .padding(horizontal = if (compact) 14.dp else 18.dp, vertical = if (compact) 8.dp else 10.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(time, color = colors.textPrimary, fontSize = 42.sp, fontWeight = FontWeight.Bold)
+            Text(
+                time,
+                color = colors.textPrimary,
+                fontSize = if (compact) 32.sp else 42.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+            )
             Spacer(Modifier.weight(1f))
-            Text(dateLine, color = colors.textSecondary, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+            Text(
+                dateLine,
+                color = colors.textSecondary,
+                fontSize = if (compact) 11.sp else 13.sp,
+                modifier = Modifier.padding(bottom = if (compact) 5.dp else 8.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
-        Text(lunarLine, color = colors.amber, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Text(
+            lunarLine,
+            color = colors.amber,
+            fontSize = if (compact) 11.sp else 12.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -204,9 +237,14 @@ private fun SpeedHero(
     heroSize: Dp,
 ) {
     val track = colors.surfaceVariant
+    val numSize = when {
+        heroSize >= 250.dp -> 92.sp
+        heroSize >= 190.dp -> 64.sp
+        else -> 48.sp
+    }
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(heroSize)) {
         Canvas(Modifier.fillMaxSize()) {
-            val stroke = 20.dp.toPx()
+            val stroke = if (heroSize >= 220.dp) 20.dp.toPx() else 14.dp.toPx()
             drawArc(
                 color = track,
                 startAngle = 135f,
@@ -228,18 +266,23 @@ private fun SpeedHero(
             Text(
                 speedText,
                 color = colors.textPrimary,
-                fontSize = if (heroSize >= 260.dp) 92.sp else 76.sp,
+                fontSize = numSize,
                 fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
-                lineHeight = if (heroSize >= 260.dp) 92.sp else 76.sp,
+                lineHeight = numSize,
             )
-            Text("km/h", color = colors.textSecondary, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+            Text(
+                "km/h",
+                color = colors.textSecondary,
+                fontSize = if (heroSize >= 250.dp) 17.sp else 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
             if (!gearLabel.isNullOrBlank()) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
                 Box(
-                    Modifier.clip(CircleShape).background(colors.surfaceVariant).padding(horizontal = 12.dp, vertical = 4.dp),
+                    Modifier.clip(CircleShape).background(colors.surfaceVariant).padding(horizontal = 10.dp, vertical = 2.dp),
                 ) {
-                    Text(gearLabel, color = colors.cyan, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(gearLabel, color = colors.cyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -528,6 +571,7 @@ private fun FooterCard(
     gpsAccuracy: Double?,
     s: FmmsStrings,
     colors: FmmsColors,
+    compact: Boolean = false,
 ) {
     val gpsColor = when {
         gpsAccuracy == null -> colors.textSecondary
@@ -538,36 +582,41 @@ private fun FooterCard(
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(if (compact) 16.dp else 20.dp))
             .background(colors.surface)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = if (compact) 12.dp else 16.dp, vertical = if (compact) 8.dp else 12.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("${s.odometerLbl} ${odoSavedKm?.let { fmtKm(it) } ?: "—"} km",
-                color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                color = colors.textPrimary, fontSize = if (compact) 13.sp else 15.sp, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (odoLiveKm != null && odoLiveKm.isFinite()) {
-                Text(" • live ${fmtKm(odoLiveKm)} km", color = colors.textSecondary, fontSize = 12.sp, maxLines = 1)
+                Text(" • ${fmtKm(odoLiveKm)}", color = colors.textSecondary,
+                    fontSize = if (compact) 10.sp else 12.sp, maxLines = 1)
             }
             Spacer(Modifier.weight(1f))
-            GpsDot(gpsColor, gpsAccuracy, s.accuracyLbl, colors)
+            GpsDot(gpsColor, gpsAccuracy, s.accuracyLbl, colors, compact)
         }
         Row {
-            Text("${s.distance} ${fmtKm(tripKm)} km", color = colors.textSecondary, fontSize = 13.sp)
+            Text("${s.distance} ${fmtKm(tripKm)} km", color = colors.textSecondary,
+                fontSize = if (compact) 11.sp else 13.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            Text("${s.duration} ${formatDuration(tripSeconds)}", color = colors.textSecondary, fontSize = 13.sp)
+            Text("${s.duration} ${formatDuration(tripSeconds)}", color = colors.textSecondary,
+                fontSize = if (compact) 11.sp else 13.sp, maxLines = 1)
         }
     }
 }
 
 @Composable
-private fun GpsDot(color: Color, accuracy: Double?, label: String, colors: FmmsColors) {
+private fun GpsDot(color: Color, accuracy: Double?, label: String, colors: FmmsColors, compact: Boolean = false) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(color))
         Text(
             if (accuracy != null) " $label ±${accuracy.toInt()}m" else " GPS —",
             color = colors.textSecondary,
-            fontSize = 11.sp,
+            fontSize = if (compact) 9.sp else 11.sp,
+            maxLines = 1,
         )
     }
 }

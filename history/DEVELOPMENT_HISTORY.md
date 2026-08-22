@@ -448,3 +448,13 @@ màu PNG bằng PIL (nền sáng #e0e9f3, số tốc độ xanh #1a73e8).
   trực tiếp vào app; khung APPS chính là chỗ bấm mở app cam đó.
 - Android không cho nhúng app khác trong app mình → app ngoài mở fullscreen bằng intent;
   chỉ web là nhúng được (WebView).
+
+### rev59 — fix bố cục ngang tab Car UI (user feedback "thẻ trái bị méo")
+- Nguyên nhân: SpeedHero 230dp CỐ ĐỊNH trong Box weight(1f) — khi ngang chiều cao còn
+  ~350dp nên vòng cung tràn/chèn lên thẻ trên dưới; GaugeRow 4 ô bị nén vào cột trái hẹp.
+- Fix: chuyển GaugeRow thành **dải full-width dưới cùng** (dưới cả 2 cột); hero tự đo
+  `min(maxWidth*0.88, maxHeight*0.96)` qua BoxWithConstraints + font theo mốc (92/64/48sp,
+  stroke 20→14dp); ClockCard/FooterCard thêm `compact` (font nhỏ hơn, maxLines=1+ellipsis).
+- Verify bằng bounds dump ở ROTATION_90: clock(367,116) → km/h(682,519) → gauges y=870
+  full-width → APPS/WEB chips (1221..1488,137) bên phải; không chồng lấn. Crash buffer 0.
+- Ảnh test: `/tmp/carui_landscape.png`, `/tmp/carui_portrait.png`. APK rev59.
