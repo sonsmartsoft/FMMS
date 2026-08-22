@@ -322,6 +322,11 @@ class PrefsStore(context: Context) {
     fun getLastWebUrl(): String? = prefs.getString("carui_web_url", null)
     fun setLastWebUrl(url: String) { prefs.edit().putString("carui_web_url", url).apply() }
 
+    /** Tab đang chọn trong khung media của Car UI (app/web/map) — persist để
+     *  không bị reset khi xoay máy (hai nhánh layout có saveable-key khác nhau). */
+    fun getMediaMode(): String = prefs.getString("carui_media_mode", "app") ?: "app"
+    fun setMediaMode(mode: String) { prefs.edit().putString("carui_media_mode", mode).apply() }
+
     /** Rail ngang: ghim hay tự ẩn (persist qua các lần mở app). */
     fun getRailPinned(): Boolean = prefs.getBoolean("rail_pinned", true)
     fun setRailPinned(v: Boolean) { prefs.edit().putBoolean("rail_pinned", v).apply() }

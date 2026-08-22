@@ -36,6 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
@@ -58,6 +59,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -133,6 +135,11 @@ fun CarUiScreen(vm: DashboardViewModel) {
 
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background)) {
         val isWide = maxWidth >= 560.dp
+        // State tab media (APPS/WEB/MAP) lưu vào prefs: xoay máy làm Activity
+        // recreate và hai nhánh layout có saveable-key khác nhau nên
+        // rememberSaveable không giữ được giá trị.
+        var mediaMode by rememberSaveable { mutableStateOf(AppContainer.prefs.getMediaMode()) }
+        LaunchedEffect(mediaMode) { AppContainer.prefs.setMediaMode(mediaMode) }
 
         if (isWide) {
             // MÀN NGANG (gắn trên xe): trên = cụm đồng hồ trái + khung media phải,
@@ -157,7 +164,7 @@ fun CarUiScreen(vm: DashboardViewModel) {
                         FooterCard(state.trip.distanceKm, state.trip.durationSeconds, t.odometerSavedKm, t.odometerKm, t.gpsAccuracy, s, colors, compact = true)
                     }
                     Box(Modifier.weight(0.58f).fillMaxHeight()) {
-                        MediaFrame(vm, colors, s, frameHeight = null)
+                        MediaFrame(vm, colors, s, frameHeight = null, mode = mediaMode, onModeChange = { mediaMode = it })
                     }
                 }
                 GaugeRow(t.coolantTempC, t.fuelLevelPercent, fuelColor, t.batteryVoltage, t.engineLoadPercent, s, colors)
@@ -175,7 +182,7 @@ fun CarUiScreen(vm: DashboardViewModel) {
                 }
                 GaugeRow(t.coolantTempC, t.fuelLevelPercent, fuelColor, t.batteryVoltage, t.engineLoadPercent, s, colors)
                 FooterCard(state.trip.distanceKm, state.trip.durationSeconds, t.odometerSavedKm, t.odometerKm, t.gpsAccuracy, s, colors)
-                MediaFrame(vm, colors, s, frameHeight = 320.dp)
+                MediaFrame(vm, colors, s, frameHeight = 320.dp, mode = mediaMode, onModeChange = { mediaMode = it })
             }
         }
     }
@@ -301,9 +308,15 @@ private fun SpeedHero(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MediaFrame(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings, frameHeight: Dp?) {
+private fun MediaFrame(
+    vm: DashboardViewModel,
+    colors: FmmsColors,
+    s: FmmsStrings,
+    frameHeight: Dp?,
+    mode: String,
+    onModeChange: (String) -> Unit,
+) {
     val context = LocalContext.current
-    var mode by rememberSaveable { mutableStateOf("app") }
     var shortcuts by remember { mutableStateOf(AppContainer.prefs.getAppShortcuts()) }
     var showPicker by remember { mutableStateOf(false) }
     var toast by remember { mutableStateOf<String?>(null) }
@@ -329,11 +342,11 @@ private fun MediaFrame(vm: DashboardViewModel, colors: FmmsColors, s: FmmsString
     Column(frameModifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
         // Header: ba chip chuyển chế độ
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ModeChip(s.mediaAppTab, mode == "app", colors) { mode = "app" }
+            ModeChip(s.mediaAppTab, mode == "app", colors) { onModeChange("app") }
             Spacer(Modifier.width(8.dp))
-            ModeChip(s.mediaWebTab, mode == "web", colors) { mode = "web" }
+            ModeChip(s.mediaWebTab, mode == "web", colors) { onModeChange("web") }
             Spacer(Modifier.width(8.dp))
-            ModeChip(s.mediaMapTab, mode == "map", colors) { mode = "map" }
+            ModeChip(s.mediaMapTab, mode == "map", colors) { onModeChange("map") }
         }
         Spacer(Modifier.height(8.dp))
 
@@ -460,6 +473,8 @@ private fun WebPane(colors: FmmsColors, s: FmmsStrings) {
     var input by rememberSaveable { mutableStateOf(AppContainer.prefs.getLastWebUrl() ?: DEFAULT_WEB_URL) }
     var currentUrl by rememberSaveable { mutableStateOf(AppContainer.prefs.getLastWebUrl() ?: DEFAULT_WEB_URL) }
     var webView by remember { mutableStateOf<WebView?>(null) }
+    var barVisible by rememberSaveable { mutableStateOf(true) }
+    val focusManager = LocalFocusManager.current
 
     fun submit(raw: String) {
         val url = raw.trim()
@@ -470,63 +485,12 @@ private fun WebPane(colors: FmmsColors, s: FmmsStrings) {
         AppContainer.prefs.setLastWebUrl(full)
         // điều hướng ngay trên WebView đang có (không tạo lại)
         webView?.loadUrl(full)
+        // Đã vào trang thì cuộn thanh địa chỉ + bookmark để WebView tràn khung
+        barVisible = false
+        focusManager.clearFocus()
     }
 
-    Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(
-            value = input,
-            onValueChange = { input = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text(s.webUrlHint, color = colors.textSecondary, fontSize = 13.sp) },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { submit(input) }),
-            trailingIcon = {
-                Icon(
-                    Icons.Filled.ArrowForward,
-                    contentDescription = "Go",
-                    tint = colors.cyan,
-                    modifier = Modifier
-                        .size(22.dp)
-                        .combinedClickable(onClick = { submit(input) }),
-                )
-            },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = colors.textPrimary,
-                unfocusedTextColor = colors.textPrimary,
-                focusedBorderColor = colors.cyan,
-                unfocusedBorderColor = colors.divider,
-                cursorColor = colors.cyan,
-            ),
-            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = colors.textPrimary),
-        )
-        Spacer(Modifier.height(6.dp))
-
-        // Dải bookmark nhanh
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            WEB_BOOKMARKS.forEach { (label, url) ->
-                Box(
-                    Modifier
-                        .clip(CircleShape)
-                        .background(colors.surfaceVariant)
-                        .combinedClickable(onClick = { submit(url) })
-                        .padding(horizontal = 12.dp, vertical = 5.dp),
-                ) {
-                    Text(
-                        label,
-                        color = if (currentUrl == url) colors.cyan else colors.textSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-
+    Box(Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
@@ -549,6 +513,82 @@ private fun WebPane(colors: FmmsColors, s: FmmsStrings) {
             },
             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
         )
+
+        if (barVisible) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(colors.background),
+            ) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text(s.webUrlHint, color = colors.textSecondary, fontSize = 13.sp) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                    keyboardActions = KeyboardActions(onGo = { submit(input) }),
+                    trailingIcon = {
+                        Icon(
+                            Icons.Filled.ArrowForward,
+                            contentDescription = "Go",
+                            tint = colors.cyan,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .combinedClickable(onClick = { submit(input) }),
+                        )
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary,
+                        focusedBorderColor = colors.cyan,
+                        unfocusedBorderColor = colors.divider,
+                        cursorColor = colors.cyan,
+                    ),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = colors.textPrimary),
+                )
+                Spacer(Modifier.height(6.dp))
+
+                // Dải bookmark nhanh
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    WEB_BOOKMARKS.forEach { (label, url) ->
+                        Box(
+                            Modifier
+                                .clip(CircleShape)
+                                .background(colors.surfaceVariant)
+                                .combinedClickable(onClick = { submit(url) })
+                                .padding(horizontal = 12.dp, vertical = 5.dp),
+                        ) {
+                            Text(
+                                label,
+                                color = if (currentUrl == url) colors.cyan else colors.textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        } else {
+            // Nút mở lại thanh địa chỉ khi đang xem tràn màn hình
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 8.dp, end = 8.dp)
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(colors.surface.copy(alpha = 0.85f))
+                    .combinedClickable(onClick = { barVisible = true }),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.Language, "Show address bar", tint = colors.textPrimary, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 
     DisposableEffect(Unit) {
@@ -571,7 +611,6 @@ private class MapHolder(
 @Composable
 private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
     val context = LocalContext.current
-    val dark = com.fmms.carlogger.ui.theme.LocalDarkTheme.current
     var holder by remember { mutableStateOf<MapHolder?>(null) }
     var follow by rememberSaveable { mutableStateOf(true) }
 
@@ -585,7 +624,10 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
                 cfg.osmdroidBasePath = java.io.File(ctx.cacheDir, "osmdroid")
 
                 val map = org.osmdroid.views.MapView(ctx)
-                map.setTileSource(org.osmdroid.tileprovider.tilesource.TileSourceFactory.MAPNIK)
+                // Tile CARTO dark_all: giao diện tối gần như y hệt Google Maps
+                // ban đêm (nền xám than, đường nhạt, nước tối) — miễn phí, chỉ cần
+                // ghi công "© OpenStreetMap contributors © CARTO".
+                map.setTileSource(cartoDarkSource())
                 map.setMultiTouchControls(true)
                 map.zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
                 map.controller.setZoom(17.0)
@@ -621,8 +663,6 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
                 map.overlays.add(marker)
                 map.overlays.add(myLoc)
 
-                if (dark) applyDarkTileFilter(map)
-
                 holder = MapHolder(map, marker, trail, myLoc)
                 map
             },
@@ -652,7 +692,7 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
 
         // Attribution bắt buộc của OpenStreetMap
         Text(
-            "© OpenStreetMap contributors",
+            "© OpenStreetMap © CARTO",
             color = colors.textSecondary,
             fontSize = 9.sp,
             modifier = Modifier
@@ -683,18 +723,18 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
     }
 }
 
-/** Lọc màu tile OSM → tông tối giống Google Maps đêm (giữ xanh nước/vùng cây). */
-private fun applyDarkTileFilter(map: org.osmdroid.views.MapView) {
-    val invert = android.graphics.ColorMatrix(
-        floatArrayOf(
-            -0.72f, 0.43f, 0.29f, 0f, 0.78f,
-            -0.15f, 0.79f, 0.36f, 0f, 0.72f,
-            0.05f, 0.30f, 0.65f, 0f, 0.66f,
-            0f, 0f, 0f, 1f, 0f,
-        ),
-    )
-    map.overlayManager.tilesOverlay.setColorFilter(android.graphics.ColorMatrixColorFilter(invert))
-}
+/** Nguồn tile tối của CARTO (dựa trên dữ liệu OpenStreetMap). */
+private fun cartoDarkSource() = org.osmdroid.tileprovider.tilesource.XYTileSource(
+    "CARTO_DARK",
+    0, 19, 256, ".png",
+    arrayOf(
+        "https://a.basemaps.cartocdn.com/dark_all/",
+        "https://b.basemaps.cartocdn.com/dark_all/",
+        "https://c.basemaps.cartocdn.com/dark_all/",
+        "https://d.basemaps.cartocdn.com/dark_all/",
+    ),
+    "© OpenStreetMap contributors © CARTO",
+)
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)

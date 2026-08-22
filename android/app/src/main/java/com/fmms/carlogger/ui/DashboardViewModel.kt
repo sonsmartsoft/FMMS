@@ -51,6 +51,7 @@ class DashboardViewModel : ViewModel() {
         c.obdManager.connectionState,
         c.vehicleRepository.observeAll(),
         c.gpsTelemetry,
+        c.gpsTracker.location,
     ) { values: Array<Any?> ->
         @Suppress("UNCHECKED_CAST")
         val telemetry = values[0] as LiveTelemetry
@@ -66,8 +67,21 @@ class DashboardViewModel : ViewModel() {
         val vehicles = values[5] as List<com.fmms.carlogger.core.database.entity.VehicleEntity>
         @Suppress("UNCHECKED_CAST")
         val gps = values[6] as LiveTelemetry
+        @Suppress("UNCHECKED_CAST")
+        val phoneLoc = values[7] as android.location.Location?
         val deviceMode = c.prefs.getDeviceMode()
-        val live = if (deviceMode == "gps") gps else telemetry
+        // GPS điện thoại luôn có sẵn (GpsTracker nhận fix liên tục kể cả khi OBD
+        // chưa kết nối) — merge vào live để map/footer/tốc độ không bị "mù".
+        // Số liệu từ OBD (nếu có) được ưu tiên giữ nguyên.
+        val phoneLat = phoneLoc?.latitude?.takeIf { it != 0.0 }
+        val phoneLng = phoneLoc?.longitude?.takeIf { it != 0.0 }
+        val live = if (deviceMode == "gps") gps else telemetry.copy(
+            latitude = telemetry.latitude ?: phoneLat,
+            longitude = telemetry.longitude ?: phoneLng,
+            gpsAccuracy = telemetry.gpsAccuracy ?: phoneLoc?.accuracy?.toDouble(),
+            speedKmh = telemetry.speedKmh
+                ?: phoneLoc?.speed?.takeIf { it > 0.1 }?.let { (it * 3.6).toDouble() },
+        )
         val hasMac = c.prefs.getMac() != null
         val active = vehicles.firstOrNull { it.active } ?: vehicles.firstOrNull()
         val odoDisplay = if (active != null) {

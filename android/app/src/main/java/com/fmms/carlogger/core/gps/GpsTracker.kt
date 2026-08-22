@@ -68,7 +68,14 @@ class GpsTracker(private val context: Context) {
         }
     }
 
-    fun currentLocation(): Location? = _location.value ?: lastKnown()
+    /**
+     * Vị trí gần nhất; tự thử start() lại nếu lần trước bị bỏ qua vì chưa đủ quyền
+     * (user có thể cấp permission SAU khi service đã chạy).
+     */
+    fun currentLocation(): Location? {
+        if (!active) start()
+        return _location.value ?: lastKnown()
+    }
 
     private val listener = object : LocationListener {
         override fun onLocationChanged(location: Location) {

@@ -483,3 +483,26 @@ màu PNG bằng PIL (nền sáng #e0e9f3, số tốc độ xanh #1a73e8).
   `cacheDir/osmdroid` → không cần quyền storage.
 - Verify ADB: chip MAP render tile thật (pixel-sample 952 màu khác nhau, xanh lá/dương/be
   đảo màu), attribution hiện, xoay ngang OK, crash buffer 0. APK rev61.
+
+### rev62 — GPS merge + map Google-night (CARTO) + WEB tự ẩn thanh địa chỉ
+- **Fix GPS mù khi OBD offline**: `GpsTracker.currentLocation()` giờ tự `start()` lại nếu
+  lần trước bị bỏ qua vì chưa đủ quyền (user cấp permission sau khi service đã chạy thì
+  trước đó không bao giờ request lại). `DashboardViewModel` merge trực tiếp từ flow
+  `gpsTracker.location` (không còn phụ thuộc `gpsTelemetry` — flow đó chỉ chạy ở chế độ
+  GPS-only nên ở chế độ OBD luôn rỗng): lat/lng/accuracy/speed điện thoại lấp chỗ trống,
+  số liệu OBD vẫn ưu tiên. Footer hiện "Accuracy ±100m" thay "GPS —".
+- **Map đổi tile sang CARTO dark_all** (`basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png`)
+  — giao diện tối gần như y hệt Google Maps ban đêm, bỏ hẳn ColorMatrix filter cũ
+  (ma trận sai làm tile trắng thành teal chói). Bắt lỗi 2 vòng: thiếu "/" cuối baseUrl →
+  host dính zoom level (`cartocdn.com17`, UnknownHost); sau đó thiếu nhánh `dark_all`
+  → HTTP 404. Attribution đổi thành "© OpenStreetMap © CARTO". Verify: white-pixel vùng
+  pane 94%→0.1%, logcat 0 lỗi download, marker cyan hiện, đường cao tốc vàng đúng kiểu
+  Google đêm.
+- **WEB pane tự ẩn thanh địa chỉ + bookmark** sau khi bấm Go/chọn bookmark — WebView
+  tràn toàn khung; nút tròn nhỏ icon globe (góc trên phải, content-desc "Show address
+  bar") bấm để mở lại. `focusManager.clearFocus()` khi ẩn.
+- **Fix mất tab media khi xoay**: xoay làm Activity recreate, MediaFrame được tạo lại ở
+  nhánh layout khác (portrait/landscape) nên rememberSaveable reset về APPS. Giờ state
+  `mediaMode` hoist lên CarUiScreen + persist prefs `carui_media_mode`. Verify: chọn MAP
+  portrait → xoay ngang → vẫn MAP, tile render ngay.
+- APK rev62 (verify apksigner OK).
