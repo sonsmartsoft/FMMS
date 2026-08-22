@@ -1,6 +1,7 @@
 package com.fmms.carlogger.ui.carui
 
 import android.annotation.SuppressLint
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.animation.core.animateFloatAsState
@@ -9,6 +10,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -431,12 +433,24 @@ private fun AppTile(
     }
 }
 
+/** Trang mở mặc định khi chưa từng nhập URL nào trong khung WEB. */
+private const val DEFAULT_WEB_URL = "https://fmms.vercel.app/"
+
+private val WEB_BOOKMARKS = listOf(
+    "FMMS" to "https://fmms.vercel.app/",
+    "YouTube" to "https://m.youtube.com",
+    "Google" to "https://www.google.com",
+    "VnExpress" to "https://vnexpress.net",
+    "Tuổi Trẻ" to "https://tuoitre.vn",
+    "Wikipedia" to "https://vi.wikipedia.org",
+)
+
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WebPane(colors: FmmsColors, s: FmmsStrings) {
-    var input by rememberSaveable { mutableStateOf(AppContainer.prefs.getLastWebUrl() ?: "") }
-    var currentUrl by rememberSaveable { mutableStateOf(AppContainer.prefs.getLastWebUrl() ?: "") }
+    var input by rememberSaveable { mutableStateOf(AppContainer.prefs.getLastWebUrl() ?: DEFAULT_WEB_URL) }
+    var currentUrl by rememberSaveable { mutableStateOf(AppContainer.prefs.getLastWebUrl() ?: DEFAULT_WEB_URL) }
     var webView by remember { mutableStateOf<WebView?>(null) }
 
     fun submit(raw: String) {
@@ -446,6 +460,8 @@ private fun WebPane(colors: FmmsColors, s: FmmsStrings) {
         input = full
         currentUrl = full
         AppContainer.prefs.setLastWebUrl(full)
+        // điều hướng ngay trên WebView đang có (không tạo lại)
+        webView?.loadUrl(full)
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -477,26 +493,54 @@ private fun WebPane(colors: FmmsColors, s: FmmsStrings) {
             ),
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, color = colors.textPrimary),
         )
+        Spacer(Modifier.height(6.dp))
+
+        // Dải bookmark nhanh
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            WEB_BOOKMARKS.forEach { (label, url) ->
+                Box(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(colors.surfaceVariant)
+                        .combinedClickable(onClick = { submit(url) })
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                ) {
+                    Text(
+                        label,
+                        color = if (currentUrl == url) colors.cyan else colors.textSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
         Spacer(Modifier.height(8.dp))
 
-        if (currentUrl.isBlank()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(s.webUrlHint, color = colors.textSecondary, fontSize = 13.sp, textAlign = TextAlign.Center)
-            }
-        } else {
-            AndroidView(
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.loadsImagesAutomatically = true
-                        webViewClient = WebViewClient()
-                        loadUrl(currentUrl)
-                    }.also { webView = it }
-                },
-                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
-            )
-        }
+        AndroidView(
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadsImagesAutomatically = true
+                    // Giữ mọi link http(s) trong khung; CHẶN intent:// market://... để
+                    // các trang như YouTube không ép mở app ngoài.
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: WebResourceRequest?,
+                        ): Boolean {
+                            val scheme = request?.url?.scheme ?: return false
+                            return !(scheme.equals("http", true) || scheme.equals("https", true))
+                        }
+                    }
+                    loadUrl(currentUrl)
+                }.also { webView = it }
+            },
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
+        )
     }
 
     DisposableEffect(Unit) {

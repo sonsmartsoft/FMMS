@@ -458,3 +458,15 @@ màu PNG bằng PIL (nền sáng #e0e9f3, số tốc độ xanh #1a73e8).
 - Verify bằng bounds dump ở ROTATION_90: clock(367,116) → km/h(682,519) → gauges y=870
   full-width → APPS/WEB chips (1221..1488,137) bên phải; không chồng lấn. Crash buffer 0.
 - Ảnh test: `/tmp/carui_landscape.png`, `/tmp/carui_portrait.png`. APK rev59.
+
+### rev60 — khung WEB: mặc định fmms.vercel.app + bookmark + chặn ép mở app
+- `DEFAULT_WEB_URL = https://fmms.vercel.app/` — lần đầu mở WEB chưa có URL lưu thì load
+  luôn trang FMMS web; URL user nhập sau vẫn được ghi nhớ đè (`carui_web_url`).
+- Dải bookmark chip cuộn ngang dưới ô địa chỉ: FMMS / YouTube (m.youtube.com) / Google /
+  VnExpress / Tuổi Trẻ / Wikipedia. Bấm = nạp ngay + lưu thành trang cuối.
+- **Chặn ép mở app**: override `shouldOverrideUrlLoading` — mọi scheme khác http/https
+  (intent://, market://, youtube app link...) bị bỏ qua, trang ở lại trong WebView.
+  Verify: bấm YouTube → focus vẫn `com.fmms.carlogger`, pixel-sample vùng webview ra
+  nền tối #0b1117 (YT mobile dark theo system night) chứ không trắng trống.
+- Lưu ý ADB: Samsung tiếp tục tự bật lại accelerometer_rotation nhiều lần trong phiên —
+  phải set lại trước mỗi lần test xoay.
