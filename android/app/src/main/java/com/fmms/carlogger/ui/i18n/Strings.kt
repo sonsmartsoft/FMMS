@@ -228,6 +228,8 @@ data class FmmsStrings(
     val mediaWebTab: String,
     val mediaMapTab: String,
     val webUrlHint: String,
+    val destPin: String,
+    val routeNoPath: String,
     /** true khi đang chọn tiếng Việt (chọn thứ/lunar weekday). */
     val isVietnamese: Boolean = false,
 )
@@ -328,6 +330,7 @@ val En = FmmsStrings(
     tripStartToast = "● Trip started", tripEndToast = "■ Trip ended",
     caruiTab = "CAR UI", mediaAppTab = "APPS", mediaWebTab = "WEB", mediaMapTab = "MAP",
     webUrlHint = "Enter address…",
+    destPin = "Destination", routeNoPath = "No route found",
 )
 
 val Vi = FmmsStrings(
@@ -426,6 +429,7 @@ val Vi = FmmsStrings(
     tripStartToast = "● Bắt đầu ghi hành trình", tripEndToast = "■ Đã kết thúc hành trình",
     caruiTab = "Ô TÔ", mediaAppTab = "ỨNG DỤNG", mediaWebTab = "WEB", mediaMapTab = "BẢN ĐỒ",
     webUrlHint = "Nhập địa chỉ…",
+    destPin = "Đích", routeNoPath = "Không tìm được đường đi",
     isVietnamese = true,
 )
 

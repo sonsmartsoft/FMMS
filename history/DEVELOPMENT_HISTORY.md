@@ -514,3 +514,20 @@ màu PNG bằng PIL (nền sáng #e0e9f3, số tốc độ xanh #1a73e8).
   nhãn trắng giữ trắng. Đúng phân bố màu Google Maps ban đêm.
 - Verify pixel: màu chiếm ưu thế vùng map = (34,38,48), dải đường 47–55, nhãn band
   224+; marker cyan hiện; giữ tab sau xoay ngang OK. APK rev63.
+
+### rev64 — map tương phản cao + bộ nút Google Maps (chỉ đường, lớp ngày/đêm)
+- **Tương phản**: ma trận night-lift dốc hơn (scale 1.75–1.90 + offset) — nền #090909 →
+  xám than #2C313D, đường phụ ~#777F96, đường chính ~#93A0AD, nhãn trắng giữ trắng.
+  Pixel-check: màu chủ đạo vùng map (44,49,61), chênh lệch đường/nền rất rõ khi lái xe.
+- **Chỉ đường kiểu Google Maps**: chạm lên bản đồ = đặt ghim đích (icon mặc định
+  osmdroid) → gọi OSRM miễn phí (routing.openstreetmap.de/routed-car, dự phòng
+  router.project-osrm.org; geometries=geojson, overview=full) trong Dispatchers.IO →
+  vẽ Polyline hổ phách 255,179,0 rộng 11f + thẻ dưới cùng "0.5 km • 2 phút" (i18n
+  phút/min) + nút X xoá lộ trình. Lỗi không có GPS/mất mạng → toast routeNoPath.
+- **Nút Layers đổi lớp bản đồ**: đêm = CARTO dark_all + lift (mặc định), ngày = CARTO
+  Voyager sáng màu; lưu prefs `carui_map_style`. Verify pixel: ngày 66.6% pixel sáng
+  (251,248,243), đêm 1.0% (44,49,61).
+- Giữ nguyên nút định vị (follow) + zoom in/out; MapHolder thêm routeLine + destMarker;
+  tap map qua MapEventsOverlay → callback Compose. 2D/3D thật: osmdroid tile phẳng
+  chưa hỗ trợ — xem xét sau nếu đổi sang map engine khác.
+- APK rev64 (apksigner OK).

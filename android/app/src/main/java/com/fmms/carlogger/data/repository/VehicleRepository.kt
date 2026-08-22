@@ -327,6 +327,10 @@ class PrefsStore(context: Context) {
     fun getMediaMode(): String = prefs.getString("carui_media_mode", "app") ?: "app"
     fun setMediaMode(mode: String) { prefs.edit().putString("carui_media_mode", mode).apply() }
 
+    /** Kiểu bản đồ Car UI: "night" (mặc định) hoặc "day". */
+    fun getMapStyle(): String = prefs.getString("carui_map_style", "night") ?: "night"
+    fun setMapStyle(style: String) { prefs.edit().putString("carui_map_style", style).apply() }
+
     /** Rail ngang: ghim hay tự ẩn (persist qua các lần mở app). */
     fun getRailPinned(): Boolean = prefs.getBoolean("rail_pinned", true)
     fun setRailPinned(v: Boolean) { prefs.edit().putBoolean("rail_pinned", v).apply() }

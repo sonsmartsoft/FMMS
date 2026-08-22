@@ -36,8 +36,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -50,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,7 +85,10 @@ import com.fmms.carlogger.ui.i18n.LocalStrings
 import com.fmms.carlogger.ui.theme.FmmsColors
 import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import com.fmms.carlogger.util.LunarCalendar
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.osmdroid.util.GeoPoint
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -387,7 +394,7 @@ private fun MediaFrame(
         } else if (mode == "web") {
             WebPane(colors, s)
         } else {
-            MapPane(vm, colors)
+            MapPane(vm, colors, s)
         }
     }
 
@@ -606,13 +613,34 @@ private class MapHolder(
     val marker: org.osmdroid.views.overlay.Marker,
     val trail: org.osmdroid.views.overlay.Polyline,
     val myLoc: org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay,
+    val routeLine: org.osmdroid.views.overlay.Polyline,
+    val destMarker: org.osmdroid.views.overlay.Marker,
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
+private fun MapPane(vm: DashboardViewModel, colors: FmmsColors, s: FmmsStrings) {
     val context = LocalContext.current
     var holder by remember { mutableStateOf<MapHolder?>(null) }
     var follow by rememberSaveable { mutableStateOf(true) }
+    // (km, phút) của tuyến đang chỉ đường; null = không có route
+    var routeInfo by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    val scope = rememberCoroutineScope()
+    // callback từ AndroidView factory sang state Compose (tap chọn điểm đến)
+    val onMapTap = remember { mutableStateOf<(GeoPoint) -> Unit>({}) }
+    var nightStyle by rememberSaveable { mutableStateOf(AppContainer.prefs.getMapStyle() != "day") }
+    var toastMsg by remember { mutableStateOf<String?>(null) }
+
+    fun applyStyle(map: org.osmdroid.views.MapView, night: Boolean) {
+        if (night) {
+            map.setTileSource(cartoDarkSource())
+            applyNightLift(map)
+        } else {
+            map.overlayManager.tilesOverlay.setColorFilter(null)
+            map.setTileSource(cartoVoyagerSource())
+        }
+        map.invalidate()
+    }
 
     Box(Modifier.fillMaxSize()) {
         AndroidView(
@@ -624,15 +652,12 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
                 cfg.osmdroidBasePath = java.io.File(ctx.cacheDir, "osmdroid")
 
                 val map = org.osmdroid.views.MapView(ctx)
-                // Tile CARTO dark_all: giao diện tối gần như y hệt Google Maps
-                // ban đêm (nền xám than, đường nhạt, nước tối) — miễn phí, chỉ cần
-                // ghi công "© OpenStreetMap contributors © CARTO".
-                map.setTileSource(cartoDarkSource())
-                // CARTO dark_all nền gần đen tuyệt đối (#090909) — khó nhìn.
-                // Nâng cấp tuyến tính + lệch nhẹ sang xanh: đất #09 → xám than
-                // #22262F, đường #37→#484E5A, nhãn trắng vẫn trắng — đúng tông
-                // Google Maps ban đêm (xanh-xám than, đường lộ rõ).
-                applyNightLift(map)
+                if (nightStyle) {
+                    map.setTileSource(cartoDarkSource())
+                    applyNightLift(map)
+                } else {
+                    map.setTileSource(cartoVoyagerSource())
+                }
                 map.setMultiTouchControls(true)
                 map.zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
                 map.controller.setZoom(17.0)
@@ -664,21 +689,51 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
                     outlinePaint.color = colors.cyan.toArgb()
                     outlinePaint.strokeWidth = 7f
                 }
+                // Lộ trình chỉ đường màu hổ phách + ghim điểm đến (icon mặc định osmdroid)
+                val routeLine = org.osmdroid.views.overlay.Polyline(map).apply {
+                    outlinePaint.color = android.graphics.Color.rgb(255, 179, 0)
+                    outlinePaint.strokeWidth = 11f
+                    isEnabled = false
+                }
+                val destMarker = org.osmdroid.views.overlay.Marker(map).apply {
+                    setAnchor(org.osmdroid.views.overlay.Marker.ANCHOR_BOTTOM, org.osmdroid.views.overlay.Marker.ANCHOR_CENTER)
+                    isEnabled = false
+                }
                 map.overlays.add(trail)
+                map.overlays.add(routeLine)
                 map.overlays.add(marker)
+                map.overlays.add(destMarker)
                 map.overlays.add(myLoc)
 
-                holder = MapHolder(map, marker, trail, myLoc)
+                // Chạm lên bản đồ = chọn điểm đến → tự chỉ đường từ vị trí xe
+                map.overlays.add(
+                    org.osmdroid.views.overlay.MapEventsOverlay(object : org.osmdroid.events.MapEventsReceiver {
+                        override fun singleTapConfirmedHelper(p: GeoPoint?): Boolean {
+                            if (p == null) return false
+                            onMapTap.value(p)
+                            return true
+                        }
+
+                        override fun longPressHelper(p: GeoPoint?): Boolean = false
+                    }),
+                )
+
+                holder = MapHolder(map, marker, trail, myLoc, routeLine, destMarker)
                 map
             },
             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
         )
 
-        // Nút nổi kiểu Google Maps: định vị + zoom
+        // Nút nổi kiểu Google Maps: lớp bản đồ + định vị + zoom
         Column(
             Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 26.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            MapFab(icon = Icons.Filled.Layers, tint = colors.textPrimary, colors = colors) {
+                nightStyle = !nightStyle
+                AppContainer.prefs.setMapStyle(if (nightStyle) "night" else "day")
+                holder?.let { applyStyle(it.map, nightStyle) }
+            }
             MapFab(icon = Icons.Filled.MyLocation, tint = if (follow) colors.cyan else colors.textSecondary, colors = colors) {
                 follow = !follow
                 if (follow) {
@@ -695,7 +750,52 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
             }
         }
 
-        // Attribution bắt buộc của OpenStreetMap
+        // Thẻ chỉ đường kiểu Google Maps: quãng đường • thời gian + nút xoá
+        routeInfo?.let { (km, min) ->
+            Row(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 26.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(colors.surfaceVariant)
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.Navigation, null, tint = Color(0xFFFFB300), modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    String.format("%.1f km • %.0f %s", km, min, if (s.isVietnamese) "phút" else "min"),
+                    color = colors.textPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.width(10.dp))
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Clear route",
+                    tint = colors.textSecondary,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .combinedClickable(onClick = {
+                            routeInfo = null
+                            holder?.let { h ->
+                                h.routeLine.isEnabled = false
+                                h.destMarker.isEnabled = false
+                                h.map.invalidate()
+                            }
+                        }),
+                )
+            }
+        }
+
+        toastMsg?.let { msg ->
+            LaunchedEffect(msg) {
+                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                toastMsg = null
+            }
+        }
+
+        // Attribution bắt buộc của OpenStreetMap/CARTO
         Text(
             "© OpenStreetMap © CARTO",
             color = colors.textSecondary,
@@ -707,6 +807,38 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
                 .background(colors.surface.copy(alpha = 0.75f))
                 .padding(horizontal = 5.dp, vertical = 1.dp),
         )
+    }
+
+    // Tap trên map = đặt đích + gọi OSRM chỉ đường từ vị trí hiện tại
+    LaunchedEffect(Unit) {
+        val handler: (GeoPoint) -> Unit = handlerFun@{ gp ->
+            val h = holder ?: return@handlerFun
+            h.destMarker.position = gp
+            h.destMarker.isEnabled = true
+            h.destMarker.title = s.destPin
+            h.map.invalidate()
+            routeInfo = null
+            scope.launch {
+                val st = vm.uiState.value.telemetry
+                val sLat = st.latitude
+                val sLng = st.longitude
+                if (sLat == null || sLng == null) {
+                    toastMsg = s.routeNoPath
+                    return@launch
+                }
+                val result = fetchRoute(sLat to sLng, gp)
+                if (result == null) {
+                    toastMsg = s.routeNoPath
+                } else {
+                    val (pts, km, min) = result
+                    h.routeLine.setPoints(pts)
+                    h.routeLine.isEnabled = true
+                    h.map.invalidate()
+                    routeInfo = km to min
+                }
+            }
+        }
+        onMapTap.value = handler
     }
 
     // Cập nhật marker/vệt chạy theo telemetry
@@ -728,6 +860,51 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
     }
 }
 
+/**
+ * Gọi OSRM miễn phí (FOSSGIS trước, demo server dự phòng) để lấy lộ trình lái xe.
+ * Trả về (điểm geometry, km, phút) hoặc null nếu lỗi/mất mạng.
+ */
+private suspend fun fetchRoute(
+    start: Pair<Double, Double>,
+    end: GeoPoint,
+): Triple<List<GeoPoint>, Double, Double>? = withContext(Dispatchers.IO) {
+    val servers = listOf(
+        "https://routing.openstreetmap.de/routed-car",
+        "https://router.project-osrm.org",
+    )
+    for (base in servers) {
+        try {
+            val url = "$base/route/v1/driving/" +
+                "${start.second},${start.first};${end.longitude},${end.latitude}" +
+                "?overview=full&geometries=geojson"
+            val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                connectTimeout = 8000
+                readTimeout = 12000
+                setRequestProperty("User-Agent", "fmms-carlogger")
+            }
+            @Suppress("BlockingMethodInNonTransactionalContext")
+            val body = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+            val json = org.json.JSONObject(body)
+            val route = json.getJSONArray("routes").getJSONObject(0)
+            val coords = route.getJSONObject("geometry").getJSONArray("coordinates")
+            val pts = ArrayList<GeoPoint>(coords.length())
+            for (i in 0 until coords.length()) {
+                val cxy = coords.getJSONArray(i)
+                pts.add(GeoPoint(cxy.getDouble(1), cxy.getDouble(0)))
+            }
+            return@withContext Triple(
+                pts,
+                route.getDouble("distance") / 1000.0,
+                route.getDouble("duration") / 60.0,
+            )
+        } catch (_: Exception) {
+            continue
+        }
+    }
+    null
+}
+
 /** Nguồn tile tối của CARTO (dựa trên dữ liệu OpenStreetMap). */
 private fun cartoDarkSource() = org.osmdroid.tileprovider.tilesource.XYTileSource(
     "CARTO_DARK",
@@ -742,21 +919,34 @@ private fun cartoDarkSource() = org.osmdroid.tileprovider.tilesource.XYTileSourc
 )
 
 /**
- * Nâng độ sáng tile tối về tông Google Maps đêm: nền than xanh thay vì đen xì,
- * đường/nhãn vẫn phân cấp rõ. Ma trận tuyến tính đơn giản (scale + offset) —
- * đất #090909 → ~#22262F, đường phụ ~#37373A → ~#484E5A, nhãn trắng giữ nguyên.
+ * Nâng tương phản tối đa cho tile CARTO dark: nền #090909 → xám than xanh
+ * #2B313D, đường phụ → ~#777F96, đường chính → ~#93A0AD, nhãn trắng giữ trắng.
+ * Dốc dốc (scale ~1.8) nên chênh lệch đường/nền rất rõ — dễ nhìn khi lái xe.
  */
 private fun applyNightLift(map: org.osmdroid.views.MapView) {
     val lift = android.graphics.ColorMatrix(
         floatArrayOf(
-            0.85f, 0f, 0f, 0f, 26f,
-            0f, 0.88f, 0f, 0f, 30f,
-            0f, 0f, 0.92f, 0f, 40f,
+            1.75f, 0f, 0f, 0f, 28f,
+            0f, 1.80f, 0f, 0f, 33f,
+            0f, 0f, 1.90f, 0f, 44f,
             0f, 0f, 0f, 1f, 0f,
         ),
     )
     map.overlayManager.tilesOverlay.setColorFilter(android.graphics.ColorMatrixColorFilter(lift))
 }
+
+/** Tile CARTO Voyager — bản đồ ngày sáng màu, kiểu Google Maps ban ngày. */
+private fun cartoVoyagerSource() = org.osmdroid.tileprovider.tilesource.XYTileSource(
+    "CARTO_VOYAGER",
+    0, 19, 256, ".png",
+    arrayOf(
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/",
+    ),
+    "© OpenStreetMap contributors © CARTO",
+)
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
