@@ -506,3 +506,11 @@ màu PNG bằng PIL (nền sáng #e0e9f3, số tốc độ xanh #1a73e8).
   `mediaMode` hoist lên CarUiScreen + persist prefs `carui_media_mode`. Verify: chọn MAP
   portrait → xoay ngang → vẫn MAP, tile render ngay.
 - APK rev62 (verify apksigner OK).
+
+### rev63 — map sáng như Google Maps đêm thật (bỏ "đen xì")
+- Phản hồi: tile CARTO dark_all nền #090909 gần đen tuyệt đối, không nhìn thấy gì.
+- Thêm `applyNightLift()`: ColorMatrix tuyến tính scale+offset lệch nhẹ sang xanh —
+  đất #090909 → xám than xanh #222630, đường phụ → #2F343F/#484E5A lộ rõ lưới,
+  nhãn trắng giữ trắng. Đúng phân bố màu Google Maps ban đêm.
+- Verify pixel: màu chiếm ưu thế vùng map = (34,38,48), dải đường 47–55, nhãn band
+  224+; marker cyan hiện; giữ tab sau xoay ngang OK. APK rev63.

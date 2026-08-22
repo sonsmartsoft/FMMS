@@ -628,6 +628,11 @@ private fun MapPane(vm: DashboardViewModel, colors: FmmsColors) {
                 // ban đêm (nền xám than, đường nhạt, nước tối) — miễn phí, chỉ cần
                 // ghi công "© OpenStreetMap contributors © CARTO".
                 map.setTileSource(cartoDarkSource())
+                // CARTO dark_all nền gần đen tuyệt đối (#090909) — khó nhìn.
+                // Nâng cấp tuyến tính + lệch nhẹ sang xanh: đất #09 → xám than
+                // #22262F, đường #37→#484E5A, nhãn trắng vẫn trắng — đúng tông
+                // Google Maps ban đêm (xanh-xám than, đường lộ rõ).
+                applyNightLift(map)
                 map.setMultiTouchControls(true)
                 map.zoomController.setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER)
                 map.controller.setZoom(17.0)
@@ -735,6 +740,23 @@ private fun cartoDarkSource() = org.osmdroid.tileprovider.tilesource.XYTileSourc
     ),
     "© OpenStreetMap contributors © CARTO",
 )
+
+/**
+ * Nâng độ sáng tile tối về tông Google Maps đêm: nền than xanh thay vì đen xì,
+ * đường/nhãn vẫn phân cấp rõ. Ma trận tuyến tính đơn giản (scale + offset) —
+ * đất #090909 → ~#22262F, đường phụ ~#37373A → ~#484E5A, nhãn trắng giữ nguyên.
+ */
+private fun applyNightLift(map: org.osmdroid.views.MapView) {
+    val lift = android.graphics.ColorMatrix(
+        floatArrayOf(
+            0.85f, 0f, 0f, 0f, 26f,
+            0f, 0.88f, 0f, 0f, 30f,
+            0f, 0f, 0.92f, 0f, 40f,
+            0f, 0f, 0f, 1f, 0f,
+        ),
+    )
+    map.overlayManager.tilesOverlay.setColorFilter(android.graphics.ColorMatrixColorFilter(lift))
+}
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
