@@ -22,4 +22,11 @@ interface OBDTransport {
 
     /** Best-effort short send used for init sequences that return no payload. */
     suspend fun sendRaw(cmd: String)
+
+    /**
+     * Gửi lệnh dạng stream (vd "ATMA" — monitor all) và gom toàn bộ dữ liệu
+     * adapter trả về trong [durationMs] ms, rồi dừng stream. Trả về null nếu
+     * mất kết nối hoặc không nhận được gì.
+     */
+    suspend fun captureStream(cmd: String, durationMs: Long): String?
 }

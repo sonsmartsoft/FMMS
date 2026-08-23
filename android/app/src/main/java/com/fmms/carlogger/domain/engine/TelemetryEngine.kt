@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Drives OBD polling (profiles per spec §16) and merges GPS.
@@ -25,6 +26,8 @@ class TelemetryEngine(
     private val vehicleRepository: com.fmms.carlogger.data.repository.VehicleRepository? = null,
     // Lưu ODO ECU lần cuối đọc được — hiển thị lại khi mất kết nối OBD
     private val odoStore: android.content.SharedPreferences? = null,
+    // Truy cập trực tiếp transport để sniff CAN (số hộp số P/R/N/D/M)
+    private val transport: com.fmms.carlogger.core.obd.OBDTransport? = null,
 ) {
 
     companion object {
@@ -36,6 +39,16 @@ class TelemetryEngine(
     val live: StateFlow<LiveTelemetry> = _live
 
     private var pollJob: Job? = null
+    private var gearJob: Job? = null
+
+    /** Tạm dừng vòng quét PID (dùng khi sniff CAN để không trộn lệnh vào stream). */
+    @Volatile
+    var paused = false
+        private set
+
+    fun setPaused(p: Boolean) {
+        paused = p
+    }
 
     // ECU odometer (PID 01A6): read every ODO_SWEEP_EVERY sweeps (~25s) to keep
     // the poll loop fast; value is held between sweeps.
@@ -78,8 +91,7 @@ class TelemetryEngine(
     private var pendingGear: Int? = null
     private var pendingGearCount = 0
 
-    private fun estimateGear(rpm: Double?, speed: Double?): Int? {
-        if (rpm == null || speed == null || speed < 15.0) {
+    private fun estimateGear(rpm: Double?, speed: Double?): Int? {        if (rpm == null || speed == null || speed < 15.0) {
             currentGear = null; pendingGear = null; pendingGearCount = 0
             return null
         }
@@ -104,6 +116,80 @@ class TelemetryEngine(
         return currentGear
     }
 
+    // ------------------------------------------------------------------
+    // Sniff số hộp số THẬT từ bus CAN (không qua OBD PID chuẩn):
+    //   ID 228 byte0: 01=P, 02=R, 03=N, 04=D, 14/24/34..=M1/M2/M3..
+    //   ID 228 byte4: bitmask số đang ăn (02=số1, 04=số2, 08=3, 10=4...)
+    //   ID 131 byte1: phải bằng nibble-thấp của 228 → đối chứng chéo chống nhiễu
+    // ------------------------------------------------------------------
+    private var canHeadersSet = false
+
+    /** Nhãn số đọc từ CAN (P/R/N/D) — null khi chưa có tín hiệu → UI hiện "--". */
+    @Volatile
+    private var liveCanGear: String? = null
+
+    private suspend fun sniffCanGear(): String? {
+        val t = transport ?: return null
+        val r = sniffCanGearOnce(t)
+        android.util.Log.d(
+            "GearSniff",
+            "result=$r rawLen=$lastSniffRawLen f228=$lastSniffF228 f131=$lastSniffF131" +
+                (lastSniffRaw?.take(140)?.let { " raw=[${it.replace("\n", "|")}]" } ?: ""),
+        )
+        return r
+    }
+
+    private var lastSniffRawLen = -1
+    private var lastSniffRaw: String? = null
+    private var lastSniffF228: String? = null
+    private var lastSniffF131: String? = null
+
+    private suspend fun sniffCanGearOnce(t: com.fmms.carlogger.core.obd.OBDTransport): String? {
+        return try {
+            // TOÀN BỘ phiên ATMA phải giữ khoá giao dịch chung với vòng quét PID —
+            // nếu không, lệnh PID có thể chen vào giữa cửa sổ monitor và làm hỏng
+            // cả hai luồng phản hồi (đây từng là nguyên nhân gây lỗi bus/đèn nháy).
+            elms.transactionMutex.withLock {
+                if (!canHeadersSet) {
+                    t.sendCommandAndWait("AT H1", 800)
+                    t.sendCommandAndWait("AT S1", 800)
+                    canHeadersSet = true
+                }
+                val raw = t.captureStream("ATMA", 300)
+            lastSniffRawLen = raw?.length ?: -1
+            lastSniffRaw = raw
+            val frames = com.fmms.carlogger.core.obd.GearScanner.parseFrames(raw ?: "")
+            if (frames.isEmpty() && canHeadersSet) {
+                // Không thấy frame nào → có thể adapter vừa reset, mất AT H1/S1.
+                // Bật lại cờ để lần sniff kế gửi lại lệnh header.
+                canHeadersSet = false
+            }
+            val f228 = frames.lastOrNull { it.id == "228" } ?: return null
+            lastSniffF228 = f228.bytes.joinToString(" ") { String.format("%02X", it) }
+            val f131 = frames.lastOrNull { it.id == "131" }
+            lastSniffF131 = f131?.bytes?.joinToString(" ") { String.format("%02X", it) }
+            val b0 = f228.bytes.getOrNull(0) ?: return null
+            // Bảng số thật (quét 2026-08-23): nibble-thấp byte0 = 1:P, 2:R, 3:N, 4:D
+            // (khớp 100% với byte1 của ID 131 — dùng làm đối chứng chéo)
+            val crossOk = if (f131 != null && f131.bytes.size > 1) {
+                f131.bytes[1] == (b0 and 0x0F)
+            } else true
+            if (!crossOk) {
+                return null // hai nguồn lệch nhau → bỏ mẫu này
+            }
+            when (b0 and 0x0F) {
+                0x01 -> "P"
+                0x02 -> "R"
+                0x03 -> "N"
+                0x04 -> "D"
+                else -> null
+            }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     data class PollResult(val telemetry: LiveTelemetry, val raw: List<Pair<String, String>>)
 
     fun start() {
@@ -114,8 +200,8 @@ class TelemetryEngine(
             lastGoodOdoKm?.let { o -> _live.value = _live.value.copy(odometerSavedKm = o) }
             var lastFuelRate = 0.0
             while (true) {
-                if (!elms.isInitialised) {
-                    delay(1000)
+                if (paused || !elms.isInitialised) {
+                    delay(400)
                     continue
                 }
                 val result = pollOnce()
@@ -123,18 +209,13 @@ class TelemetryEngine(
                 if (sweepCount % ODO_SWEEP_EVERY == 1L) refreshEcuOdometer()
                 val rpm = result.telemetry.rpm
                 val spd = result.telemetry.speedKmh
-                val engineOn = (rpm ?: 0.0) >= 300.0
                 val g = estimateGear(rpm, spd)
+                // Nhãn số hộp số do gearJob cập nhật riêng (đọc CAN đều 1.2s),
+                // vòng chính chỉ giữ fallback D# khi đang chạy mà CAN chậm.
                 _live.value = result.telemetry.copy(
                     timestamp = System.currentTimeMillis(),
                     gear = g,
-                    // P: máy nổ nhưng xe đứng yên. N/R không tách được qua OBD chuẩn
-                    // (cần PID riêng của hãng); khi chạy hiển thị số trong hộp D.
-                    gearLabel = when {
-                        !engineOn -> null
-                        (spd ?: 0.0) < 3.0 -> "P"
-                        else -> g?.let { "D$it" }
-                    },
+                    gearLabel = liveCanGear,
                     odometerKm = ecuLiveOdoKm,
                     odometerSavedKm = lastGoodOdoKm,
                     gpsSpeedKmh = gpsTracker.currentLocation()?.speed?.takeIf { it > 0 }?.let { (it * 3.6).toDouble() },
@@ -148,6 +229,38 @@ class TelemetryEngine(
                 delay(2500)
             }
         }
+        // Vòng sniff CAN riêng: CHỈ chạy khi xe đứng yên (<3 km/h) — khi đang lái
+        // không gửi ATMA gì cả (an toàn cho bus, tránh lỗi đèn như sự cố trước),
+        // nhãn D khi chạy xe do fallback ước tính từ RPM/tốc độ đảm nhiệm.
+        if (gearJob?.isActive != true) {
+            gearJob = scope.launch {
+                var emptyStreak = 0
+                while (true) {
+                    val moving = (_live.value.speedKmh ?: 0.0) >= 3.0
+                    if (paused || !elms.isInitialised || transport == null || moving) {
+                        liveCanGear = null
+                        emptyStreak = 0
+                        delay(1500)
+                        continue
+                    }
+                    val g = sniffCanGear()
+                    liveCanGear = g
+                    emptyStreak = if (g == null) emptyStreak + 1 else 0
+                    // Nhiều mẫu trống liên tiếp → nghi adapter reset/anyhư lạ:
+                    // nghỉ lâu, buộc gửi lại header ở lần kế.
+                    if (emptyStreak >= 4) {
+                        canHeadersSet = false
+                        delay(30_000)
+                        emptyStreak = 0
+                    } else {
+                        delay(1200)
+                    }
+                }
+            }
+        }
+        // KHÔNG sniff CAN trong vòng chính: adapter ELM327 giá rẻ chạy ATMA liên tục
+        // gây khung lỗi trên bus → ECU đèn pha nháy. Số hộp số giờ chỉ đọc khi
+        // người dùng chủ động mở màn hình GearScan (có pause vòng quét PID).
     }
 
     private suspend fun pollOnce(): PollResult {
@@ -186,6 +299,9 @@ class TelemetryEngine(
         }
 
         val hasPids = listOf(rpm, speed, coolant, voltage, fuelLevel).any { it != null }
+        // Nhiều ECU Mazda không trả PID 5E (fuel rate) → suy ra từ MAF:
+        // L/h ≈ MAF(g/s) × 3600 / (AFR 14.7 × tỉ trọng xăng ~745 g/L) ≈ MAF × 0.33
+        if (fuelRate == null && maf != null) fuelRate = maf * 0.33
         val telemetry = LiveTelemetry(
             rpm = rpm,
             speedKmh = speed,
@@ -210,5 +326,7 @@ class TelemetryEngine(
     fun stop() {
         pollJob?.cancel()
         pollJob = null
+        gearJob?.cancel()
+        gearJob = null
     }
 }

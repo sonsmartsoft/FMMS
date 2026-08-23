@@ -63,18 +63,6 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        // Header — đóng bằng cách bấm icon trên thanh điều hướng
-        Text(
-            s.speed,
-            color = colors.textPrimary,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
         // Gauge chính + mini OBD căn TRÁI; màn rộng thì bên phải là panel KPI động cơ
         BoxWithConstraints(Modifier.fillMaxWidth()) {
             val miniSize = (maxWidth / 4.6f).coerceIn(84.dp, 110.dp)
@@ -96,6 +84,7 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
                             maxSpeedKmh = state.trip.maxSpeedKmh?.takeIf { it.isFinite() && it > 0 } ?: 0.0,
                             accent = colors.red,
                             gearLabel = state.telemetry.gearLabel,
+                            rangeKm = state.fuel.rangeKm,
                         )
                         Spacer(modifier = Modifier.width(14.dp))
                         MiniObdGauge(
@@ -125,6 +114,7 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
                             maxSpeedKmh = state.trip.maxSpeedKmh?.takeIf { it.isFinite() && it > 0 } ?: 0.0,
                             accent = colors.red,
                             gearLabel = state.telemetry.gearLabel,
+                            rangeKm = state.fuel.rangeKm,
                         )
                         Spacer(modifier = Modifier.width(14.dp))
                         MiniObdGauge(
@@ -221,7 +211,14 @@ fun SpeedometerScreen(vm: DashboardViewModel) {
 // ---------------------------------------------------------------------
 
 @Composable
-private fun AnalogSpeedGauge(modifier: Modifier, speedKmh: Double, maxSpeedKmh: Double, accent: Color, gearLabel: String? = null) {
+private fun AnalogSpeedGauge(
+    modifier: Modifier,
+    speedKmh: Double,
+    maxSpeedKmh: Double,
+    accent: Color,
+    gearLabel: String? = null,
+    rangeKm: Double? = null,
+) {
     val colors = LocalFmmsColors.current
     val frac = (speedKmh / 220.0).toFloat().coerceIn(0f, 1f)
     val animated by animateFloatAsState(
@@ -257,6 +254,16 @@ private fun AnalogSpeedGauge(modifier: Modifier, speedKmh: Double, maxSpeedKmh: 
                     color = colors.cyan,
                     fontSize = (gaugeSize.value * 0.075f).sp,
                     fontWeight = FontWeight.Bold,
+                )
+            }
+            if (rangeKm != null && rangeKm.isFinite()) {
+                Spacer(modifier = Modifier.height((gaugeSize.value * 0.015f).dp))
+                Text(
+                    "≈ ${rangeKm.toInt()} km",
+                    color = if (rangeKm < 20.0) Color(0xFFFF3B30)
+                    else colors.textPrimary.copy(alpha = 0.85f),
+                    fontSize = (gaugeSize.value * 0.052f).sp,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
         }

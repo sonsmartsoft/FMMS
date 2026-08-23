@@ -201,6 +201,10 @@ private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.th
                     showSubAsNote = state.fuel.rangeKm == null,
                     noteColor = colors.amber,
                     unit = if (state.fuel.rangeKm != null) "km" else null,
+                    // Nổi bật gấp đôi + đỏ nhấp nháy khi còn dưới 20km
+                    valueSize = 48.sp,
+                    numericValue = state.fuel.rangeKm,
+                    alertBelow = 20.0,
                 )
                 VerticalDivider(modifier = Modifier.height(50.dp).width(1.dp), color = colors.divider)
                 FuelGaugeCard(
@@ -248,7 +252,6 @@ private fun WideLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.th
                 title = strings.speed, value = t.speedKmh?.let { "${it.toInt()}" } ?: "—", unit = "km/h",
                 color = colors.cyan, modifier = Modifier.weight(1f),
                 maxValue = 220f, currentValue = t.speedKmh?.toFloat() ?: 0f,
-                badge = t.gearLabel,
             )
             GaugeCard(
                 title = strings.rpm, value = t.rpm?.let { "${it.toInt()}" } ?: "—", unit = "rpm",
@@ -299,6 +302,10 @@ private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.
                     showSubAsNote = state.fuel.rangeKm == null,
                     noteColor = colors.amber,
                     unit = if (state.fuel.rangeKm != null) "km" else null,
+                    // Nổi bật gấp đôi + đỏ nhấp nháy khi còn dưới 20km
+                    valueSize = 48.sp,
+                    numericValue = state.fuel.rangeKm,
+                    alertBelow = 20.0,
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Row(
@@ -350,7 +357,6 @@ private fun NarrowLayout(state: DashboardUiState, colors: com.fmms.carlogger.ui.
                 title = strings.speed, value = t.speedKmh?.let { "${it.toInt()}" } ?: "—", unit = "km/h",
                 color = colors.cyan, modifier = Modifier.weight(1f),
                 maxValue = 220f, currentValue = t.speedKmh?.toFloat() ?: 0f,
-                badge = t.gearLabel,
             )
             GaugeCard(
                 title = strings.rpm, value = t.rpm?.let { "${it.toInt()}" } ?: "—", unit = "rpm",
@@ -495,19 +501,39 @@ private fun HeroCell(
     showSubAsNote: Boolean = false,
     noteColor: Color = Color.Gray,
     unit: String? = null,
+    /** Cỡ chữ giá trị (mặc định 24sp). */
+    valueSize: androidx.compose.ui.unit.TextUnit = 24.sp,
+    /** Giá trị số để so ngưỡng cảnh báo (vd quãng đường còn lại). */
+    numericValue: Double? = null,
+    /** Nhỏ hơn ngưỡng này -> đỏ nhấp nháy. */
+    alertBelow: Double? = null,
 ) {
     val colors = LocalFmmsColors.current
+    val low = numericValue != null && alertBelow != null && numericValue < alertBelow
+    val blinkAlpha = if (low) {
+        val t = rememberInfiniteTransition(label = "heroBlink")
+        t.animateFloat(
+            initialValue = 0.25f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(450, easing = LinearEasing), RepeatMode.Reverse),
+            label = "heroBlinkAlpha",
+        ).value
+    } else 1f
+    val shownColor = if (low) colors.red else color
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(2.dp))
         // Số và đơn vị tách riêng để giá trị dài (vd 2622.5) không chiếm nửa card.
-        androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, color = color, fontSize = 24.sp, fontWeight = FontWeight.Black)
+        androidx.compose.foundation.layout.Row(
+            verticalAlignment = Alignment.Bottom,
+            modifier = Modifier.graphicsLayer { this.alpha = blinkAlpha },
+        ) {
+            Text(value, color = shownColor, fontSize = valueSize, fontWeight = FontWeight.Black)
             if (!unit.isNullOrBlank()) {
                 Spacer(modifier = Modifier.width(3.dp))
                 Text(
                     unit,
-                    color = color.copy(alpha = 0.75f),
+                    color = shownColor.copy(alpha = 0.75f),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 3.dp),

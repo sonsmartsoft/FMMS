@@ -11,6 +11,7 @@ import com.fmms.carlogger.core.obd.OBDConnectionState.DISCONNECTED
 import com.fmms.carlogger.core.obd.OBDConnectionState.ERROR
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
@@ -137,6 +138,19 @@ class BluetoothBleTransport(
         }
         Unit
     }
+
+    override suspend fun captureStream(cmd: String, durationMs: Long): String? =
+        withContext(Dispatchers.IO) {
+            val before = responseBuffer.length
+            sendRaw(cmd)
+            delay(durationMs)
+            sendRaw(".")
+            delay(150)
+            val out = synchronized(responseBuffer) {
+                if (responseBuffer.length > before) responseBuffer.substring(before) else ""
+            }
+            out.ifEmpty { null }
+        }
 
     override suspend fun disconnect(): Unit {
         mainHandler.post { gatt?.disconnect(); gatt?.close(); gatt = null }

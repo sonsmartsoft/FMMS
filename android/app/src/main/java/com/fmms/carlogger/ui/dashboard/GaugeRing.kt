@@ -44,7 +44,6 @@ fun GaugeCard(
         animationSpec = tween(durationMillis = 600),
         label = "gauge",
     )
-
     Card(
         modifier = modifier,
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),

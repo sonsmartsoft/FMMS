@@ -140,6 +140,7 @@ object AppContainer {
             scope = appScope,
             vehicleRepository = vehicleRepository,
             odoStore = context.getSharedPreferences("ecu_odo", android.content.Context.MODE_PRIVATE),
+            transport = obdManager.transport,
         )
         this.fuelEngine = FuelEngine(vehicleRepository, tripRepository, fuelLogRepository)
         this.tripEngine = TripEngine(vehicleRepository, tripRepository, appScope) { prefs.getTripTimeoutMs() }

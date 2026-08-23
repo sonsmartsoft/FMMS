@@ -50,7 +50,6 @@ class MoreViewModel(private val dashboard: DashboardViewModel) : ViewModel() {
         object Settings : Page()
         object Connection : Page()
         object Device : Page()
-        object Tpms : Page()
     }
 
     private val _page = MutableStateFlow<Page>(Page.Menu)
@@ -80,7 +79,6 @@ fun MoreScreen(vm: DashboardViewModel) {
         is MoreViewModel.Page.Settings -> SettingsScreen(onBack = moreVm::back)
         is MoreViewModel.Page.Connection -> ConnectionScreen(onBack = moreVm::back)
         is MoreViewModel.Page.Device -> DeviceConfigScreen(onBack = moreVm::back)
-        is MoreViewModel.Page.Tpms -> com.fmms.carlogger.ui.tpms.TpmsScanScreen(onBack = moreVm::back)
     }
 }
 
@@ -108,7 +106,6 @@ private fun MoreMenu(onOpen: (MoreViewModel.Page) -> Unit, vm: DashboardViewMode
             MenuItem(strings.cloud, strings.cloudDesc) { onOpen(MoreViewModel.Page.Cloud) }
             MenuItem(strings.connection, strings.connectionDesc) { onOpen(MoreViewModel.Page.Connection) }
             MenuItem(strings.device, strings.deviceDesc) { onOpen(MoreViewModel.Page.Device) }
-            MenuItem("TPMS", strings.tpmsDesc) { onOpen(MoreViewModel.Page.Tpms) }
             MenuItem(strings.settings, strings.settingsDesc) { onOpen(MoreViewModel.Page.Settings) }
         }
         CustomScrollbar(scrollState, Modifier.align(Alignment.CenterEnd).fillMaxHeight())

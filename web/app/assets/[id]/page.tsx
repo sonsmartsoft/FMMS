@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Asset, ExpenseRecord, MaintenanceRecord, TripRecord, LoanRecord } from '@/types/mobility';
 import { FuelLog, getFuelLogs, createFuelLog } from '@/lib/services/fuelService';
@@ -24,6 +24,12 @@ import {
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
 const durFmt = (s: number) => `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+
+const DEFAULT_MAINT_CATEGORIES = [
+  'Thay dầu máy', 'Thay lọc dầu / Lọc nhớt', 'Thay lọc gió động cơ', 'Thay lọc gió điều hòa',
+  'Thay bugi đánh lửa', 'Thay má phanh', 'Thay nước làm mát', 'Thay ắc-quy / Pin', 'Thay lốp xe',
+  'Thay dầu hộp số', 'Bơm lốp & Cân thước lái', 'Vệ sinh buồng đốt / Kim phun', 'Sửa chữa & Khác'
+];
 
 /* ── Shared Modal Wrapper ─────────────────────────────────────── */
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -201,6 +207,40 @@ export default function AssetDetailPage() {
   /* ── Form states ── */
   const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
   const [maintForm, setMaintForm] = useState({ date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
+  const [categories, setCategories] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
+  const [serviceItems, setServiceItems] = useState<{ name: string; cost: string }[]>([
+    { name: 'Thay dầu máy', cost: '' },
+  ]);
+
+  useEffect(() => {
+    const loadMasterCategories = () => {
+      try {
+        const saved = localStorage.getItem('fmms_master_maint');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCategories(parsed.map((c: any) => typeof c === 'string' ? c : c.name));
+            return;
+          }
+        }
+      } catch {}
+      setCategories(DEFAULT_MAINT_CATEGORIES);
+    };
+
+    loadMasterCategories();
+    window.addEventListener('fmms_master_updated', loadMasterCategories);
+    return () => window.removeEventListener('fmms_master_updated', loadMasterCategories);
+  }, []);
+
+  const addServiceItem = () => setServiceItems(p => [...p, { name: categories[0] || 'Thay dầu máy', cost: '' }]);
+  const removeServiceItem = (index: number) => setServiceItems(p => p.filter((_, i) => i !== index));
+  const updateServiceItem = (index: number, field: 'name' | 'cost', value: string) => {
+    setServiceItems(p => p.map((item, i) => i === index ? { ...item, [field]: value } : item));
+  };
+  const calculatedItemsCost = useMemo(() => {
+    return serviceItems.reduce((acc, item) => acc + (parseFloat(item.cost) || 0), 0);
+  }, [serviceItems]);
+
   const [expForm, setExpForm] = useState({ date: '', category: 'FUEL', amount: '', vendor: '', odometer_km: '', description: '' });
   const [tripForm, setTripForm] = useState({ start_time: '', end_time: '', distance_km: '', start_location: '', end_location: '', fuel_used_liters: '', average_speed_kmh: '' });
   const [partForm, setPartForm] = useState({ name: '', brand: '', category: 'Điện tử', install_date: '', cost: '', odometer_km: '', warranty_months: '', notes: '' });
@@ -281,14 +321,18 @@ export default function AssetDetailPage() {
 
   const saveMaint = async () => {
     try {
+      const totalCost = calculatedItemsCost > 0 ? calculatedItemsCost : (parseFloat(maintForm.cost) || 0);
+      const itemsSummary = serviceItems.map(s => `${s.name}: ${s.cost ? parseInt(s.cost).toLocaleString('vi-VN') + '₫' : '—'}`).join(' + ');
+      const fullNotes = maintForm.notes ? `${maintForm.notes} | Các hạng mục: ${itemsSummary}` : `Các hạng mục: ${itemsSummary}`;
+
       const created = await createMaintenanceRecord({
         asset_id: asset.id,
-        maintenance_type: maintForm.maintenance_type,
-        date: maintForm.date,
+        maintenance_type: maintForm.maintenance_type || serviceItems[0]?.name || 'Thay dầu máy',
+        date: maintForm.date || new Date().toISOString().split('T')[0],
         odometer_km: parseFloat(maintForm.odometer_km) || 0,
-        cost: parseFloat(maintForm.cost) || 0,
+        cost: totalCost,
         vendor: maintForm.vendor || undefined,
-        notes: maintForm.notes || undefined,
+        notes: fullNotes,
         next_due_km: maintForm.next_due_km ? parseFloat(maintForm.next_due_km) : undefined,
         next_due_date: maintForm.next_due_date || undefined,
       });
@@ -297,6 +341,7 @@ export default function AssetDetailPage() {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
     setOpenModal(null);
+    setServiceItems([{ name: 'Thay dầu máy', cost: '' }]);
   };
 
   const saveExpense = async () => {
@@ -1198,41 +1243,146 @@ export default function AssetDetailPage() {
 
       {/* Maintenance Modal */}
       {openModal === 'maintenance' && (
-        <Modal title="Thêm hạng mục bảo dưỡng" onClose={() => setOpenModal(null)}>
-          <Field label="Ngày bảo dưỡng"><input type="date" className="theme-input" value={maintForm.date} onChange={e => setMaintForm(p => ({ ...p, date: e.target.value }))} /></Field>
-          <Field label="Loại hạng mục / Dịch vụ bảo dưỡng *">
-            <select
-              className="theme-select font-semibold"
-              value={maintForm.maintenance_type}
-              onChange={e => setMaintForm(p => ({ ...p, maintenance_type: e.target.value }))}
-            >
-              {[
-                'Thay dầu máy',
-                'Thay lọc dầu / Lọc nhớt',
-                'Thay lọc gió động cơ',
-                'Thay lọc gió điều hòa',
-                'Bugi đánh lửa',
-                'Kiểm tra / Thay má phanh',
-                'Thay nước làm mát',
-                'Thay ắc-quy',
-                'Thay dầu hộp số',
-                'Bơm lốp & Cân thước lái',
-                'Kiểm tra định kỳ toàn bộ xe',
-                'Khác (Nhập tùy chọn)'
-              ].map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </Field>
-          <Field label="Đơn giá / Chi phí thực tế (₫) *">
-            <input type="number" className="theme-input font-mono font-bold" placeholder="VD: 650000" value={maintForm.cost} onChange={e => setMaintForm(p => ({ ...p, cost: e.target.value }))} />
-          </Field>
-          <Field label="Odometer (km)"><input type="number" className="theme-input" placeholder="VD: 12846" value={maintForm.odometer_km} onChange={e => setMaintForm(p => ({ ...p, odometer_km: e.target.value }))} /></Field>
-          <Field label="Garage / Đại lý thực hiện"><input type="text" className="theme-input" placeholder="VD: Honda Tây Hồ, Garage Hà Đông" value={maintForm.vendor} onChange={e => setMaintForm(p => ({ ...p, vendor: e.target.value }))} /></Field>
-          <Field label="Ghi chú thêm"><input type="text" className="theme-input" value={maintForm.notes} onChange={e => setMaintForm(p => ({ ...p, notes: e.target.value }))} /></Field>
-          <Field label="Kỳ bảo dưỡng tiếp theo (km)"><input type="number" className="theme-input" value={maintForm.next_due_km} onChange={e => setMaintForm(p => ({ ...p, next_due_km: e.target.value }))} /></Field>
-          <Field label="Ngày bảo dưỡng tiếp theo"><input type="date" className="theme-input" value={maintForm.next_due_date} onChange={e => setMaintForm(p => ({ ...p, next_due_date: e.target.value }))} /></Field>
-          <div className="flex space-x-2 pt-2">
-            <button onClick={saveMaint} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">Lưu bảo dưỡng</button>
-            <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+        <Modal title="Thêm đợt bảo dưỡng / Thay phụ tùng" onClose={() => setOpenModal(null)}>
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày thực hiện *</label>
+                <input type="date" className="theme-input" value={maintForm.date} onChange={e => setMaintForm(p => ({ ...p, date: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Odometer lúc BD (km)</label>
+                <input type="number" className="theme-input" placeholder="12846" value={maintForm.odometer_km} onChange={e => setMaintForm(p => ({ ...p, odometer_km: e.target.value }))} />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Gói / Loại bảo dưỡng chính</label>
+                <select className="theme-select" value={maintForm.maintenance_type} onChange={e => setMaintForm(p => ({ ...p, maintenance_type: e.target.value }))}>
+                  {categories.map((t: string) => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Multi-Service Line Items Section */}
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="flex items-center justify-between">
+                <span className="font-bold uppercase tracking-wider text-[11px]" style={{ color: 'var(--accent-cyan)' }}>
+                  Chi tiết các hạng mục / Dịch vụ ({serviceItems.length})
+                </span>
+                <button type="button" onClick={addServiceItem} className="text-[11px] font-bold px-2.5 py-1 rounded-lg text-white" style={{ background: 'var(--accent-cyan)' }}>
+                  + Thêm dịch vụ
+                </button>
+              </div>
+
+              {/* Quick suggestions */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Thêm nhanh:</span>
+                {categories.slice(0, 6).map((cat, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setServiceItems(p => [...p, { name: cat, cost: '' }])}
+                    className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80 transition"
+                    style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
+                  >
+                    + {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* Column Headers */}
+              <div className="grid grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider px-1 pt-1" style={{ color: 'var(--text-muted)' }}>
+                <div className="col-span-7">Tên Hạng Mục / Dịch Vụ Bảo Dưỡng *</div>
+                <div className="col-span-4">Đơn Giá Nhập (₫) *</div>
+                <div className="col-span-1"></div>
+              </div>
+
+              <div className="space-y-3">
+                {serviceItems.map((item, idx) => (
+                  <div key={idx} className="p-2.5 rounded-xl space-y-1.5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                    <div className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-7">
+                        <select
+                          className="theme-select text-xs font-semibold"
+                          value={categories.includes(item.name) ? item.name : 'OTHER'}
+                          onChange={e => {
+                            const selected = e.target.value;
+                            if (selected === 'OTHER') {
+                              updateServiceItem(idx, 'name', '');
+                            } else {
+                              updateServiceItem(idx, 'name', selected);
+                            }
+                          }}
+                        >
+                          <option value="" disabled>-- Chọn dịch vụ từ Master Data --</option>
+                          {categories.map(cat => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                          <option value="OTHER">✍️ Tùy chọn khác (Nhập tay...)</option>
+                        </select>
+
+                        {(!categories.includes(item.name) || item.name === '') && (
+                          <input
+                            type="text"
+                            className="theme-input text-xs mt-1.5"
+                            placeholder="Nhập tên dịch vụ tùy chỉnh (VD: Thay xích, Cân vành...)"
+                            value={item.name}
+                            onChange={e => updateServiceItem(idx, 'name', e.target.value)}
+                          />
+                        )}
+                      </div>
+
+                      <div className="col-span-4">
+                        <input
+                          type="number"
+                          className="theme-input font-mono font-bold text-xs"
+                          placeholder="Điền giá thực tế (₫)"
+                          value={item.cost}
+                          onChange={e => updateServiceItem(idx, 'cost', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="col-span-1 flex justify-end">
+                        {serviceItems.length > 1 && (
+                          <button type="button" onClick={() => removeServiceItem(idx)} className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 shrink-0">
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center pt-2 border-t font-bold text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Tổng chi phí các hạng mục:</span>
+                <span style={{ color: 'var(--status-red)' }}>{fmt(calculatedItemsCost)} ₫</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Garage / Đại lý</label>
+                <input type="text" className="theme-input" placeholder="VD: Honda Tây Hồ, Garage Hà Đông" value={maintForm.vendor} onChange={e => setMaintForm(p => ({ ...p, vendor: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Kỳ tiếp theo (km)</label>
+                <input type="number" className="theme-input" placeholder="17846" value={maintForm.next_due_km} onChange={e => setMaintForm(p => ({ ...p, next_due_km: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ghi chú thêm</label>
+              <input type="text" className="theme-input" placeholder="Ghi chú thêm..." value={maintForm.notes} onChange={e => setMaintForm(p => ({ ...p, notes: e.target.value }))} />
+            </div>
+
+            <div className="flex space-x-2 pt-2">
+              <button onClick={saveMaint} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                Lưu đợt bảo dưỡng
+              </button>
+              <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+            </div>
           </div>
         </Modal>
       )}

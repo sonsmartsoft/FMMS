@@ -25,7 +25,7 @@ class OBDConnectionManager(
     private val appContext = context.applicationContext
     // BLE GATT transport — the KW906's Classic SPP mode stalls/PAGE_TIMEOUTs,
     // while the vendor MAXOBD app proves the GATT mode is stable.
-    private val transport = BleOBDTransport(appContext)
+    val transport: OBDTransport = BleOBDTransport(appContext)
 
     private val _connectionState = MutableStateFlow<OBDConnectionState>(OBDConnectionState.DISCONNECTED)
     val connectionState: StateFlow<OBDConnectionState> = _connectionState

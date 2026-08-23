@@ -289,6 +289,21 @@ class BleOBDTransport(context: Context) : OBDTransport {
         writeChunks((cmd + "\r").toByteArray(Charsets.US_ASCII))
     }
 
+    override suspend fun captureStream(cmd: String, durationMs: Long): String? = withContext(Dispatchers.IO) {
+        if (gatt == null || txChar == null) return@withContext null
+        synchronized(rx) { rx.setLength(0); promptSeen = false }
+        val sent = writeChunks((cmd + "\r").toByteArray(Charsets.US_ASCII))
+        if (!sent) return@withContext null
+        // AT MA stream vô hạn — chỉ gom dữ liệu theo thời lượng rồi dừng
+        // bằng một ký tự bất kỳ (ELM thoát monitor khi nhận byte).
+        delay(durationMs)
+        sendRaw(".")
+        delay(150)
+        val out = synchronized(rx) { rx.toString() }
+        synchronized(rx) { rx.setLength(0); promptSeen = false }
+        out.ifEmpty { null }
+    }
+
     override suspend fun sendCommandAndWait(cmd: String, timeoutMs: Long): String? = withContext(Dispatchers.IO) {
         if (gatt == null || txChar == null) return@withContext null
 

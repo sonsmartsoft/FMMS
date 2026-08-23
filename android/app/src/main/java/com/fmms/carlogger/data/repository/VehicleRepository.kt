@@ -334,6 +334,12 @@ class PrefsStore(context: Context) {
     /** Map đang phóng toàn màn hình trong tab Car UI không. */
     fun getMapFull(): Boolean = prefs.getBoolean("carui_map_full", false)
     fun setMapFull(full: Boolean) { prefs.edit().putBoolean("carui_map_full", full).apply() }
+    fun getWebFull(): Boolean = prefs.getBoolean("carui_web_full", false)
+    fun setWebFull(full: Boolean) { prefs.edit().putBoolean("carui_web_full", full).apply() }
+    fun getWebBarVisible(): Boolean = prefs.getBoolean("carui_web_bar", true)
+    fun setWebBarVisible(visible: Boolean) { prefs.edit().putBoolean("carui_web_bar", visible).apply() }
+    fun getCamFull(): Boolean = prefs.getBoolean("carui_cam_full", false)
+    fun setCamFull(full: Boolean) { prefs.edit().putBoolean("carui_cam_full", full).apply() }
 
     /** Rail ngang: ghim hay tự ẩn (persist qua các lần mở app). */
     fun getRailPinned(): Boolean = prefs.getBoolean("rail_pinned", true)

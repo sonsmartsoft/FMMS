@@ -40,7 +40,7 @@ fun elmProtocolName(number: String?): String? = when (number?.trim()?.uppercase(
  */
 class ELM327ProtocolManager(private val transport: OBDTransport) {
 
-    private val mutex = Mutex()
+    val transactionMutex = Mutex()
 
     /** Optional diagnostic sink: invoked with (command, response-or-null) for every exchange. */
     var onLog: ((cmd: String, resp: String?) -> Unit)? = null
@@ -60,7 +60,7 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
         onLog?.invoke(cmd, resp)
     }
 
-    suspend fun initialize(): Elm327Info = mutex.withLock {
+    suspend fun initialize(): Elm327Info = transactionMutex.withLock {
         // Protocol candidates in order: CAN 11b/500k FIRST -> auto -> 29b/500k -> 11b/250k -> 29b/250k
         val protocolCandidates = listOf(
             "ATSP6",  // ISO 15765-4 CAN (11-bit ID, 500 kbaud) — DEFAULT/PRIORITY
@@ -151,7 +151,7 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
         return pids.count { it in critical }
     }
 
-    suspend fun sendCommand(cmd: String): String? = mutex.withLock {
+    suspend fun sendCommand(cmd: String): String? = transactionMutex.withLock {
         transport.sendCommandAndWait(cmd, 2000).also { log(cmd, it) }
     }
 
@@ -161,7 +161,7 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
 
     /** Raw PID read bypassing the supported-PID filter (optional PIDs like 01A6 odometer). */
     suspend fun readPidRaw(command: String, timeoutMs: Long = 2000): String? =
-        mutex.withLock { transport.sendCommandAndWait(command, timeoutMs).also { log(command, it) } }
+        transactionMutex.withLock { transport.sendCommandAndWait(command, timeoutMs).also { log(command, it) } }
 
     /** Run a single read of a PID, returns parsed value or null if unsupported/unreadable. */
     suspend fun readPid(pid: PidDefinition): Double? {
@@ -175,7 +175,7 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
                     )
             ) return null
         }
-        return mutex.withLock {
+        return transactionMutex.withLock {
             val resp = transport.sendCommandAndWait(pid.command, 2000)
             log(pid.command, resp)
             if (resp == null) return@withLock null
@@ -185,7 +185,7 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
     }
 
     suspend fun shutdown() {
-        mutex.withLock { transport.sendRaw("ATPC") }
+        transactionMutex.withLock { transport.sendRaw("ATPC") }
     }
 
     private class Elm327InfoBuilder {

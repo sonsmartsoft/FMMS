@@ -34,6 +34,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -112,6 +114,20 @@ class MainActivity : ComponentActivity() {
                 ProvideStrings(strings = if (lang == "vi") Vi else En) {
                     FmmsApp()
                 }
+            }
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Đang xem web (YouTube...) mà rời app thì thu thành cửa sổ hình trong hình
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && com.fmms.carlogger.ui.carui.WebPip.canEnter) {
+            try {
+                val params = android.app.PictureInPictureParams.Builder()
+                    .setAspectRatio(android.util.Rational(16, 9))
+                    .build()
+                enterPictureInPictureMode(params)
+            } catch (_: Exception) {
             }
         }
     }
@@ -249,6 +265,9 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
                 }
                 Box(modifier = Modifier.weight(1f)) {
                     FmmsNavHost(navController = navController, vm = vm)
+                    // Car UI sống liên tục qua các lần chuyển tab để WebView
+                    // (YouTube...) không bị hủy -> không mất trang/vị trí phát
+                    PersistentCarUi(vm = vm, currentRoute = currentRoute)
                     // Dải cảm ứng vô hình ở mép trái màn hình: vuốt sang phải mở rail
                     if (!(railPinned || railTempOpen)) {
                         Box(
@@ -298,9 +317,33 @@ private fun FmmsApp(vm: DashboardViewModel = viewModel()) {
                         .background(colors.background)
                 ) {
                     FmmsNavHost(navController = navController, vm = vm)
+                    PersistentCarUi(vm = vm, currentRoute = currentRoute)
                 }
             }
         }
+    }
+}
+
+/**
+ * Giữ CarUiScreen trong composition suốt phiên app: khi sang tab khác chỉ ẩn
+ * (alpha 0 + đẩy xuống lớp dưới) nên WebView/camera 360 vẫn chạy ngầm và
+ * giữ nguyên trạng thái phát. Khi quay lại hiện ra tức thì.
+ */
+@Composable
+private fun PersistentCarUi(vm: DashboardViewModel, currentRoute: String) {
+    var visited by rememberSaveable { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(currentRoute) {
+        if (currentRoute == "carui") visited = true
+    }
+    val visible = currentRoute == "carui"
+    if (!visited) return
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { alpha = if (visible) 1f else 0f }
+            .zIndex(if (visible) 1f else -1f),
+    ) {
+        CarUiScreen(vm = vm, screenVisible = visible)
     }
 }
 
@@ -318,9 +361,9 @@ private fun FmmsNavHost(navController: androidx.navigation.NavHostController, vm
         }, onOpenDate = { y, m, d ->
             navController.navigate("lunar_calendar?y=$y&m=$m&d=$d") { launchSingleTop = true }
         }) }
-        composable("carui") {
-            CarUiScreen(vm = vm)
-        }
+        // Nội dung Car UI được giữ bền bởi PersistentCarUi (xem trên),
+        // đích điều hướng chỉ là placeholder để thanh điều hướng đổi tab.
+        composable("carui") { }
         composable("trips") { TripsScreen() }
         composable("fuel") { FuelScreen() }
         composable("stats") { StatsScreen() }

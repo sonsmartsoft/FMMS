@@ -113,6 +113,38 @@ class BluetoothClassicTransport : OBDTransport {
 
     override fun isConnected(): Boolean = socket?.isConnected == true
 
+    override suspend fun captureStream(cmd: String, durationMs: Long): String? = withContext(Dispatchers.IO) {
+        val out = output ?: return@withContext null
+        val inStream = input ?: return@withContext null
+        try {
+            val sink = ByteArray(1024)
+            while (inStream.available() > 0) {
+                if (inStream.read(sink) <= 0) break
+            }
+            out.write((cmd + "\r").toByteArray(Charsets.US_ASCII))
+            out.flush()
+            val buffer = ByteArray(4096)
+            val sb = StringBuilder()
+            val deadline = System.currentTimeMillis() + durationMs
+            while (System.currentTimeMillis() < deadline) {
+                if (inStream.available() > 0) {
+                    val n = inStream.read(buffer)
+                    if (n > 0) sb.append(String(buffer, 0, n, Charsets.ISO_8859_1))
+                } else {
+                    delay(30)
+                }
+            }
+            // Dừng monitor + hút nốt byte còn trong đường ống
+            out.write(".".toByteArray(Charsets.US_ASCII))
+            out.flush()
+            delay(120)
+            while (inStream.available() > 0) inStream.read(sink)
+            sb.toString().ifEmpty { null }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     override suspend fun sendRaw(cmd: String): Unit = withContext(Dispatchers.IO) {
         try {
             output?.write((cmd + "\r").toByteArray(Charsets.US_ASCII))
