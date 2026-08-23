@@ -90,10 +90,12 @@ export interface LoanRecord {
   down_payment: number;
   interest_rate_percent: number;
   term_months: number;
+  start_date?: string;
   monthly_payment: number;
   current_balance: number;
   payment_day: number;
   status: 'ACTIVE' | 'CLOSED';
+  notes?: string;
 }
 
 export interface TripRecord {

@@ -141,3 +141,15 @@ export async function updateLoan(id: string, data: Partial<Pick<LoanRow, 'curren
   const { error } = await supabase.from('loans').update(data).eq('id', id);
   if (error) throw error;
 }
+
+export async function updateLoanFull(id: string, data: Partial<LoanInput>) {
+  const supabase = createClient();
+  const { error } = await supabase.from('loans').update(data).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteLoan(id: string) {
+  const supabase = createClient();
+  const { error } = await supabase.from('loans').delete().eq('id', id);
+  if (error) throw error;
+}

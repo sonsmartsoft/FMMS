@@ -118,17 +118,17 @@ export default function AssetsPage() {
                   style={{ borderBottom: '1px solid var(--border-subtle)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}
                 >
                   <td className="px-4 py-3">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                    <Link href={`/assets/${asset.id}`} className="flex items-center space-x-3 group cursor-pointer">
+                      <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 group-hover:scale-105 transition" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                         {asset.image_url
                           ? <img src={asset.image_url} alt={asset.name} className="w-full h-full object-cover" />
                           : <AssetIcon className="w-5 h-5 m-auto mt-2.5" style={{ color: 'var(--text-muted)' }} />}
                       </div>
                       <div>
-                        <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{asset.name}</p>
+                        <p className="font-bold group-hover:text-cyan-400 transition" style={{ color: 'var(--text-primary)' }}>{asset.name}</p>
                         <p style={{ color: 'var(--text-muted)' }}>{asset.brand} • {asset.year}</p>
                       </div>
-                    </div>
+                    </Link>
                   </td>
                   <td className="px-4 py-3">
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: bc.bg, color: bc.color }}>
