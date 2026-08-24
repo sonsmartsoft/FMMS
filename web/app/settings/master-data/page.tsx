@@ -281,8 +281,11 @@ export default function MasterDataPage() {
 
       {/* Edit Category Modal */}
       {editingCategory && (
-        <div className="fixed inset-0 z-[9999] grid place-items-center pt-16 p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingCategory(null)}>
-          <div className="relative rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingCategory(null)}>
+
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
+
+            <div className="relative rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border-default)' }}>
               <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <Pencil className="w-4 h-4 text-cyan-400" /> Chỉnh sửa tên danh mục
@@ -309,8 +312,11 @@ export default function MasterDataPage() {
       )}
       {/* Edit SubCategory Modal */}
       {editingSub && (
-        <div className="fixed inset-0 z-[9999] grid place-items-center pt-16 p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingSub(null)}>
-          <div className="relative rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingSub(null)}>
+
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
+
+            <div className="relative rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border-default)' }}>
               <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <Pencil className="w-4 h-4 text-cyan-400" /> Chỉnh sửa tên danh mục con ({editingSub.subKey})

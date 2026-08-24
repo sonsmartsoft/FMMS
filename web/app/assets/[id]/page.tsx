@@ -65,7 +65,7 @@ function generateLoanSchedule(loan: any, payments: any[]) {
 function Modal({ title, onClose, children, maxWidth = 'max-w-2xl' }: { title: string; onClose: () => void; children: React.ReactNode; maxWidth?: string }) {
   return (
     <div
-      className="fixed inset-0 z-[9999] grid place-items-center pt-16 p-4 sm:p-6 backdrop-blur-md"
+      className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md"
       style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={onClose}
     >

@@ -326,8 +326,11 @@ export default function UsersManagementPage() {
 
       {/* Add User Modal */}
       {openModal === 'add' && (
-        <div className="fixed inset-0 z-[9999] grid place-items-center pt-16 p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
-          <div className="relative rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
+
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
+
+            <div className="relative rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <UserPlus className="w-4 h-4 text-cyan-400" />
@@ -369,8 +372,11 @@ export default function UsersManagementPage() {
 
       {/* Assign Assets Modal */}
       {openModal === 'assign' && selectedUser && (
-        <div className="fixed inset-0 z-[9999] grid place-items-center pt-16 p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
-          <div className="relative rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
+
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
+
+            <div className="relative rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <Car className="w-4 h-4 text-cyan-400" />
