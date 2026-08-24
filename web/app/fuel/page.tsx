@@ -327,13 +327,13 @@ export default function FuelPage() {
       {/* Add / Edit Fuel Modal */}
       {openModal && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md overflow-hidden"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md overflow-y-auto"
           style={{ background: 'rgba(0,0,0,0.75)' }}
           onClick={() => setOpenModal(false)}
         >
           <div
-            className="glass-panel rounded-2xl w-full max-w-2xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
-            style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}
+            className="relative rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden"
+            style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 sm:p-5 shrink-0 border-b z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>

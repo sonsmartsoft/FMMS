@@ -65,12 +65,12 @@ function generateLoanSchedule(loan: any, payments: any[]) {
 function Modal({ title, onClose, children, maxWidth = 'max-w-2xl' }: { title: string; onClose: () => void; children: React.ReactNode; maxWidth?: string }) {
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md overflow-hidden"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md overflow-y-auto"
       style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={onClose}
     >
       <div
-        className={`glass-panel rounded-2xl w-full ${maxWidth} my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden`}
+        className={`relative rounded-2xl w-full ${maxWidth} max-h-[85vh] flex flex-col shadow-2xl overflow-hidden`}
         style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}
         onClick={(e) => e.stopPropagation()}
       >
