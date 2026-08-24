@@ -308,7 +308,7 @@ export default function MaintenancePage() {
       {/* Multi-Service Maintenance Modal */}
       {openModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-3xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+          <div className="glass-panel rounded-2xl w-full max-w-3xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
 
             {/* Modal Sticky Header */}
             <div className="flex items-center justify-between p-4 sm:p-5 shrink-0 border-b z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
@@ -324,7 +324,7 @@ export default function MaintenancePage() {
             {/* Modal Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
               {/* Section 1: General Info */}
-              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                 <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">1. Thông tin Đợt Bảo Dưỡng</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1 sm:col-span-1">
@@ -362,7 +362,7 @@ export default function MaintenancePage() {
               </div>
 
               {/* Multi-Service Line Items Section */}
-              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                 <div className="flex items-center justify-between">
                   <span className="font-bold uppercase tracking-wider text-xs text-purple-400">
                     2. Chi tiết các Hạng mục / Dịch vụ &amp; Phụ tùng ({serviceItems.length})

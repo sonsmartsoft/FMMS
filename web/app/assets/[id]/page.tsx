@@ -71,7 +71,7 @@ function Modal({ title, onClose, children, maxWidth = 'max-w-2xl' }: { title: st
     >
       <div
         className={`glass-panel rounded-2xl w-full ${maxWidth} my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden`}
-        style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}
+        style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>

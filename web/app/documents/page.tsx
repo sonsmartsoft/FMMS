@@ -271,7 +271,7 @@ export default function DocumentsPage() {
       {/* Add Document Modal */}
       {openAddModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md overflow-hidden" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-2xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+          <div className="glass-panel rounded-2xl w-full max-w-2xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
                 <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -282,7 +282,7 @@ export default function DocumentsPage() {
               <button onClick={() => setOpenAddModal(false)} className="p-1.5 rounded-xl hover:bg-white/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
-              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                 <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">1. Thông tin tài liệu &amp; Phương tiện</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -304,7 +304,7 @@ export default function DocumentsPage() {
                 </div>
               </div>
 
-              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                 <h4 className="font-bold text-xs uppercase tracking-wider text-purple-400">2. Số hợp đồng, Thời hạn &amp; Chi phí</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -339,7 +339,7 @@ export default function DocumentsPage() {
       {/* Edit Document Modal */}
       {editingItem && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md overflow-hidden" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingItem(null)}>
-          <div className="glass-panel rounded-2xl w-full max-w-2xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+          <div className="glass-panel rounded-2xl w-full max-w-2xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <Pencil className="w-4 h-4 text-cyan-400" />
@@ -348,7 +348,7 @@ export default function DocumentsPage() {
               <button onClick={() => setEditingItem(null)} className="p-1.5 rounded-xl hover:bg-white/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
-              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Tên giấy tờ / Bảo hiểm</label>
