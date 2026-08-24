@@ -235,7 +235,7 @@ export default function WarrantiesPage() {
       {/* Search & Filter Bar */}
       <div className="glass-panel p-4 rounded-2xl flex items-center justify-between flex-wrap gap-3 text-xs" style={{ border: '1px solid var(--border-default)' }}>
         <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-2.5" style={{ color: 'var(--text-muted)' }} />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 z-10" style={{ color: 'var(--text-muted)' }} />
           <input
             type="text"
             className="theme-input pl-9"

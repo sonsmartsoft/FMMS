@@ -171,34 +171,34 @@
 .animate-bounce-subtle { animation: bounceSub 3s ease-in-out infinite; }
 
 /* ================================================
-   Theme-aware form inputs
+   Theme-aware form inputs — in @layer components so
+   Tailwind utilities (pl-9, pl-10, etc.) can override
    ================================================ */
-.theme-input {
-  background: var(--bg-input);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-  border-radius: 0.75rem;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-  padding-right: 0.75rem;
-  padding-left: 0.75rem;
-  font-size: 0.75rem;
-  width: 100%;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.theme-input:focus { border-color: var(--accent-cyan); }
+@layer components {
+  .theme-input {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .theme-input:focus { border-color: var(--accent-cyan); }
 
-.theme-select {
-  background: var(--bg-input);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-  border-radius: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.75rem;
-  width: 100%;
-  outline: none;
-  appearance: none;
-  cursor: pointer;
+  .theme-select {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    width: 100%;
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+  }
+  .theme-select:focus { border-color: var(--accent-cyan); }
 }
-.theme-select:focus { border-color: var(--accent-cyan); }
