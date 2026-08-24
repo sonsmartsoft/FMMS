@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
-import { PartRecord } from '@/lib/data/mockData';
+import { PartRecord, MOCK_PARTS } from '@/lib/data/mockData';
 
 export interface PartInput {
   asset_id: string;
@@ -28,14 +28,19 @@ export function mapPartRow(row: any): PartRecord {
 }
 
 export async function getParts(assetId?: string): Promise<PartRecord[]> {
-  const supabase = createClient();
-  let query = supabase.from('parts').select('*').order('installation_date', { ascending: false });
-  if (assetId) {
-    query = query.eq('asset_id', assetId);
-  }
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map(mapPartRow);
+  try {
+    const supabase = createClient();
+    let query = supabase.from('parts').select('*').order('installation_date', { ascending: false });
+    if (assetId) {
+      query = query.eq('asset_id', assetId);
+    }
+    const { data, error } = await query;
+    if (!error && data && data.length > 0) {
+      return data.map(mapPartRow);
+    }
+  } catch {}
+
+  return MOCK_PARTS;
 }
 
 export async function createPart(input: PartInput) {

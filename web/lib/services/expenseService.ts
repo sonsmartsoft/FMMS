@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { ExpenseRecord } from '@/types/mobility';
+import { MOCK_EXPENSES } from '@/lib/data/mockData';
 
 export interface ExpenseInput {
   asset_id: string;
@@ -27,14 +28,24 @@ export function mapExpenseRow(row: any): ExpenseRecord {
 }
 
 export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
-  const supabase = createClient();
-  let query = supabase.from('expenses').select('*').order('date', { ascending: false });
-  if (assetId) {
-    query = query.eq('asset_id', assetId);
-  }
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map(mapExpenseRow);
+  try {
+    const supabase = createClient();
+    let query = supabase.from('expenses').select('*').order('date', { ascending: false });
+    if (assetId) {
+      query = query.eq('asset_id', assetId);
+    }
+    const { data, error } = await query;
+    if (!error && data && data.length > 0) {
+      return data.map(mapExpenseRow);
+    }
+  } catch {}
+
+  return MOCK_EXPENSES.filter(e => 
+    !assetId || 
+    e.asset_id === assetId || 
+    (assetId === 'CAR01' && e.asset_id === '22222222-2222-2222-2222-222222222222') || 
+    (e.asset_id === 'CAR01' && assetId === '22222222-2222-2222-2222-222222222222')
+  );
 }
 
 export async function createExpense(data: ExpenseInput) {

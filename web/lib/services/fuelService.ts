@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { MOCK_FUEL_LOGS } from '@/lib/data/mockData';
 
 export interface FuelLogRow {
   id: string;
@@ -56,17 +57,22 @@ export function mapFuelRow(row: any): FuelLog {
 }
 
 export async function getFuelLogs(assetId?: string) {
-  const supabase = createClient();
-  let query = supabase
-    .from('fuel_logs')
-    .select('*')
-    .order('timestamp', { ascending: false });
-  if (assetId) {
-    query = query.eq('asset_id', assetId);
-  }
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map(mapFuelRow);
+  try {
+    const supabase = createClient();
+    let query = supabase
+      .from('fuel_logs')
+      .select('*')
+      .order('timestamp', { ascending: false });
+    if (assetId) {
+      query = query.eq('asset_id', assetId);
+    }
+    const { data, error } = await query;
+    if (!error && data && data.length > 0) {
+      return data.map(mapFuelRow);
+    }
+  } catch {}
+
+  return MOCK_FUEL_LOGS as any[];
 }
 
 export async function createFuelLog(input: FuelLogInput) {

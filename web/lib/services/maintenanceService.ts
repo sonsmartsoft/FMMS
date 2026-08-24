@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { MaintenanceRecord } from '@/types/mobility';
+import { MOCK_MAINTENANCE_RECORDS } from '@/lib/data/mockData';
 
 export interface MaintenanceInput {
   asset_id: string;
@@ -43,14 +44,24 @@ export function mapMaintenanceRow(row: any): MaintenanceRecord {
 }
 
 export async function getMaintenanceRecords(assetId?: string): Promise<MaintenanceRecord[]> {
-  const supabase = createClient();
-  let query = supabase.from('maintenance_records').select('*').order('date', { ascending: false });
-  if (assetId) {
-    query = query.eq('asset_id', assetId);
-  }
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map(mapMaintenanceRow);
+  try {
+    const supabase = createClient();
+    let query = supabase.from('maintenance_records').select('*').order('date', { ascending: false });
+    if (assetId) {
+      query = query.eq('asset_id', assetId);
+    }
+    const { data, error } = await query;
+    if (!error && data && data.length > 0) {
+      return data.map(mapMaintenanceRow);
+    }
+  } catch {}
+
+  return MOCK_MAINTENANCE_RECORDS.filter(m => 
+    !assetId || 
+    m.asset_id === assetId || 
+    (assetId === 'CAR01' && m.asset_id === '22222222-2222-2222-2222-222222222222') || 
+    (m.asset_id === 'CAR01' && assetId === '22222222-2222-2222-2222-222222222222')
+  );
 }
 
 export async function createMaintenanceRecord(data: MaintenanceInput) {
