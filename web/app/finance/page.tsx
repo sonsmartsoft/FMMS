@@ -5,6 +5,7 @@ import { getAssets } from '@/lib/services/assetService';
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import { getLoans, getLoanPayments, createLoan, createLoanPayment, updateLoan, LoanRow, LoanPaymentRow } from '@/lib/services/loanService';
 import { ExpenseRecord } from '@/types/mobility';
+import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
 import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2 } from 'lucide-react';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
@@ -456,123 +457,18 @@ export default function FinancePage() {
 
           {selectedLoan && (
             <div className="space-y-5">
-              {/* Loan Summary Card */}
-              <div className="p-6 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-                  <div>
-                    <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                      Khoản vay mua {assets.find(a => a.id === selectedLoan.asset_id)?.name || 'Phương tiện'}
-                    </h3>
-                    <p className="text-xs mt-0.5 font-medium" style={{ color: 'var(--text-muted)' }}>
-                      Tổ chức tín dụng: <strong style={{ color: 'var(--accent-cyan)' }}>{selectedLoan.lender}</strong> {selectedLoan.notes ? `• ${selectedLoan.notes}` : ''}
-                    </p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-bold" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)' }}>● {selectedLoan.status}</span>
-                    <button onClick={() => openEditLoan(selectedLoan)} className="px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-white/10" style={{ color: 'var(--accent-cyan)', border: '1px solid var(--border-default)' }}>
-                      ✏️ Sửa khoản vay
-                    </button>
-                    <button onClick={() => handleDeleteLoan(selectedLoan.id)} className="p-1.5 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => setShowPaymentModal(true)}
-                      className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white shadow-md transition hover:opacity-90"
-                      style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}>
-                      <Plus className="w-3.5 h-3.5" /><span>Ghi nhận thanh toán</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs mb-5">
-                  {[
-                    { label: 'Số tiền gốc vay', value: `${fmt(selectedLoan.principal)} ₫`, color: 'var(--text-primary)' },
-                    { label: 'Trả trước', value: `${fmt(selectedLoan.down_payment)} ₫`, color: 'var(--text-secondary)' },
-                    { label: 'Lãi suất năm', value: `${selectedLoan.interest_rate_percent}%/năm`, color: 'var(--status-amber)' },
-                    { label: 'Kỳ hạn vay', value: `${selectedLoan.term_months} tháng`, color: 'var(--text-secondary)' },
-                    { label: 'Trả hàng tháng (EMI)', value: `${fmt(selectedLoan.monthly_payment)} ₫`, color: 'var(--accent-cyan)' },
-                    { label: 'Hạn đóng hàng tháng', value: `Ngày ${selectedLoan.payment_day}/tháng`, color: 'var(--text-secondary)' },
-                    { label: 'Tiến độ kỳ', value: `${paidPayments} / ${selectedLoan.term_months} kỳ`, color: 'var(--status-green)' },
-                    { label: 'Tình trạng quá hạn', value: overduePayments > 0 ? `${overduePayments} kỳ` : 'Không có', color: overduePayments > 0 ? 'var(--status-red)' : 'var(--status-green)' },
-                  ].map((r, i) => (
-                    <div key={i} className="p-3 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
-                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{r.label}</p>
-                      <p className="font-bold mt-0.5 text-xs" style={{ color: r.color }}>{r.value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="p-4 rounded-2xl text-center mb-4" style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)' }}>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Dư nợ gốc còn lại</p>
-                  <p className="text-3xl font-black mt-1 font-mono" style={{ color: 'var(--status-red)' }}>{fmt(selectedLoan.current_balance)} ₫</p>
-                  <p className="text-xs mt-1 font-medium" style={{ color: 'var(--text-secondary)' }}>Đã hoàn tất thanh toán gốc: {fmt(paidPrincipal)} ₫ ({loanProgress.toFixed(1)}%)</p>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5 font-bold" style={{ color: 'var(--text-muted)' }}>
-                    <span>Tiến độ trả nợ tổng thể</span>
-                    <span style={{ color: 'var(--accent-cyan)' }}>{loanProgress.toFixed(1)}%</span>
-                  </div>
-                  <div className="h-3 rounded-full overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
-                    <div className="h-full rounded-full transition-all" style={{ width: `${loanProgress}%`, background: 'linear-gradient(90deg, var(--accent-cyan), #3B82F6)' }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* ─── Loan Payment Schedule Table ─── */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                    <span>📋 Lịch trả nợ chi tiết theo số tháng ({selectedLoan.term_months} kỳ)</span>
-                  </h3>
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>Mỗi tháng 1 row · Cho phép bấm đổi trạng thái</span>
-                </div>
-                <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
-                        {['Kỳ #', 'Ngày đến hạn', 'Gốc (₫)', 'Lãi (₫)', 'Tổng trả tháng (₫)', 'Dư nợ còn lại (₫)', 'Trạng thái', 'Thao tác'].map(h => (
-                          <th key={h} className="text-left px-3.5 py-3 font-semibold uppercase text-[10px] tracking-wide whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loanSchedule.map((p, i) => {
-                        const st = statusBadge(p.status);
-                        return (
-                          <tr key={p.payment_number}
-                            style={{
-                              borderBottom: '1px solid var(--border-subtle)',
-                              background: p.status === 'OVERDUE' ? 'rgba(248,113,113,0.05)' : i % 2 === 0 ? 'transparent' : 'var(--bg-hover)',
-                            }}>
-                            <td className="px-3.5 py-2.5 font-bold" style={{ color: 'var(--text-muted)' }}>Kỳ {p.payment_number}</td>
-                            <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--text-secondary)' }}>{fmtDate(p.due_date)}</td>
-                            <td className="px-3.5 py-2.5 font-mono font-medium" style={{ color: 'var(--accent-cyan)' }}>{fmt(p.principal_paid)} ₫</td>
-                            <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--status-amber)' }}>{fmt(p.interest_paid)} ₫</td>
-                            <td className="px-3.5 py-2.5 font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{fmt(p.total_payment)} ₫</td>
-                            <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--text-muted)' }}>{fmt(p.remaining_balance)} ₫</td>
-                            <td className="px-3.5 py-2.5">
-                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold" style={{ background: st.bg, color: st.color }}>
-                                {st.label}
-                              </span>
-                            </td>
-                            <td className="px-3.5 py-2.5">
-                              <button
-                                onClick={() => toggleSchedulePayment(p)}
-                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition hover:opacity-80"
-                                style={p.status === 'PAID'
-                                  ? { background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }
-                                  : { background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}
-                              >
-                                {p.status === 'PAID' ? '↺ Chuyển chưa trả' : '✓ Đánh dấu đã trả'}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              {(() => {
+                const targetAsset = assets.find(a => a.id === selectedLoan.asset_id);
+                if (!targetAsset) return null;
+                return (
+                  <VehicleFinanceOverview
+                    asset={targetAsset}
+                    loan={selectedLoan as any}
+                    expenses={expenses.filter(e => e.asset_id === selectedLoan.asset_id)}
+                    onRefresh={loadData}
+                  />
+                );
+              })()}
             </div>
           )}
         </div>

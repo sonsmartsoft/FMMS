@@ -8,6 +8,10 @@ export interface LoanRow {
   principal: number;
   down_payment: number;
   interest_rate_percent: number;
+  preferred_rate_percent?: number;
+  preferred_months?: number;
+  floating_rate_percent?: number;
+  loan_ratio_percent?: number;
   term_months: number;
   start_date: string;
   monthly_payment: number;
@@ -48,6 +52,10 @@ export interface LoanInput {
   principal: number;
   down_payment: number;
   interest_rate_percent: number;
+  preferred_rate_percent?: number;
+  preferred_months?: number;
+  floating_rate_percent?: number;
+  loan_ratio_percent?: number;
   term_months: number;
   start_date: string;
   monthly_payment: number;
@@ -67,6 +75,10 @@ export async function createLoan(input: LoanInput) {
       principal: input.principal,
       down_payment: input.down_payment,
       interest_rate_percent: input.interest_rate_percent,
+      preferred_rate_percent: input.preferred_rate_percent ?? null,
+      preferred_months: input.preferred_months ?? null,
+      floating_rate_percent: input.floating_rate_percent ?? null,
+      loan_ratio_percent: input.loan_ratio_percent ?? null,
       term_months: input.term_months,
       start_date: input.start_date,
       monthly_payment: input.monthly_payment,

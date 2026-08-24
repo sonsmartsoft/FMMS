@@ -38,6 +38,7 @@ export interface Asset {
   purchase_date?: string;
   purchase_price: number;
   current_value: number;
+  current_market_value?: number;
   initial_odometer_km: number;
   current_odometer_km: number;
   virtual_odometer_km: number;
@@ -89,6 +90,10 @@ export interface LoanRecord {
   principal: number;
   down_payment: number;
   interest_rate_percent: number;
+  preferred_rate_percent?: number;
+  preferred_months?: number;
+  floating_rate_percent?: number;
+  loan_ratio_percent?: number;
   term_months: number;
   start_date?: string;
   monthly_payment: number;

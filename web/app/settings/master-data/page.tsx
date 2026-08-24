@@ -19,22 +19,31 @@ export default function MasterDataPage() {
     'Mazda Hà Đông', 'Honda Tây Hồ', 'Zestech Việt Nam', 'Bảo hiểm Quân Đội (MIC)', 'Bảo Việt Insurance', 'PV OIL', 'Petrolimex', 'Garage Chuyên Nghiệp'
   ]);
 
+  const [banks, setBanks] = useState<string[]>([
+    'Techcombank (TCB)', 'VPBank', 'VIB (Ngân hàng Quốc Tế)', 'TPBank (Tiên Phong)',
+    'Shinhan Bank Việt Nam', 'Vietcombank (VCB)', 'BIDV', 'VietinBank',
+    'MB Bank (Quân Đội)', 'Sacombank', 'ACB (Á Châu)', 'HDBank', 'MSB (Hàng Hải)', 'Woori Bank / Standard Chartered / HSBC'
+  ]);
+
   // Edit inline modal / state
   const [editingCategory, setEditingCategory] = useState<{ listKey: string; oldVal: string; newVal: string } | null>(null);
 
   const [newMaint, setNewMaint] = useState('');
   const [newExp, setNewExp] = useState('');
   const [newVendor, setNewVendor] = useState('');
+  const [newBank, setNewBank] = useState('');
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     const sMaint = localStorage.getItem('fmms_master_maint');
     const sExp = localStorage.getItem('fmms_master_exp');
     const sVendor = localStorage.getItem('fmms_master_vendors');
+    const sBank = localStorage.getItem('fmms_master_banks');
 
     if (sMaint) try { setMaintCategories(JSON.parse(sMaint)); } catch {}
     if (sExp) try { setExpCategories(JSON.parse(sExp)); } catch {}
     if (sVendor) try { setVendors(JSON.parse(sVendor)); } catch {}
+    if (sBank) try { setBanks(JSON.parse(sBank)); } catch {}
   }, []);
 
   const showToast = (msg: string) => {
@@ -96,6 +105,22 @@ export default function MasterDataPage() {
     showToast('Đã xóa nhà cung cấp!');
   };
 
+  const addBank = () => {
+    if (!newBank.trim()) return;
+    const updated = [...banks, newBank.trim()];
+    setBanks(updated);
+    saveToStorage('fmms_master_banks', updated);
+    setNewBank('');
+    showToast('Đã thêm ngân hàng mới!');
+  };
+
+  const deleteBank = (b: string) => {
+    const updated = banks.filter(x => x !== b);
+    setBanks(updated);
+    saveToStorage('fmms_master_banks', updated);
+    showToast('Đã xóa ngân hàng!');
+  };
+
   const handleSaveInlineEdit = () => {
     if (!editingCategory || !editingCategory.newVal.trim()) return;
     const { listKey, oldVal, newVal } = editingCategory;
@@ -113,6 +138,10 @@ export default function MasterDataPage() {
       const updated = vendors.map(c => c === oldVal ? val : c);
       setVendors(updated);
       saveToStorage('fmms_master_vendors', updated);
+    } else if (listKey === 'bank') {
+      const updated = banks.map(c => c === oldVal ? val : c);
+      setBanks(updated);
+      saveToStorage('fmms_master_banks', updated);
     }
 
     setEditingCategory(null);
@@ -281,6 +310,43 @@ export default function MasterDataPage() {
             onChange={e => setNewVendor(e.target.value)}
           />
           <button onClick={addVendor} className="px-4 py-2.5 rounded-xl bg-emerald-500 text-white text-xs font-bold shrink-0 hover:opacity-90 transition">
+            <Plus className="w-4 h-4 inline mr-1" />Thêm
+          </button>
+        </div>
+      </div>
+
+      {/* 4. Bank Providers Master */}
+      <div className="glass-panel p-5 sm:p-6 rounded-2xl space-y-4" style={{ border: '1px solid var(--border-default)' }}>
+        <h3 className="font-extrabold text-sm flex items-center space-x-2" style={{ color: 'var(--text-primary)' }}>
+          <Sliders className="w-4 h-4 text-amber-400" />
+          <span>Danh Sách Ngân Hàng Vay Mua Xe (Bank Providers for Auto Loans)</span>
+        </h3>
+
+        <div className="flex flex-wrap gap-2">
+          {banks.map(b => (
+            <span key={b} className="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-2 group transition hover:scale-105" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+              <span>{b}</span>
+              <div className="flex items-center space-x-1 ml-1 opacity-80 group-hover:opacity-100">
+                <button onClick={() => setEditingCategory({ listKey: 'bank', oldVal: b, newVal: b })} className="text-cyan-400 hover:text-cyan-300 p-0.5" title="Sửa tên">
+                  <Pencil className="w-3 h-3" />
+                </button>
+                <button onClick={() => deleteBank(b)} className="text-rose-400 hover:text-rose-300 p-0.5" title="Xóa">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            </span>
+          ))}
+        </div>
+
+        <div className="flex items-center space-x-2 max-w-md pt-2">
+          <input
+            type="text"
+            className="theme-input text-xs"
+            placeholder="Thêm ngân hàng mới (VD: Vietcombank, Standard Chartered)..."
+            value={newBank}
+            onChange={e => setNewBank(e.target.value)}
+          />
+          <button onClick={addBank} className="px-4 py-2.5 rounded-xl bg-amber-500 text-white text-xs font-bold shrink-0 hover:opacity-90 transition">
             <Plus className="w-4 h-4 inline mr-1" />Thêm
           </button>
         </div>
