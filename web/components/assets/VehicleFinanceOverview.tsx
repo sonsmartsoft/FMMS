@@ -114,6 +114,9 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     start_date: loan?.start_date ? loan.start_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
     monthly_payment: String(loan?.monthly_payment || ''),
     payment_day: String(loan?.payment_day || 15),
+    bank_contact_name: loan?.bank_contact_name || '',
+    bank_contact_phone: loan?.bank_contact_phone || '',
+    bank_hotline: loan?.bank_hotline || '',
     notes: loan?.notes || '',
   });
 
@@ -206,6 +209,9 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       monthly_payment: parseFloat(loanForm.monthly_payment) || emi,
       payment_day: parseInt(loanForm.payment_day) || 15,
       current_balance: loan ? loan.current_balance : p,
+      bank_contact_name: loanForm.bank_contact_name || undefined,
+      bank_contact_phone: loanForm.bank_contact_phone || undefined,
+      bank_hotline: loanForm.bank_hotline || undefined,
       notes: loanForm.notes || undefined,
     };
 
@@ -568,6 +574,26 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
               <div className="flex justify-between"><span>Tổng lãi đã trả đến nay:</span><strong className="font-mono text-pink-400">{fmt(paidInterest)} ₫</strong></div>
               <div className="flex justify-between"><span>Dự tính tổng lãi cả kỳ hạn:</span><strong className="font-mono text-rose-400">{fmt(projectedTotalInterest)} ₫</strong></div>
             </div>
+
+            {/* Quick Call Bank Contacts */}
+            {(loan?.bank_contact_phone || loan?.bank_hotline) && (
+              <div className="p-3 rounded-xl space-y-2" style={{ background: 'rgba(14,165,233,0.08)', border: '1px solid rgba(14,165,233,0.25)' }}>
+                <span className="font-bold uppercase text-[11px] text-cyan-400">📞 Gọi nhanh hỗ trợ Ngân hàng:</span>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {loan?.bank_contact_phone && (
+                    <a href={`tel:${loan.bank_contact_phone}`} className="px-3 py-1.5 rounded-lg bg-cyan-500 text-white font-bold text-xs flex items-center gap-1.5 hover:opacity-90">
+                      <span>👤 {loan.bank_contact_name || 'Cán bộ tín dụng'}: {loan.bank_contact_phone}</span>
+                    </a>
+                  )}
+                  {loan?.bank_hotline && (
+                    <a href={`tel:${loan.bank_hotline}`} className="px-3 py-1.5 rounded-lg bg-slate-700 text-cyan-300 font-bold text-xs flex items-center gap-1.5 hover:opacity-90" style={{ border: '1px solid rgba(14,165,233,0.4)' }}>
+                      <span>☎️ Tổng đài {loan.lender}: {loan.bank_hotline}</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
             <button onClick={() => setActiveModal('loan_config')} className="w-full py-2.5 rounded-xl bg-emerald-500 text-white font-bold text-xs">
               ✏️ Điều chỉnh lãi suất &amp; Cấu hình khoản vay
             </button>
@@ -709,6 +735,18 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
               <div className="space-y-1">
                 <label className="font-bold text-[11px] uppercase" style={{ color: 'var(--text-muted)' }}>Ngày đóng hàng tháng</label>
                 <input type="number" min="1" max="31" className="theme-input font-mono" value={loanForm.payment_day} onChange={e => setLoanForm(p => ({ ...p, payment_day: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* Bank Officer & Hotline Contact Information */}
+            <div className="p-3 rounded-xl space-y-2 font-sans" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <span className="font-bold text-[11px] uppercase flex items-center gap-1.5" style={{ color: 'var(--accent-cyan)' }}>
+                📞 Liên hệ Cán bộ tín dụng &amp; Tổng đài Ngân hàng
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="text" placeholder="Tên cán bộ tín dụng (VD: Anh Nam TCB)..." className="theme-input text-xs" value={loanForm.bank_contact_name} onChange={e => setLoanForm(p => ({ ...p, bank_contact_name: e.target.value }))} />
+                <input type="tel" placeholder="SĐT cán bộ tín dụng..." className="theme-input text-xs font-mono font-bold" value={loanForm.bank_contact_phone} onChange={e => setLoanForm(p => ({ ...p, bank_contact_phone: e.target.value }))} />
+                <input type="tel" placeholder="Hotline/Tổng đài ngân hàng..." className="theme-input text-xs font-mono col-span-2" value={loanForm.bank_hotline} onChange={e => setLoanForm(p => ({ ...p, bank_hotline: e.target.value }))} />
               </div>
             </div>
 

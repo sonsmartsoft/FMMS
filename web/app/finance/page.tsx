@@ -78,6 +78,9 @@ export default function FinancePage() {
     start_date: new Date().toISOString().slice(0, 10),
     monthly_payment: '',
     payment_day: '15',
+    bank_contact_name: '',
+    bank_contact_phone: '',
+    bank_hotline: '',
     notes: '',
   });
 
@@ -191,6 +194,9 @@ export default function FinancePage() {
       start_date: new Date().toISOString().slice(0, 10),
       monthly_payment: '',
       payment_day: '15',
+      bank_contact_name: '',
+      bank_contact_phone: '',
+      bank_hotline: '',
       notes: '',
     });
     setOpenAddLoanModal(true);
@@ -208,6 +214,9 @@ export default function FinancePage() {
       start_date: l.start_date ? l.start_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
       monthly_payment: String(l.monthly_payment),
       payment_day: String(l.payment_day || 15),
+      bank_contact_name: l.bank_contact_name || '',
+      bank_contact_phone: l.bank_contact_phone || '',
+      bank_hotline: l.bank_hotline || '',
       notes: l.notes || '',
     });
     setOpenAddLoanModal(true);
@@ -227,6 +236,9 @@ export default function FinancePage() {
       monthly_payment: m,
       payment_day: parseInt(loanForm.payment_day) || 15,
       current_balance: editingLoan ? editingLoan.current_balance : p,
+      bank_contact_name: loanForm.bank_contact_name || undefined,
+      bank_contact_phone: loanForm.bank_contact_phone || undefined,
+      bank_hotline: loanForm.bank_hotline || undefined,
       notes: loanForm.notes || undefined,
     };
 
@@ -547,6 +559,18 @@ export default function FinancePage() {
                   {calculatedMonthly > 0 && !loanForm.monthly_payment && (
                     <p className="text-[10px] mt-1" style={{ color: 'var(--accent-cyan)' }}>Gợi ý tính toán EMI: {fmt(calculatedMonthly)} ₫/tháng</p>
                   )}
+                </div>
+              </div>
+
+              {/* Bank Contact & Hotline Fields */}
+              <div className="p-3 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <span className="font-bold text-[11px] uppercase flex items-center gap-1.5" style={{ color: 'var(--accent-cyan)' }}>
+                  📞 Cán bộ tín dụng &amp; Hotline Ngân hàng
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="text" placeholder="Tên cán bộ tín dụng..." className="theme-input text-xs" value={loanForm.bank_contact_name} onChange={e => setLoanForm(p => ({ ...p, bank_contact_name: e.target.value }))} />
+                  <input type="tel" placeholder="SĐT cán bộ tín dụng..." className="theme-input text-xs font-mono font-bold" value={loanForm.bank_contact_phone} onChange={e => setLoanForm(p => ({ ...p, bank_contact_phone: e.target.value }))} />
+                  <input type="tel" placeholder="Hotline/Tổng đài ngân hàng..." className="theme-input text-xs font-mono col-span-2" value={loanForm.bank_hotline} onChange={e => setLoanForm(p => ({ ...p, bank_hotline: e.target.value }))} />
                 </div>
               </div>
             </div>

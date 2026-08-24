@@ -46,6 +46,9 @@ export interface Asset {
   status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'SOLD';
   image_url?: string;
   description?: string;
+  sales_rep_name?: string;
+  sales_rep_phone?: string;
+  brand_hotline?: string;
   capabilities: AssetCapabilities;
   // Derived quick stats
   fuel_level_percent?: number;
@@ -101,6 +104,9 @@ export interface LoanRecord {
   payment_day: number;
   status: 'ACTIVE' | 'CLOSED';
   notes?: string;
+  bank_contact_name?: string;
+  bank_contact_phone?: string;
+  bank_hotline?: string;
 }
 
 export interface TripRecord {

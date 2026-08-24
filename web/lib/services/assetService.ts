@@ -61,6 +61,9 @@ export function mapAssetRow(row: any, capsRow?: any): Asset {
     status: (row.status ?? 'ACTIVE') as Asset['status'],
     image_url: row.image_url ?? undefined,
     description: row.description ?? undefined,
+    sales_rep_name: row.sales_rep_name ?? undefined,
+    sales_rep_phone: row.sales_rep_phone ?? undefined,
+    brand_hotline: row.brand_hotline ?? undefined,
     capabilities: caps,
   };
 }
@@ -141,6 +144,9 @@ export type AssetInput = {
   status?: Asset['status'];
   image_url?: string;
   description?: string;
+  sales_rep_name?: string;
+  sales_rep_phone?: string;
+  brand_hotline?: string;
   capabilities?: Partial<AssetCapabilities>;
 };
 
@@ -224,6 +230,9 @@ export async function updateAsset(id: string, data: Partial<AssetInput>) {
   if ('virtual_odometer_km' in data) payload.virtual_odometer_km = data.virtual_odometer_km;
   if ('status' in data) payload.status = data.status;
   if ('description' in data) payload.description = data.description;
+  if ('sales_rep_name' in data) payload.sales_rep_name = data.sales_rep_name;
+  if ('sales_rep_phone' in data) payload.sales_rep_phone = data.sales_rep_phone;
+  if ('brand_hotline' in data) payload.brand_hotline = data.brand_hotline;
   payload.updated_at = new Date().toISOString();
 
   const { error } = await supabase

@@ -11,6 +11,9 @@ export interface InsuranceRow {
   cost: number;
   coverage_amount?: number;
   document_url?: string;
+  agent_name?: string;
+  agent_phone?: string;
+  provider_hotline?: string;
 }
 
 export interface InsuranceInput {
@@ -23,6 +26,9 @@ export interface InsuranceInput {
   cost: number;
   coverage_amount?: number;
   document_url?: string;
+  agent_name?: string;
+  agent_phone?: string;
+  provider_hotline?: string;
 }
 
 export const POLICY_TYPE_LABELS: Record<InsuranceRow['policy_type'], string> = {
@@ -43,6 +49,9 @@ export function mapInsuranceRow(row: any): InsuranceRow {
     cost: Number(row.cost) || 0,
     coverage_amount: row.coverage_amount != null ? Number(row.coverage_amount) : undefined,
     document_url: row.document_url ?? undefined,
+    agent_name: row.agent_name ?? undefined,
+    agent_phone: row.agent_phone ?? undefined,
+    provider_hotline: row.provider_hotline ?? undefined,
   };
 }
 

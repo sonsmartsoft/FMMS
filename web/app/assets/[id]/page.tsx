@@ -157,6 +157,9 @@ export default function AssetDetailPage() {
           purchase_date: a.purchase_date || '', image_url: a.image_url || '',
           current_odometer_km: String(a.current_odometer_km || 0),
           status: a.status || 'ACTIVE', description: a.description || '',
+          sales_rep_name: a.sales_rep_name || '',
+          sales_rep_phone: a.sales_rep_phone || '',
+          brand_hotline: a.brand_hotline || '',
         });
 
         const [f, m, e, t, p, i, l] = await Promise.all([
@@ -382,13 +385,14 @@ export default function AssetDetailPage() {
   const [expForm, setExpForm] = useState({ date: '', category: 'FUEL', amount: '', vendor: '', odometer_km: '', description: '' });
   const [tripForm, setTripForm] = useState({ start_time: '', end_time: '', distance_km: '', start_location: '', end_location: '', fuel_used_liters: '', average_speed_kmh: '' });
   const [partForm, setPartForm] = useState({ name: '', brand: '', category: 'Điện tử', install_date: '', cost: '', odometer_km: '', warranty_months: '', notes: '' });
-  const [insForm, setInsForm] = useState({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', notes: '' });
+  const [insForm, setInsForm] = useState({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', agent_name: '', agent_phone: '', provider_hotline: '', notes: '' });
   const [editForm, setEditForm] = useState({
     name: '', brand: '', model: '', year: '', color: '',
     license_plate: '', vin: '', engine: '', fuel_type: 'PETROL',
     tank_capacity_liters: '', battery_capacity_kwh: '',
     purchase_price: '', current_value: '',
     purchase_date: '', image_url: '', current_odometer_km: '', status: 'ACTIVE', description: '',
+    sales_rep_name: '', sales_rep_phone: '', brand_hotline: '',
   });
   const [odoForm, setOdoForm] = useState({ new_value_km: '', reason: 'Hiệu chỉnh sai số đồng hồ' });
   const [claimForm, setClaimForm] = useState({ item_name: '', description: '', amount_claimed: '', vendor: '' });
@@ -550,6 +554,9 @@ export default function AssetDetailPage() {
         expiry_date: insForm.expiry_date,
         cost: parseFloat(insForm.annual_fee) || 0,
         coverage_amount: parseFloat(insForm.coverage_amount) || 0,
+        agent_name: insForm.agent_name || undefined,
+        agent_phone: insForm.agent_phone || undefined,
+        provider_hotline: insForm.provider_hotline || undefined,
       });
       setInsurances([{
         id: created.id,
@@ -560,13 +567,16 @@ export default function AssetDetailPage() {
         expiry_date: created.expiry_date,
         annual_fee: created.cost,
         coverage_amount: created.coverage_amount ?? 0,
+        agent_name: created.agent_name,
+        agent_phone: created.agent_phone,
+        provider_hotline: created.provider_hotline,
         status: 'ACTIVE',
       }, ...insurances]);
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
     setOpenModal(null);
-    setInsForm({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', notes: '' });
+    setInsForm({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', agent_name: '', agent_phone: '', provider_hotline: '', notes: '' });
   };
 
   const saveEdit = async () => {
@@ -591,6 +601,9 @@ export default function AssetDetailPage() {
         current_odometer_km: parseFloat(editForm.current_odometer_km) || 0,
         status: editForm.status as 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE' | 'SOLD',
         description: editForm.description || undefined,
+        sales_rep_name: editForm.sales_rep_name || undefined,
+        sales_rep_phone: editForm.sales_rep_phone || undefined,
+        brand_hotline: editForm.brand_hotline || undefined,
       });
       if (updated) setAsset(updated);
       setOpenModal(null);
@@ -701,6 +714,9 @@ export default function AssetDetailPage() {
             purchase_date: asset.purchase_date || '', image_url: asset.image_url || '',
             current_odometer_km: String(asset.current_odometer_km || 0),
             status: asset.status || 'ACTIVE', description: asset.description || '',
+            sales_rep_name: asset.sales_rep_name || '',
+            sales_rep_phone: asset.sales_rep_phone || '',
+            brand_hotline: asset.brand_hotline || '',
           }); setOpenModal('edit'); }}
             className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition hover:opacity-90"
             style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}>
@@ -778,6 +794,9 @@ export default function AssetDetailPage() {
                     purchase_date: asset.purchase_date || '', image_url: asset.image_url || '',
                     current_odometer_km: String(asset.current_odometer_km || 0),
                     status: asset.status || 'ACTIVE', description: asset.description || '',
+                    sales_rep_name: asset.sales_rep_name || '',
+                    sales_rep_phone: asset.sales_rep_phone || '',
+                    brand_hotline: asset.brand_hotline || '',
                   });
                   setOpenModal('edit');
                 }}
@@ -825,6 +844,96 @@ export default function AssetDetailPage() {
                 <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>{asset.description}</p>
               </div>
             )}
+
+            {/* 📞 Danh bạ Liên hệ & Tổng đài cứu hộ hỗ trợ */}
+            <div className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="flex items-center justify-between">
+                <h4 className="font-extrabold text-xs uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <span>📞 Danh Bạ Liên Hệ &amp; Tổng Đài Hỗ Trợ</span>
+                </h4>
+                <button
+                  onClick={() => {
+                    setEditForm({
+                      name: asset.name, brand: asset.brand, model: asset.model, year: String(asset.year || ''),
+                      color: asset.color || '', license_plate: asset.license_plate || '',
+                      vin: asset.vin || '', engine: asset.engine || '', fuel_type: asset.fuel_type || 'PETROL',
+                      tank_capacity_liters: String(asset.tank_capacity_liters ?? ''),
+                      battery_capacity_kwh: String(asset.battery_capacity_kwh ?? ''),
+                      purchase_price: String(asset.purchase_price || ''), current_value: String(asset.current_value || ''),
+                      purchase_date: asset.purchase_date || '', image_url: asset.image_url || '',
+                      current_odometer_km: String(asset.current_odometer_km || 0),
+                      status: asset.status || 'ACTIVE', description: asset.description || '',
+                      sales_rep_name: asset.sales_rep_name || '',
+                      sales_rep_phone: asset.sales_rep_phone || '',
+                      brand_hotline: asset.brand_hotline || '',
+                    });
+                    setOpenModal('edit');
+                  }}
+                  className="text-[11px] font-bold text-cyan-400 hover:underline"
+                >
+                  ✏️ Sửa danh bạ
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                {/* 1. Mua xe & Hãng */}
+                <div className="p-3.5 rounded-xl space-y-1.5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                  <p className="font-bold text-[11px] uppercase text-cyan-400">🚘 Đại lý &amp; Bán xe ({asset.brand})</p>
+                  <p style={{ color: 'var(--text-secondary)' }}>Cố vấn: <strong>{asset.sales_rep_name || 'Chưa cập nhật'}</strong></p>
+                  <div className="flex flex-col gap-1 pt-1">
+                    {asset.sales_rep_phone ? (
+                      <a href={`tel:${asset.sales_rep_phone}`} className="px-2.5 py-1 rounded-lg bg-cyan-500 text-white font-bold text-[11px] flex items-center gap-1.5 hover:opacity-90 w-fit">
+                        <span>📞 SĐT Sale: {asset.sales_rep_phone}</span>
+                      </a>
+                    ) : <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Chưa có SĐT sale</span>}
+
+                    {asset.brand_hotline ? (
+                      <a href={`tel:${asset.brand_hotline}`} className="px-2.5 py-1 rounded-lg bg-slate-700 text-cyan-300 font-bold text-[11px] flex items-center gap-1.5 hover:opacity-90 w-fit" style={{ border: '1px solid rgba(14,165,233,0.3)' }}>
+                        <span>☎️ Hotline {asset.brand}: {asset.brand_hotline}</span>
+                      </a>
+                    ) : <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Chưa có hotline hãng</span>}
+                  </div>
+                </div>
+
+                {/* 2. Ngân hàng & Tín dụng */}
+                <div className="p-3.5 rounded-xl space-y-1.5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                  <p className="font-bold text-[11px] uppercase text-emerald-400">🏦 Khoản Vay ({loan?.lender || 'Ngân hàng'})</p>
+                  <p style={{ color: 'var(--text-secondary)' }}>Cán bộ TD: <strong>{loan?.bank_contact_name || 'Chưa cập nhật'}</strong></p>
+                  <div className="flex flex-col gap-1 pt-1">
+                    {loan?.bank_contact_phone ? (
+                      <a href={`tel:${loan.bank_contact_phone}`} className="px-2.5 py-1 rounded-lg bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1.5 hover:opacity-90 w-fit">
+                        <span>📞 SĐT Cán bộ: {loan.bank_contact_phone}</span>
+                      </a>
+                    ) : <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Chưa có SĐT cán bộ</span>}
+
+                    {loan?.bank_hotline ? (
+                      <a href={`tel:${loan.bank_hotline}`} className="px-2.5 py-1 rounded-lg bg-slate-700 text-emerald-300 font-bold text-[11px] flex items-center gap-1.5 hover:opacity-90 w-fit" style={{ border: '1px solid rgba(16,185,129,0.3)' }}>
+                        <span>☎️ Hotline NH: {loan.bank_hotline}</span>
+                      </a>
+                    ) : <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Chưa có hotline ngân hàng</span>}
+                  </div>
+                </div>
+
+                {/* 3. Bảo hiểm */}
+                <div className="p-3.5 rounded-xl space-y-1.5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                  <p className="font-bold text-[11px] uppercase text-purple-400">🛡️ Bảo Hiểm ({insurances[0]?.company || 'Bảo hiểm'})</p>
+                  <p style={{ color: 'var(--text-secondary)' }}>Đại lý / Cán bộ: <strong>{insurances[0]?.agent_name || 'Chưa cập nhật'}</strong></p>
+                  <div className="flex flex-col gap-1 pt-1">
+                    {insurances[0]?.agent_phone ? (
+                      <a href={`tel:${insurances[0].agent_phone}`} className="px-2.5 py-1 rounded-lg bg-purple-500 text-white font-bold text-[11px] flex items-center gap-1.5 hover:opacity-90 w-fit">
+                        <span>📞 SĐT Cán bộ BH: {insurances[0].agent_phone}</span>
+                      </a>
+                    ) : <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Chưa có SĐT cán bộ BH</span>}
+
+                    {insurances[0]?.provider_hotline ? (
+                      <a href={`tel:${insurances[0].provider_hotline}`} className="px-2.5 py-1 rounded-lg bg-slate-700 text-purple-300 font-bold text-[11px] flex items-center gap-1.5 hover:opacity-90 w-fit" style={{ border: '1px solid rgba(167,139,250,0.3)' }}>
+                        <span>☎️ Cứu hộ BH: {insurances[0].provider_hotline}</span>
+                      </a>
+                    ) : <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Chưa có hotline cứu hộ BH</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1316,6 +1425,16 @@ export default function AssetDetailPage() {
             </select>
           </Field>
           <Field label="Mô tả ghi chú"><input type="text" className="theme-input" value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} /></Field>
+          
+          <div className="p-3 rounded-xl space-y-2 mt-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+            <p className="font-bold text-[11px] uppercase text-cyan-400">📞 Danh bạ Cố vấn bán xe &amp; Hotline Hãng</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Tên đại diện/Sale xe"><input type="text" className="theme-input" placeholder="VD: Anh Nam Showroom" value={editForm.sales_rep_name} onChange={e => setEditForm(p => ({ ...p, sales_rep_name: e.target.value }))} /></Field>
+              <Field label="SĐT Sale bán xe"><input type="tel" className="theme-input font-mono font-bold" placeholder="0912..." value={editForm.sales_rep_phone} onChange={e => setEditForm(p => ({ ...p, sales_rep_phone: e.target.value }))} /></Field>
+            </div>
+            <Field label="Số tổng đài cứu hộ Hãng xe"><input type="tel" className="theme-input font-mono" placeholder="VD: 1900 54 54 54" value={editForm.brand_hotline} onChange={e => setEditForm(p => ({ ...p, brand_hotline: e.target.value }))} /></Field>
+          </div>
+
           <div className="flex space-x-2 pt-2">
             <button onClick={saveEdit} disabled={savingEdit} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">
               {savingEdit ? 'Đang lưu...' : 'Lưu thay đổi'}
@@ -1564,6 +1683,15 @@ export default function AssetDetailPage() {
           <Field label="Ngày hết hạn"><input type="date" className="theme-input" value={insForm.expiry_date} onChange={e => setInsForm(p => ({ ...p, expiry_date: e.target.value }))} /></Field>
           <Field label="Phí hàng năm (₫)"><input type="number" className="theme-input" placeholder="VD: 6500000" value={insForm.annual_fee} onChange={e => setInsForm(p => ({ ...p, annual_fee: e.target.value }))} /></Field>
           <Field label="Mức bồi thường (₫)"><input type="number" className="theme-input" placeholder="VD: 490000000" value={insForm.coverage_amount} onChange={e => setInsForm(p => ({ ...p, coverage_amount: e.target.value }))} /></Field>
+
+          <div className="p-3 rounded-xl space-y-2 mt-2 font-sans" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+            <p className="font-bold text-[11px] uppercase text-purple-400">📞 Đại lý Bảo hiểm &amp; Hotline Cứu hộ</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Field label="Tên cán bộ/Đại lý BH"><input type="text" className="theme-input" placeholder="VD: Chị Mai Bảo Việt" value={insForm.agent_name} onChange={e => setInsForm(p => ({ ...p, agent_name: e.target.value }))} /></Field>
+              <Field label="SĐT cán bộ BH"><input type="tel" className="theme-input font-mono font-bold" placeholder="0988..." value={insForm.agent_phone} onChange={e => setInsForm(p => ({ ...p, agent_phone: e.target.value }))} /></Field>
+            </div>
+            <Field label="Hotline bồi thường / cứu hộ BH"><input type="tel" className="theme-input font-mono" placeholder="VD: 1900 55 88 99" value={insForm.provider_hotline} onChange={e => setInsForm(p => ({ ...p, provider_hotline: e.target.value }))} /></Field>
+          </div>
           <div className="flex space-x-2 pt-2">
             <button onClick={saveInsurance} className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white font-bold text-xs hover:opacity-90 transition">Lưu</button>
             <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>

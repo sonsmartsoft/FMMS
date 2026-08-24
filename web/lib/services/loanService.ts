@@ -19,6 +19,9 @@ export interface LoanRow {
   current_balance: number;
   status: 'ACTIVE' | 'CLOSED';
   notes?: string;
+  bank_contact_name?: string;
+  bank_contact_phone?: string;
+  bank_hotline?: string;
 }
 
 export interface LoanPaymentRow {
@@ -63,6 +66,9 @@ export interface LoanInput {
   current_balance: number;
   status?: 'ACTIVE' | 'CLOSED';
   notes?: string;
+  bank_contact_name?: string;
+  bank_contact_phone?: string;
+  bank_hotline?: string;
 }
 
 export async function createLoan(input: LoanInput) {
@@ -86,6 +92,9 @@ export async function createLoan(input: LoanInput) {
       current_balance: input.current_balance,
       status: input.status ?? 'ACTIVE',
       notes: input.notes ?? null,
+      bank_contact_name: input.bank_contact_name ?? null,
+      bank_contact_phone: input.bank_contact_phone ?? null,
+      bank_hotline: input.bank_hotline ?? null,
     })
     .select()
     .single();
