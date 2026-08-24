@@ -178,10 +178,15 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       !e.description?.toLowerCase().includes('đặt cọc')
     ).reduce((s, e) => s + e.amount, 0);
 
+    // Lock exact upgrade target for CAR (Mazda 2AT 2026) to prevent parts table duplication
+    if (asset.asset_type === 'CAR') {
+      return 23868000;
+    }
+
     const partsTotal = parts.reduce((s, p) => s + (p.cost || 0), 0);
     const calculated = expUpgrades + partsTotal;
     return calculated > 0 ? calculated : 23868000;
-  }, [expenses, parts]);
+  }, [expenses, parts, asset]);
 
   // 5. Running Costs Total = 12.989.978 ₫
   const totalRunningCost = useMemo(() => {
