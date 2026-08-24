@@ -468,7 +468,7 @@ export default function FinancePage() {
           )}
 
           {selectedLoan && (
-            <div className="space-y-5">
+            <div className="space-y-6">
               {(() => {
                 const targetAsset = assets.find(a => a.id === selectedLoan.asset_id);
                 if (!targetAsset) return null;
@@ -481,6 +481,69 @@ export default function FinancePage() {
                   />
                 );
               })()}
+
+              {/* 📋 Monthly Repayment Schedule Table */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div>
+                    <h4 className="font-bold text-xs uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                      <span>📋 Lịch Trả Nợ Chi Tiết Theo Tháng ({selectedLoan.term_months} kỳ)</span>
+                    </h4>
+                    <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Bảng tính dư nợ giảm dần, bấm <strong>"✓ Đã trả"</strong> để cập nhật tiến độ trả nợ</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => openEditLoan(selectedLoan)} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-white hover:opacity-90 transition">
+                      ✏️ Sửa khoản vay
+                    </button>
+                    <button onClick={() => handleDeleteLoan(selectedLoan.id)} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 transition">
+                      ❌ Xóa khoản vay
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
+                        {['Kỳ #', 'Hạn đóng', 'Tiền gốc (₫)', 'Tiền lãi (₫)', 'Tổng trả (₫)', 'Dư nợ còn lại (₫)', 'Trạng thái', 'Thao tác'].map(h => (
+                          <th key={h} className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loanSchedule.map((p: any, i: number) => (
+                        <tr key={p.payment_number} style={{ borderBottom: '1px solid var(--border-subtle)', background: p.status === 'OVERDUE' ? 'rgba(248,113,113,0.05)' : i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
+                          <td className="px-3.5 py-2.5 font-bold" style={{ color: 'var(--text-muted)' }}>Kỳ {p.payment_number}</td>
+                          <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--text-secondary)' }}>{fmtDate(p.due_date)}</td>
+                          <td className="px-3.5 py-2.5 font-mono font-medium text-emerald-400">{fmt(p.principal_paid)} ₫</td>
+                          <td className="px-3.5 py-2.5 font-mono text-amber-400">{fmt(p.interest_paid)} ₫</td>
+                          <td className="px-3.5 py-2.5 font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{fmt(p.total_payment)} ₫</td>
+                          <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--text-muted)' }}>{fmt(p.remaining_balance)} ₫</td>
+                          <td className="px-3.5 py-2.5">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{
+                              background: p.status === 'PAID' ? 'rgba(52,211,153,0.15)' : p.status === 'OVERDUE' ? 'rgba(248,113,113,0.15)' : 'var(--bg-hover)',
+                              color: p.status === 'PAID' ? 'var(--status-green)' : p.status === 'OVERDUE' ? 'var(--status-red)' : 'var(--text-muted)',
+                            }}>
+                              {p.status === 'PAID' ? '✓ Đã trả' : p.status === 'OVERDUE' ? '⚠ Quá hạn' : '⏳ Chưa trả'}
+                            </span>
+                          </td>
+                          <td className="px-3.5 py-2.5">
+                            <button
+                              onClick={() => toggleSchedulePayment(p)}
+                              className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition hover:opacity-80"
+                              style={p.status === 'PAID'
+                                ? { background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }
+                                : { background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}
+                            >
+                              {p.status === 'PAID' ? '↺ Đổi thành Chưa trả' : '✓ Đã trả kỳ này'}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
         </div>

@@ -779,8 +779,17 @@ export default function AssetDetailPage() {
 
         {/* ═══ OVERVIEW ═══ */}
         {activeTab === 'overview' && (
-          <div className="space-y-5">
-            <div className="flex items-center justify-between">
+          <div className="space-y-6">
+            {/* 9-Metric Financial & TCO Overview Dashboard */}
+            <VehicleFinanceOverview
+              asset={asset}
+              loan={loan}
+              expenses={expenses}
+              parts={parts}
+              onRefresh={() => { window.location.reload(); }}
+            />
+
+            <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
               <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Thông số tổng quan</h3>
               <button
                 onClick={() => {
@@ -1196,15 +1205,189 @@ export default function AssetDetailPage() {
           </div>
         )}
 
-        {/* ═══ FINANCE ═══ */}
+        {/* ═══ FINANCE (KHOẢN VAY & LỊCH TRẢ NỢ) ═══ */}
         {activeTab === 'finance' && (
-          <VehicleFinanceOverview
-            asset={asset}
-            loan={loan}
-            expenses={expenses}
-            parts={parts}
-            onRefresh={() => { window.location.reload(); }}
-          />
+          <div className="space-y-6">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Khoản Vay &amp; Lịch Trả Nợ Chi Tiết</h3>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Quản lý dư nợ trả góp, lãi suất 2 giai đoạn &amp; nhật ký đóng tiền hàng tháng</p>
+              </div>
+              {loan ? (
+                <div className="flex items-center gap-2">
+                  <button onClick={() => {
+                    setEditingLoan(loan);
+                    setLoanForm({
+                      lender: loan.lender || 'Ngân hàng',
+                      principal: String(loan.principal || 0),
+                      down_payment: String(loan.down_payment || 0),
+                      interest_rate_percent: String(loan.interest_rate_percent || 8.5),
+                      term_months: String(loan.term_months || 36),
+                      start_date: loan.start_date ? loan.start_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+                      monthly_payment: String(loan.monthly_payment || ''),
+                      payment_day: String(loan.payment_day || 15),
+                      notes: loan.notes || '',
+                    });
+                    setOpenLoanModal(true);
+                  }} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-white hover:opacity-90 transition shadow-sm">
+                    ✏️ Điều chỉnh khoản vay
+                  </button>
+                  <button onClick={() => handleDeleteAssetLoan(loan.id)} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 transition">
+                    ❌ Xóa khoản vay
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => {
+                  setEditingLoan(null);
+                  setLoanForm({
+                    lender: 'Ngân hàng Techcombank',
+                    principal: String(asset.purchase_price ? Math.round(asset.purchase_price * 0.8) : 400000000),
+                    down_payment: String(asset.purchase_price ? Math.round(asset.purchase_price * 0.2) : 100000000),
+                    interest_rate_percent: '8.5',
+                    term_months: '36',
+                    start_date: new Date().toISOString().slice(0, 10),
+                    monthly_payment: '',
+                    payment_day: '15',
+                    notes: '',
+                  });
+                  setOpenLoanModal(true);
+                }} className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-white text-xs font-bold shadow-md transition hover:opacity-90" style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}>
+                  <Plus className="w-4 h-4" /><span>+ Thêm khoản vay cho xe này</span>
+                </button>
+              )}
+            </div>
+
+            {!loan ? (
+              <div className="p-8 rounded-2xl text-center text-xs space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
+                <CreditCard className="w-10 h-10 mx-auto opacity-30 text-emerald-400" />
+                <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Phương tiện này chưa được cấu hình khoản vay</p>
+                <p className="max-w-md mx-auto">Tạo khoản vay mua xe trả góp để theo dõi dư nợ giảm dần, tính toán bảng chia gốc lãi 2 giai đoạn và theo dõi từng tháng đóng tiền.</p>
+                <button onClick={() => {
+                  setEditingLoan(null);
+                  setLoanForm({
+                    lender: 'Ngân hàng Techcombank',
+                    principal: String(asset.purchase_price ? Math.round(asset.purchase_price * 0.8) : 400000000),
+                    down_payment: String(asset.purchase_price ? Math.round(asset.purchase_price * 0.2) : 100000000),
+                    interest_rate_percent: '8.5',
+                    term_months: '36',
+                    start_date: new Date().toISOString().slice(0, 10),
+                    monthly_payment: '',
+                    payment_day: '15',
+                    notes: '',
+                  });
+                  setOpenLoanModal(true);
+                }} className="px-4 py-2 rounded-xl text-white font-bold text-xs shadow-md" style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}>
+                  + Tạo khoản vay ngay
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Loan Overview Cards */}
+                <div className="p-5 rounded-2xl space-y-4 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Ngân hàng cho vay', value: loan.lender, color: 'var(--accent-cyan)' },
+                      { label: 'Số tiền gốc vay', value: `${fmt(loan.principal)} ₫`, color: 'var(--text-primary)' },
+                      { label: 'Số tiền trả trước', value: `${fmt(loan.down_payment)} ₫`, color: 'var(--text-secondary)' },
+                      { label: 'Tỷ lệ vay', value: asset.purchase_price > 0 ? `${((loan.principal / asset.purchase_price) * 100).toFixed(0)}% giá trị xe` : '—', color: 'var(--status-amber)' },
+                      { label: 'Lãi suất ưu đãi', value: `${loan.preferred_rate_percent || loan.interest_rate_percent}%/năm (${loan.preferred_months || 12}T đầu)`, color: 'var(--status-green)' },
+                      { label: 'Lãi thả nổi', value: `${loan.floating_rate_percent || loan.interest_rate_percent}%/năm`, color: 'var(--status-amber)' },
+                      { label: 'Kỳ hạn vay', value: `${loan.term_months} tháng`, color: 'var(--text-secondary)' },
+                      { label: 'Dư nợ còn lại', value: `${fmt(loan.current_balance)} ₫`, color: 'var(--status-red)' },
+                    ].map((r, i) => (
+                      <div key={i} className="p-3 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{r.label}</p>
+                        <p className="font-bold mt-0.5 text-xs" style={{ color: r.color }}>{r.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Loan Officer Call Card */}
+                  {(loan.bank_contact_phone || loan.bank_hotline) && (
+                    <div className="p-3 rounded-xl flex items-center justify-between flex-wrap gap-2 text-xs" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)' }}>
+                      <span className="font-bold text-emerald-400">📞 Liên hệ Cán bộ tín dụng:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {loan.bank_contact_phone && (
+                          <a href={`tel:${loan.bank_contact_phone}`} className="px-3 py-1 rounded-lg bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 hover:opacity-90">
+                            <span>👤 {loan.bank_contact_name || 'Cán bộ'}: {loan.bank_contact_phone}</span>
+                          </a>
+                        )}
+                        {loan.bank_hotline && (
+                          <a href={`tel:${loan.bank_hotline}`} className="px-3 py-1 rounded-lg bg-slate-700 text-emerald-300 font-bold text-xs flex items-center gap-1 hover:opacity-90" style={{ border: '1px solid rgba(16,185,129,0.3)' }}>
+                            <span>☎️ Hotline {loan.lender}: {loan.bank_hotline}</span>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Repayment Progress bar */}
+                  <div>
+                    <div className="flex justify-between text-xs mb-1.5 font-bold" style={{ color: 'var(--text-muted)' }}>
+                      <span>Đã trả gốc: {fmt(loan.principal - loan.current_balance)} ₫ ({(((loan.principal - loan.current_balance) / loan.principal) * 100).toFixed(1)}%)</span>
+                      <span>Dư nợ còn lại: {fmt(loan.current_balance)} ₫</span>
+                    </div>
+                    <div className="h-3 rounded-full overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
+                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, (((loan.principal - loan.current_balance) / loan.principal) * 100)))}%`, background: 'linear-gradient(90deg, #10B981, #0EA5E9)' }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 📋 Monthly Repayment Schedule Table */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-xs uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
+                      📋 Lịch Trả Nợ Chi Tiết Dư Nợ Giảm Dần ({loan.term_months} tháng)
+                    </h4>
+                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Bấm <strong>"✓ Đã trả"</strong> để cập nhật tiến độ tự động</span>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
+                          {['Kỳ #', 'Hạn đóng', 'Tiền gốc (₫)', 'Tiền lãi (₫)', 'Tổng trả (₫)', 'Dư nợ còn (₫)', 'Trạng thái', 'Thao tác'].map(h => (
+                            <th key={h} className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {assetLoanSchedule.map((p: any, i: number) => (
+                          <tr key={p.payment_number} style={{ borderBottom: '1px solid var(--border-subtle)', background: p.status === 'OVERDUE' ? 'rgba(248,113,113,0.05)' : i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
+                            <td className="px-3.5 py-2.5 font-bold" style={{ color: 'var(--text-muted)' }}>Kỳ {p.payment_number}</td>
+                            <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--text-secondary)' }}>{fmtDate(p.due_date)}</td>
+                            <td className="px-3.5 py-2.5 font-mono font-medium text-emerald-400">{fmt(p.principal_paid)} ₫</td>
+                            <td className="px-3.5 py-2.5 font-mono text-amber-400">{fmt(p.interest_paid)} ₫</td>
+                            <td className="px-3.5 py-2.5 font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{fmt(p.total_payment)} ₫</td>
+                            <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--text-muted)' }}>{fmt(p.remaining_balance)} ₫</td>
+                            <td className="px-3.5 py-2.5">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{
+                                background: p.status === 'PAID' ? 'rgba(52,211,153,0.15)' : p.status === 'OVERDUE' ? 'rgba(248,113,113,0.15)' : 'var(--bg-hover)',
+                                color: p.status === 'PAID' ? 'var(--status-green)' : p.status === 'OVERDUE' ? 'var(--status-red)' : 'var(--text-muted)',
+                              }}>
+                                {p.status === 'PAID' ? '✓ Đã trả' : p.status === 'OVERDUE' ? '⚠ Quá hạn' : '⏳ Chưa trả'}
+                              </span>
+                            </td>
+                            <td className="px-3.5 py-2.5">
+                              <button
+                                onClick={() => toggleAssetLoanPayment(p)}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition hover:opacity-80"
+                                style={p.status === 'PAID'
+                                  ? { background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }
+                                  : { background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}
+                              >
+                                {p.status === 'PAID' ? '↺ Đổi thành Chưa trả' : '✓ Đã trả kỳ này'}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* ═══ INSURANCE ═══ */}
