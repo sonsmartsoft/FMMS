@@ -160,34 +160,70 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     );
   }, [expenses]);
 
+  // AppSheet Exact Formulas:
+  // 1. Initial Rollout Fees (Trước bạ, Đăng kiểm, Phí biển số, BH Thân vỏ, Phí NH, BH Khoản vay)
   const initialFeesTotal = useMemo(() => {
     return initialRolloutExpenses.reduce((s, e) => s + e.amount, 0);
   }, [initialRolloutExpenses]);
 
-  const investment = asset.purchase_price || 0;
-  const totalInitialRollout = investment + initialFeesTotal;
+  // 2. Down Payment (Trả trước từ vốn tự có: Giá xe 397M - Gốc vay 295M = 102M)
+  const purchasePrice = asset.purchase_price || 0;
+  const downPayment = loan ? loan.down_payment : purchasePrice;
 
-  // Financial Calculations
-  const schedule = useMemo(() => generate2TierLoanSchedule(loan, payments), [loan, payments]);
-  const paidInterest = useMemo(() => {
-    return schedule.filter(s => s.status === 'PAID').reduce((sum, s) => sum + s.interest_paid, 0);
-  }, [schedule]);
+  // 3. Investment (Vốn tự có ban đầu = Trả trước 102M + Chi phí lăn bánh ban đầu 55.71M = 157.710.700 ₫)
+  const investment = downPayment + initialFeesTotal;
 
-  const projectedTotalInterest = useMemo(() => {
-    return schedule.reduce((sum, s) => sum + s.interest_paid, 0);
-  }, [schedule]);
-
-  const totalInterest = paidInterest > 0 ? paidInterest : projectedTotalInterest;
-
+  // 4. Upgrades Total = 23.868.000 ₫
   const totalUpgradeCost = useMemo(() => {
     const expUpgrades = expenses.filter(e => e.category === 'UPGRADE' || e.category === 'PARTS').reduce((s, e) => s + e.amount, 0);
     const partsTotal = parts.reduce((s, p) => s + (p.cost || 0), 0);
     return expUpgrades + partsTotal;
   }, [expenses, parts]);
 
+  // 5. Running Costs Total = 12.989.978 ₫
   const totalRunningCost = useMemo(() => {
-    return expenses.filter(e => e.category !== 'UPGRADE' && e.category !== 'PARTS' && (e.category as string) !== 'INITIAL').reduce((s, e) => s + e.amount, 0);
+    return expenses.filter(e => 
+      e.category !== 'UPGRADE' && 
+      e.category !== 'PARTS' && 
+      (e.category as string) !== 'INITIAL' &&
+      e.category !== 'REGISTRATION' &&
+      e.category !== 'LOAN_PAYMENT' &&
+      e.category !== 'LOAN_INTEREST'
+    ).reduce((s, e) => s + e.amount, 0);
   }, [expenses]);
+
+  // 6. Loan Payments & Interest
+  const schedule = useMemo(() => generate2TierLoanSchedule(loan, payments), [loan, payments]);
+  const paidInterest = useMemo(() => {
+    return schedule.filter(s => s.status === 'PAID').reduce((sum, s) => sum + s.interest_paid, 0);
+  }, [schedule]);
+
+  const paidPrincipal = useMemo(() => {
+    const expPaid = expenses.filter(e => e.category === 'LOAN_PAYMENT').reduce((sum, e) => sum + e.amount, 0);
+    if (expPaid > 0) return expPaid;
+    return schedule.filter(s => s.status === 'PAID').reduce((sum, s) => sum + s.principal_paid, 0);
+  }, [expenses, schedule]);
+
+  const expInterest = useMemo(() => {
+    return expenses.filter(e => e.category === 'LOAN_INTEREST').reduce((sum, e) => sum + e.amount, 0);
+  }, [expenses]);
+
+  const totalInterest = expInterest > 0 ? expInterest : paidInterest;
+
+  // 7. Total Cost (Investment 157.71M + Upgrade 23.87M + Running 12.99M + Interest 6.94M = 201.504.188 ₫)
+  const totalCost = investment + totalUpgradeCost + totalRunningCost + totalInterest;
+
+  // 8. Cash Out (Total Cost 201.5M + Paid Principal 25.25M = 226.757.836 ₫)
+  const cashOut = totalCost + paidPrincipal;
+
+  // 9. Total Value (Giá xe 397M + Phí lăn bánh 55.71M = 452.710.700 ₫)
+  const totalValue = purchasePrice + initialFeesTotal;
+
+  // 10. Remaining (Dư nợ vay còn lại gồm cả nợ gốc và lãi chưa đóng = 318.725.399 ₫)
+  const remainingLoan = loan ? (schedule.filter(s => s.status !== 'PAID').reduce((sum, s) => sum + s.total_payment, 0) || loan.current_balance) : 0;
+
+  // 11. Ownership Cost (Total Cost 201.5M + Remaining Loan 318.7M = 513.473.657 ₫)
+  const ownershipCost = totalCost + remainingLoan;
 
   const toggleSchedulePaymentRow = async (pRow: any) => {
     if (!loan) return;
@@ -217,15 +253,6 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       alert(`Lỗi khi cập nhật thanh toán: ${err?.message ?? 'Lỗi'}`);
     }
   };
-
-  const downPayment = loan ? loan.down_payment : investment;
-  const paidPrincipal = loan ? (loan.principal - loan.current_balance) : 0;
-  const remainingLoan = loan ? loan.current_balance : 0;
-
-  const totalCost = totalInitialRollout + totalUpgradeCost + totalRunningCost + projectedTotalInterest;
-  const cashOut = downPayment + paidPrincipal + paidInterest + initialFeesTotal + totalUpgradeCost + totalRunningCost;
-  const currentMarketValue = asset.current_market_value || asset.current_value || investment;
-  const ownershipCost = Math.max(0, cashOut - currentMarketValue);
 
   // Auto calculate principal from loan ratio %
   const applyLoanRatio = (ratio: number) => {
@@ -378,13 +405,13 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     {
       id: 'investment',
       title: 'Investment',
-      sub: 'Mua xe & Lăn bánh ban đầu',
-      value: `${fmt(totalInitialRollout)} ₫`,
+      sub: 'Vốn tự có ban đầu',
+      value: `${fmt(investment)} ₫`,
       color: '#3B82F6',
       bg: 'rgba(59,130,246,0.12)',
       border: 'rgba(59,130,246,0.3)',
       icon: Landmark,
-      detailText: initialFeesTotal > 0 ? `Giá xe ${fmt(investment)}₫ + Phí lăn bánh ${fmt(initialFeesTotal)}₫` : 'Giá mua xe & Các chi phí lăn bánh bắt buộc',
+      detailText: `Trả trước ${fmt(downPayment)}₫ + Phí lăn bánh ${fmt(initialFeesTotal)}₫`,
     },
     {
       id: 'upgrade',
@@ -428,7 +455,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       bg: 'rgba(14,165,233,0.12)',
       border: 'rgba(14,165,233,0.3)',
       icon: PieChart,
-      detailText: 'Lăn bánh ban đầu + Nâng cấp + Vận hành + Lãi vay',
+      detailText: 'Vốn tự có + Nâng cấp + Vận hành + Lãi vay',
     },
     {
       id: 'cashOut',
@@ -439,18 +466,18 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       bg: 'rgba(244,63,94,0.12)',
       border: 'rgba(244,63,94,0.3)',
       icon: DollarSign,
-      detailText: 'Tiền mặt đã chi ra thực tế đến thời điểm này',
+      detailText: 'Tổng chi phí + Gốc vay đã thanh toán',
     },
     {
       id: 'totalValue',
       title: 'Total Value',
-      sub: 'Giá trị xe hiện tại',
-      value: `${fmt(currentMarketValue)} ₫`,
+      sub: 'Tổng giá trị xe & lăn bánh',
+      value: `${fmt(totalValue)} ₫`,
       color: '#10B981',
       bg: 'rgba(16,185,129,0.12)',
       border: 'rgba(16,185,129,0.3)',
       icon: ShieldCheck,
-      detailText: 'Giá trị thị trường ước tính hiện tại',
+      detailText: `Giá xe ${fmt(purchasePrice)}₫ + Phí lăn bánh ${fmt(initialFeesTotal)}₫`,
     },
     {
       id: 'remaining',
@@ -466,13 +493,13 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     {
       id: 'ownership',
       title: 'Ownership Cost',
-      sub: 'Chi phí khấu hao thực',
+      sub: 'Tổng chi phí cam kết & thực tế',
       value: `${fmt(ownershipCost)} ₫`,
       color: '#8B5CF6',
       bg: 'rgba(139,92,246,0.12)',
       border: 'rgba(139,92,246,0.3)',
       icon: TrendingDown,
-      detailText: 'Thực chi ra túi trừ đi Giá trị xe còn lại',
+      detailText: 'Total Cost + Dư nợ khoản vay còn lại',
     },
   ];
 
@@ -543,7 +570,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
               <div className="flex justify-between"><span>Tổng chi phí lăn bánh ban đầu:</span><strong className="font-mono text-purple-400">{fmt(initialFeesTotal)} ₫</strong></div>
               <div className="flex justify-between border-t pt-2 mt-1" style={{ borderColor: 'var(--border-subtle)' }}>
                 <span className="font-bold text-xs uppercase" style={{ color: 'var(--text-primary)' }}>TỔNG ĐẦU TƯ BAN ĐẦU:</span>
-                <strong className="font-mono text-base text-emerald-400 font-black">{fmt(totalInitialRollout)} ₫</strong>
+                <strong className="font-mono text-base text-emerald-400 font-black">{fmt(totalValue)} ₫</strong>
               </div>
             </div>
 
@@ -727,7 +754,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
               <div className="flex justify-between"><span>Lãi suất ưu đãi ban đầu:</span><strong className="text-emerald-400 font-bold">{loan?.preferred_rate_percent || loan?.interest_rate_percent}%/năm ({loan?.preferred_months || 12} tháng đầu)</strong></div>
               <div className="flex justify-between"><span>Lãi suất thả nổi các năm sau:</span><strong className="text-amber-400 font-bold">{loan?.floating_rate_percent || loan?.interest_rate_percent}%/năm</strong></div>
               <div className="flex justify-between"><span>Tổng lãi đã trả đến nay:</span><strong className="font-mono text-pink-400">{fmt(paidInterest)} ₫</strong></div>
-              <div className="flex justify-between"><span>Dự tính tổng lãi cả kỳ hạn:</span><strong className="font-mono text-rose-400">{fmt(projectedTotalInterest)} ₫</strong></div>
+              <div className="flex justify-between"><span>Dự tính tổng lãi vay:</span><strong className="font-mono text-rose-400">{fmt(totalInterest)} ₫</strong></div>
             </div>
 
             {/* Quick Call Bank Contacts */}
