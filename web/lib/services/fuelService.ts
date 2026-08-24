@@ -93,16 +93,50 @@ export async function createFuelLog(input: FuelLogInput) {
     tank_full: input.tank_full ?? true,
     notes: input.notes ?? null,
   };
+
+  const newLogObj = {
+    id: `FL_${Date.now()}`,
+    asset_id: realId,
+    date: timestamp.slice(0, 10),
+    liters: payload.fuel_liters,
+    price_per_liter: payload.price_per_liter,
+    total_cost: payload.total_cost,
+    odometer_km: payload.odometer_km,
+    station: payload.station ?? '',
+    notes: payload.notes ?? undefined,
+  };
+
+  // Mutate in-memory mock data so UI updates immediately
+  (MOCK_FUEL_LOGS as any[]).unshift(newLogObj);
+
   try {
     const { data, error } = await supabase.from('fuel_logs').insert([payload]).select().maybeSingle();
     if (!error && data) return mapFuelRow(data);
   } catch (err) {
     console.warn('createFuelLog Supabase fallback:', err);
   }
-  return mapFuelRow({ id: `FL_${Date.now()}`, ...payload });
+  return mapFuelRow(newLogObj);
 }
 
 export async function updateFuelLog(id: string, input: Partial<FuelLogInput>) {
+  // Mutate in-memory mock data in-place so UI updates immediately
+  const existingIdx = (MOCK_FUEL_LOGS as any[]).findIndex((f: any) => f.id === id);
+  if (existingIdx >= 0) {
+    const target = (MOCK_FUEL_LOGS as any[])[existingIdx];
+    if (input.fuel_liters != null) target.liters = input.fuel_liters;
+    if (input.price_per_liter != null) target.price_per_liter = input.price_per_liter;
+    if (input.price_per_liter != null || input.fuel_liters != null) {
+      const l = input.fuel_liters ?? target.liters;
+      const p = input.price_per_liter ?? target.price_per_liter;
+      target.total_cost = Math.round(l * p);
+    }
+    if (input.odometer_km != null) target.odometer_km = input.odometer_km;
+    if (input.station != null) target.station = input.station;
+    if (input.notes != null) target.notes = input.notes;
+    if (input.timestamp != null) target.date = input.timestamp.slice(0, 10);
+    if (input.asset_id != null) target.asset_id = resolveAssetId(input.asset_id);
+  }
+
   if (isValidUuid(id)) {
     try {
       const supabase = createClient();
@@ -148,6 +182,10 @@ export async function updateFuelLog(id: string, input: Partial<FuelLogInput>) {
 }
 
 export async function deleteFuelLog(id: string) {
+  // Mutate in-memory mock data
+  const delIdx = (MOCK_FUEL_LOGS as any[]).findIndex((f: any) => f.id === id);
+  if (delIdx >= 0) (MOCK_FUEL_LOGS as any[]).splice(delIdx, 1);
+
   if (isValidUuid(id)) {
     try {
       const supabase = createClient();

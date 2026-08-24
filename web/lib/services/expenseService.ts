@@ -62,6 +62,16 @@ export async function createExpense(data: ExpenseInput) {
     odometer_km: data.odometer_km ?? null,
     description: data.description ?? null,
   };
+
+  const newExpObj = {
+    id: `EX_${Date.now()}`,
+    ...payload,
+    currency: payload.currency,
+    description: payload.description || '',
+  } as ExpenseRecord;
+
+  (MOCK_EXPENSES as any[]).unshift(newExpObj);
+
   try {
     const { data: created, error } = await supabase
       .from('expenses')
@@ -72,15 +82,22 @@ export async function createExpense(data: ExpenseInput) {
   } catch (err) {
     console.warn('createExpense Supabase fallback:', err);
   }
-  return {
-    id: `EX_${Date.now()}`,
-    ...payload,
-    currency: payload.currency,
-    description: payload.description || '',
-  } as ExpenseRecord;
+  return newExpObj;
 }
 
 export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
+  const existingIdx = (MOCK_EXPENSES as any[]).findIndex((e: any) => e.id === id);
+  if (existingIdx >= 0) {
+    const target = (MOCK_EXPENSES as any[])[existingIdx];
+    if (data.date != null) target.date = data.date;
+    if (data.category != null) target.category = data.category;
+    if (data.amount != null) target.amount = data.amount;
+    if (data.vendor != null) target.vendor = data.vendor;
+    if (data.odometer_km != null) target.odometer_km = data.odometer_km;
+    if (data.description != null) target.description = data.description;
+    if (data.asset_id != null) target.asset_id = resolveAssetId(data.asset_id);
+  }
+
   if (isValidUuid(id)) {
     try {
       const supabase = createClient();
@@ -117,6 +134,9 @@ export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
 }
 
 export async function deleteExpense(id: string) {
+  const delIdx = (MOCK_EXPENSES as any[]).findIndex((e: any) => e.id === id);
+  if (delIdx >= 0) (MOCK_EXPENSES as any[]).splice(delIdx, 1);
+
   if (isValidUuid(id)) {
     try {
       const supabase = createClient();
