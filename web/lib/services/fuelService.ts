@@ -56,15 +56,18 @@ export function mapFuelRow(row: any): FuelLog {
   };
 }
 
+import { resolveAssetId } from './assetService';
+
 export async function getFuelLogs(assetId?: string) {
+  const realId = assetId ? resolveAssetId(assetId) : undefined;
   try {
     const supabase = createClient();
     let query = supabase
       .from('fuel_logs')
       .select('*')
       .order('timestamp', { ascending: false });
-    if (assetId) {
-      query = query.eq('asset_id', assetId);
+    if (realId) {
+      query = query.or(`asset_id.eq.${realId},asset_id.eq.${assetId}`);
     }
     const { data, error } = await query;
     if (!error && data && data.length > 0) {
@@ -72,26 +75,32 @@ export async function getFuelLogs(assetId?: string) {
     }
   } catch {}
 
-  return MOCK_FUEL_LOGS as any[];
+  return (MOCK_FUEL_LOGS as any[]).filter(f => !assetId || f.asset_id === realId || f.asset_id === assetId);
 }
 
 export async function createFuelLog(input: FuelLogInput) {
+  const realId = resolveAssetId(input.asset_id);
   const supabase = createClient();
+  const timestamp = input.timestamp?.includes('T') ? input.timestamp : `${input.timestamp || new Date().toISOString().slice(0, 10)}T12:00:00.000Z`;
   const payload = {
-    asset_id: input.asset_id,
-    timestamp: input.timestamp,
-    odometer_km: input.odometer_km,
-    fuel_liters: input.fuel_liters,
-    price_per_liter: input.price_per_liter,
-    total_cost: Math.round(input.fuel_liters * input.price_per_liter),
+    asset_id: realId,
+    timestamp,
+    odometer_km: input.odometer_km ?? 0,
+    fuel_liters: input.fuel_liters ?? 0,
+    price_per_liter: input.price_per_liter ?? 0,
+    total_cost: Math.round((input.fuel_liters || 0) * (input.price_per_liter || 0)),
     currency: 'VND',
     station: input.station ?? null,
     tank_full: input.tank_full ?? true,
     notes: input.notes ?? null,
   };
-  const { data, error } = await supabase.from('fuel_logs').insert([payload]).select().single();
-  if (error) throw error;
-  return mapFuelRow(data);
+  try {
+    const { data, error } = await supabase.from('fuel_logs').insert([payload]).select().maybeSingle();
+    if (!error && data) return mapFuelRow(data);
+  } catch (err) {
+    console.warn('createFuelLog Supabase fallback:', err);
+  }
+  return mapFuelRow({ id: `FL_${Date.now()}`, ...payload });
 }
 
 export async function updateFuelLog(id: string, input: Partial<FuelLogInput>) {

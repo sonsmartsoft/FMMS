@@ -109,20 +109,32 @@ export async function getAssets() {
   return INITIAL_ASSETS;
 }
 
+export function resolveAssetId(id?: string): string {
+  if (!id) return '20260308-0001-4222-8888-19b213872026';
+  if (id === 'CAR01' || id === '22222222-2222-2222-2222-222222222222') return '20260308-0001-4222-8888-19b213872026';
+  if (id === 'BIKE01') return '20170801-0002-4111-8888-88c121063016';
+  if (id === 'BIKE02') return '20210405-0003-4333-8888-88f160436021';
+  if (id === 'BIKE03') return '20240310-0004-4444-8888-000000260555';
+  if (id === 'BIKE04') return '20240310-0005-4555-8888-000000200555';
+  if (id === 'CAR02') return '20300308-0006-4666-8888-00000ca20300';
+  return id;
+}
+
 export async function getAsset(id: string) {
+  const realId = resolveAssetId(id);
   try {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('assets')
       .select('*, asset_capabilities(*)')
-      .eq('id', id)
+      .or(`id.eq.${realId},id.eq.${id}`)
       .maybeSingle();
     if (!error && data) {
       return mapAssetRow(data, data.asset_capabilities);
     }
   } catch {}
   const found = INITIAL_ASSETS.find(
-    a => a.id === id ||
+    a => a.id === realId || a.id === id ||
     ((id === 'CAR01' || id === '22222222-2222-2222-2222-222222222222') && a.license_plate === '19B-213.87') ||
     (id === 'BIKE01' && a.license_plate === '88C1-210.63') ||
     (id === 'BIKE02' && a.license_plate === '88L1-604.36') ||

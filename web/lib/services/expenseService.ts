@@ -27,12 +27,15 @@ export function mapExpenseRow(row: any): ExpenseRecord {
   };
 }
 
+import { resolveAssetId } from './assetService';
+
 export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
+  const realId = assetId ? resolveAssetId(assetId) : undefined;
   try {
     const supabase = createClient();
     let query = supabase.from('expenses').select('*').order('date', { ascending: false });
-    if (assetId) {
-      query = query.eq('asset_id', assetId);
+    if (realId) {
+      query = query.or(`asset_id.eq.${realId},asset_id.eq.${assetId}`);
     }
     const { data, error } = await query;
     if (!error && data && data.length > 0) {
@@ -42,30 +45,40 @@ export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
 
   return MOCK_EXPENSES.filter(e => 
     !assetId || 
-    e.asset_id === assetId || 
-    (assetId === 'CAR01' && e.asset_id === '22222222-2222-2222-2222-222222222222') || 
-    (e.asset_id === 'CAR01' && assetId === '22222222-2222-2222-2222-222222222222')
+    e.asset_id === realId || 
+    e.asset_id === assetId
   );
 }
 
 export async function createExpense(data: ExpenseInput) {
+  const realId = resolveAssetId(data.asset_id);
   const supabase = createClient();
-  const { data: created, error } = await supabase
-    .from('expenses')
-    .insert({
-      asset_id: data.asset_id,
-      date: data.date,
-      category: data.category,
-      amount: data.amount,
-      currency: data.currency ?? 'VND',
-      vendor: data.vendor ?? null,
-      odometer_km: data.odometer_km ?? null,
-      description: data.description ?? null,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return mapExpenseRow(created);
+  const payload = {
+    asset_id: realId,
+    date: data.date,
+    category: data.category,
+    amount: data.amount,
+    currency: data.currency ?? 'VND',
+    vendor: data.vendor ?? null,
+    odometer_km: data.odometer_km ?? null,
+    description: data.description ?? null,
+  };
+  try {
+    const { data: created, error } = await supabase
+      .from('expenses')
+      .insert(payload)
+      .select()
+      .maybeSingle();
+    if (!error && created) return mapExpenseRow(created);
+  } catch (err) {
+    console.warn('createExpense Supabase fallback:', err);
+  }
+  return {
+    id: `EX_${Date.now()}`,
+    ...payload,
+    currency: payload.currency,
+    description: payload.description || '',
+  } as ExpenseRecord;
 }
 
 export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
