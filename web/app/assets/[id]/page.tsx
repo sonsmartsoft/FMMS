@@ -9,10 +9,10 @@ import { getMaintenanceRecords, createMaintenanceRecord, updateMaintenanceRecord
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import { getTrips, createTrip } from '@/lib/services/tripService';
 import { getParts, createPart, updatePart, deletePart } from '@/lib/services/partService';
-import { getInsurancePolicies, createInsurancePolicy, InsuranceRow } from '@/lib/services/insuranceService';
+import { getInsurancePolicies, createInsurancePolicy, updateInsurancePolicy, deleteInsurancePolicy, InsuranceRow } from '@/lib/services/insuranceService';
 import { getLoadByAsset } from '@/lib/services/loanService';
 import { createOdometerAdjustment, getOdometerLogs, createOdometerLog, updateOdometerLog, deleteOdometerLog, OdometerLogRecord } from '@/lib/services/odometerService';
-import { createWarrantyClaim } from '@/lib/services/warrantyService';
+import { getWarranties, createWarranty, updateWarranty, deleteWarranty, createWarrantyClaim } from '@/lib/services/warrantyService';
 import { createClient } from '@/lib/supabase/client';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
 import {
@@ -136,6 +136,18 @@ export default function AssetDetailPage() {
   const [odometerLogs, setOdometerLogs] = useState<OdometerLogRecord[]>([]);
   const [editingOdoLog, setEditingOdoLog] = useState<OdometerLogRecord | null>(null);
   const [odoLogForm, setOdoLogForm] = useState({ date: '', odometer_km: '', note: '' });
+  const [editingInsurance, setEditingInsurance] = useState<any | null>(null);
+  const [warranties, setWarranties] = useState<any[]>([]);
+  const [editingWarranty, setEditingWarranty] = useState<any | null>(null);
+  const [warrantyForm, setWarrantyForm] = useState({
+    item_type: 'VEHICLE',
+    item_name: 'Bảo hành chính hãng',
+    provider: 'Thaco / Mazda',
+    policy_number: '',
+    start_date: '',
+    expiry_date: '',
+    coverage_details: '',
+  });
 
   /* ── Live OBD telemetry (realtime from Android app) ── */
   const [live, setLive] = useState<{ speed: number | null; rpm: number | null; coolant: number | null; voltage: number | null }>({
@@ -169,7 +181,7 @@ export default function AssetDetailPage() {
           brand_hotline: a.brand_hotline || '',
         });
 
-        const [f, m, e, t, p, i, l, odo] = await Promise.all([
+        const [f, m, e, t, p, i, l, odo, w] = await Promise.all([
           getFuelLogs(assetId),
           getMaintenanceRecords(assetId),
           getExpenses(assetId),
@@ -178,6 +190,7 @@ export default function AssetDetailPage() {
           getInsurancePolicies(assetId),
           getLoadByAsset(assetId),
           getOdometerLogs(assetId),
+          getWarranties(assetId),
         ]);
         if (cancelled) return;
         setFuelLogs(f);
@@ -186,6 +199,7 @@ export default function AssetDetailPage() {
         setTrips(t);
         setParts(p);
         setOdometerLogs(odo);
+        if (w?.data) setWarranties(w.data);
         setInsurances(
           i.map((r: InsuranceRow) => ({
             id: r.id,
@@ -773,39 +787,158 @@ export default function AssetDetailPage() {
     setEditingPartItem(null);
   };
 
-  const saveInsurance = async () => {
+  /* ── Insurance Edit & Delete ── */
+  const handleOpenEditInsurance = (ins: any) => {
+    setEditingInsurance(ins);
+    setInsForm({
+      type: ins.type || 'Bảo hiểm vật chất',
+      company: ins.company || '',
+      policy_number: ins.policy_number || '',
+      start_date: ins.start_date || '',
+      expiry_date: ins.expiry_date || '',
+      annual_fee: String(ins.annual_fee || ''),
+      coverage_amount: String(ins.coverage_amount || ''),
+      agent_name: ins.agent_name || '',
+      agent_phone: ins.agent_phone || '',
+      provider_hotline: ins.provider_hotline || '',
+      notes: '',
+    });
+    setOpenModal('insurance');
+  };
+
+  const handleDeleteInsurance = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa hợp đồng bảo hiểm này?')) return;
     try {
-      const created = await createInsurancePolicy({
-        asset_id: asset.id,
-        provider: insForm.company,
-        policy_number: insForm.policy_number,
-        policy_type: insForm.type.includes('TNDS') ? 'MANDATORY' : insForm.type.includes('vật chất') ? 'COMPREHENSIVE' : 'OTHER',
-        start_date: insForm.start_date,
-        expiry_date: insForm.expiry_date,
-        cost: parseFloat(insForm.annual_fee) || 0,
-        coverage_amount: parseFloat(insForm.coverage_amount) || 0,
-        agent_name: insForm.agent_name || undefined,
-        agent_phone: insForm.agent_phone || undefined,
-        provider_hotline: insForm.provider_hotline || undefined,
-      });
-      setInsurances([{
-        id: created.id,
-        type: created.policy_type === 'COMPREHENSIVE' ? 'Bảo hiểm vật chất' : created.policy_type === 'MANDATORY' ? 'Bảo hiểm TNDS bắt buộc' : 'Khác',
-        company: created.provider,
-        policy_number: created.policy_number,
-        start_date: created.start_date,
-        expiry_date: created.expiry_date,
-        annual_fee: created.cost,
-        coverage_amount: created.coverage_amount ?? 0,
-        agent_name: created.agent_name,
-        agent_phone: created.agent_phone,
-        provider_hotline: created.provider_hotline,
-        status: 'ACTIVE',
-      }, ...insurances]);
+      await deleteInsurancePolicy(id);
+      setInsurances(prev => prev.filter(i => i.id !== id));
+    } catch (err: any) {
+      alert(`Lỗi khi xóa: ${err?.message ?? 'Không xóa được'}`);
+    }
+  };
+
+  /* ── Warranty Edit & Delete ── */
+  const handleOpenEditWarranty = (w: any) => {
+    setEditingWarranty(w);
+    setWarrantyForm({
+      item_type: w.item_type || 'VEHICLE',
+      item_name: w.item_name || 'Bảo hành chính hãng',
+      provider: w.provider || '',
+      policy_number: w.policy_number || '',
+      start_date: w.start_date ? w.start_date.slice(0, 10) : '',
+      expiry_date: w.expiry_date ? w.expiry_date.slice(0, 10) : '',
+      coverage_details: w.coverage_details || '',
+    });
+    setOpenModal('warranty');
+  };
+
+  const handleDeleteWarranty = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa bảo hành này?')) return;
+    try {
+      await deleteWarranty(id);
+      setWarranties(prev => prev.filter(w => w.id !== id));
+    } catch (err: any) {
+      alert(`Lỗi khi xóa: ${err?.message ?? 'Không xóa được'}`);
+    }
+  };
+
+  const saveWarranty = async () => {
+    try {
+      if (editingWarranty) {
+        const { data } = await updateWarranty(editingWarranty.id, {
+          item_type: warrantyForm.item_type as any,
+          item_name: warrantyForm.item_name,
+          provider: warrantyForm.provider,
+          policy_number: warrantyForm.policy_number || undefined,
+          start_date: warrantyForm.start_date || new Date().toISOString().slice(0, 10),
+          expiry_date: warrantyForm.expiry_date || undefined,
+          coverage_details: warrantyForm.coverage_details || undefined,
+        });
+        if (data) setWarranties(prev => prev.map(w => w.id === editingWarranty.id ? data : w));
+      } else {
+        const { data } = await createWarranty({
+          asset_id: asset.id,
+          item_type: warrantyForm.item_type as any,
+          item_name: warrantyForm.item_name,
+          provider: warrantyForm.provider,
+          policy_number: warrantyForm.policy_number || undefined,
+          start_date: warrantyForm.start_date || new Date().toISOString().slice(0, 10),
+          expiry_date: warrantyForm.expiry_date || undefined,
+          coverage_details: warrantyForm.coverage_details || undefined,
+          status: 'ACTIVE',
+        });
+        if (data) setWarranties([data, ...warranties]);
+      }
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
     setOpenModal(null);
+    setEditingWarranty(null);
+  };
+
+  const saveInsurance = async () => {
+    try {
+      if (editingInsurance) {
+        const updated = await updateInsurancePolicy(editingInsurance.id, {
+          provider: insForm.company,
+          policy_number: insForm.policy_number,
+          policy_type: insForm.type.includes('TNDS') ? 'MANDATORY' : insForm.type.includes('vật chất') ? 'COMPREHENSIVE' : 'OTHER',
+          start_date: insForm.start_date,
+          expiry_date: insForm.expiry_date,
+          cost: parseFloat(insForm.annual_fee) || 0,
+          coverage_amount: parseFloat(insForm.coverage_amount) || 0,
+          agent_name: insForm.agent_name || undefined,
+          agent_phone: insForm.agent_phone || undefined,
+          provider_hotline: insForm.provider_hotline || undefined,
+        });
+        const mapped = {
+          id: updated.id,
+          type: updated.policy_type === 'COMPREHENSIVE' ? 'Bảo hiểm vật chất' : updated.policy_type === 'MANDATORY' ? 'Bảo hiểm TNDS bắt buộc' : 'Khác',
+          company: updated.provider,
+          policy_number: updated.policy_number,
+          start_date: updated.start_date,
+          expiry_date: updated.expiry_date,
+          annual_fee: updated.cost,
+          coverage_amount: updated.coverage_amount ?? 0,
+          agent_name: updated.agent_name,
+          agent_phone: updated.agent_phone,
+          provider_hotline: updated.provider_hotline,
+          status: 'ACTIVE',
+        };
+        setInsurances(prev => prev.map(i => i.id === editingInsurance.id ? mapped : i));
+      } else {
+        const created = await createInsurancePolicy({
+          asset_id: asset.id,
+          provider: insForm.company,
+          policy_number: insForm.policy_number,
+          policy_type: insForm.type.includes('TNDS') ? 'MANDATORY' : insForm.type.includes('vật chất') ? 'COMPREHENSIVE' : 'OTHER',
+          start_date: insForm.start_date,
+          expiry_date: insForm.expiry_date,
+          cost: parseFloat(insForm.annual_fee) || 0,
+          coverage_amount: parseFloat(insForm.coverage_amount) || 0,
+          agent_name: insForm.agent_name || undefined,
+          agent_phone: insForm.agent_phone || undefined,
+          provider_hotline: insForm.provider_hotline || undefined,
+        });
+        setInsurances([{
+          id: created.id,
+          type: created.policy_type === 'COMPREHENSIVE' ? 'Bảo hiểm vật chất' : created.policy_type === 'MANDATORY' ? 'Bảo hiểm TNDS bắt buộc' : 'Khác',
+          company: created.provider,
+          policy_number: created.policy_number,
+          start_date: created.start_date,
+          expiry_date: created.expiry_date,
+          annual_fee: created.cost,
+          coverage_amount: created.coverage_amount ?? 0,
+          agent_name: created.agent_name,
+          agent_phone: created.agent_phone,
+          provider_hotline: created.provider_hotline,
+          status: 'ACTIVE',
+        }, ...insurances]);
+      }
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
+    setOpenModal(null);
+    setEditingInsurance(null);
     setInsForm({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', agent_name: '', agent_phone: '', provider_hotline: '', notes: '' });
   };
 
@@ -1722,8 +1855,8 @@ export default function AssetDetailPage() {
         {activeTab === 'insurance' && (
           <div className="space-y-5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Bảo hiểm & Giấy tờ xe</h3>
-              <button onClick={() => setOpenModal('insurance')}
+              <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Bảo hiểm &amp; Giấy tờ xe</h3>
+              <button onClick={() => { setEditingInsurance(null); setInsForm({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', agent_name: '', agent_phone: '', provider_hotline: '', notes: '' }); setOpenModal('insurance'); }}
                 className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-purple-500 text-white text-xs font-bold transition hover:opacity-90">
                 <Plus className="w-3.5 h-3.5" /><span>Thêm bảo hiểm</span>
               </button>
@@ -1738,9 +1871,17 @@ export default function AssetDetailPage() {
                   <div key={ins.id} className="p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                     <div className="flex items-center justify-between mb-2">
                       <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{ins.type}</p>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: `${sc}22`, color: sc }}>
-                        {daysLeft < 0 ? 'Hết hạn' : daysLeft <= 30 ? `Sắp hết (${daysLeft}d)` : 'CÒN HẠN'}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: `${sc}22`, color: sc }}>
+                          {daysLeft < 0 ? 'Hết hạn' : daysLeft <= 30 ? `Sắp hết (${daysLeft}d)` : 'CÒN HẠN'}
+                        </span>
+                        <button onClick={() => handleOpenEditInsurance(ins)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDeleteInsurance(ins.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                     {([
                       ['Công ty', ins.company],
@@ -1767,7 +1908,32 @@ export default function AssetDetailPage() {
 
             {/* Registration & Specs */}
             <div className="p-4 rounded-xl space-y-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-              <p className="font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Đăng kiểm & Giấy tờ xe</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="font-bold" style={{ color: 'var(--text-primary)' }}>Đăng kiểm &amp; Giấy tờ xe</p>
+                <button
+                  onClick={() => {
+                    setEditForm({
+                      name: asset.name, brand: asset.brand, model: asset.model, year: String(asset.year || ''),
+                      color: asset.color || '', license_plate: asset.license_plate || '',
+                      vin: asset.vin || '', engine: asset.engine || '', fuel_type: asset.fuel_type || 'PETROL',
+                      tank_capacity_liters: String(asset.tank_capacity_liters ?? ''),
+                      battery_capacity_kwh: String(asset.battery_capacity_kwh ?? ''),
+                      purchase_price: String(asset.purchase_price || ''), current_value: String(asset.current_value || ''),
+                      purchase_date: asset.purchase_date || '', image_url: asset.image_url || '',
+                      current_odometer_km: String(asset.current_odometer_km || 0),
+                      status: asset.status || 'ACTIVE', description: asset.description || '',
+                      sales_rep_name: asset.sales_rep_name || '',
+                      sales_rep_phone: asset.sales_rep_phone || '',
+                      brand_hotline: asset.brand_hotline || '',
+                    });
+                    setOpenModal('edit');
+                  }}
+                  className="text-xs font-semibold text-cyan-400 hover:underline flex items-center space-x-1"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Cập nhật giấy tờ &amp; Đăng kiểm</span>
+                </button>
+              </div>
               {([
                 ['Biển số xe', asset.license_plate || 'Chưa có'],
                 ['Năm sản xuất', asset.year?.toString() || '—'],
@@ -1787,13 +1953,13 @@ export default function AssetDetailPage() {
         {activeTab === 'warranty' && (
           <div className="space-y-5">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Sổ Bảo Hành & Sổ Claim Phụ Tùng</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Sổ Bảo Hành &amp; Sổ Claim Phụ Tùng</h3>
               <div className="flex items-center space-x-2">
                 <button onClick={() => setOpenModal('claim')}
                   className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-purple-500 text-white text-xs font-bold transition hover:opacity-90">
                   <Plus className="w-3.5 h-3.5" /><span>Tạo Yêu cầu Claim</span>
                 </button>
-                <button onClick={() => setOpenModal('warranty')}
+                <button onClick={() => { setEditingWarranty(null); setWarrantyForm({ item_type: 'VEHICLE', item_name: 'Bảo hành chính hãng', provider: `${asset.brand} Việt Nam`, policy_number: '', start_date: asset.purchase_date || '', expiry_date: '', coverage_details: '3 năm / 100,000 km' }); setOpenModal('warranty'); }}
                   className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-bold transition hover:opacity-90">
                   <Plus className="w-3.5 h-3.5" /><span>Thêm bảo hành</span>
                 </button>
@@ -1804,7 +1970,12 @@ export default function AssetDetailPage() {
               <div className="p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="font-bold" style={{ color: 'var(--text-primary)' }}>Bảo hành Hãng xe / Phương tiện</p>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)' }}>CÒN HẠN</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)' }}>CÒN HẠN</span>
+                    <button onClick={() => { setEditForm({ name: asset.name, brand: asset.brand, model: asset.model, year: String(asset.year || ''), color: asset.color || '', license_plate: asset.license_plate || '', vin: asset.vin || '', engine: asset.engine || '', fuel_type: asset.fuel_type || 'PETROL', tank_capacity_liters: String(asset.tank_capacity_liters ?? ''), battery_capacity_kwh: String(asset.battery_capacity_kwh ?? ''), purchase_price: String(asset.purchase_price || ''), current_value: String(asset.current_value || ''), purchase_date: asset.purchase_date || '', image_url: asset.image_url || '', current_odometer_km: String(asset.current_odometer_km || 0), status: asset.status || 'ACTIVE', description: asset.description || '', sales_rep_name: asset.sales_rep_name || '', sales_rep_phone: asset.sales_rep_phone || '', brand_hotline: asset.brand_hotline || '' }); setOpenModal('edit'); }} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa thông số xe">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 {[
                   ['Hạng mục', `${asset.brand} ${asset.model}`],
@@ -1820,20 +1991,54 @@ export default function AssetDetailPage() {
                 ))}
               </div>
 
+              {warranties.map((w) => (
+                <div key={w.id} className="p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{w.item_name}</p>
+                    <div className="flex items-center space-x-2">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)' }}>{w.status || 'ACTIVE'}</span>
+                      <button onClick={() => handleOpenEditWarranty(w)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDeleteWarranty(w.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  {[
+                    ['Nhà cung cấp', w.provider],
+                    ['Số hợp đồng / Phiếu', w.policy_number || '—'],
+                    ['Ngày bắt đầu', w.start_date ? w.start_date.slice(0, 10) : '—'],
+                    ['Ngày hết hạn', w.expiry_date ? w.expiry_date.slice(0, 10) : 'Theo hãng'],
+                    ['Chi tiết', w.coverage_details || 'Bảo hành chính hãng'],
+                  ].map(([k, v], i) => (
+                    <div key={i} className="flex justify-between">
+                      <span style={{ color: 'var(--text-muted)' }}>{k}</span>
+                      <span className="font-medium" style={{ color: 'var(--text-secondary)' }}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
               <div className="p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="font-bold" style={{ color: 'var(--text-primary)' }}>Bảo hành Phụ tùng / Nâng cấp</p>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)' }}>{parts.length} phụ tùng</span>
                 </div>
-                {parts.slice(0, 3).map((p, i) => (
-                  <div key={i} className="flex justify-between items-center py-1" style={{ borderBottom: i < 2 ? '1px solid var(--border-subtle)' : 'none' }}>
+                {parts.slice(0, 5).map((p, i) => (
+                  <div key={i} className="flex justify-between items-center py-1" style={{ borderBottom: i < parts.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}>
                     <div>
                       <p className="font-semibold" style={{ color: 'var(--text-secondary)' }}>{p.name}</p>
                       <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{p.brand || 'Chính hãng'}</p>
                     </div>
-                    <span className="text-[10px] font-bold" style={{ color: 'var(--status-green)' }}>
-                      {p.warranty_months ? `${p.warranty_months} tháng` : 'Theo hãng'}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[10px] font-bold" style={{ color: 'var(--status-green)' }}>
+                        {p.warranty_months ? `${p.warranty_months} tháng` : 'Theo hãng'}
+                      </span>
+                      <button onClick={() => handleOpenEditPart(p)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa phụ tùng">
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2223,7 +2428,7 @@ export default function AssetDetailPage() {
 
       {/* Insurance Modal */}
       {openModal === 'insurance' && (
-        <Modal title="Thêm thông tin bảo hiểm" onClose={() => setOpenModal(null)}>
+        <Modal title={editingInsurance ? 'Chỉnh sửa hợp đồng bảo hiểm' : 'Thêm thông tin bảo hiểm'} onClose={() => { setOpenModal(null); setEditingInsurance(null); }}>
           <Field label="Loại bảo hiểm">
             <select className="theme-select" value={insForm.type} onChange={e => setInsForm(p => ({ ...p, type: e.target.value }))}>
               {['Bảo hiểm vật chất', 'Bảo hiểm TNDS bắt buộc', 'Bảo hiểm thân xe', 'Bảo hiểm xưởng sáng', 'Khác'].map(o => <option key={o}>{o}</option>)}
@@ -2245,8 +2450,36 @@ export default function AssetDetailPage() {
             <Field label="Hotline bồi thường / cứu hộ BH"><input type="tel" className="theme-input font-mono" placeholder="VD: 1900 55 88 99" value={insForm.provider_hotline} onChange={e => setInsForm(p => ({ ...p, provider_hotline: e.target.value }))} /></Field>
           </div>
           <div className="flex space-x-2 pt-2">
-            <button onClick={saveInsurance} className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white font-bold text-xs hover:opacity-90 transition">Lưu</button>
-            <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+            <button onClick={saveInsurance} className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white font-bold text-xs hover:opacity-90 transition">
+              {editingInsurance ? 'Cập nhật bảo hiểm' : 'Lưu bảo hiểm'}
+            </button>
+            <button onClick={() => { setOpenModal(null); setEditingInsurance(null); }} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Warranty Modal */}
+      {openModal === 'warranty' && (
+        <Modal title={editingWarranty ? 'Chỉnh sửa thông tin bảo hành' : 'Thêm bảo hành mới'} onClose={() => { setOpenModal(null); setEditingWarranty(null); }}>
+          <Field label="Loại bảo hành">
+            <select className="theme-select" value={warrantyForm.item_type} onChange={e => setWarrantyForm(p => ({ ...p, item_type: e.target.value }))}>
+              <option value="VEHICLE">Bảo hành Phương tiện / Hãng xe</option>
+              <option value="PART">Bảo hành Phụ tùng / Nâng cấp</option>
+              <option value="UPGRADE">Bảo hành Thiết bị / Đồ chơi</option>
+              <option value="OTHER">Khác</option>
+            </select>
+          </Field>
+          <Field label="Hạng mục bảo hành *"><input type="text" className="theme-input" placeholder="VD: Màn hình Zestech, Bảo hành xe Mazda 2..." value={warrantyForm.item_name} onChange={e => setWarrantyForm(p => ({ ...p, item_name: e.target.value }))} /></Field>
+          <Field label="Đơn vị / Đại lý bảo hành *"><input type="text" className="theme-input" placeholder="VD: Thaco Mazda Hà Đông, Zestech..." value={warrantyForm.provider} onChange={e => setWarrantyForm(p => ({ ...p, provider: e.target.value }))} /></Field>
+          <Field label="Số thẻ / Số phiếu bảo hành"><input type="text" className="theme-input" placeholder="VD: BH-2026-999" value={warrantyForm.policy_number} onChange={e => setWarrantyForm(p => ({ ...p, policy_number: e.target.value }))} /></Field>
+          <Field label="Ngày bắt đầu"><input type="date" className="theme-input" value={warrantyForm.start_date} onChange={e => setWarrantyForm(p => ({ ...p, start_date: e.target.value }))} /></Field>
+          <Field label="Ngày hết hạn"><input type="date" className="theme-input" value={warrantyForm.expiry_date} onChange={e => setWarrantyForm(p => ({ ...p, expiry_date: e.target.value }))} /></Field>
+          <Field label="Chi tiết điều khoản / Phạm vi"><input type="text" className="theme-input" placeholder="VD: Bảo hành 24 tháng chính hãng..." value={warrantyForm.coverage_details} onChange={e => setWarrantyForm(p => ({ ...p, coverage_details: e.target.value }))} /></Field>
+          <div className="flex space-x-2 pt-2">
+            <button onClick={saveWarranty} className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white font-bold text-xs hover:opacity-90 transition shadow-md">
+              {editingWarranty ? 'Cập nhật bảo hành' : 'Lưu bảo hành'}
+            </button>
+            <button onClick={() => { setOpenModal(null); setEditingWarranty(null); }} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
           </div>
         </Modal>
       )}
