@@ -256,9 +256,9 @@ export const MOCK_EXPENSES: ExpenseRecord[] = [
   { id: 'EX2026041901', asset_id: REAL_ASSET_IDS.MAZDA2_2026, date: '2026-04-19', category: 'UPGRADE', amount: 100000, currency: 'VND', odometer_km: 230, description: 'Sạc trên xe' },
   { id: 'EX2026041902', asset_id: REAL_ASSET_IDS.MAZDA2_2026, date: '2026-04-19', category: 'UPGRADE', amount: 52000, currency: 'VND', odometer_km: 230, description: 'Thùng rác ô tô' },
   { id: 'EX2026041903', asset_id: REAL_ASSET_IDS.MAZDA2_2026, date: '2026-04-19', category: 'UPGRADE', amount: 864000, currency: 'VND', odometer_km: 230, description: 'Thảm lót sàn' },
-  { id: 'EX2026041904', asset_id: REAL_ASSET_IDS.MAZDA2_2026, date: '2026-04-19', category: 'UPGRADE', amount: 2200000, currency: 'VND', odometer_km: 235, description: 'Máy rửa xe gia đình' },
+  { id: 'EX2026041904', asset_id: REAL_ASSET_IDS.MAZDA2_2026, date: '2026-04-19', category: 'CAR_WASH', amount: 2200000, currency: 'VND', odometer_km: 235, description: 'Máy rửa xe gia đình' },
   { id: 'EX2026042101', asset_id: REAL_ASSET_IDS.MAZDA2_2026, date: '2026-04-21', category: 'UPGRADE', amount: 389000, currency: 'VND', vendor: 'Toyota', odometer_km: 235, description: 'Bơm lốp Toyota' },
-  { id: 'EX2026072604', asset_id: REAL_ASSET_IDS.MAZDA2_2026, date: '2026-07-26', category: 'UPGRADE', amount: 250000, currency: 'VND', odometer_km: 2163, description: 'Khử mùi trong xe vị cafe' },
+  { id: 'EX2026072604', asset_id: REAL_ASSET_IDS.MAZDA2_2026, date: '2026-07-26', category: 'CAR_WASH', amount: 250000, currency: 'VND', odometer_km: 2163, description: 'Khử mùi trong xe vị cafe' },
 
   // CAR01 - Running & Fuel
   { id: 'EX2026040903', asset_id: REAL_ASSET_IDS.MAZDA2_2026, date: '2026-04-09', category: 'FUEL', amount: 1000000, currency: 'VND', odometer_km: 12, description: 'Đổ xăng lần đầu 37,7L' },
