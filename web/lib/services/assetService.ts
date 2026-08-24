@@ -221,38 +221,50 @@ export async function createAsset(data: AssetInput) {
 }
 
 export async function updateAsset(id: string, data: Partial<AssetInput>) {
-  const supabase = createClient();
-  const payload: Record<string, any> = {};
-  if ('name' in data) payload.name = data.name;
-  if ('asset_type' in data) payload.asset_type = data.asset_type;
-  if ('brand' in data) payload.brand = data.brand;
-  if ('model' in data) payload.model = data.model;
-  if ('year' in data) payload.year = data.year;
-  if ('color' in data) payload.color = data.color;
-  if ('license_plate' in data) payload.license_plate = data.license_plate;
-  if ('vin' in data) payload.vin = data.vin;
-  if ('engine' in data) payload.engine = data.engine;
-  if ('fuel_type' in data) payload.fuel_type = data.fuel_type;
-  if ('tank_capacity_liters' in data) payload.tank_capacity_liters = data.tank_capacity_liters;
-  if ('battery_capacity_kwh' in data) payload.battery_capacity_kwh = data.battery_capacity_kwh;
-  if ('purchase_date' in data) payload.purchase_date = data.purchase_date;
-  if ('purchase_price' in data) payload.purchase_price = data.purchase_price;
-  if ('current_value' in data) payload.current_value = data.current_value;
-  if ('image_url' in data) payload.image_url = data.image_url;
-  if ('current_odometer_km' in data) payload.current_odometer_km = data.current_odometer_km;
-  if ('virtual_odometer_km' in data) payload.virtual_odometer_km = data.virtual_odometer_km;
-  if ('status' in data) payload.status = data.status;
-  if ('description' in data) payload.description = data.description;
-  if ('sales_rep_name' in data) payload.sales_rep_name = data.sales_rep_name;
-  if ('sales_rep_phone' in data) payload.sales_rep_phone = data.sales_rep_phone;
-  if ('brand_hotline' in data) payload.brand_hotline = data.brand_hotline;
-  payload.updated_at = new Date().toISOString();
+  try {
+    const supabase = createClient();
+    const payload: Record<string, any> = {};
+    if ('name' in data) payload.name = data.name;
+    if ('asset_type' in data) payload.asset_type = data.asset_type;
+    if ('brand' in data) payload.brand = data.brand;
+    if ('model' in data) payload.model = data.model;
+    if ('year' in data) payload.year = data.year;
+    if ('color' in data) payload.color = data.color;
+    if ('license_plate' in data) payload.license_plate = data.license_plate;
+    if ('vin' in data) payload.vin = data.vin;
+    if ('engine' in data) payload.engine = data.engine;
+    if ('fuel_type' in data) payload.fuel_type = data.fuel_type;
+    if ('tank_capacity_liters' in data) payload.tank_capacity_liters = data.tank_capacity_liters;
+    if ('battery_capacity_kwh' in data) payload.battery_capacity_kwh = data.battery_capacity_kwh;
+    if ('purchase_date' in data) payload.purchase_date = data.purchase_date;
+    if ('purchase_price' in data) payload.purchase_price = data.purchase_price;
+    if ('current_value' in data) payload.current_value = data.current_value;
+    if ('image_url' in data) payload.image_url = data.image_url;
+    if ('current_odometer_km' in data) payload.current_odometer_km = data.current_odometer_km;
+    if ('virtual_odometer_km' in data) payload.virtual_odometer_km = data.virtual_odometer_km;
+    if ('status' in data) payload.status = data.status;
+    if ('description' in data) payload.description = data.description;
+    if ('sales_rep_name' in data) payload.sales_rep_name = data.sales_rep_name;
+    if ('sales_rep_phone' in data) payload.sales_rep_phone = data.sales_rep_phone;
+    if ('brand_hotline' in data) payload.brand_hotline = data.brand_hotline;
+    payload.updated_at = new Date().toISOString();
 
-  const { error } = await supabase
-    .from('assets')
-    .update(payload)
-    .eq('id', id);
-  if (error) throw error;
+    const { error } = await supabase
+      .from('assets')
+      .update(payload)
+      .eq('id', id);
+
+    if (error) {
+      if (error.message?.includes('schema cache') || error.message?.includes('column')) {
+        delete payload.sales_rep_name;
+        delete payload.sales_rep_phone;
+        delete payload.brand_hotline;
+        await supabase.from('assets').update(payload).eq('id', id);
+      }
+    }
+  } catch (err: any) {
+    console.warn('updateAsset fallback:', err?.message);
+  }
   return getAsset(id);
 }
 

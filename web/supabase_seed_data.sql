@@ -14,6 +14,15 @@ ALTER TABLE IF EXISTS public.parts DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.assets ALTER COLUMN owner_id DROP NOT NULL;
 ALTER TABLE IF EXISTS public.expenses DROP CONSTRAINT IF EXISTS expenses_category_check;
 
+-- Add contact info columns if missing
+ALTER TABLE IF EXISTS public.assets ADD COLUMN IF NOT EXISTS sales_rep_name TEXT;
+ALTER TABLE IF EXISTS public.assets ADD COLUMN IF NOT EXISTS sales_rep_phone TEXT;
+ALTER TABLE IF EXISTS public.assets ADD COLUMN IF NOT EXISTS brand_hotline TEXT;
+
+ALTER TABLE IF EXISTS public.loans ADD COLUMN IF NOT EXISTS bank_contact_name TEXT;
+ALTER TABLE IF EXISTS public.loans ADD COLUMN IF NOT EXISTS bank_contact_phone TEXT;
+ALTER TABLE IF EXISTS public.loans ADD COLUMN IF NOT EXISTS bank_hotline TEXT;
+
 DO $$
 DECLARE
   v_mazda_id UUID;
