@@ -15,11 +15,28 @@ export interface ExpenseInput {
 }
 
 export function mapExpenseRow(row: any): ExpenseRecord {
+  let category = row.category;
+  const desc = (row.description || '').toLowerCase();
+  
+  if (desc.includes('máy rửa xe') || desc.includes('khử mùi')) {
+    category = 'CAR_WASH';
+  } else if (desc.includes('thanh toán gốc') || desc.includes('trả gốc')) {
+    category = 'LOAN_PAYMENT';
+  } else if (desc.includes('thanh toán lãi') || desc.includes('trả lãi')) {
+    category = 'LOAN_INTEREST';
+  } else if (desc.includes('trước bạ') || desc.includes('đăng kiểm') || desc.includes('biển số')) {
+    category = 'REGISTRATION';
+  } else if (desc.includes('bảo hiểm thân vỏ')) {
+    category = 'INSURANCE';
+  } else if (desc.includes('phí dịch vụ ngân hàng') || desc.includes('bảo hiểm khoản vay')) {
+    category = 'INITIAL';
+  }
+
   return {
     id: row.id,
     asset_id: row.asset_id,
     date: row.date,
-    category: row.category,
+    category,
     amount: Number(row.amount) || 0,
     currency: row.currency || 'VND',
     vendor: row.vendor ?? undefined,
