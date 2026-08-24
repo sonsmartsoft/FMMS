@@ -574,88 +574,95 @@ export default function FinancePage() {
       {/* ─── Add / Edit Loan Modal ─── */}
       {openAddLoanModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md overflow-hidden" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddLoanModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-lg my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+          <div className="glass-panel rounded-2xl w-full max-w-3xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
-              <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
-                {editingLoan ? '✏️ Chỉnh sửa thông tin khoản vay' : '🏦 Thêm khoản vay mua xe mới'}
-              </h3>
-              <button onClick={() => setOpenAddLoanModal(false)} className="p-1 rounded-lg hover:bg-slate-500/10" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
+              <div>
+                <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <span>{editingLoan ? '✏️ Chỉnh sửa thông tin khoản vay' : '🏦 Thêm khoản vay mua xe mới'}</span>
+                </h3>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Nhập thông tin hợp đồng tín dụng, lãi suất và lịch trả nợ định kỳ</p>
+              </div>
+              <button onClick={() => setOpenAddLoanModal(false)} className="p-1.5 rounded-xl hover:bg-white/10 transition" style={{ color: 'var(--text-muted)' }}>
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Phương tiện vay *</label>
-                <select className="theme-select" value={loanForm.asset_id} onChange={e => setLoanForm(p => ({ ...p, asset_id: e.target.value }))}>
-                  {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.brand})</option>)}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1 col-span-2 sm:col-span-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tổ chức tín dụng / Ngân hàng *</label>
-                  <input type="text" className="theme-input" placeholder="VD: Techcombank, VPBank..." value={loanForm.lender} onChange={e => setLoanForm(p => ({ ...p, lender: e.target.value }))} />
-                </div>
-                <div className="space-y-1 col-span-2 sm:col-span-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ghi chú / Tên hợp đồng</label>
-                  <input type="text" className="theme-input" placeholder="VD: Vay mua xe trả góp 4 năm" value={loanForm.notes} onChange={e => setLoanForm(p => ({ ...p, notes: e.target.value }))} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Số tiền gốc vay (₫) *</label>
-                  <input type="number" className="theme-input font-mono font-bold" placeholder="400000000" value={loanForm.principal} onChange={e => setLoanForm(p => ({ ...p, principal: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Số tiền trả trước (₫)</label>
-                  <input type="number" className="theme-input font-mono" placeholder="100000000" value={loanForm.down_payment} onChange={e => setLoanForm(p => ({ ...p, down_payment: e.target.value }))} />
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+              {/* Section 1: Thông tin chung */}
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">1. Thông tin Hợp đồng &amp; Phương tiện</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Phương tiện vay *</label>
+                    <select className="theme-select font-semibold" value={loanForm.asset_id} onChange={e => setLoanForm(p => ({ ...p, asset_id: e.target.value }))}>
+                      {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.brand})</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ngân hàng / Đơn vị cho vay *</label>
+                    <input type="text" className="theme-input" placeholder="VD: Techcombank, VPBank..." value={loanForm.lender} onChange={e => setLoanForm(p => ({ ...p, lender: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ghi chú / Tên hợp đồng</label>
+                    <input type="text" className="theme-input" placeholder="VD: Vay mua xe trả góp 4 năm" value={loanForm.notes} onChange={e => setLoanForm(p => ({ ...p, notes: e.target.value }))} />
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Lãi suất (%/năm) *</label>
-                  <input type="number" step="0.1" className="theme-input font-mono" placeholder="8.5" value={loanForm.interest_rate_percent} onChange={e => setLoanForm(p => ({ ...p, interest_rate_percent: e.target.value }))} />
+              {/* Section 2: Gốc vay & Lãi suất */}
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">2. Số tiền vay &amp; Lãi suất trả góp</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Gốc vay (₫) *</label>
+                    <input type="number" className="theme-input font-mono font-bold text-cyan-400" placeholder="400000000" value={loanForm.principal} onChange={e => setLoanForm(p => ({ ...p, principal: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Trả trước (₫)</label>
+                    <input type="number" className="theme-input font-mono" placeholder="100000000" value={loanForm.down_payment} onChange={e => setLoanForm(p => ({ ...p, down_payment: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Lãi suất (%/năm) *</label>
+                    <input type="number" step="0.1" className="theme-input font-mono" placeholder="8.5" value={loanForm.interest_rate_percent} onChange={e => setLoanForm(p => ({ ...p, interest_rate_percent: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Kỳ hạn (tháng) *</label>
+                    <input type="number" className="theme-input font-mono" placeholder="36" value={loanForm.term_months} onChange={e => setLoanForm(p => ({ ...p, term_months: e.target.value }))} />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Kỳ hạn (tháng) *</label>
-                  <input type="number" className="theme-input font-mono" placeholder="36" value={loanForm.term_months} onChange={e => setLoanForm(p => ({ ...p, term_months: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Hạn đóng (ngày)</label>
-                  <input type="number" min="1" max="31" className="theme-input font-mono" placeholder="15" value={loanForm.payment_day} onChange={e => setLoanForm(p => ({ ...p, payment_day: e.target.value }))} />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày bắt đầu vay *</label>
+                    <input type="date" className="theme-input" value={loanForm.start_date} onChange={e => setLoanForm(p => ({ ...p, start_date: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Hạn đóng định kỳ (Ngày)</label>
+                    <input type="number" min="1" max="31" className="theme-input font-mono" placeholder="15" value={loanForm.payment_day} onChange={e => setLoanForm(p => ({ ...p, payment_day: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Số tiền trả hàng tháng (₫)</label>
+                    <input
+                      type="number"
+                      className="theme-input font-mono font-bold text-emerald-400"
+                      placeholder={calculatedMonthly > 0 ? String(calculatedMonthly) : 'Tự động tính'}
+                      value={loanForm.monthly_payment}
+                      onChange={e => setLoanForm(p => ({ ...p, monthly_payment: e.target.value }))}
+                    />
+                    {calculatedMonthly > 0 && !loanForm.monthly_payment && (
+                      <p className="text-[10px] mt-0.5 text-cyan-400 font-semibold">Gợi ý EMI: {fmt(calculatedMonthly)} ₫/tháng</p>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày bắt đầu vay *</label>
-                  <input type="date" className="theme-input" value={loanForm.start_date} onChange={e => setLoanForm(p => ({ ...p, start_date: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Trả hàng tháng (₫)</label>
-                  <input
-                    type="number"
-                    className="theme-input font-mono font-bold"
-                    placeholder={calculatedMonthly > 0 ? String(calculatedMonthly) : 'Tự động tính'}
-                    value={loanForm.monthly_payment}
-                    onChange={e => setLoanForm(p => ({ ...p, monthly_payment: e.target.value }))}
-                  />
-                  {calculatedMonthly > 0 && !loanForm.monthly_payment && (
-                    <p className="text-[10px] mt-1" style={{ color: 'var(--accent-cyan)' }}>Gợi ý tính toán EMI: {fmt(calculatedMonthly)} ₫/tháng</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Bank Contact & Hotline Fields */}
-              <div className="p-3 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                <span className="font-bold text-[11px] uppercase flex items-center gap-1.5" style={{ color: 'var(--accent-cyan)' }}>
-                  📞 Cán bộ tín dụng &amp; Hotline Ngân hàng
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <input type="text" placeholder="Tên cán bộ tín dụng..." className="theme-input text-xs" value={loanForm.bank_contact_name} onChange={e => setLoanForm(p => ({ ...p, bank_contact_name: e.target.value }))} />
+              {/* Section 3: Cán bộ tín dụng */}
+              <div className="p-4 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-purple-400">3. Liên hệ Cán bộ tín dụng &amp; Tổng đài Ngân hàng</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input type="text" placeholder="Tên cán bộ tín dụng (VD: Anh Tuấn TPBank)..." className="theme-input text-xs" value={loanForm.bank_contact_name} onChange={e => setLoanForm(p => ({ ...p, bank_contact_name: e.target.value }))} />
                   <input type="tel" placeholder="SĐT cán bộ tín dụng..." className="theme-input text-xs font-mono font-bold" value={loanForm.bank_contact_phone} onChange={e => setLoanForm(p => ({ ...p, bank_contact_phone: e.target.value }))} />
-                  <input type="tel" placeholder="Hotline/Tổng đài ngân hàng..." className="theme-input text-xs font-mono col-span-2" value={loanForm.bank_hotline} onChange={e => setLoanForm(p => ({ ...p, bank_hotline: e.target.value }))} />
+                  <input type="tel" placeholder="Hotline/Tổng đài ngân hàng..." className="theme-input text-xs font-mono" value={loanForm.bank_hotline} onChange={e => setLoanForm(p => ({ ...p, bank_hotline: e.target.value }))} />
                 </div>
               </div>
             </div>

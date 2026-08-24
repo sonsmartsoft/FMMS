@@ -62,7 +62,7 @@ function generateLoanSchedule(loan: any, payments: any[]) {
 }
 
 /* ── Shared Modal Wrapper ─────────────────────────────────────── */
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function Modal({ title, onClose, children, maxWidth = 'max-w-2xl' }: { title: string; onClose: () => void; children: React.ReactNode; maxWidth?: string }) {
   return (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md overflow-hidden"
@@ -70,17 +70,19 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
       onClick={onClose}
     >
       <div
-        className="glass-panel rounded-2xl w-full max-w-xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+        className={`glass-panel rounded-2xl w-full ${maxWidth} my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden`}
         style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
-          <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{title}</h3>
-          <button onClick={onClose} className="p-1 rounded-lg transition hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
+          <h3 className="font-extrabold text-sm uppercase tracking-wide flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+            <span>{title}</span>
+          </h3>
+          <button onClick={onClose} className="p-1.5 rounded-xl transition hover:bg-white/10" style={{ color: 'var(--text-muted)' }}>
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">{children}</div>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">{children}</div>
       </div>
     </div>
   );
