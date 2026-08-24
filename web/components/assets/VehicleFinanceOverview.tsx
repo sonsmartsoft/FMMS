@@ -25,6 +25,7 @@ interface VehicleFinanceOverviewProps {
   expenses: ExpenseRecord[];
   parts?: PartItem[];
   onRefresh: () => void;
+  onNavigateTab?: (tabId: string) => void;
 }
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
@@ -91,7 +92,7 @@ function generate2TierLoanSchedule(loan: LoanRecord | null, payments: any[]) {
   return schedule;
 }
 
-export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRefresh }: VehicleFinanceOverviewProps) {
+export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRefresh, onNavigateTab }: VehicleFinanceOverviewProps) {
   const [payments, setPayments] = useState<any[]>([]);
   const [bankList, setBankList] = useState<string[]>(DEFAULT_BANKS);
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -122,6 +123,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
 
   const [upgradeForm, setUpgradeForm] = useState({ description: '', amount: '', vendor: '', date: new Date().toISOString().slice(0, 10) });
   const [runningForm, setRunningForm] = useState({ category: 'FUEL', description: '', amount: '', vendor: '', date: new Date().toISOString().slice(0, 10) });
+  const [initialForm, setInitialForm] = useState({ category: 'Lệ phí trước bạ', description: '', amount: '', vendor: '' });
 
   useEffect(() => {
     // Load Master Banks
@@ -137,6 +139,33 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       getLoanPayments(loan.id).then(setPayments).catch(() => {});
     }
   }, [loan]);
+
+  // Mandatory Initial Rollout Expenses
+  const initialRolloutExpenses = useMemo(() => {
+    return expenses.filter(e => 
+      (e.category as string) === 'INITIAL' || 
+      e.category === 'REGISTRATION' ||
+      (e.description && (
+        e.description.toLowerCase().includes('trước bạ') || 
+        e.description.toLowerCase().includes('đăng kiểm') || 
+        e.description.toLowerCase().includes('biển số') || 
+        e.description.toLowerCase().includes('thân vỏ') || 
+        e.description.toLowerCase().includes('phí ngân hàng') || 
+        e.description.toLowerCase().includes('bảo hiểm khoản vay') || 
+        e.description.toLowerCase().includes('đặt cọc') || 
+        e.description.toLowerCase().includes('lần 1') || 
+        e.description.toLowerCase().includes('lần 2') || 
+        e.description.toLowerCase().includes('lần 3')
+      ))
+    );
+  }, [expenses]);
+
+  const initialFeesTotal = useMemo(() => {
+    return initialRolloutExpenses.reduce((s, e) => s + e.amount, 0);
+  }, [initialRolloutExpenses]);
+
+  const investment = asset.purchase_price || 0;
+  const totalInitialRollout = investment + initialFeesTotal;
 
   // Financial Calculations
   const schedule = useMemo(() => generate2TierLoanSchedule(loan, payments), [loan, payments]);
@@ -157,16 +186,44 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
   }, [expenses, parts]);
 
   const totalRunningCost = useMemo(() => {
-    return expenses.filter(e => e.category !== 'UPGRADE' && e.category !== 'PARTS').reduce((s, e) => s + e.amount, 0);
+    return expenses.filter(e => e.category !== 'UPGRADE' && e.category !== 'PARTS' && (e.category as string) !== 'INITIAL').reduce((s, e) => s + e.amount, 0);
   }, [expenses]);
 
-  const investment = asset.purchase_price || 0;
+  const toggleSchedulePaymentRow = async (pRow: any) => {
+    if (!loan) return;
+    try {
+      if (pRow.status === 'PAID') {
+        const match = payments.find(x => x.payment_number === pRow.payment_number);
+        if (match) {
+          await updateLoanPayment(match.id, { status: 'PENDING', paid_date: undefined });
+          await updateLoan(loan.id, { current_balance: Math.min(loan.principal, loan.current_balance + pRow.principal_paid) });
+        }
+      } else {
+        await createLoanPayment({
+          loan_id: loan.id,
+          payment_number: pRow.payment_number,
+          due_date: pRow.due_date,
+          principal_paid: pRow.principal_paid,
+          interest_paid: pRow.interest_paid,
+          total_payment: pRow.total_payment,
+          paid_date: new Date().toISOString().slice(0, 10),
+          status: 'PAID',
+          remaining_balance: Math.max(0, loan.current_balance - pRow.principal_paid),
+        });
+        await updateLoan(loan.id, { current_balance: Math.max(0, loan.current_balance - pRow.principal_paid) });
+      }
+      onRefresh();
+    } catch (err: any) {
+      alert(`Lỗi khi cập nhật thanh toán: ${err?.message ?? 'Lỗi'}`);
+    }
+  };
+
   const downPayment = loan ? loan.down_payment : investment;
   const paidPrincipal = loan ? (loan.principal - loan.current_balance) : 0;
   const remainingLoan = loan ? loan.current_balance : 0;
 
-  const totalCost = investment + totalUpgradeCost + totalRunningCost + projectedTotalInterest;
-  const cashOut = downPayment + paidPrincipal + paidInterest + totalUpgradeCost + totalRunningCost;
+  const totalCost = totalInitialRollout + totalUpgradeCost + totalRunningCost + projectedTotalInterest;
+  const cashOut = downPayment + paidPrincipal + paidInterest + initialFeesTotal + totalUpgradeCost + totalRunningCost;
   const currentMarketValue = asset.current_market_value || asset.current_value || investment;
   const ownershipCost = Math.max(0, cashOut - currentMarketValue);
 
@@ -239,6 +296,26 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     }
   };
 
+  const handleAddInitialItem = async (presetDesc?: string) => {
+    const desc = presetDesc || initialForm.description || initialForm.category;
+    if (!initialForm.amount && !presetDesc) return;
+    try {
+      await createExpense({
+        asset_id: asset.id,
+        date: new Date().toISOString().slice(0, 10),
+        category: 'INITIAL' as any,
+        amount: parseFloat(initialForm.amount) || 0,
+        currency: 'VND',
+        vendor: initialForm.vendor || undefined,
+        description: desc,
+      });
+      onRefresh();
+      setInitialForm({ category: 'Lệ phí trước bạ', description: '', amount: '', vendor: '' });
+    } catch (err: any) {
+      alert(`Lỗi khi thêm chi phí ban đầu: ${err?.message ?? 'Lỗi'}`);
+    }
+  };
+
   const handleAddUpgradeItem = async () => {
     if (!upgradeForm.amount) return;
     try {
@@ -277,33 +354,23 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     }
   };
 
-  const toggleSchedulePaymentRow = async (pRow: any) => {
-    if (!loan) return;
-    try {
-      if (pRow.status === 'PAID') {
-        const match = payments.find(x => x.payment_number === pRow.payment_number);
-        if (match) {
-          await updateLoanPayment(match.id, { status: 'PENDING', paid_date: undefined });
-          await updateLoan(loan.id, { current_balance: Math.min(loan.principal, loan.current_balance + pRow.principal_paid) });
-        }
-      } else {
-        await createLoanPayment({
-          loan_id: loan.id,
-          payment_number: pRow.payment_number,
-          due_date: pRow.due_date,
-          principal_paid: pRow.principal_paid,
-          interest_paid: pRow.interest_paid,
-          total_payment: pRow.total_payment,
-          paid_date: new Date().toISOString().slice(0, 10),
-          status: 'PAID',
-          remaining_balance: Math.max(0, loan.current_balance - pRow.principal_paid),
-        });
-        await updateLoan(loan.id, { current_balance: Math.max(0, loan.current_balance - pRow.principal_paid) });
+  // Card Navigation / Modal Trigger
+  const handleCardClick = (cardId: string) => {
+    if (onNavigateTab) {
+      if (cardId === 'upgrade') {
+        onNavigateTab('parts');
+        return;
       }
-      onRefresh();
-    } catch (err: any) {
-      alert(`Lỗi khi cập nhật thanh toán: ${err?.message ?? 'Lỗi'}`);
+      if (cardId === 'running') {
+        onNavigateTab('expenses');
+        return;
+      }
+      if (cardId === 'interest' || cardId === 'remaining') {
+        onNavigateTab('finance');
+        return;
+      }
     }
+    setActiveModal(cardId);
   };
 
   // 9 Summary Cards Config
@@ -311,13 +378,13 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     {
       id: 'investment',
       title: 'Investment',
-      sub: 'Giá mua xe ban đầu',
-      value: `${fmt(investment)} ₫`,
+      sub: 'Mua xe & Lăn bánh ban đầu',
+      value: `${fmt(totalInitialRollout)} ₫`,
       color: '#3B82F6',
       bg: 'rgba(59,130,246,0.12)',
       border: 'rgba(59,130,246,0.3)',
       icon: Landmark,
-      detailText: 'Hóa đơn / Giá niêm yết xe ban đầu',
+      detailText: initialFeesTotal > 0 ? `Giá xe ${fmt(investment)}₫ + Phí lăn bánh ${fmt(initialFeesTotal)}₫` : 'Giá mua xe & Các chi phí lăn bánh bắt buộc',
     },
     {
       id: 'upgrade',
@@ -328,7 +395,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       bg: 'rgba(167,139,250,0.12)',
       border: 'rgba(167,139,250,0.3)',
       icon: Wrench,
-      detailText: `${parts.length + expenses.filter(e => e.category === 'UPGRADE' || e.category === 'PARTS').length} món độ & nâng cấp`,
+      detailText: `${parts.length + expenses.filter(e => e.category === 'UPGRADE' || e.category === 'PARTS').length} món độ — Mở tab Phụ tùng`,
     },
     {
       id: 'running',
@@ -339,7 +406,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       bg: 'rgba(245,158,11,0.12)',
       border: 'rgba(245,158,11,0.3)',
       icon: Fuel,
-      detailText: 'Xăng/Điện, Bảo dưỡng, Bảo hiểm, BOT...',
+      detailText: 'Xăng, Đổ bê tông/Gửi xe, BOT, Rửa xe... — Mở tab Chi phí',
     },
     {
       id: 'interest',
@@ -350,7 +417,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       bg: 'rgba(236,72,153,0.12)',
       border: 'rgba(236,72,153,0.3)',
       icon: TrendingUp,
-      detailText: loan ? `Ưu đãi ${loan.preferred_rate_percent || loan.interest_rate_percent}% + Thả nổi ${loan.floating_rate_percent || loan.interest_rate_percent}%` : 'Chưa có khoản vay',
+      detailText: loan ? `Ưu đãi ${loan.preferred_rate_percent || loan.interest_rate_percent}% + Thả nổi ${loan.floating_rate_percent || loan.interest_rate_percent}% — Mở Khoản vay` : 'Chưa có khoản vay',
     },
     {
       id: 'totalCost',
@@ -361,7 +428,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       bg: 'rgba(14,165,233,0.12)',
       border: 'rgba(14,165,233,0.3)',
       icon: PieChart,
-      detailText: 'Mua xe + Độ xe + Vận hành + Lãi vay',
+      detailText: 'Lăn bánh ban đầu + Nâng cấp + Vận hành + Lãi vay',
     },
     {
       id: 'cashOut',
@@ -372,7 +439,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       bg: 'rgba(244,63,94,0.12)',
       border: 'rgba(244,63,94,0.3)',
       icon: DollarSign,
-      detailText: 'Tiền mặt đã chi ra thực tế đến hôm nay',
+      detailText: 'Tiền mặt đã chi ra thực tế đến thời điểm này',
     },
     {
       id: 'totalValue',
@@ -394,7 +461,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       bg: 'rgba(251,146,60,0.12)',
       border: 'rgba(251,146,60,0.3)',
       icon: CreditCard,
-      detailText: loan ? `Còn ${loan.term_months - schedule.filter(s => s.status === 'PAID').length} kỳ hạn đóng` : 'Không có dư nợ',
+      detailText: loan ? `Còn ${loan.term_months - schedule.filter(s => s.status === 'PAID').length} kỳ đóng — Mở Khoản vay` : 'Không có dư nợ',
     },
     {
       id: 'ownership',
@@ -419,7 +486,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
             <span>BẢNG ĐIỀU KHIỂN TÀI CHÍNH XE &amp; TCO (9 METRIC CARDS)</span>
           </h3>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            Click vào từng thẻ để xem danh sách chi tiết và chỉnh sửa từng khoản thu chi
+            Click vào từng thẻ để chuyển thẳng màn hình chi tiết hoặc chỉnh sửa thông số
           </p>
         </div>
         <button
@@ -439,7 +506,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
           return (
             <div
               key={card.id}
-              onClick={() => setActiveModal(card.id)}
+              onClick={() => handleCardClick(card.id)}
               className="glass-card p-4 rounded-2xl cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg relative overflow-hidden group"
               style={{ background: 'var(--bg-secondary)', border: `1px solid ${card.border}` }}
             >
@@ -467,27 +534,115 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
 
       {/* ─── MODAL DRILL-DOWNS ─── */}
 
-      {/* 1. Investment Modal */}
+      {/* 1. Investment Modal (Mandatory Initial Rollout Expenses) */}
       {activeModal === 'investment' && (
-        <DrillDownModal title="💵 Investment — Chi phí mua xe ban đầu" onClose={() => setActiveModal(null)}>
-          <div className="space-y-4">
-            <div className="p-4 rounded-xl space-y-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-              <div className="flex justify-between"><span>Giá niêm yết / Hóa đơn:</span><strong className="font-mono text-cyan-400">{fmt(investment)} ₫</strong></div>
-              <div className="flex justify-between"><span>Ngày mua xe:</span><strong>{fmtDate(asset.purchase_date)}</strong></div>
-              <div className="flex justify-between"><span>Trả trước:</span><strong className="font-mono">{fmt(downPayment)} ₫</strong></div>
-              <div className="flex justify-between"><span>Gốc vay:</span><strong className="font-mono text-rose-400">{fmt(loan?.principal || 0)} ₫</strong></div>
+        <DrillDownModal title="💵 Investment — Chi phí mua xe &amp; Lăn bánh ban đầu" onClose={() => setActiveModal(null)}>
+          <div className="space-y-5 text-xs">
+            <div className="p-4 rounded-xl space-y-2 font-sans" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="flex justify-between"><span>Giá niêm yết xe:</span><strong className="font-mono text-cyan-400">{fmt(investment)} ₫</strong></div>
+              <div className="flex justify-between"><span>Tổng chi phí lăn bánh ban đầu:</span><strong className="font-mono text-purple-400">{fmt(initialFeesTotal)} ₫</strong></div>
+              <div className="flex justify-between border-t pt-2 mt-1" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="font-bold text-xs uppercase" style={{ color: 'var(--text-primary)' }}>TỔNG ĐẦU TƯ BAN ĐẦU:</span>
+                <strong className="font-mono text-base text-emerald-400 font-black">{fmt(totalInitialRollout)} ₫</strong>
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>Chỉnh sửa giá mua xe (₫)</label>
-              <input type="number" className="theme-input font-mono font-bold" value={purchasePriceInput} onChange={e => setPurchasePriceInput(e.target.value)} />
+
+            {/* Edit Purchase Price */}
+            <div className="p-3 rounded-xl space-y-2" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+              <label className="text-[11px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Chỉnh sửa giá mua xe gốc (₫)</label>
+              <div className="flex gap-2">
+                <input type="number" className="theme-input font-mono font-bold text-xs flex-1" value={purchasePriceInput} onChange={e => setPurchasePriceInput(e.target.value)} />
+                <button onClick={async () => {
+                  await updateAsset(asset.id, { purchase_price: parseFloat(purchasePriceInput) || 0 });
+                  onRefresh();
+                }} className="px-3 py-1.5 rounded-lg bg-cyan-500 text-white font-bold text-xs shrink-0">
+                  Lưu giá xe
+                </button>
+              </div>
             </div>
-            <button onClick={async () => {
-              await updateAsset(asset.id, { purchase_price: parseFloat(purchasePriceInput) || 0 });
-              onRefresh();
-              setActiveModal(null);
-            }} className="w-full py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs">
-              Lưu giá mua mới
-            </button>
+
+            {/* Mandatory Initial Rollout Items Form */}
+            <div className="p-3.5 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <h5 className="font-bold uppercase text-[11px]" style={{ color: 'var(--accent-cyan)' }}>
+                + Khai báo các chi phí lăn bánh bắt buộc (Trước bạ, Đăng kiểm, BH, Phí vay...)
+              </h5>
+              
+              {/* Quick Preset Buttons */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Thêm nhanh:</span>
+                {[
+                  'Lệ phí trước bạ',
+                  'Đăng kiểm & đường bộ',
+                  'Phí dịch vụ đăng ký',
+                  'Bảo hiểm thân vỏ',
+                  'Phí dịch vụ ngân hàng',
+                  'Phí bảo hiểm khoản vay'
+                ].map(preset => (
+                  <button
+                    key={preset}
+                    onClick={() => setInitialForm(p => ({ ...p, category: preset, description: preset }))}
+                    className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80 transition"
+                    style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
+                  >
+                    + {preset}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  placeholder="Mô tả khoản chi (VD: Lệ phí trước bạ 10%)..."
+                  className="theme-input text-xs col-span-2"
+                  value={initialForm.description}
+                  onChange={e => setInitialForm(p => ({ ...p, description: e.target.value }))}
+                />
+                <input
+                  type="number"
+                  placeholder="Số tiền (₫)..."
+                  className="theme-input text-xs font-mono font-bold"
+                  value={initialForm.amount}
+                  onChange={e => setInitialForm(p => ({ ...p, amount: e.target.value }))}
+                />
+                <input
+                  type="text"
+                  placeholder="Đơn vị / Nơi thu (VD: Thuế, Đăng kiểm, BH...)"
+                  className="theme-input text-xs"
+                  value={initialForm.vendor}
+                  onChange={e => setInitialForm(p => ({ ...p, vendor: e.target.value }))}
+                />
+              </div>
+
+              <button onClick={() => handleAddInitialItem()} className="w-full py-2 rounded-xl bg-purple-500 text-white font-bold text-xs">
+                + Thêm chi phí ban đầu này
+              </button>
+            </div>
+
+            {/* List of Initial Rollout Expenses */}
+            <div className="space-y-2">
+              <h5 className="font-bold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
+                Danh sách chi phí ban đầu đã ghi nhận ({initialRolloutExpenses.length})
+              </h5>
+              <div className="max-h-52 overflow-y-auto space-y-2">
+                {initialRolloutExpenses.map(item => (
+                  <div key={item.id} className="p-3 rounded-xl flex items-center justify-between" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                    <div>
+                      <p className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{item.description}</p>
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{fmtDate(item.date)} {item.vendor ? `• ${item.vendor}` : ''}</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono font-bold text-purple-400">{fmt(item.amount)} ₫</span>
+                      <button onClick={async () => { await deleteExpense(item.id); onRefresh(); }} className="text-rose-400 hover:opacity-70 p-1">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {initialRolloutExpenses.length === 0 && (
+                  <p className="text-[11px] text-center py-3" style={{ color: 'var(--text-muted)' }}>Chưa khai báo thêm chi phí lăn bánh ban đầu</p>
+                )}
+              </div>
+            </div>
           </div>
         </DrillDownModal>
       )}

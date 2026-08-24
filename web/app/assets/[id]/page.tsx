@@ -787,6 +787,7 @@ export default function AssetDetailPage() {
               expenses={expenses}
               parts={parts}
               onRefresh={() => { window.location.reload(); }}
+              onNavigateTab={(tabId) => setActiveTab(tabId)}
             />
 
             <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
