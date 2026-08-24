@@ -335,7 +335,7 @@ export default function DeviceManagementPage() {
 
       {/* EDIT & DEVICE ASSIGNMENT MODAL */}
       {editingDevice && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-md"
+        <div className="fixed inset-0 z-[9999] grid place-items-center pt-16 p-4 backdrop-blur-md"
           style={{ background: 'rgba(0,0,0,0.6)' }}>
           <div className="w-full max-w-md p-6 rounded-2xl space-y-4 border shadow-2xl animate-scaleIn"
             style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)' }}>
