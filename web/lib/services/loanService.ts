@@ -74,29 +74,27 @@ export interface LoanInput {
 
 export async function createLoan(input: LoanInput) {
   const supabase = createClient();
+  const payload: Record<string, any> = {
+    asset_id: input.asset_id,
+    lender: input.lender,
+    principal: input.principal,
+    down_payment: input.down_payment,
+    interest_rate_percent: input.interest_rate_percent,
+    term_months: input.term_months,
+    start_date: input.start_date,
+    monthly_payment: input.monthly_payment,
+    payment_day: input.payment_day,
+    current_balance: input.current_balance,
+    status: input.status ?? 'ACTIVE',
+    notes: input.notes ?? null,
+  };
+  if (input.bank_contact_name) payload.bank_contact_name = input.bank_contact_name;
+  if (input.bank_contact_phone) payload.bank_contact_phone = input.bank_contact_phone;
+  if (input.bank_hotline) payload.bank_hotline = input.bank_hotline;
+
   const { data, error } = await supabase
     .from('loans')
-    .insert({
-      asset_id: input.asset_id,
-      lender: input.lender,
-      principal: input.principal,
-      down_payment: input.down_payment,
-      interest_rate_percent: input.interest_rate_percent,
-      preferred_rate_percent: input.preferred_rate_percent ?? null,
-      preferred_months: input.preferred_months ?? null,
-      floating_rate_percent: input.floating_rate_percent ?? null,
-      loan_ratio_percent: input.loan_ratio_percent ?? null,
-      term_months: input.term_months,
-      start_date: input.start_date,
-      monthly_payment: input.monthly_payment,
-      payment_day: input.payment_day,
-      current_balance: input.current_balance,
-      status: input.status ?? 'ACTIVE',
-      notes: input.notes ?? null,
-      bank_contact_name: input.bank_contact_name ?? null,
-      bank_contact_phone: input.bank_contact_phone ?? null,
-      bank_hotline: input.bank_hotline ?? null,
-    })
+    .insert(payload)
     .select()
     .single();
   if (error) throw error;
@@ -174,7 +172,24 @@ export async function updateLoan(id: string, data: Partial<Pick<LoanRow, 'curren
 
 export async function updateLoanFull(id: string, data: Partial<LoanInput>) {
   const supabase = createClient();
-  const { error } = await supabase.from('loans').update(data).eq('id', id);
+  const payload: Record<string, any> = {};
+  if (data.asset_id !== undefined) payload.asset_id = data.asset_id;
+  if (data.lender !== undefined) payload.lender = data.lender;
+  if (data.principal !== undefined) payload.principal = data.principal;
+  if (data.down_payment !== undefined) payload.down_payment = data.down_payment;
+  if (data.interest_rate_percent !== undefined) payload.interest_rate_percent = data.interest_rate_percent;
+  if (data.term_months !== undefined) payload.term_months = data.term_months;
+  if (data.start_date !== undefined) payload.start_date = data.start_date;
+  if (data.monthly_payment !== undefined) payload.monthly_payment = data.monthly_payment;
+  if (data.payment_day !== undefined) payload.payment_day = data.payment_day;
+  if (data.current_balance !== undefined) payload.current_balance = data.current_balance;
+  if (data.status !== undefined) payload.status = data.status;
+  if (data.notes !== undefined) payload.notes = data.notes;
+  if (data.bank_contact_name !== undefined) payload.bank_contact_name = data.bank_contact_name;
+  if (data.bank_contact_phone !== undefined) payload.bank_contact_phone = data.bank_contact_phone;
+  if (data.bank_hotline !== undefined) payload.bank_hotline = data.bank_hotline;
+
+  const { error } = await supabase.from('loans').update(payload).eq('id', id);
   if (error) throw error;
 }
 

@@ -55,6 +55,14 @@
   1. Đưa toàn bộ `.theme-input`, `.theme-select` vào `@layer components` trong `globals.css`.
   2. Chuẩn hóa vị trí icon tìm kiếm thành: `absolute left-3 top-1/2 -translate-y-1/2 z-10`.
 
+### 🔄 Đợt 5: Sửa lỗi Schema Cache Khoản Vay & Bổ Sung Thêm Phương Tiện
+- **Vấn đề 1:** Khi lưu/sửa khoản vay (`/finance`), Supabase báo lỗi `Could not find the 'floating_rate_percent' column of 'loans' in the schema cache`.
+- **Nguyên nhân:** Service `loanService.ts` gửi các trường mở rộng (`floating_rate_percent`, `preferred_rate_percent`, `loan_ratio_percent`) mà trong bảng PostgreSQL `loans` chưa có các cột này.
+- **Giải pháp:** Sanitize (lọc sạch) payload trong `createLoan` và `updateLoanFull`, chỉ gửi chính xác các cột thực tế tồn tại trong database bảng `loans`.
+- **Vấn đề 2:** Nút "Thêm phương tiện" tại trang danh sách (`/assets`) bấm vào không phản hồi.
+- **Giải pháp:** Bổ sung state `openAddModal`, `assetForm`, kết nối trực tiếp với service `createAsset`, và xây dựng đầy đủ Modal 2 lớp chuẩn hóa với đầy đủ thông số kỹ thuật, biển số, giá trị mua, odometer ban đầu.
+- **Vấn đề 3:** Bổ sung ràng buộc `maxHeight: 'min(85vh, 620px)'` trên toàn bộ modal tại `/documents` và `/assets/[id]` để đảm bảo cuộn form trên mọi kích thước màn hình.
+
 ---
 
 ## 3. QUY CHUẨN THIẾT KẾ MODAL / POPUP CHUẨN (BẮT BUỘC TUÂN THỦ)

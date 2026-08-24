@@ -272,8 +272,12 @@ export default function DocumentsPage() {
       {openAddModal && (
         <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
           <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-            <div className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+            <div
+              className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden"
+              style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
                 <div>
                   <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                     <span>📑 Thêm Giấy Tờ / Hợp Đồng Bảo Hiểm Mới</span>
@@ -326,7 +330,7 @@ export default function DocumentsPage() {
                   </div>
                 </div>
               </div>
-              <div className="p-4 shrink-0 border-t flex space-x-2" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
                 <button onClick={saveDoc} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
                   Lưu tài liệu mới
                 </button>
@@ -341,7 +345,11 @@ export default function DocumentsPage() {
       {editingItem && (
         <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingItem(null)}>
           <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-            <div className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+            <div
+              className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden"
+              style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }}
+              onClick={e => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
                 <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                   <Pencil className="w-4 h-4 text-cyan-400" />
