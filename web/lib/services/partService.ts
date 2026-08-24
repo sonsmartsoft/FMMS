@@ -65,3 +65,35 @@ export async function createPart(input: PartInput) {
   if (error) throw error;
   return mapPartRow(data);
 }
+
+export async function updatePart(id: string, input: Partial<PartInput>) {
+  const existingIdx = (MOCK_PARTS as any[]).findIndex((p: any) => p.id === id);
+  if (existingIdx >= 0) {
+    const target = (MOCK_PARTS as any[])[existingIdx];
+    if (input.part_name != null) target.name = input.part_name;
+    if (input.brand != null) target.brand = input.brand;
+    if (input.supplier != null) target.category = input.supplier;
+    if (input.installation_date != null) target.install_date = input.installation_date;
+    if (input.cost != null) target.cost = input.cost;
+    if (input.installed_odometer_km != null) target.odometer_km = input.installed_odometer_km;
+    if (input.notes != null) target.notes = input.notes;
+  }
+  return {
+    id,
+    name: input.part_name || 'Phụ tùng',
+    brand: input.brand || '',
+    category: input.supplier || 'Khác',
+    install_date: input.installation_date || new Date().toISOString().slice(0, 10),
+    cost: input.cost || 0,
+    odometer_km: input.installed_odometer_km || 0,
+    notes: input.notes,
+  };
+}
+
+export async function deletePart(id: string) {
+  const existingIdx = (MOCK_PARTS as any[]).findIndex((p: any) => p.id === id);
+  if (existingIdx >= 0) {
+    (MOCK_PARTS as any[]).splice(existingIdx, 1);
+  }
+  return true;
+}

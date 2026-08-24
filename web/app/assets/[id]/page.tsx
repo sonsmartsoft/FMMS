@@ -2,13 +2,13 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Asset, ExpenseRecord, MaintenanceRecord, TripRecord, LoanRecord } from '@/types/mobility';
-import { FuelLog, getFuelLogs, createFuelLog } from '@/lib/services/fuelService';
+import { Asset, ExpenseRecord, MaintenanceRecord, TripRecord, LoanRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
+import { FuelLog, getFuelLogs, createFuelLog, updateFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
 import { getAsset, getAssets, updateAsset } from '@/lib/services/assetService';
-import { getMaintenanceRecords, createMaintenanceRecord } from '@/lib/services/maintenanceService';
-import { getExpenses, createExpense } from '@/lib/services/expenseService';
+import { getMaintenanceRecords, createMaintenanceRecord, updateMaintenanceRecord, deleteMaintenanceRecord } from '@/lib/services/maintenanceService';
+import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import { getTrips, createTrip } from '@/lib/services/tripService';
-import { getParts, createPart } from '@/lib/services/partService';
+import { getParts, createPart, updatePart, deletePart } from '@/lib/services/partService';
 import { getInsurancePolicies, createInsurancePolicy, InsuranceRow } from '@/lib/services/insuranceService';
 import { getLoadByAsset } from '@/lib/services/loanService';
 import { createOdometerAdjustment } from '@/lib/services/odometerService';
@@ -18,7 +18,7 @@ import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOvervi
 import {
   ArrowLeft, Gauge, Fuel, Wrench, DollarSign, FileText, BarChart3,
   Cpu, CheckCircle2, Plus, MapPin, Activity, Layers, Car, X, Pencil,
-  Zap, Clock, TrendingDown, Shield, CreditCard, Award,
+  Zap, Clock, TrendingDown, Shield, CreditCard, Award, Trash2, Edit2,
 } from 'lucide-react';
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -386,7 +386,21 @@ export default function AssetDetailPage() {
     return serviceItems.reduce((acc, item) => acc + (parseFloat(item.cost) || 0), 0);
   }, [serviceItems]);
 
-  const [expForm, setExpForm] = useState({ date: '', category: 'FUEL', amount: '', vendor: '', odometer_km: '', description: '' });
+  const [taxMap, setTaxMap] = useState<Record<string, { label: string; subcategories: Record<string, string> }>>(TAXONOMY);
+
+  useEffect(() => {
+    setTaxMap(getDynamicTaxonomy());
+    const handleUpdate = () => setTaxMap(getDynamicTaxonomy());
+    window.addEventListener('fmms_master_updated', handleUpdate);
+    return () => window.removeEventListener('fmms_master_updated', handleUpdate);
+  }, []);
+
+  const [editingExp, setEditingExp] = useState<ExpenseRecord | null>(null);
+  const [editingMaint, setEditingMaint] = useState<MaintenanceRecord | null>(null);
+  const [editingFuel, setEditingFuel] = useState<FuelLog | null>(null);
+  const [editingPartItem, setEditingPartItem] = useState<any | null>(null);
+
+  const [expForm, setExpForm] = useState({ date: '', category: 'Running', subcategory: 'Fuel', amount: '', vendor: '', odometer_km: '', description: '' });
   const [tripForm, setTripForm] = useState({ start_time: '', end_time: '', distance_km: '', start_location: '', end_location: '', fuel_used_liters: '', average_speed_kmh: '' });
   const [partForm, setPartForm] = useState({ name: '', brand: '', category: 'Điện tử', install_date: '', cost: '', odometer_km: '', warranty_months: '', notes: '' });
   const [insForm, setInsForm] = useState({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', agent_name: '', agent_phone: '', provider_hotline: '', notes: '' });
@@ -443,77 +457,148 @@ export default function AssetDetailPage() {
   /* ══════════════════════════════════════════════
      SAVE HANDLERS
      ══════════════════════════════════════════════ */
+  /* ── Edit & Delete Handlers for Expenses ── */
+  const handleOpenEditExpense = (item: ExpenseRecord) => {
+    setEditingExp(item);
+    setExpForm({
+      date: item.date ? item.date.slice(0, 10) : '',
+      category: item.category || 'Running',
+      subcategory: item.subcategory || 'Fuel',
+      amount: String(item.amount || ''),
+      vendor: item.vendor || '',
+      odometer_km: item.odometer_km ? String(item.odometer_km) : '',
+      description: item.description || '',
+    });
+    setOpenModal('expense');
+  };
+
+  const handleDeleteExpense = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa khoản chi phí này?')) return;
+    try {
+      await deleteExpense(id);
+      setExpenses(prev => prev.filter(e => e.id !== id));
+    } catch (err: any) {
+      alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
+    }
+  };
+
+  /* ── Edit & Delete Handlers for Maintenance ── */
+  const handleOpenEditMaint = (item: MaintenanceRecord) => {
+    setEditingMaint(item);
+    setMaintForm({
+      date: item.date ? item.date.slice(0, 10) : '',
+      maintenance_type: item.maintenance_type || 'Thay dầu máy',
+      odometer_km: item.odometer_km ? String(item.odometer_km) : '',
+      cost: String(item.cost || ''),
+      vendor: item.vendor || '',
+      notes: item.notes || '',
+      next_due_km: item.next_due_km ? String(item.next_due_km) : '',
+      next_due_date: item.next_due_date ? item.next_due_date.slice(0, 10) : '',
+    });
+    setOpenModal('maintenance');
+  };
+
+  const handleDeleteMaint = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa nhật ký bảo dưỡng này?')) return;
+    try {
+      await deleteMaintenanceRecord(id);
+      setMaintenance(prev => prev.filter(m => m.id !== id));
+    } catch (err: any) {
+      alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
+    }
+  };
+
+  /* ── Edit & Delete Handlers for Fuel ── */
+  const handleOpenEditFuel = (item: FuelLog) => {
+    setEditingFuel(item);
+    setFuelForm({
+      date: item.date ? item.date.slice(0, 10) : '',
+      liters: String(item.liters || ''),
+      price_per_liter: String(item.price_per_liter || ''),
+      odometer_km: item.odometer_km ? String(item.odometer_km) : '',
+      station: item.station || '',
+      notes: item.notes || '',
+    });
+    setOpenModal('fuel');
+  };
+
+  const handleDeleteFuel = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa nhật ký đổ xăng này?')) return;
+    try {
+      await deleteFuelLog(id);
+      setFuelLogs(prev => prev.filter(f => f.id !== id));
+    } catch (err: any) {
+      alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
+    }
+  };
+
+  /* ── Edit & Delete Handlers for Parts ── */
+  const handleOpenEditPart = (item: any) => {
+    setEditingPartItem(item);
+    setPartForm({
+      name: item.name || '',
+      brand: item.brand || '',
+      category: item.category || 'Điện tử',
+      install_date: item.install_date ? item.install_date.slice(0, 10) : '',
+      cost: String(item.cost || ''),
+      odometer_km: item.odometer_km ? String(item.odometer_km) : '',
+      warranty_months: item.warranty_months ? String(item.warranty_months) : '',
+      notes: item.notes || '',
+    });
+    setOpenModal('part');
+  };
+
+  const handleDeletePart = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa phụ tùng / nâng cấp này?')) return;
+    try {
+      await deletePart(id);
+      setParts(prev => prev.filter(p => p.id !== id));
+    } catch (err: any) {
+      alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
+    }
+  };
+
   const saveFuel = async () => {
     const l = parseFloat(fuelForm.liters) || 0;
     const p = parseFloat(fuelForm.price_per_liter) || 0;
     try {
-      const created = await createFuelLog({
-        asset_id: asset.id,
-        timestamp: new Date(fuelForm.date || Date.now()).toISOString(),
-        odometer_km: parseFloat(fuelForm.odometer_km) || 0,
-        fuel_liters: l,
-        price_per_liter: p,
-        station: fuelForm.station || undefined,
-        notes: fuelForm.notes || undefined,
-        tank_full: true,
-      });
-      setFuelLogs([created, ...fuelLogs]);
+      if (editingFuel) {
+        const updated = await updateFuelLog(editingFuel.id, {
+          timestamp: new Date(fuelForm.date || Date.now()).toISOString(),
+          fuel_liters: l,
+          price_per_liter: p,
+          total_cost: l * p,
+          odometer_km: parseFloat(fuelForm.odometer_km) || 0,
+          station: fuelForm.station || undefined,
+          notes: fuelForm.notes || undefined,
+        });
+        setFuelLogs(prev => prev.map(f => f.id === editingFuel.id ? updated : f));
+      } else {
+        const created = await createFuelLog({
+          asset_id: asset.id,
+          timestamp: new Date(fuelForm.date || Date.now()).toISOString(),
+          odometer_km: parseFloat(fuelForm.odometer_km) || 0,
+          fuel_liters: l,
+          price_per_liter: p,
+          station: fuelForm.station || undefined,
+          notes: fuelForm.notes || undefined,
+          tank_full: true,
+        });
+        setFuelLogs([created, ...fuelLogs]);
+      }
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
     setOpenModal(null);
+    setEditingFuel(null);
     setFuelForm({ date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
-  };
-
-  const saveMaint = async () => {
-    try {
-      const totalCost = calculatedItemsCost > 0 ? calculatedItemsCost : (parseFloat(maintForm.cost) || 0);
-      const itemsSummary = serviceItems.map(s => `${s.name}: ${s.cost ? parseInt(s.cost).toLocaleString('vi-VN') + '₫' : '—'}`).join(' + ');
-      const fullNotes = maintForm.notes ? `${maintForm.notes} | Các hạng mục: ${itemsSummary}` : `Các hạng mục: ${itemsSummary}`;
-
-      const created = await createMaintenanceRecord({
-        asset_id: asset.id,
-        maintenance_type: maintForm.maintenance_type || serviceItems[0]?.name || 'Thay dầu máy',
-        date: maintForm.date || new Date().toISOString().split('T')[0],
-        odometer_km: parseFloat(maintForm.odometer_km) || 0,
-        cost: totalCost,
-        vendor: maintForm.vendor || undefined,
-        notes: fullNotes,
-        next_due_km: maintForm.next_due_km ? parseFloat(maintForm.next_due_km) : undefined,
-        next_due_date: maintForm.next_due_date || undefined,
-      });
-      setMaintenance([created, ...maintenance]);
-    } catch (err: any) {
-      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
-    }
-    setOpenModal(null);
-    setServiceItems([{ name: 'Thay dầu máy', cost: '' }]);
-  };
-
-  const saveExpense = async () => {
-    try {
-      const created = await createExpense({
-        asset_id: asset.id,
-        date: expForm.date,
-        category: expForm.category as ExpenseRecord['category'],
-        amount: parseFloat(expForm.amount) || 0,
-        vendor: expForm.vendor || undefined,
-        odometer_km: expForm.odometer_km ? parseFloat(expForm.odometer_km) : undefined,
-        description: expForm.description || undefined,
-      });
-      setExpenses([created, ...expenses]);
-    } catch (err: any) {
-      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
-    }
-    setOpenModal(null);
-    setExpForm({ date: '', category: 'FUEL', amount: '', vendor: '', odometer_km: '', description: '' });
   };
 
   const saveTrip = async () => {
     try {
       const created = await createTrip({
         asset_id: asset.id,
-        start_time: tripForm.start_time,
+        start_time: tripForm.start_time || new Date().toISOString(),
         end_time: tripForm.end_time || undefined,
         distance_km: parseFloat(tripForm.distance_km) || 0,
         fuel_used_liters: tripForm.fuel_used_liters ? parseFloat(tripForm.fuel_used_liters) : undefined,
@@ -528,23 +613,111 @@ export default function AssetDetailPage() {
     setOpenModal(null);
   };
 
-  const savePart = async () => {
+  const saveMaint = async () => {
     try {
-      const created = await createPart({
-        asset_id: asset.id,
-        part_name: partForm.name,
-        brand: partForm.brand || undefined,
-        supplier: partForm.category || undefined,
-        installation_date: partForm.install_date || undefined,
-        cost: parseFloat(partForm.cost) || 0,
-        installed_odometer_km: partForm.odometer_km ? parseFloat(partForm.odometer_km) : undefined,
-        notes: partForm.notes || undefined,
-      });
-      setParts([created, ...parts]);
+      const totalCost = calculatedItemsCost > 0 ? calculatedItemsCost : (parseFloat(maintForm.cost) || 0);
+      const itemsSummary = serviceItems.map(s => `${s.name}: ${s.cost ? parseInt(s.cost).toLocaleString('vi-VN') + '₫' : '—'}`).join(' + ');
+      const fullNotes = maintForm.notes ? `${maintForm.notes} | Các hạng mục: ${itemsSummary}` : `Các hạng mục: ${itemsSummary}`;
+
+      if (editingMaint) {
+        const updated = await updateMaintenanceRecord(editingMaint.id, {
+          maintenance_type: maintForm.maintenance_type || serviceItems[0]?.name || 'Thay dầu máy',
+          date: maintForm.date || new Date().toISOString().split('T')[0],
+          odometer_km: parseFloat(maintForm.odometer_km) || 0,
+          cost: totalCost,
+          vendor: maintForm.vendor || undefined,
+          notes: fullNotes,
+          next_due_km: maintForm.next_due_km ? parseFloat(maintForm.next_due_km) : undefined,
+          next_due_date: maintForm.next_due_date || undefined,
+        });
+        setMaintenance(prev => prev.map(m => m.id === editingMaint.id ? updated : m));
+      } else {
+        const created = await createMaintenanceRecord({
+          asset_id: asset.id,
+          maintenance_type: maintForm.maintenance_type || serviceItems[0]?.name || 'Thay dầu máy',
+          date: maintForm.date || new Date().toISOString().split('T')[0],
+          odometer_km: parseFloat(maintForm.odometer_km) || 0,
+          cost: totalCost,
+          vendor: maintForm.vendor || undefined,
+          notes: fullNotes,
+          next_due_km: maintForm.next_due_km ? parseFloat(maintForm.next_due_km) : undefined,
+          next_due_date: maintForm.next_due_date || undefined,
+        });
+        setMaintenance([created, ...maintenance]);
+      }
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
     setOpenModal(null);
+    setEditingMaint(null);
+    setServiceItems([{ name: 'Thay dầu máy', cost: '' }]);
+  };
+
+  const saveExpense = async () => {
+    try {
+      if (editingExp) {
+        const updated = await updateExpense(editingExp.id, {
+          date: expForm.date,
+          category: expForm.category as ExpenseRecord['category'],
+          subcategory: expForm.subcategory,
+          amount: parseFloat(expForm.amount) || 0,
+          vendor: expForm.vendor || undefined,
+          odometer_km: expForm.odometer_km ? parseFloat(expForm.odometer_km) : undefined,
+          description: expForm.description || undefined,
+        });
+        setExpenses(prev => prev.map(e => e.id === editingExp.id ? updated : e));
+      } else {
+        const created = await createExpense({
+          asset_id: asset.id,
+          date: expForm.date || new Date().toISOString().slice(0, 10),
+          category: expForm.category as ExpenseRecord['category'],
+          subcategory: expForm.subcategory,
+          amount: parseFloat(expForm.amount) || 0,
+          vendor: expForm.vendor || undefined,
+          odometer_km: expForm.odometer_km ? parseFloat(expForm.odometer_km) : undefined,
+          description: expForm.description || undefined,
+        });
+        setExpenses([created, ...expenses]);
+      }
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
+    setOpenModal(null);
+    setEditingExp(null);
+    setExpForm({ date: '', category: 'Running', subcategory: 'Fuel', amount: '', vendor: '', odometer_km: '', description: '' });
+  };
+
+  const savePart = async () => {
+    try {
+      if (editingPartItem) {
+        const updated = await updatePart(editingPartItem.id, {
+          part_name: partForm.name,
+          brand: partForm.brand || undefined,
+          supplier: partForm.category || undefined,
+          installation_date: partForm.install_date || undefined,
+          cost: parseFloat(partForm.cost) || 0,
+          installed_odometer_km: partForm.odometer_km ? parseFloat(partForm.odometer_km) : undefined,
+          notes: partForm.notes || undefined,
+        });
+        setParts(prev => prev.map(p => p.id === editingPartItem.id ? updated : p));
+      } else {
+        const created = await createPart({
+          asset_id: asset.id,
+          part_name: partForm.name,
+          brand: partForm.brand || undefined,
+          supplier: partForm.category || undefined,
+          installation_date: partForm.install_date || undefined,
+          cost: parseFloat(partForm.cost) || 0,
+          installed_odometer_km: partForm.odometer_km ? parseFloat(partForm.odometer_km) : undefined,
+          notes: partForm.notes || undefined,
+        });
+        setParts([created, ...parts]);
+      }
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
+    setOpenModal(null);
+    setEditingPartItem(null);
   };
 
   const saveInsurance = async () => {
@@ -1085,7 +1258,7 @@ export default function AssetDetailPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-default)' }}>
-                    {['Ngày', 'Số lít', 'Giá/L', 'Tổng tiền', 'Odometer', 'Cây xăng', 'L/100km'].map(h => (
+                    {['Ngày', 'Số lít', 'Giá/L', 'Tổng tiền', 'Odometer', 'Cây xăng', 'L/100km', 'Thao tác'].map(h => (
                       <th key={h} className="text-left px-3 py-2.5 font-semibold uppercase text-[10px] tracking-wide">{h}</th>
                     ))}
                   </tr>
@@ -1102,6 +1275,16 @@ export default function AssetDetailPage() {
                       <td className="px-3 py-2.5" style={{ color: f.consumption_l100km && f.consumption_l100km > 7.5 ? 'var(--status-red)' : 'var(--status-green)' }}>
                         {f.consumption_l100km ? `${f.consumption_l100km}L` : '—'}
                       </td>
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center space-x-1">
+                          <button onClick={() => handleOpenEditFuel(f)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDeleteFuel(f.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1115,7 +1298,7 @@ export default function AssetDetailPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Lịch sử bảo dưỡng</h3>
-              <button onClick={() => setOpenModal('maintenance')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
+              <button onClick={() => { setEditingMaint(null); setOpenModal('maintenance'); }} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
                 <Plus className="w-3.5 h-3.5" /><span>Thêm bảo dưỡng</span>
               </button>
             </div>
@@ -1140,7 +1323,15 @@ export default function AssetDetailPage() {
                       {m.notes && <p className="text-[10px] mt-0.5 italic" style={{ color: 'var(--text-faint)' }}>{m.notes}</p>}
                       {m.next_due_km && <p className="text-[10px] mt-0.5" style={{ color: 'var(--accent-cyan)' }}>Kỳ tiếp: {fmt(m.next_due_km)} km {m.next_due_date ? `(${fmtDate(m.next_due_date)})` : ''}</p>}
                     </div>
-                    <span className="font-bold text-sm shrink-0" style={{ color: 'var(--status-red)' }}>{fmt(m.cost)} ₫</span>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="font-bold text-sm" style={{ color: 'var(--status-red)' }}>{fmt(m.cost)} ₫</span>
+                      <button onClick={() => handleOpenEditMaint(m)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDeleteMaint(m.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1153,7 +1344,7 @@ export default function AssetDetailPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Phụ tùng & Nâng cấp</h3>
-              <button onClick={() => setOpenModal('part')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
+              <button onClick={() => { setEditingPartItem(null); setOpenModal('part'); }} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
                 <Plus className="w-3.5 h-3.5" /><span>Thêm phụ tùng</span>
               </button>
             </div>
@@ -1168,7 +1359,15 @@ export default function AssetDetailPage() {
                     {p.warranty_months && <p className="text-[10px] mt-0.5" style={{ color: 'var(--status-green)' }}>Bảo hành: {p.warranty_months} tháng</p>}
                     {p.notes && <p className="text-[10px] mt-0.5 italic" style={{ color: 'var(--text-faint)' }}>{p.notes}</p>}
                   </div>
-                  <span className="font-bold text-sm shrink-0" style={{ color: 'var(--status-amber)' }}>{fmt(p.cost)} ₫</span>
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <span className="font-bold text-sm" style={{ color: 'var(--status-amber)' }}>{fmt(p.cost)} ₫</span>
+                    <button onClick={() => handleOpenEditPart(p)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => handleDeletePart(p.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1183,7 +1382,7 @@ export default function AssetDetailPage() {
                 <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Chi phí phát sinh</h3>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Tổng: <strong style={{ color: 'var(--status-red)' }}>{fmt(totalExpenses)} ₫</strong></p>
               </div>
-              <button onClick={() => setOpenModal('expense')} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
+              <button onClick={() => { setEditingExp(null); setOpenModal('expense'); }} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
                 <Plus className="w-3.5 h-3.5" /><span>Thêm chi phí</span>
               </button>
             </div>
@@ -1198,12 +1397,22 @@ export default function AssetDetailPage() {
                       <p className="mt-0.5" style={{ color: 'var(--text-muted)' }}>
                         {fmtDate(e.date)} {e.vendor ? `• ${e.vendor}` : ''} •
                         <span className="ml-1 px-1.5 py-0.5 rounded" style={{ background: `${CAT_COLORS[e.category]}22`, color: CAT_COLORS[e.category] || '#6B7280', fontSize: 10 }}>
-                          {CAT_LABELS[e.category] || e.category}
+                          {e.category} {e.subcategory ? `> ${e.subcategory}` : ''}
                         </span>
                       </p>
                     </div>
                   </div>
-                  <span className="font-bold shrink-0" style={{ color: 'var(--status-red)' }}>{fmt(e.amount)} ₫</span>
+                  <div className="flex items-center space-x-3 shrink-0">
+                    <span className="font-bold" style={{ color: 'var(--status-red)' }}>{fmt(e.amount)} ₫</span>
+                    <div className="flex items-center space-x-1">
+                      <button onClick={() => handleOpenEditExpense(e)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDeleteExpense(e.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1800,20 +2009,46 @@ export default function AssetDetailPage() {
 
       {/* Expense Modal */}
       {openModal === 'expense' && (
-        <Modal title="Thêm chi phí phát sinh" onClose={() => setOpenModal(null)}>
+        <Modal title={editingExp ? 'Chỉnh sửa chi phí phát sinh' : 'Thêm chi phí phát sinh'} onClose={() => { setOpenModal(null); setEditingExp(null); }}>
           <Field label="Ngày"><input type="date" className="theme-input" value={expForm.date} onChange={e => setExpForm(p => ({ ...p, date: e.target.value }))} /></Field>
-          <Field label="Loại chi phí">
-            <select className="theme-select" value={expForm.category} onChange={e => setExpForm(p => ({ ...p, category: e.target.value }))}>
-              {Object.entries(CAT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          
+          <Field label="Danh mục chính (Category)">
+            <select
+              className="theme-select font-semibold"
+              value={expForm.category}
+              onChange={e => {
+                const newCat = e.target.value;
+                const firstSub = Object.keys(taxMap[newCat]?.subcategories || {})[0] || 'Fuel';
+                setExpForm(p => ({ ...p, category: newCat, subcategory: firstSub }));
+              }}
+            >
+              {Object.entries(taxMap).map(([catKey, catVal]) => (
+                <option key={catKey} value={catKey}>{catVal.label}</option>
+              ))}
             </select>
           </Field>
-          <Field label="Số tiền (₫)"><input type="number" className="theme-input" placeholder="VD: 808500" value={expForm.amount} onChange={e => setExpForm(p => ({ ...p, amount: e.target.value }))} /></Field>
+
+          <Field label="Danh mục con (SubCategory)">
+            <select
+              className="theme-select"
+              value={expForm.subcategory}
+              onChange={e => setExpForm(p => ({ ...p, subcategory: e.target.value }))}
+            >
+              {Object.entries(taxMap[expForm.category]?.subcategories || { Other: 'Khác' }).map(([subKey, subLabel]) => (
+                <option key={subKey} value={subKey}>{subLabel} ({subKey})</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Số tiền (₫)"><input type="number" className="theme-input font-mono font-bold" placeholder="VD: 808500" value={expForm.amount} onChange={e => setExpForm(p => ({ ...p, amount: e.target.value }))} /></Field>
           <Field label="Nhà cung cấp / Địa điểm"><input type="text" className="theme-input" value={expForm.vendor} onChange={e => setExpForm(p => ({ ...p, vendor: e.target.value }))} /></Field>
-          <Field label="Odometer (tuỳ chọn)"><input type="number" className="theme-input" value={expForm.odometer_km} onChange={e => setExpForm(p => ({ ...p, odometer_km: e.target.value }))} /></Field>
-          <Field label="Mô tả"><input type="text" className="theme-input" placeholder="Mô tả ngắn gọn" value={expForm.description} onChange={e => setExpForm(p => ({ ...p, description: e.target.value }))} /></Field>
+          <Field label="Odometer (km - tuỳ chọn)"><input type="number" className="theme-input font-mono" value={expForm.odometer_km} onChange={e => setExpForm(p => ({ ...p, odometer_km: e.target.value }))} /></Field>
+          <Field label="Mô tả"><input type="text" className="theme-input" placeholder="Mô tả ngắn gọn..." value={expForm.description} onChange={e => setExpForm(p => ({ ...p, description: e.target.value }))} /></Field>
           <div className="flex space-x-2 pt-2">
-            <button onClick={saveExpense} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">Lưu</button>
-            <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+            <button onClick={saveExpense} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">
+              {editingExp ? 'Cập nhật chi phí' : 'Lưu chi phí'}
+            </button>
+            <button onClick={() => { setOpenModal(null); setEditingExp(null); }} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
           </div>
         </Modal>
       )}

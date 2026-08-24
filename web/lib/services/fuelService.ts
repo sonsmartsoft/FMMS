@@ -22,6 +22,7 @@ export interface FuelLogInput {
   odometer_km: number;
   fuel_liters: number;
   price_per_liter: number;
+  total_cost?: number;
   station?: string;
   tank_full?: boolean;
   notes?: string;
