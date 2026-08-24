@@ -308,62 +308,79 @@ export default function MaintenancePage() {
       {/* Multi-Service Maintenance Modal */}
       {openModal && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+          <div className="glass-panel rounded-2xl w-full max-w-3xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
 
             {/* Modal Sticky Header */}
             <div className="flex items-center justify-between p-4 sm:p-5 shrink-0 border-b z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
-                <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Thêm đợt bảo dưỡng / Thay phụ tùng</h3>
-                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Quản lý đợt bảo dưỡng gồm nhiều dịch vụ & phụ tùng</p>
+                <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <span>🛠️ Thêm Đợt Bảo Dưỡng / Thay Phụ Tùng Mới</span>
+                </h3>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Ghi nhận đợt bảo dưỡng gồm nhiều hạng mục dịch vụ &amp; phụ tùng cùng lúc</p>
               </div>
-              <button onClick={() => setOpenModal(false)} className="p-1 rounded-lg hover:bg-slate-500/10" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
+              <button onClick={() => setOpenModal(false)} className="p-1.5 rounded-xl hover:bg-white/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
             </div>
 
             {/* Modal Scrollable Body */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1 col-span-2">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
-                  <select className="theme-select" value={form.asset_id} onChange={e => setForm(p => ({ ...p, asset_id: e.target.value }))}>
-                    {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.brand})</option>)}
-                  </select>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+              {/* Section 1: General Info */}
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">1. Thông tin Đợt Bảo Dưỡng</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1 sm:col-span-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
+                    <select className="theme-select font-semibold" value={form.asset_id} onChange={e => setForm(p => ({ ...p, asset_id: e.target.value }))}>
+                      {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.brand})</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày thực hiện *</label>
+                    <input type="date" className="theme-input font-medium" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Odometer lúc BD (km)</label>
+                    <input type="number" className="theme-input font-mono font-bold" placeholder="VD: 12846" value={form.odometer_km} onChange={e => setForm(p => ({ ...p, odometer_km: e.target.value }))} />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày thực hiện *</label>
-                  <input type="date" className="theme-input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Odometer lúc BD (km)</label>
-                  <input type="number" className="theme-input" placeholder="12846" value={form.odometer_km} onChange={e => setForm(p => ({ ...p, odometer_km: e.target.value }))} />
-                </div>
-                <div className="space-y-1 col-span-2">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Gói / Loại bảo dưỡng chính</label>
-                  <select className="theme-select" value={form.maintenance_type} onChange={e => setForm(p => ({ ...p, maintenance_type: e.target.value }))}>
-                    {categories.map((t: string) => <option key={t}>{t}</option>)}
-                  </select>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <div className="space-y-1 sm:col-span-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Gói / Loại bảo dưỡng chính</label>
+                    <select className="theme-select font-semibold" value={form.maintenance_type} onChange={e => setForm(p => ({ ...p, maintenance_type: e.target.value }))}>
+                      {categories.map((t: string) => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Garage / Đại lý thực hiện</label>
+                    <input type="text" className="theme-input" placeholder="VD: Thaco Mazda Hà Đông" value={form.vendor} onChange={e => setForm(p => ({ ...p, vendor: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Kỳ bảo dưỡng tiếp (km)</label>
+                    <input type="number" className="theme-input font-mono" placeholder="VD: 17846" value={form.next_due_km} onChange={e => setForm(p => ({ ...p, next_due_km: e.target.value }))} />
+                  </div>
                 </div>
               </div>
 
               {/* Multi-Service Line Items Section */}
               <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                 <div className="flex items-center justify-between">
-                  <span className="font-bold uppercase tracking-wider text-[11px]" style={{ color: 'var(--accent-cyan)' }}>
-                    Chi tiết các hạng mục / Dịch vụ ({serviceItems.length})
+                  <span className="font-bold uppercase tracking-wider text-xs text-purple-400">
+                    2. Chi tiết các Hạng mục / Dịch vụ &amp; Phụ tùng ({serviceItems.length})
                   </span>
-                  <button type="button" onClick={addServiceItem} className="text-[11px] font-bold px-2.5 py-1 rounded-lg text-white" style={{ background: 'var(--accent-cyan)' }}>
+                  <button type="button" onClick={addServiceItem} className="text-xs font-bold px-3 py-1.5 rounded-xl text-white shadow-sm transition hover:opacity-90 flex items-center gap-1" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
                     + Thêm dịch vụ
                   </button>
                 </div>
 
                 {/* Quick suggestions */}
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Thêm nhanh:</span>
+                  <span className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Chọn nhanh:</span>
                   {categories.slice(0, 6).map((cat, i) => (
                     <button
                       key={i}
                       type="button"
                       onClick={() => setServiceItems(p => [...p, { name: cat, cost: '' }])}
-                      className="px-2 py-0.5 rounded text-[10px] font-semibold hover:opacity-80 transition"
+                      className="px-2.5 py-1 rounded-lg text-[10px] font-semibold transition hover:opacity-90"
                       style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}
                     >
                       + {cat}
@@ -374,13 +391,13 @@ export default function MaintenancePage() {
                 {/* Column Headers */}
                 <div className="grid grid-cols-12 gap-2 text-[10px] font-bold uppercase tracking-wider px-1 pt-1" style={{ color: 'var(--text-muted)' }}>
                   <div className="col-span-7">Tên Hạng Mục / Dịch Vụ Bảo Dưỡng *</div>
-                  <div className="col-span-4">Đơn Giá Nhập (₫) *</div>
-                  <div className="col-span-1"></div>
+                  <div className="col-span-4">Chi phí thực tế (₫) *</div>
+                  <div className="col-span-1 text-center">Xóa</div>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {serviceItems.map((item, idx) => (
-                    <div key={idx} className="p-2.5 rounded-xl space-y-1.5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                    <div key={idx} className="p-2.5 rounded-xl space-y-1.5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                       <div className="grid grid-cols-12 gap-2 items-center">
                         <div className="col-span-7">
                           <select
@@ -418,16 +435,16 @@ export default function MaintenancePage() {
                         <div className="col-span-4">
                           <input
                             type="number"
-                            className="theme-input font-mono font-bold text-xs"
-                            placeholder="Điền giá thực tế (₫)"
+                            className="theme-input font-mono font-bold text-xs text-emerald-400"
+                            placeholder="Chi phí ₫"
                             value={item.cost}
                             onChange={e => updateServiceItem(idx, 'cost', e.target.value)}
                           />
                         </div>
 
-                        <div className="col-span-1 flex justify-end">
+                        <div className="col-span-1 flex justify-center">
                           {serviceItems.length > 1 && (
-                            <button type="button" onClick={() => removeServiceItem(idx)} className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 shrink-0">
+                            <button type="button" onClick={() => removeServiceItem(idx)} className="p-1.5 rounded-xl text-rose-400 hover:bg-rose-500/15 shrink-0 transition" title="Xóa dòng">
                               <X className="w-4 h-4" />
                             </button>
                           )}
@@ -437,20 +454,9 @@ export default function MaintenancePage() {
                   ))}
                 </div>
 
-                <div className="flex justify-between items-center pt-2 border-t font-bold text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
+                <div className="flex justify-between items-center pt-3 border-t font-bold text-xs" style={{ borderColor: 'var(--border-default)' }}>
                   <span style={{ color: 'var(--text-muted)' }}>Tổng chi phí các hạng mục:</span>
-                  <span style={{ color: 'var(--status-red)' }}>{fmt(calculatedItemsCost)} ₫</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Garage / Đại lý</label>
-                  <input type="text" className="theme-input" placeholder="VD: Mazda Hà Đông" value={form.vendor} onChange={e => setForm(p => ({ ...p, vendor: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Kỳ tiếp theo (km)</label>
-                  <input type="number" className="theme-input" placeholder="17846" value={form.next_due_km} onChange={e => setForm(p => ({ ...p, next_due_km: e.target.value }))} />
+                  <span className="text-sm font-mono text-rose-400 font-extrabold">{fmt(calculatedItemsCost)} ₫</span>
                 </div>
               </div>
             </div>

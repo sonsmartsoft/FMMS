@@ -332,61 +332,76 @@ export default function FuelPage() {
           onClick={() => setOpenModal(false)}
         >
           <div
-            className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+            className="glass-panel rounded-2xl w-full max-w-2xl my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
             style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 sm:p-5 shrink-0 border-b z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
-                <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
-                  {editingId ? '✏️ Chỉnh sửa bản ghi nhiên liệu' : '⛽ Ghi nhận đổ nhiên liệu mới'}
+                <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <span>{editingId ? '✏️ Chỉnh Sửa Bản Ghi Nhiên Liệu' : '⛽ Ghi Nhận Đổ Nhiên Liệu / Sạc Pin Mới'}</span>
                 </h3>
-                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  {editingId ? 'Cập nhật thông tin đợt đổ xăng' : 'Nhập thông tin đợt đổ xăng / sạc pin'}
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                  {editingId ? 'Cập nhật thông tin đợt đổ xăng' : 'Nhập thông tin đợt đổ xăng / sạc pin để tính mức tiêu thụ l/100km'}
                 </p>
               </div>
-              <button onClick={() => setOpenModal(false)} className="p-1 rounded-lg hover:bg-slate-500/10 transition" style={{ color: 'var(--text-muted)' }}>
+              <button onClick={() => setOpenModal(false)} className="p-1.5 rounded-xl hover:bg-white/10 transition" style={{ color: 'var(--text-muted)' }}>
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 text-xs">
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
-                <select className="theme-select" value={form.asset_id} onChange={e => setForm(p => ({ ...p, asset_id: e.target.value }))}>
-                  {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.license_plate || a.brand})</option>)}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày đổ xăng *</label>
-                <input type="date" className="theme-input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Số lít *</label>
-                  <input type="number" step="0.1" className="theme-input" placeholder="35.0" value={form.liters} onChange={e => setForm(p => ({ ...p, liters: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Giá/Lít (₫) *</label>
-                  <input type="number" className="theme-input" placeholder="23100" value={form.price_per_liter} onChange={e => setForm(p => ({ ...p, price_per_liter: e.target.value }))} />
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">1. Thông tin Đợt Đổ Xăng</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
+                    <select className="theme-select font-semibold" value={form.asset_id} onChange={e => setForm(p => ({ ...p, asset_id: e.target.value }))}>
+                      {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.license_plate || a.brand})</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày đổ xăng *</label>
+                    <input type="date" className="theme-input font-medium" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+                  </div>
                 </div>
               </div>
-              {form.liters && form.price_per_liter && (
-                <div className="px-3 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between" style={{ background: 'var(--accent-cyan-bg)', border: '1px solid var(--accent-cyan-border)' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Tổng tiền tính được:</span>
-                  <span style={{ color: 'var(--accent-cyan)' }}>{fmt(parseFloat(form.liters) * parseFloat(form.price_per_liter))} ₫</span>
+
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">2. Số Lượng &amp; Chi Phí Nhiên Liệu</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Số lít *</label>
+                    <input type="number" step="0.1" className="theme-input font-mono font-bold text-cyan-400" placeholder="35.0" value={form.liters} onChange={e => setForm(p => ({ ...p, liters: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Đơn giá (₫/Lít) *</label>
+                    <input type="number" className="theme-input font-mono font-bold" placeholder="23100" value={form.price_per_liter} onChange={e => setForm(p => ({ ...p, price_per_liter: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Odometer lúc đổ (km)</label>
+                    <input type="number" className="theme-input font-mono font-bold" placeholder="12846" value={form.odometer_km} onChange={e => setForm(p => ({ ...p, odometer_km: e.target.value }))} />
+                  </div>
                 </div>
-              )}
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Odometer lúc đổ (km)</label>
-                <input type="number" className="theme-input" placeholder="12846" value={form.odometer_km} onChange={e => setForm(p => ({ ...p, odometer_km: e.target.value }))} />
+
+                {form.liters && form.price_per_liter && (
+                  <div className="px-4 py-3 rounded-xl text-xs font-extrabold flex items-center justify-between" style={{ background: 'var(--accent-cyan-bg)', border: '1px solid var(--accent-cyan-border)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Tổng thanh toán tiền xăng:</span>
+                    <span className="text-sm font-mono text-cyan-400 font-extrabold">{fmt(parseFloat(form.liters) * parseFloat(form.price_per_liter))} ₫</span>
+                  </div>
+                )}
               </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Cây xăng / Trạm sạc</label>
-                <input type="text" className="theme-input" placeholder="VD: PV OIL Cầu Giấy, Petrolimex Hà Đông" value={form.station} onChange={e => setForm(p => ({ ...p, station: e.target.value }))} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ghi chú</label>
-                <input type="text" className="theme-input" placeholder="Ghi chú thêm nếu cần..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Cây xăng / Trạm sạc</label>
+                    <input type="text" className="theme-input" placeholder="VD: PV OIL Cầu Giấy, Petrolimex Hà Đông..." value={form.station} onChange={e => setForm(p => ({ ...p, station: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Ghi chú thêm</label>
+                    <input type="text" className="theme-input" placeholder="Ghi chú đợt đổ xăng..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+                  </div>
+                </div>
               </div>
             </div>
             <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
