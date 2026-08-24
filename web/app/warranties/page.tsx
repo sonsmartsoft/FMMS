@@ -377,18 +377,18 @@ export default function WarrantiesPage() {
 
       {/* Add Warranty Modal */}
       {openModal === 'warranty' && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md overflow-y-auto" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
-          <div className="relative rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+        <div className="fixed inset-0 z-[9999] grid place-items-center p-4 sm:p-6 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
+          <div className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
                 <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                   <span>🛡️ Thêm Sổ Bảo Hành Phương Tiện &amp; Phụ Tùng</span>
                 </h3>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Quản lý thời hạn bảo hành chính hãng, phụ tùng nâng cấp và đồ chơi xe</p>
               </div>
-              <button onClick={() => setOpenModal(null)} className="p-1.5 rounded-xl hover:bg-white/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
+              <button onClick={() => setOpenModal(null)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
               <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                 <h4 className="font-bold text-xs uppercase tracking-wider text-amber-400">1. Thông tin Hạng mục &amp; Loại Bảo hành</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -410,7 +410,6 @@ export default function WarrantiesPage() {
                   </div>
                 </div>
               </div>
-
               <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                 <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">2. Đơn vị cấp &amp; Thời hạn Bảo hành</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -433,11 +432,11 @@ export default function WarrantiesPage() {
                 </div>
               </div>
             </div>
-            <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+            <div className="p-4 shrink-0 border-t flex space-x-2" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <button onClick={saveWarranty} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
                 Lưu sổ bảo hành
               </button>
-              <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+              <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
             </div>
           </div>
         </div>
@@ -445,18 +444,18 @@ export default function WarrantiesPage() {
 
       {/* Add Claim Modal */}
       {openModal === 'claim' && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md overflow-y-auto" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
-          <div className="relative rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+        <div className="fixed inset-0 z-[9999] grid place-items-center p-4 sm:p-6 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
+          <div className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 580px)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
                 <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                   <span>📋 Tạo Yêu Cầu Bảo Hành / Claim Bồi Thường</span>
                 </h3>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Theo dõi nhật ký đổi trả, bảo hành sự cố thiết bị &amp; phụ tùng</p>
               </div>
-              <button onClick={() => setOpenModal(null)} className="p-1.5 rounded-xl hover:bg-white/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
+              <button onClick={() => setOpenModal(null)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
               <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -488,11 +487,11 @@ export default function WarrantiesPage() {
                 </div>
               </div>
             </div>
-            <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+            <div className="p-4 shrink-0 border-t flex space-x-2" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <button onClick={saveClaim} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #8B5CF6, #6366F1)' }}>
                 Gửi Yêu Cầu Claim Bồi Thường
               </button>
-              <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+              <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
             </div>
           </div>
         </div>
