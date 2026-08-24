@@ -78,7 +78,7 @@ export interface ExpenseRecord {
   id: string;
   asset_id: string;
   date: string;
-  category: 'FUEL' | 'MAINTENANCE' | 'PARTS' | 'LABOR' | 'INSURANCE' | 'REGISTRATION' | 'INSPECTION' | 'TOLL' | 'PARKING' | 'UPGRADE' | 'OTHER';
+  category: 'FUEL' | 'MAINTENANCE' | 'PARTS' | 'LABOR' | 'INSURANCE' | 'REGISTRATION' | 'INSPECTION' | 'TOLL' | 'PARKING' | 'UPGRADE' | 'INITIAL' | 'CAR_WASH' | 'LOAN_PAYMENT' | 'LOAN_INTEREST' | 'OTHER';
   amount: number;
   currency: string;
   vendor?: string;
