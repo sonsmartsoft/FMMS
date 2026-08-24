@@ -678,6 +678,7 @@ export default function FinancePage() {
             </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* ─── Add/Edit Expense Modal ─── */}
@@ -755,14 +756,13 @@ export default function FinancePage() {
             </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* ─── Record Payment Modal ─── */}
       {showPaymentModal && selectedLoan && (
         <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setShowPaymentModal(false)}>
-
           <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-
             <div className="relative rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Ghi nhận thanh toán khoản vay</h3>
@@ -793,6 +793,7 @@ export default function FinancePage() {
             </div>
           </div>
         </div>
+      </div>
       )}
     </div>
   );

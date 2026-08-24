@@ -309,13 +309,12 @@ export default function MasterDataPage() {
             </div>
           </div>
         </div>
+      </div>
       )}
       {/* Edit SubCategory Modal */}
       {editingSub && (
         <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingSub(null)}>
-
           <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-
             <div className="relative rounded-2xl w-full max-w-md p-5 space-y-4 shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border-default)' }}>
               <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -340,6 +339,7 @@ export default function MasterDataPage() {
             </div>
           </div>
         </div>
+      </div>
       )}
 
       {/* ─── 0. Admin 2-Tier Taxonomy Manager (Category & SubCategory) ─── */}

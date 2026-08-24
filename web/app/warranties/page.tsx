@@ -378,68 +378,67 @@ export default function WarrantiesPage() {
       {/* Add Warranty Modal */}
       {openModal === 'warranty' && (
         <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
-
           <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-
             <div className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
-              <div>
-                <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                  <span>🛡️ Thêm Sổ Bảo Hành Phương Tiện &amp; Phụ Tùng</span>
-                </h3>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Quản lý thời hạn bảo hành chính hãng, phụ tùng nâng cấp và đồ chơi xe</p>
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+                <div>
+                  <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    <span>🛡️ Thêm Sổ Bảo Hành Phương Tiện &amp; Phụ Tùng</span>
+                  </h3>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Quản lý thời hạn bảo hành chính hãng, phụ tùng nâng cấp và đồ chơi xe</p>
+                </div>
+                <button onClick={() => setOpenModal(null)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
               </div>
-              <button onClick={() => setOpenModal(null)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
-              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                <h4 className="font-bold text-xs uppercase tracking-wider text-amber-400">1. Thông tin Hạng mục &amp; Loại Bảo hành</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
-                    <select className="theme-select font-semibold" value={wForm.asset_id} onChange={e => setWForm(p => ({ ...p, asset_id: e.target.value }))}>
-                      {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.brand})</option>)}
-                    </select>
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
+                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-amber-400">1. Thông tin Hạng mục &amp; Loại Bảo hành</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
+                      <select className="theme-select font-semibold" value={wForm.asset_id} onChange={e => setWForm(p => ({ ...p, asset_id: e.target.value }))}>
+                        {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.brand})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Loại bảo hành</label>
+                      <select className="theme-select font-semibold" value={wForm.warranty_type} onChange={e => setWForm(p => ({ ...p, warranty_type: e.target.value }))}>
+                        {['Bảo hành Hãng sản xuất', 'Bảo hành Phụ tùng', 'Bảo hành Nâng cấp / Đồ chơi', 'Bảo hành Lắp đặt', 'Khác'].map(t => <option key={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Tên hạng mục bảo hành *</label>
+                      <input type="text" className="theme-input" placeholder="VD: Bảo hành động cơ Thaco, Màn hình Zestech ZX10..." value={wForm.item_name} onChange={e => setWForm(p => ({ ...p, item_name: e.target.value }))} />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Loại bảo hành</label>
-                    <select className="theme-select font-semibold" value={wForm.warranty_type} onChange={e => setWForm(p => ({ ...p, warranty_type: e.target.value }))}>
-                      {['Bảo hành Hãng sản xuất', 'Bảo hành Phụ tùng', 'Bảo hành Nâng cấp / Đồ chơi', 'Bảo hành Lắp đặt', 'Khác'].map(t => <option key={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Tên hạng mục bảo hành *</label>
-                    <input type="text" className="theme-input" placeholder="VD: Bảo hành động cơ Thaco, Màn hình Zestech ZX10..." value={wForm.item_name} onChange={e => setWForm(p => ({ ...p, item_name: e.target.value }))} />
+                </div>
+                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">2. Đơn vị cấp &amp; Thời hạn Bảo hành</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị / Đại lý bảo hành *</label>
+                      <input type="text" className="theme-input" placeholder="VD: Mazda Việt Nam, Zestech Hà Đông..." value={wForm.provider} onChange={e => setWForm(p => ({ ...p, provider: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số thẻ / Số hợp đồng bảo hành</label>
+                      <input type="text" className="theme-input font-mono" placeholder="VD: WAR-2026-987" value={wForm.warranty_number} onChange={e => setWForm(p => ({ ...p, warranty_number: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày bắt đầu</label>
+                      <input type="date" className="theme-input" value={wForm.start_date} onChange={e => setWForm(p => ({ ...p, start_date: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày hết hạn *</label>
+                      <input type="date" className="theme-input" value={wForm.expiry_date} onChange={e => setWForm(p => ({ ...p, expiry_date: e.target.value }))} />
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">2. Đơn vị cấp &amp; Thời hạn Bảo hành</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị / Đại lý bảo hành *</label>
-                    <input type="text" className="theme-input" placeholder="VD: Mazda Việt Nam, Zestech Hà Đông..." value={wForm.provider} onChange={e => setWForm(p => ({ ...p, provider: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số thẻ / Số hợp đồng bảo hành</label>
-                    <input type="text" className="theme-input font-mono" placeholder="VD: WAR-2026-987" value={wForm.warranty_number} onChange={e => setWForm(p => ({ ...p, warranty_number: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày bắt đầu</label>
-                    <input type="date" className="theme-input" value={wForm.start_date} onChange={e => setWForm(p => ({ ...p, start_date: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày hết hạn *</label>
-                    <input type="date" className="theme-input" value={wForm.expiry_date} onChange={e => setWForm(p => ({ ...p, expiry_date: e.target.value }))} />
-                  </div>
-                </div>
+              <div className="p-4 shrink-0 border-t flex space-x-2" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+                <button onClick={saveWarranty} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                  Lưu sổ bảo hành
+                </button>
+                <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
               </div>
-            </div>
-            <div className="p-4 shrink-0 border-t flex space-x-2" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
-              <button onClick={saveWarranty} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
-                Lưu sổ bảo hành
-              </button>
-              <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
             </div>
           </div>
         </div>
@@ -448,56 +447,55 @@ export default function WarrantiesPage() {
       {/* Add Claim Modal */}
       {openModal === 'claim' && (
         <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
-
           <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-
             <div className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 580px)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
-              <div>
-                <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                  <span>📋 Tạo Yêu Cầu Bảo Hành / Claim Bồi Thường</span>
-                </h3>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Theo dõi nhật ký đổi trả, bảo hành sự cố thiết bị &amp; phụ tùng</p>
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+                <div>
+                  <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    <span>📋 Tạo Yêu Cầu Bảo Hành / Claim Bồi Thường</span>
+                  </h3>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Theo dõi nhật ký đổi trả, bảo hành sự cố thiết bị &amp; phụ tùng</p>
+                </div>
+                <button onClick={() => setOpenModal(null)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
               </div>
-              <button onClick={() => setOpenModal(null)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
-              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
-                    <select className="theme-select font-semibold" value={cForm.asset_id} onChange={e => setCForm(p => ({ ...p, asset_id: e.target.value }))}>
-                      {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.brand})</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Trạng thái yêu cầu</label>
-                    <select className="theme-select font-semibold" value={cForm.status} onChange={e => setCForm(p => ({ ...p, status: e.target.value as any }))}>
-                      <option value="PENDING">⏳ PENDING (Đang chờ xử lý)</option>
-                      <option value="APPROVED">✅ APPROVED (Đã duyệt bồi thường)</option>
-                      <option value="RESOLVED">🎉 RESOLVED (Hoàn tất thay thế/sửa chữa)</option>
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Mô tả sự cố / Lý do Claim *</label>
-                    <input type="text" className="theme-input" placeholder="VD: Lỗi cảm biến lốp TPMS, Hỏng camera 360..." value={cForm.description} onChange={e => setCForm(p => ({ ...p, description: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số tiền bồi thường yêu cầu (₫) *</label>
-                    <input type="number" className="theme-input font-mono font-bold text-purple-400" placeholder="VD: 1500000" value={cForm.amount_claimed} onChange={e => setCForm(p => ({ ...p, amount_claimed: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Đại lý / Đơn vị tiếp nhận bồi thường</label>
-                    <input type="text" className="theme-input" placeholder="VD: Zestech Hà Đông" value={cForm.vendor} onChange={e => setCForm(p => ({ ...p, vendor: e.target.value }))} />
+              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
+                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
+                      <select className="theme-select font-semibold" value={cForm.asset_id} onChange={e => setCForm(p => ({ ...p, asset_id: e.target.value }))}>
+                        {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.brand})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Trạng thái yêu cầu</label>
+                      <select className="theme-select font-semibold" value={cForm.status} onChange={e => setCForm(p => ({ ...p, status: e.target.value as any }))}>
+                        <option value="PENDING">⏳ PENDING (Đang chờ xử lý)</option>
+                        <option value="APPROVED">✅ APPROVED (Đã duyệt bồi thường)</option>
+                        <option value="RESOLVED">🎉 RESOLVED (Hoàn tất thay thế/sửa chữa)</option>
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Mô tả sự cố / Lý do Claim *</label>
+                      <input type="text" className="theme-input" placeholder="VD: Lỗi cảm biến lốp TPMS, Hỏng camera 360..." value={cForm.description} onChange={e => setCForm(p => ({ ...p, description: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số tiền bồi thường yêu cầu (₫) *</label>
+                      <input type="number" className="theme-input font-mono font-bold text-purple-400" placeholder="VD: 1500000" value={cForm.amount_claimed} onChange={e => setCForm(p => ({ ...p, amount_claimed: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Đại lý / Đơn vị tiếp nhận bồi thường</label>
+                      <input type="text" className="theme-input" placeholder="VD: Zestech Hà Đông" value={cForm.vendor} onChange={e => setCForm(p => ({ ...p, vendor: e.target.value }))} />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="p-4 shrink-0 border-t flex space-x-2" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
-              <button onClick={saveClaim} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #8B5CF6, #6366F1)' }}>
-                Gửi Yêu Cầu Claim Bồi Thường
-              </button>
-              <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+              <div className="p-4 shrink-0 border-t flex space-x-2" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+                <button onClick={saveClaim} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #8B5CF6, #6366F1)' }}>
+                  Gửi Yêu Cầu Claim Bồi Thường
+                </button>
+                <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+              </div>
             </div>
           </div>
         </div>

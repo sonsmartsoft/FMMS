@@ -336,116 +336,118 @@ export default function DeviceManagementPage() {
       {/* EDIT & DEVICE ASSIGNMENT MODAL */}
       {editingDevice && (
         <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md"
-          style={{ background: 'rgba(0,0,0,0.6)' }}>
-          <div className="w-full max-w-md p-6 rounded-2xl space-y-4 border shadow-2xl animate-scaleIn"
-            style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)' }}>
-            <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-              <h3 className="font-bold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                <Edit3 className="w-5 h-5 text-cyan-400" />
-                Chỉnh sửa & Gán xe cho Thiết bị
-              </h3>
-              <button onClick={() => setEditingDevice(null)} className="p-1 rounded-lg hover:bg-white/10">
-                <X className="w-5 h-5 text-slate-400" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block mb-1 font-bold" style={{ color: 'var(--text-muted)' }}>Device ID (UUID)</label>
-                <input
-                  type="text"
-                  disabled
-                  value={editingDevice.id}
-                  className="w-full p-2.5 rounded-xl font-mono text-[11px]"
-                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
-                />
+          style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setEditingDevice(null)}>
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
+            <div className="w-full max-w-md p-6 rounded-2xl space-y-4 border shadow-2xl animate-scaleIn"
+              style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)' }} onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                <h3 className="font-bold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <Edit3 className="w-5 h-5 text-cyan-400" />
+                  Chỉnh sửa & Gán xe cho Thiết bị
+                </h3>
+                <button onClick={() => setEditingDevice(null)} className="p-1 rounded-lg hover:bg-white/10">
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
               </div>
 
-              <div>
-                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Tên thiết bị (Tracker Name)</label>
-                <input
-                  type="text"
-                  value={editingDevice.name}
-                  onChange={e => setEditingDevice({ ...editingDevice, name: e.target.value })}
-                  placeholder="VD: Tracker xe đạp Uti"
-                  className="w-full p-2.5 rounded-xl"
-                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                />
-              </div>
-
-              <div>
-                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Phương tiện gán (`vehicle_id`)</label>
-                <select
-                  value={editingDevice.vehicleId}
-                  onChange={e => setEditingDevice({ ...editingDevice, vehicleId: e.target.value })}
-                  className="w-full p-2.5 rounded-xl text-xs font-medium"
-                  style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                >
-                  <option value="">-- Chưa gán xe --</option>
-                  {assets.map(a => (
-                    <option key={a.id} value={a.id}>
-                      🚗 {a.name} ({a.license_plate || a.brand}) — {a.asset_type}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[10px] mt-1" style={{ color: 'var(--text-faint)' }}>
-                  Gán xe ở đây sẽ đồng bộ tức thì về Android app khi app gọi `get_fleet_vehicles`.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-3 text-xs">
                 <div>
-                  <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Loại thiết bị</label>
-                  <select
-                    value={editingDevice.deviceType}
-                    onChange={e => setEditingDevice({ ...editingDevice, deviceType: e.target.value })}
-                    className="w-full p-2.5 rounded-xl"
-                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="GPS-TRACKER">GPS-TRACKER (Xe đạp)</option>
-                    <option value="ELM327-BT">ELM327-BT (OBD Ô tô)</option>
-                    <option value="ZESTECH_ADAS">ZESTECH ADAS</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Bluetooth MAC (nếu có)</label>
+                  <label className="block mb-1 font-bold" style={{ color: 'var(--text-muted)' }}>Device ID (UUID)</label>
                   <input
                     type="text"
-                    value={editingDevice.macAddress}
-                    onChange={e => setEditingDevice({ ...editingDevice, macAddress: e.target.value })}
-                    placeholder="AA:BB:CC:11:22:33"
+                    disabled
+                    value={editingDevice.id}
                     className="w-full p-2.5 rounded-xl font-mono text-[11px]"
+                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
+                  />
+                </div>
+
+                <div>
+                  <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Tên thiết bị (Tracker Name)</label>
+                  <input
+                    type="text"
+                    value={editingDevice.name}
+                    onChange={e => setEditingDevice({ ...editingDevice, name: e.target.value })}
+                    placeholder="VD: Tracker xe đạp Uti"
+                    className="w-full p-2.5 rounded-xl"
                     style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                   />
                 </div>
-              </div>
-            </div>
 
-            <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-              <button
-                onClick={() => handleDeleteDevice(editingDevice.id)}
-                className="px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 flex items-center gap-1.5"
-              >
-                <Trash2 className="w-4 h-4" />
-                Xóa thiết bị
-              </button>
-              <div className="flex items-center gap-2">
+                <div>
+                  <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Phương tiện gán (`vehicle_id`)</label>
+                  <select
+                    value={editingDevice.vehicleId}
+                    onChange={e => setEditingDevice({ ...editingDevice, vehicleId: e.target.value })}
+                    className="w-full p-2.5 rounded-xl text-xs font-medium"
+                    style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="">-- Chưa gán xe --</option>
+                    {assets.map(a => (
+                      <option key={a.id} value={a.id}>
+                        🚗 {a.name} ({a.license_plate || a.brand}) — {a.asset_type}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] mt-1" style={{ color: 'var(--text-faint)' }}>
+                    Gán xe ở đây sẽ đồng bộ tức thì về Android app khi app gọi `get_fleet_vehicles`.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Loại thiết bị</label>
+                    <select
+                      value={editingDevice.deviceType}
+                      onChange={e => setEditingDevice({ ...editingDevice, deviceType: e.target.value })}
+                      className="w-full p-2.5 rounded-xl"
+                      style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                    >
+                      <option value="GPS-TRACKER">GPS-TRACKER (Xe đạp)</option>
+                      <option value="ELM327-BT">ELM327-BT (OBD Ô tô)</option>
+                      <option value="ZESTECH_ADAS">ZESTECH ADAS</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Bluetooth MAC (nếu có)</label>
+                    <input
+                      type="text"
+                      value={editingDevice.macAddress}
+                      onChange={e => setEditingDevice({ ...editingDevice, macAddress: e.target.value })}
+                      placeholder="AA:BB:CC:11:22:33"
+                      className="w-full p-2.5 rounded-xl font-mono text-[11px]"
+                      style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
                 <button
-                  onClick={() => setEditingDevice(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold hover:bg-white/10"
-                  style={{ color: 'var(--text-muted)' }}
+                  onClick={() => handleDeleteDevice(editingDevice.id)}
+                  className="px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 flex items-center gap-1.5"
                 >
-                  Hủy
+                  <Trash2 className="w-4 h-4" />
+                  Xóa thiết bị
                 </button>
-                <button
-                  disabled={saving}
-                  onClick={handleSaveDevice}
-                  className="px-5 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-2"
-                  style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
-                >
-                  <Save className="w-4 h-4" />
-                  {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEditingDevice(null)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold hover:bg-white/10"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    disabled={saving}
+                    onClick={handleSaveDevice}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-2"
+                    style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+                  >
+                    <Save className="w-4 h-4" />
+                    {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
