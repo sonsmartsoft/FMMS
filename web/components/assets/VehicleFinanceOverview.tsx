@@ -142,18 +142,14 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
 
   // 1. Mandatory Initial Rollout Fees (Trước bạ, Đăng kiểm, Phí biển số, BH Thân vỏ, Phí NH, BH Khoản vay)
   const initialRolloutExpenses = useMemo(() => {
-    return expenses.filter(e => 
-      e.category === 'REGISTRATION' ||
-      (e.category as string) === 'INSURANCE' ||
-      (e.description && (
-        e.description.toLowerCase().includes('trước bạ') || 
-        e.description.toLowerCase().includes('đăng kiểm') || 
-        e.description.toLowerCase().includes('biển số') || 
-        e.description.toLowerCase().includes('thân vỏ') || 
-        e.description.toLowerCase().includes('phí dịch vụ ngân hàng') || 
-        e.description.toLowerCase().includes('bảo hiểm khoản vay')
-      ))
-    );
+    return expenses.filter(e => {
+      const c = (e.category || '').toUpperCase();
+      const sc = (e.subcategory || '').toLowerCase();
+      if (c === 'REGISTRATION' || c === 'INSURANCE' || sc === 'registration' || sc === 'insurance' || sc === 'loan fee' || sc === 'loan insurance') {
+        return true;
+      }
+      return c === 'INITIAL' && sc !== 'purchase';
+    });
   }, [expenses]);
 
   // System-wide Dynamic Formulas for ALL Vehicles:
@@ -171,13 +167,14 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
 
   // 4. Upgrades Total (Tổng chi phí Nâng cấp & Đồ chơi)
   const totalUpgradeCost = useMemo(() => {
-    const expUpgrades = expenses.filter(e => 
-      (e.category === 'UPGRADE' || e.category === 'PARTS') &&
-      !e.description?.toLowerCase().includes('trước bạ') &&
-      !e.description?.toLowerCase().includes('đặt cọc') &&
-      !e.description?.toLowerCase().includes('chuyển tiền') &&
-      !e.description?.toLowerCase().includes('mua xe')
-    ).reduce((s, e) => s + e.amount, 0);
+    const expUpgrades = expenses.filter(e => {
+      const c = (e.category || '').toUpperCase();
+      const sc = (e.subcategory || '').toLowerCase();
+      if (sc === 'car wash' || sc === 'fuel' || sc === 'epass fee' || sc === 'parking' || sc === 'running fine' || sc === 'monthly payment' || sc === 'interest' || sc === 'purchase' || sc === 'registration' || sc === 'loan fee' || sc === 'loan insurance') {
+        return false;
+      }
+      return c === 'UPGRADE' || c === 'PARTS';
+    }).reduce((s, e) => s + e.amount, 0);
 
     if (expUpgrades > 0) return expUpgrades;
     return parts.reduce((s, p) => s + (p.cost || 0), 0);
@@ -185,25 +182,12 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
 
   // 5. Running Costs Total (Chi phí vận hành: Xăng, Trạm epass, Đỗ xe, Rửa xe...)
   const totalRunningCost = useMemo(() => {
-    return expenses.filter(e => 
-      e.category === 'FUEL' ||
-      e.category === 'TOLL' ||
-      e.category === 'PARKING' ||
-      e.category === 'CAR_WASH' ||
-      (e.category !== 'UPGRADE' && 
-       e.category !== 'PARTS' && 
-       (e.category as string) !== 'INITIAL' &&
-       e.category !== 'REGISTRATION' &&
-       e.category !== 'INSURANCE' &&
-       e.category !== 'LOAN_PAYMENT' &&
-       e.category !== 'LOAN_INTEREST' &&
-       !e.description?.toLowerCase().includes('thanh toán') &&
-       !e.description?.toLowerCase().includes('gốc') &&
-       !e.description?.toLowerCase().includes('lãi') &&
-       !e.description?.toLowerCase().includes('trước bạ') &&
-       !e.description?.toLowerCase().includes('đặt cọc') &&
-       !e.description?.toLowerCase().includes('mua xe'))
-    ).reduce((s, e) => s + e.amount, 0);
+    return expenses.filter(e => {
+      const c = (e.category || '').toUpperCase();
+      const sc = (e.subcategory || '').toLowerCase();
+      return c === 'RUNNING' || c === 'FUEL' || c === 'TOLL' || c === 'PARKING' || c === 'CAR_WASH' ||
+        sc === 'fuel' || sc === 'car wash' || sc === 'epass fee' || sc === 'parking' || sc === 'running fine';
+    }).reduce((s, e) => s + e.amount, 0);
   }, [expenses]);
 
   // 6. Loan Payments & Interest
