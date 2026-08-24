@@ -122,6 +122,21 @@ export const TAXONOMY: Record<string, { label: string; subcategories: Record<str
   }
 };
 
+export function getDynamicTaxonomy(): Record<string, { label: string; subcategories: Record<string, string> }> {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('fmms_master_taxonomy');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+  }
+  return TAXONOMY;
+}
+
 export interface ExpenseRecord {
   id: string;
   asset_id: string;

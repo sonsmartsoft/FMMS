@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { getAssets } from '@/lib/services/assetService';
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import { getLoans, getLoanPayments, createLoan, createLoanPayment, updateLoan, LoanRow, LoanPaymentRow } from '@/lib/services/loanService';
-import { ExpenseRecord, TAXONOMY } from '@/types/mobility';
+import { ExpenseRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
 import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2 } from 'lucide-react';
 
@@ -105,6 +105,15 @@ export default function FinancePage() {
       /* ignore */
     }
   };
+
+  const [taxMap, setTaxMap] = useState<Record<string, { label: string; subcategories: Record<string, string> }>>(TAXONOMY);
+
+  useEffect(() => {
+    setTaxMap(getDynamicTaxonomy());
+    const handleUpdate = () => setTaxMap(getDynamicTaxonomy());
+    window.addEventListener('fmms_master_updated', handleUpdate);
+    return () => window.removeEventListener('fmms_master_updated', handleUpdate);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -689,11 +698,11 @@ export default function FinancePage() {
                   value={form.category}
                   onChange={e => {
                     const newCat = e.target.value;
-                    const firstSub = Object.keys(TAXONOMY[newCat]?.subcategories || {})[0] || 'Fuel';
+                    const firstSub = Object.keys(taxMap[newCat]?.subcategories || {})[0] || 'Fuel';
                     setForm(p => ({ ...p, category: newCat, subcategory: firstSub }));
                   }}
                 >
-                  {Object.entries(TAXONOMY).map(([catKey, catVal]) => (
+                  {Object.entries(taxMap).map(([catKey, catVal]) => (
                     <option key={catKey} value={catKey}>{catVal.label}</option>
                   ))}
                 </select>
@@ -706,7 +715,7 @@ export default function FinancePage() {
                   value={form.subcategory}
                   onChange={e => setForm(p => ({ ...p, subcategory: e.target.value }))}
                 >
-                  {Object.entries(TAXONOMY[form.category]?.subcategories || { Other: 'Khác' }).map(([subKey, subLabel]) => (
+                  {Object.entries(taxMap[form.category]?.subcategories || { Other: 'Khác' }).map(([subKey, subLabel]) => (
                     <option key={subKey} value={subKey}>{subLabel} ({subKey})</option>
                   ))}
                 </select>
