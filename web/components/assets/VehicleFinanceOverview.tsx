@@ -156,89 +156,86 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     );
   }, [expenses]);
 
-  // AppSheet Exact Formulas:
-  // 1. Initial Rollout Fees (Trước bạ, Đăng kiểm, Phí biển số, BH Thân vỏ, Phí NH, BH Khoản vay = 55.710.700 ₫)
+  // System-wide Dynamic Formulas for ALL Vehicles:
+  // 1. Initial Rollout Fees (Lệ phí lăn bánh ban đầu)
   const initialFeesTotal = useMemo(() => {
-    const sum = initialRolloutExpenses.reduce((s, e) => s + e.amount, 0);
-    return sum > 0 ? sum : 55710700;
+    return initialRolloutExpenses.reduce((s, e) => s + e.amount, 0);
   }, [initialRolloutExpenses]);
 
-  // 2. Down Payment (Trả trước từ vốn tự có: Giá xe 397M - Gốc vay 295M = 102M)
-  const purchasePrice = asset.purchase_price || 397000000;
-  const downPayment = loan ? loan.down_payment : (asset.asset_type === 'CAR' ? 102000000 : purchasePrice);
+  // 2. Down Payment & Purchase Price
+  const purchasePrice = asset.purchase_price || 0;
+  const downPayment = loan ? loan.down_payment : purchasePrice;
 
-  // 3. Investment (Vốn tự có ban đầu = Trả trước 102M + Chi phí lăn bánh ban đầu 55.71M = 157.710.700 ₫)
+  // 3. Investment (Vốn tự có ban đầu = Trả trước + Chi phí lăn bánh ban đầu)
   const investment = downPayment + initialFeesTotal;
 
-  // 4. Upgrades Total = 23.868.000 ₫
+  // 4. Upgrades Total (Tổng chi phí Nâng cấp & Đồ chơi)
   const totalUpgradeCost = useMemo(() => {
     const expUpgrades = expenses.filter(e => 
       (e.category === 'UPGRADE' || e.category === 'PARTS') &&
       !e.description?.toLowerCase().includes('trước bạ') &&
-      !e.description?.toLowerCase().includes('đặt cọc')
+      !e.description?.toLowerCase().includes('đặt cọc') &&
+      !e.description?.toLowerCase().includes('chuyển tiền') &&
+      !e.description?.toLowerCase().includes('mua xe')
     ).reduce((s, e) => s + e.amount, 0);
 
-    // Lock exact upgrade target for CAR (Mazda 2AT 2026) to prevent parts table duplication
-    if (asset.asset_type === 'CAR') {
-      return 23868000;
-    }
+    if (expUpgrades > 0) return expUpgrades;
+    return parts.reduce((s, p) => s + (p.cost || 0), 0);
+  }, [expenses, parts]);
 
-    const partsTotal = parts.reduce((s, p) => s + (p.cost || 0), 0);
-    const calculated = expUpgrades + partsTotal;
-    return calculated > 0 ? calculated : 23868000;
-  }, [expenses, parts, asset]);
-
-  // 5. Running Costs Total = 12.989.978 ₫
+  // 5. Running Costs Total (Chi phí vận hành: Xăng, Trạm epass, Đỗ xe, Rửa xe...)
   const totalRunningCost = useMemo(() => {
-    const calc = expenses.filter(e => 
-      e.category !== 'UPGRADE' && 
-      e.category !== 'PARTS' && 
-      (e.category as string) !== 'INITIAL' &&
-      e.category !== 'REGISTRATION' &&
-      e.category !== 'INSURANCE' &&
-      e.category !== 'LOAN_PAYMENT' &&
-      e.category !== 'LOAN_INTEREST' &&
-      !e.description?.toLowerCase().includes('thanh toán') &&
-      !e.description?.toLowerCase().includes('gốc') &&
-      !e.description?.toLowerCase().includes('lãi') &&
-      !e.description?.toLowerCase().includes('trước bạ') &&
-      !e.description?.toLowerCase().includes('đặt cọc')
+    return expenses.filter(e => 
+      e.category === 'FUEL' ||
+      e.category === 'TOLL' ||
+      e.category === 'PARKING' ||
+      e.category === 'CAR_WASH' ||
+      (e.category !== 'UPGRADE' && 
+       e.category !== 'PARTS' && 
+       (e.category as string) !== 'INITIAL' &&
+       e.category !== 'REGISTRATION' &&
+       e.category !== 'INSURANCE' &&
+       e.category !== 'LOAN_PAYMENT' &&
+       e.category !== 'LOAN_INTEREST' &&
+       !e.description?.toLowerCase().includes('thanh toán') &&
+       !e.description?.toLowerCase().includes('gốc') &&
+       !e.description?.toLowerCase().includes('lãi') &&
+       !e.description?.toLowerCase().includes('trước bạ') &&
+       !e.description?.toLowerCase().includes('đặt cọc') &&
+       !e.description?.toLowerCase().includes('mua xe'))
     ).reduce((s, e) => s + e.amount, 0);
-    return calc > 0 ? calc : 12989978;
   }, [expenses]);
 
   // 6. Loan Payments & Interest
   const schedule = useMemo(() => generate2TierLoanSchedule(loan, payments), [loan, payments]);
+  
   const paidInterest = useMemo(() => {
+    const expInterest = expenses.filter(e => e.category === 'LOAN_INTEREST' || e.description?.includes('Thanh toán lãi')).reduce((sum, e) => sum + e.amount, 0);
+    if (expInterest > 0) return expInterest;
     return schedule.filter(s => s.status === 'PAID').reduce((sum, s) => sum + s.interest_paid, 0);
-  }, [schedule]);
+  }, [expenses, schedule]);
 
   const paidPrincipal = useMemo(() => {
     const expPaid = expenses.filter(e => e.category === 'LOAN_PAYMENT' || e.description?.includes('Thanh toán gốc')).reduce((sum, e) => sum + e.amount, 0);
     if (expPaid > 0) return expPaid;
-    const paidSched = schedule.filter(s => s.status === 'PAID').reduce((sum, s) => sum + s.principal_paid, 0);
-    return paidSched > 0 ? paidSched : 25081632;
+    return schedule.filter(s => s.status === 'PAID').reduce((sum, s) => sum + s.principal_paid, 0);
   }, [expenses, schedule]);
 
-  const expInterest = useMemo(() => {
-    return expenses.filter(e => e.category === 'LOAN_INTEREST' || e.description?.includes('Thanh toán lãi')).reduce((sum, e) => sum + e.amount, 0);
-  }, [expenses]);
+  const totalInterest = paidInterest;
 
-  const totalInterest = expInterest > 0 ? expInterest : (paidInterest > 0 ? paidInterest : 6935510);
-
-  // 7. Total Cost (Investment 157.71M + Upgrade 23.87M + Running 12.99M + Interest 6.94M = 201.504.188 ₫)
+  // 7. Total Cost (Investment + Upgrade + Running + Interest)
   const totalCost = investment + totalUpgradeCost + totalRunningCost + totalInterest;
 
-  // 8. Cash Out (Total Cost 201.5M + Paid Principal 25.25M = 226.757.836 ₫)
+  // 8. Cash Out (Total Cost + Paid Principal)
   const cashOut = totalCost + paidPrincipal;
 
-  // 9. Total Value (Giá xe 397M + Phí lăn bánh 55.71M = 452.710.700 ₫)
+  // 9. Total Value (Giá xe + Phí lăn bánh)
   const totalValue = purchasePrice + initialFeesTotal;
 
-  // 10. Remaining (Dư nợ vay còn lại gồm cả nợ gốc và lãi chưa đóng = 318.725.399 ₫)
+  // 10. Remaining (Dư nợ vay còn lại)
   const remainingLoan = loan ? (schedule.filter(s => s.status !== 'PAID').reduce((sum, s) => sum + s.total_payment, 0) || loan.current_balance) : 0;
 
-  // 11. Ownership Cost (Total Cost 201.5M + Remaining Loan 318.7M = 513.473.657 ₫)
+  // 11. Ownership Cost (Total Cost + Remaining Loan)
   const ownershipCost = totalCost + remainingLoan;
 
   const toggleSchedulePaymentRow = async (pRow: any) => {
