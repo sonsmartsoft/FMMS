@@ -19,6 +19,7 @@ export default function MaintenancePage() {
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [openModal, setOpenModal] = useState(false);
   const [form, setForm] = useState({
     asset_id: '', date: '', maintenance_type: 'Thay dầu máy',
@@ -62,9 +63,25 @@ export default function MaintenancePage() {
     };
   }, []);
 
-  const totalCost = records.reduce((s, r) => s + r.cost, 0);
+  const isSameAsset = (recAssetId: string, targetAssetId: string) => {
+    if (recAssetId === targetAssetId) return true;
+    const targetAsset = assets.find(a => a.id === targetAssetId);
+    if (targetAsset?.license_plate === '19B-213.87' && (recAssetId === 'CAR01' || recAssetId === '22222222-2222-2222-2222-222222222222' || recAssetId === '20260308-0001-4222-8888-19b213872026')) return true;
+    if (targetAsset?.license_plate === '88C1-210.63' && (recAssetId === 'BIKE01' || recAssetId === '20170801-0002-4111-8888-88c121063016')) return true;
+    if (targetAsset?.license_plate === '88L1-604.36' && (recAssetId === 'BIKE02' || recAssetId === '20210405-0003-4333-8888-88l160436021')) return true;
+    if (targetAsset?.license_plate === 'MTB 26-555' && (recAssetId === 'BIKE03' || recAssetId === '20240310-0004-4444-8888-00000mtb2605')) return true;
+    if (targetAsset?.license_plate === 'MTB 20-999' && (recAssetId === 'BIKE04' || recAssetId === '20240310-0005-4555-8888-00000mtb2005')) return true;
+    return false;
+  };
 
+  const displayRecords = selectedAssetId
+    ? records.filter(r => isSameAsset(r.asset_id, selectedAssetId))
+    : records;
+
+  const totalCost = displayRecords.reduce((s, r) => s + r.cost, 0);
   const calculatedItemsCost = serviceItems.reduce((s, item) => s + (parseFloat(item.cost) || 0), 0);
+
+  const selectedVehicleObj = assets.find(a => a.id === selectedAssetId);
 
   const addServiceItem = () => {
     setServiceItems(p => [...p, { name: '', cost: '' }]);
@@ -103,7 +120,7 @@ export default function MaintenancePage() {
     }
   };
 
-  const getAssetName = (id: string) => assets.find(a => a.id === id)?.name || id;
+  const getAssetName = (id: string) => assets.find(a => a.id === id || isSameAsset(id, a.id))?.name || id;
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -112,22 +129,115 @@ export default function MaintenancePage() {
         <div>
           <h1 className="text-2xl font-extrabold" style={{ color: 'var(--text-primary)' }}>Bảo Dưỡng & Phụ Tùng</h1>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Lịch sử bảo dưỡng toàn bộ phương tiện · Tổng: <strong style={{ color: 'var(--status-red)' }}>{fmt(totalCost)} ₫</strong>
+            {selectedVehicleObj ? (
+              <span>Bảo dưỡng phương tiện: <strong>{selectedVehicleObj.name}</strong> ({selectedVehicleObj.license_plate}) · Tổng: <strong style={{ color: 'var(--status-red)' }}>{fmt(totalCost)} ₫</strong></span>
+            ) : (
+              <span>Lịch sử bảo dưỡng toàn bộ phương tiện · Tổng: <strong style={{ color: 'var(--status-red)' }}>{fmt(totalCost)} ₫</strong></span>
+            )}
           </p>
         </div>
-        <button onClick={() => setOpenModal(true)} className="flex items-center space-x-2 px-4 py-2 rounded-xl text-white text-xs font-bold transition hover:opacity-90"
+        <button onClick={() => setOpenModal(true)} className="flex items-center space-x-2 px-4 py-2 rounded-xl text-white text-xs font-bold transition hover:opacity-90 shadow-md"
           style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
           <Plus className="w-4 h-4" /><span>Thêm bảo dưỡng</span>
         </button>
+      </div>
+
+      {/* Vehicle Filter Selector Cards */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            Lọc bảo dưỡng theo phương tiện ({assets.length} xe)
+          </p>
+          {selectedAssetId && (
+            <button 
+              onClick={() => setSelectedAssetId(null)} 
+              className="text-[11px] font-bold underline transition hover:opacity-80 flex items-center space-x-1"
+              style={{ color: 'var(--accent-cyan)' }}
+            >
+              <span>Xem tất cả phương tiện</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {/* Option: Tất cả */}
+          <div
+            onClick={() => setSelectedAssetId(null)}
+            className={`p-3 rounded-2xl cursor-pointer border transition-all duration-200 flex flex-col justify-between ${
+              selectedAssetId === null ? 'shadow-md ring-2 ring-cyan-500 scale-[1.02]' : 'hover:border-cyan-500/50'
+            }`}
+            style={{
+              background: selectedAssetId === null ? 'rgba(14, 165, 233, 0.12)' : 'var(--bg-secondary)',
+              borderColor: selectedAssetId === null ? 'var(--accent-cyan)' : 'var(--border-default)',
+            }}
+          >
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0" style={{ background: 'var(--accent-cyan)', color: '#fff' }}>
+                ALL
+              </div>
+              <div className="overflow-hidden">
+                <p className="font-extrabold text-xs truncate" style={{ color: 'var(--text-primary)' }}>Tất cả xe</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{records.length} đợt</p>
+              </div>
+            </div>
+            <p className="text-right text-[11px] font-extrabold mt-2" style={{ color: 'var(--status-red)' }}>
+              {fmt(records.reduce((s, r) => s + r.cost, 0))} ₫
+            </p>
+          </div>
+
+          {/* Vehicle Cards */}
+          {assets.map(a => {
+            const isSelected = selectedAssetId === a.id;
+            const assetRecs = records.filter(r => isSameAsset(r.asset_id, a.id));
+            const assetCost = assetRecs.reduce((s, r) => s + r.cost, 0);
+
+            return (
+              <div
+                key={a.id}
+                onClick={() => setSelectedAssetId(isSelected ? null : a.id)}
+                className={`p-3 rounded-2xl cursor-pointer border transition-all duration-200 flex flex-col justify-between ${
+                  isSelected ? 'shadow-md ring-2 ring-cyan-500 scale-[1.02]' : 'hover:border-cyan-500/50 opacity-90 hover:opacity-100'
+                }`}
+                style={{
+                  background: isSelected ? 'rgba(14, 165, 233, 0.12)' : 'var(--bg-secondary)',
+                  borderColor: isSelected ? 'var(--accent-cyan)' : 'var(--border-default)',
+                }}
+              >
+                <div className="flex items-center space-x-2">
+                  {a.image_url ? (
+                    <img src={a.image_url} alt={a.name} className="w-8 h-8 rounded-xl object-cover border border-slate-500/20 shrink-0" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0" style={{ background: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+                      {a.asset_type === 'CAR' ? '🚘' : a.asset_type === 'MOTORCYCLE' ? '🛵' : '🚲'}
+                    </div>
+                  )}
+                  <div className="overflow-hidden">
+                    <p className="font-extrabold text-xs truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</p>
+                    <p className="text-[9px] font-semibold truncate" style={{ color: 'var(--text-muted)' }}>{a.license_plate || a.brand}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between mt-2 text-[10px]">
+                  <span className="px-1.5 py-0.5 rounded font-bold" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>
+                    {assetRecs.length} đợt
+                  </span>
+                  <span className="font-extrabold text-[11px]" style={{ color: assetCost > 0 ? 'var(--status-red)' : 'var(--text-muted)' }}>
+                    {assetCost > 0 ? `${fmt(assetCost)}₫` : '0₫'}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-center">
         {[
           { label: 'Tổng chi phí', value: `${(totalCost / 1_000_000).toFixed(1)}M ₫`, color: 'var(--status-red)' },
-          { label: 'Số lần bảo dưỡng', value: records.length, color: 'var(--accent-cyan)' },
-          { label: 'Đang OK', value: records.filter(r => r.status === 'OK').length, color: 'var(--status-green)' },
-          { label: 'Sắp đến hạn', value: records.filter(r => r.status === 'DUE_SOON').length, color: 'var(--status-amber)' },
+          { label: 'Số lần bảo dưỡng', value: displayRecords.length, color: 'var(--accent-cyan)' },
+          { label: 'Đang OK', value: displayRecords.filter(r => r.status === 'OK').length, color: 'var(--status-green)' },
+          { label: 'Sắp đến hạn', value: displayRecords.filter(r => r.status === 'DUE_SOON').length, color: 'var(--status-amber)' },
         ].map((s, i) => (
           <div key={i} className="p-4 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
             <p className="text-lg font-extrabold" style={{ color: s.color }}>{s.value}</p>
@@ -142,48 +252,57 @@ export default function MaintenancePage() {
         <div>
           <p className="font-bold text-xs" style={{ color: 'var(--status-amber)' }}>Nhắc nhở bảo dưỡng tiếp theo</p>
           <ul className="mt-1 space-y-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-            {assets.filter(a => a.next_maintenance_due).map(a => (
-              <li key={a.id}>→ <strong>{a.name}</strong>: {a.next_maintenance_due}</li>
-            ))}
+            {assets
+              .filter(a => a.next_maintenance_due && (!selectedAssetId || isSameAsset(a.id, selectedAssetId)))
+              .map(a => (
+                <li key={a.id}>→ <strong>{a.name}</strong> ({a.license_plate}): {a.next_maintenance_due}</li>
+              ))}
           </ul>
         </div>
       </div>
 
-      {/* Records */}
+      {/* Records List */}
       <div className="space-y-3">
-        {records.map((r) => {
-          const StatusIcon = r.status === 'OK' ? CheckCircle2 : r.status === 'DUE_SOON' ? Clock : AlertTriangle;
-          const statusColor = r.status === 'OK' ? 'var(--status-green)' : r.status === 'DUE_SOON' ? 'var(--status-amber)' : 'var(--status-red)';
-          return (
-            <div key={r.id} className="p-4 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start space-x-3 flex-1">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${statusColor}20`, color: statusColor }}>
-                    <StatusIcon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center space-x-2 flex-wrap gap-1">
-                      <p className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{r.maintenance_type}</p>
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${statusColor}20`, color: statusColor }}>
-                        {r.status === 'OK' ? '✓ OK' : r.status === 'DUE_SOON' ? '⚠ Sắp đến' : '❌ Quá hạn'}
-                      </span>
+        {displayRecords.length === 0 ? (
+          <div className="py-12 text-center rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
+            <Wrench className="w-10 h-10 mx-auto mb-2 opacity-30" />
+            <p className="font-semibold text-xs">Chưa có lịch sử bảo dưỡng nào cho phương tiện này</p>
+          </div>
+        ) : (
+          displayRecords.map((r) => {
+            const StatusIcon = r.status === 'OK' ? CheckCircle2 : r.status === 'DUE_SOON' ? Clock : AlertTriangle;
+            const statusColor = r.status === 'OK' ? 'var(--status-green)' : r.status === 'DUE_SOON' ? 'var(--status-amber)' : 'var(--status-red)';
+            return (
+              <div key={r.id} className="p-4 rounded-2xl transition hover:border-cyan-500/40" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${statusColor}20`, color: statusColor }}>
+                      <StatusIcon className="w-4 h-4" />
                     </div>
-                    <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {getAssetName(r.asset_id)} · {fmtDate(r.date)} · {fmt(r.odometer_km)} km · {r.vendor || 'Đại lý chính hãng'}
-                    </p>
-                    {r.notes && <p className="text-[10px] mt-1 p-2 rounded-lg" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>📝 {r.notes}</p>}
-                    {r.next_due_km && (
-                      <p className="text-[11px] mt-1 font-semibold" style={{ color: 'var(--accent-cyan)' }}>
-                        Kỳ tiếp: {fmt(r.next_due_km)} km {r.next_due_date ? `(${fmtDate(r.next_due_date)})` : ''}
+                    <div>
+                      <div className="flex items-center space-x-2 flex-wrap gap-1">
+                        <p className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{r.maintenance_type}</p>
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${statusColor}20`, color: statusColor }}>
+                          {r.status === 'OK' ? '✓ OK' : r.status === 'DUE_SOON' ? '⚠ Sắp đến' : '❌ Quá hạn'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        <strong>{getAssetName(r.asset_id)}</strong> · {fmtDate(r.date)} · {fmt(r.odometer_km)} km · {r.vendor || 'Đại lý chính hãng'}
                       </p>
-                    )}
+                      {r.notes && <p className="text-[10px] mt-1 p-2 rounded-lg" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>📝 {r.notes}</p>}
+                      {r.next_due_km && (
+                        <p className="text-[11px] mt-1 font-semibold" style={{ color: 'var(--accent-cyan)' }}>
+                          Kỳ tiếp: {fmt(r.next_due_km)} km {r.next_due_date ? `(${fmtDate(r.next_due_date)})` : ''}
+                        </p>
+                      )}
+                    </div>
                   </div>
+                  <span className="font-bold text-sm shrink-0" style={{ color: 'var(--status-red)' }}>{fmt(r.cost)} ₫</span>
                 </div>
-                <span className="font-bold text-sm shrink-0" style={{ color: 'var(--status-red)' }}>{fmt(r.cost)} ₫</span>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {/* Multi-Service Maintenance Modal */}

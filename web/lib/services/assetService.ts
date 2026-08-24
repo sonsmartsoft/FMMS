@@ -123,8 +123,12 @@ export async function getAsset(id: string) {
   } catch {}
   const found = INITIAL_ASSETS.find(
     a => a.id === id ||
-    (id === 'CAR01' && a.id === '22222222-2222-2222-2222-222222222222') ||
-    (a.id === 'CAR01' && id === '22222222-2222-2222-2222-222222222222')
+    ((id === 'CAR01' || id === '22222222-2222-2222-2222-222222222222') && a.license_plate === '19B-213.87') ||
+    (id === 'BIKE01' && a.license_plate === '88C1-210.63') ||
+    (id === 'BIKE02' && a.license_plate === '88L1-604.36') ||
+    (id === 'BIKE03' && a.license_plate === 'MTB 26-555') ||
+    (id === 'BIKE04' && a.license_plate === 'MTB 20-999') ||
+    (id === 'CAR02' && a.license_plate === 'CANIVAL')
   );
   return found || INITIAL_ASSETS[0];
 }

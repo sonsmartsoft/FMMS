@@ -40,34 +40,32 @@ BEGIN
   -- A. IDENTIFY THE PRIMARY/ORIGINAL ID FOR EACH VEHICLE (BY CREATED_AT)
   -- --------------------------------------------------------------------------
   SELECT id INTO v_mazda_id FROM public.assets WHERE license_plate = '19B-213.87' OR name ILIKE '%Mazda%' ORDER BY created_at ASC LIMIT 1;
-  IF v_mazda_id IS NULL THEN v_mazda_id := '22222222-2222-2222-2222-222222222222'; END IF;
+  IF v_mazda_id IS NULL THEN v_mazda_id := '20260308-0001-4222-8888-19b213872026'; END IF;
 
   SELECT id INTO v_bike16_id FROM public.assets WHERE license_plate = '88C1-210.63' OR name ILIKE '%2016%' ORDER BY created_at ASC LIMIT 1;
-  IF v_bike16_id IS NULL THEN v_bike16_id := '11111111-1111-1111-1111-111111111111'; END IF;
+  IF v_bike16_id IS NULL THEN v_bike16_id := '20170801-0002-4111-8888-88c121063016'; END IF;
 
   SELECT id INTO v_bike21_id FROM public.assets WHERE license_plate = '88L1-604.36' OR name ILIKE '%2021%' ORDER BY created_at ASC LIMIT 1;
-  IF v_bike21_id IS NULL THEN v_bike21_id := '33333333-3333-3333-3333-333333333333'; END IF;
+  IF v_bike21_id IS NULL THEN v_bike21_id := '20210405-0003-4333-8888-88f160436021'; END IF;
 
   SELECT id INTO v_mtb26_id FROM public.assets WHERE license_plate = 'MTB 26-555' OR name ILIKE '%26-05%' ORDER BY created_at ASC LIMIT 1;
-  IF v_mtb26_id IS NULL THEN v_mtb26_id := '44444444-4444-4444-4444-444444444444'; END IF;
+  IF v_mtb26_id IS NULL THEN v_mtb26_id := '20240310-0004-4444-8888-000000260555'; END IF;
 
   SELECT id INTO v_mtb20_id FROM public.assets WHERE license_plate = 'MTB 20-999' OR name ILIKE '%20-05%' ORDER BY created_at ASC LIMIT 1;
-  IF v_mtb20_id IS NULL THEN v_mtb20_id := '55555555-5555-5555-5555-555555555555'; END IF;
+  IF v_mtb20_id IS NULL THEN v_mtb20_id := '20240310-0005-4555-8888-000000200555'; END IF;
 
   SELECT id INTO v_carnival_id FROM public.assets WHERE license_plate = 'CANIVAL' OR name ILIKE '%Carnival%' ORDER BY created_at ASC LIMIT 1;
-  IF v_carnival_id IS NULL THEN v_carnival_id := '66666666-6666-6666-6666-666666666666'; END IF;
+  IF v_carnival_id IS NULL THEN v_carnival_id := '20300308-0006-4666-8888-00000ca20300'; END IF;
 
   -- --------------------------------------------------------------------------
-  -- B. CLEAN UP ALL DUPLICATE ASSETS & THEIR LINKED DATA
+  -- B. CLEAN UP ALL DUPLICATED DATA & ASSETS (FULL CLEAN RESET)
   -- --------------------------------------------------------------------------
-  DELETE FROM public.loans WHERE asset_id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
-  DELETE FROM public.expenses WHERE asset_id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
-  DELETE FROM public.fuel_logs WHERE asset_id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
-  DELETE FROM public.maintenance_records WHERE asset_id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
-  DELETE FROM public.parts WHERE asset_id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
-
-  -- Delete all extra duplicated vehicle rows
-  DELETE FROM public.assets WHERE id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
+  DELETE FROM public.loans;
+  DELETE FROM public.expenses;
+  DELETE FROM public.fuel_logs;
+  DELETE FROM public.maintenance_records;
+  DELETE FROM public.parts;
+  DELETE FROM public.assets;
 
   -- --------------------------------------------------------------------------
   -- C. UPDATE / INSERT CLEAN UNIQUE VEHICLE RECORDS
@@ -90,7 +88,6 @@ BEGIN
   -- --------------------------------------------------------------------------
   -- D. INSERT LOANS LINKED TO MAZDA 2 VEHICLE ID
   -- --------------------------------------------------------------------------
-  DELETE FROM public.loans WHERE asset_id = v_mazda_id;
   INSERT INTO public.loans (
     asset_id, lender, principal, down_payment, interest_rate_percent, term_months, start_date, monthly_payment, payment_day, current_balance, status, notes
   ) VALUES
@@ -99,8 +96,6 @@ BEGIN
   -- --------------------------------------------------------------------------
   -- E. INSERT ALL EXPENSES LINKED TO EXACT CLEAN VEHICLE IDs
   -- --------------------------------------------------------------------------
-  DELETE FROM public.expenses WHERE asset_id IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id);
-
   INSERT INTO public.expenses (asset_id, date, category, amount, currency, vendor, odometer_km, description) VALUES
   (v_mazda_id, '2026-03-08', 'INITIAL', 10000000, 'VND', 'Showroom Mazda', NULL, 'Đặt cọc lần 1'),
   (v_mazda_id, '2026-03-19', 'INITIAL', 30000000, 'VND', 'Showroom Mazda', NULL, 'Chuyển tiền lần 2'),
