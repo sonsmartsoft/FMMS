@@ -109,6 +109,11 @@ export async function getAssets() {
   return INITIAL_ASSETS;
 }
 
+export function isValidUuid(id?: string): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 export function resolveAssetId(id?: string): string {
   if (!id) return '20260308-0001-4222-8888-19b213872026';
   if (id === 'CAR01' || id === '22222222-2222-2222-2222-222222222222') return '20260308-0001-4222-8888-19b213872026';

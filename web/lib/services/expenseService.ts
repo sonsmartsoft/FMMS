@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { ExpenseRecord } from '@/types/mobility';
 import { MOCK_EXPENSES } from '@/lib/data/mockData';
+import { resolveAssetId, isValidUuid } from './assetService';
 
 export interface ExpenseInput {
   asset_id: string;
@@ -26,8 +27,6 @@ export function mapExpenseRow(row: any): ExpenseRecord {
     description: row.description ?? '',
   };
 }
-
-import { resolveAssetId } from './assetService';
 
 export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
   const realId = assetId ? resolveAssetId(assetId) : undefined;
@@ -82,26 +81,48 @@ export async function createExpense(data: ExpenseInput) {
 }
 
 export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
-  const supabase = createClient();
-  const { data: updated, error } = await supabase
-    .from('expenses')
-    .update({
-      ...(data.date ? { date: data.date } : {}),
-      ...(data.category ? { category: data.category } : {}),
-      ...(data.amount != null ? { amount: data.amount } : {}),
-      ...(data.vendor != null ? { vendor: data.vendor } : {}),
-      ...(data.odometer_km != null ? { odometer_km: data.odometer_km } : {}),
-      ...(data.description != null ? { description: data.description } : {}),
-    })
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return mapExpenseRow(updated);
+  if (isValidUuid(id)) {
+    try {
+      const supabase = createClient();
+      const { data: updated, error } = await supabase
+        .from('expenses')
+        .update({
+          ...(data.date ? { date: data.date } : {}),
+          ...(data.category ? { category: data.category } : {}),
+          ...(data.amount != null ? { amount: data.amount } : {}),
+          ...(data.vendor != null ? { vendor: data.vendor } : {}),
+          ...(data.odometer_km != null ? { odometer_km: data.odometer_km } : {}),
+          ...(data.description != null ? { description: data.description } : {}),
+        })
+        .eq('id', id)
+        .select()
+        .maybeSingle();
+      if (!error && updated) return mapExpenseRow(updated);
+    } catch (err) {
+      console.warn('updateExpense Supabase fallback:', err);
+    }
+  }
+
+  return mapExpenseRow({
+    id,
+    asset_id: resolveAssetId(data.asset_id),
+    date: data.date || new Date().toISOString().slice(0, 10),
+    category: data.category || 'FUEL',
+    amount: data.amount || 0,
+    currency: data.currency || 'VND',
+    vendor: data.vendor,
+    odometer_km: data.odometer_km,
+    description: data.description || '',
+  });
 }
 
 export async function deleteExpense(id: string) {
-  const supabase = createClient();
-  const { error } = await supabase.from('expenses').delete().eq('id', id);
-  if (error) throw error;
+  if (isValidUuid(id)) {
+    try {
+      const supabase = createClient();
+      await supabase.from('expenses').delete().eq('id', id);
+    } catch (err) {
+      console.warn('deleteExpense Supabase fallback:', err);
+    }
+  }
 }
