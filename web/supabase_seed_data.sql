@@ -3,7 +3,7 @@
 -- Copy and run this script in your Supabase Dashboard -> SQL Editor
 -- ============================================================================
 
--- Disable RLS temporarily so insertion is allowed
+-- 1. Disable RLS temporarily so insertion is allowed
 ALTER TABLE IF EXISTS public.assets DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.expenses DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.loans DISABLE ROW LEVEL SECURITY;
@@ -11,8 +11,9 @@ ALTER TABLE IF EXISTS public.fuel_logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.maintenance_records DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.parts DISABLE ROW LEVEL SECURITY;
 
--- Temporarily drop NOT NULL constraint on owner_id if present to allow seed script execution
+-- 2. Drop outdated constraints that block expanded FMMS categories & nullable owner
 ALTER TABLE IF EXISTS public.assets ALTER COLUMN owner_id DROP NOT NULL;
+ALTER TABLE IF EXISTS public.expenses DROP CONSTRAINT IF EXISTS expenses_category_check;
 
 DO $$
 DECLARE
@@ -21,7 +22,7 @@ BEGIN
   -- Get the first user from auth.users if available
   SELECT id INTO target_user_id FROM auth.users LIMIT 1;
   
-  -- 1. Insert Assets
+  -- Insert Assets
   INSERT INTO public.assets (
     id, owner_id, name, asset_type, category, brand, model, year, trim, color, license_plate, vin, engine, fuel_type, tank_capacity_liters, purchase_date, purchase_price, current_value, initial_odometer_km, current_odometer_km, virtual_odometer_km, odometer_source, status, image_url, description
   ) VALUES
@@ -33,13 +34,13 @@ BEGIN
   ('66666666-6666-6666-6666-666666666666', target_user_id, 'Kia Carnival (Dự kiến)', 'CAR', 'MPV 7 chỗ', 'KIA', 'Canival', 2030, NULL, 'Đen', 'CANIVAL', NULL, NULL, 'PETROL', NULL, '2030-03-08', 2000000000, 2000000000, 0, 0, 0, 'VIRTUAL', 'INACTIVE', NULL, 'Mục tiêu ô tô 7 chỗ gia đình tương lai')
   ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, purchase_price = EXCLUDED.purchase_price, owner_id = EXCLUDED.owner_id;
 
-  -- 2. Insert Loans
+  -- Insert Loans
   INSERT INTO public.loans (
     asset_id, lender, principal, down_payment, interest_rate_percent, term_months, start_date, monthly_payment, payment_day, current_balance, status, notes
   ) VALUES
   ('22222222-2222-2222-2222-222222222222', 'TPBank', 295000000, 102000000, 8.0, 60, '2026-04-07', 7378216, 28, 270918368, 'ACTIVE', '8% năm đầu -> 11.5% các năm sau');
 
-  -- 3. Insert Expenses
+  -- Insert Expenses
   INSERT INTO public.expenses (asset_id, date, category, amount, currency, vendor, odometer_km, description) VALUES
   ('22222222-2222-2222-2222-222222222222', '2026-03-08', 'INITIAL', 10000000, 'VND', 'Showroom Mazda', NULL, 'Đặt cọc lần 1'),
   ('22222222-2222-2222-2222-222222222222', '2026-03-19', 'INITIAL', 30000000, 'VND', 'Showroom Mazda', NULL, 'Chuyển tiền lần 2'),
@@ -103,7 +104,7 @@ BEGIN
 
 END $$;
 
--- Enable RLS back
+-- 3. Re-enable RLS back
 ALTER TABLE IF EXISTS public.assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.loans ENABLE ROW LEVEL SECURITY;
