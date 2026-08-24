@@ -11,7 +11,7 @@ import { getTrips, createTrip } from '@/lib/services/tripService';
 import { getParts, createPart, updatePart, deletePart } from '@/lib/services/partService';
 import { getInsurancePolicies, createInsurancePolicy, InsuranceRow } from '@/lib/services/insuranceService';
 import { getLoadByAsset } from '@/lib/services/loanService';
-import { createOdometerAdjustment } from '@/lib/services/odometerService';
+import { createOdometerAdjustment, getOdometerLogs, createOdometerLog, updateOdometerLog, deleteOdometerLog, OdometerLogRecord } from '@/lib/services/odometerService';
 import { createWarrantyClaim } from '@/lib/services/warrantyService';
 import { createClient } from '@/lib/supabase/client';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
@@ -133,6 +133,9 @@ export default function AssetDetailPage() {
   const [parts, setParts] = useState<any[]>([]);
   const [loan, setLoan] = useState<LoanRecord | null>(null);
   const [insurances, setInsurances] = useState<any[]>([]);
+  const [odometerLogs, setOdometerLogs] = useState<OdometerLogRecord[]>([]);
+  const [editingOdoLog, setEditingOdoLog] = useState<OdometerLogRecord | null>(null);
+  const [odoLogForm, setOdoLogForm] = useState({ date: '', odometer_km: '', note: '' });
 
   /* ── Live OBD telemetry (realtime from Android app) ── */
   const [live, setLive] = useState<{ speed: number | null; rpm: number | null; coolant: number | null; voltage: number | null }>({
@@ -166,7 +169,7 @@ export default function AssetDetailPage() {
           brand_hotline: a.brand_hotline || '',
         });
 
-        const [f, m, e, t, p, i, l] = await Promise.all([
+        const [f, m, e, t, p, i, l, odo] = await Promise.all([
           getFuelLogs(assetId),
           getMaintenanceRecords(assetId),
           getExpenses(assetId),
@@ -174,6 +177,7 @@ export default function AssetDetailPage() {
           getParts(assetId),
           getInsurancePolicies(assetId),
           getLoadByAsset(assetId),
+          getOdometerLogs(assetId),
         ]);
         if (cancelled) return;
         setFuelLogs(f);
@@ -181,6 +185,7 @@ export default function AssetDetailPage() {
         setExpenses(e);
         setTrips(t);
         setParts(p);
+        setOdometerLogs(odo);
         setInsurances(
           i.map((r: InsuranceRow) => ({
             id: r.id,
@@ -457,6 +462,54 @@ export default function AssetDetailPage() {
   /* ══════════════════════════════════════════════
      SAVE HANDLERS
      ══════════════════════════════════════════════ */
+  /* ── Handlers for Odometer Log ── */
+  const handleOpenEditOdoLog = (item: OdometerLogRecord) => {
+    setEditingOdoLog(item);
+    setOdoLogForm({
+      date: item.date ? item.date.slice(0, 10) : '',
+      odometer_km: String(item.odometer_km || ''),
+      note: item.note || '',
+    });
+    setOpenModal('odolog');
+  };
+
+  const handleDeleteOdoLog = async (id: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa mốc Odometer này?')) return;
+    try {
+      await deleteOdometerLog(id);
+      setOdometerLogs(prev => prev.filter(o => o.id !== id));
+    } catch (err: any) {
+      alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
+    }
+  };
+
+  const saveOdoLog = async () => {
+    const km = parseFloat(odoLogForm.odometer_km) || 0;
+    try {
+      if (editingOdoLog) {
+        const updated = await updateOdometerLog(editingOdoLog.id, {
+          date: odoLogForm.date || new Date().toISOString().slice(0, 10),
+          odometer_km: km,
+          note: odoLogForm.note,
+        });
+        setOdometerLogs(prev => prev.map(o => o.id === editingOdoLog.id ? updated : o));
+      } else {
+        const created = await createOdometerLog({
+          asset_id: asset.id,
+          date: odoLogForm.date || new Date().toISOString().slice(0, 10),
+          odometer_km: km,
+          note: odoLogForm.note,
+        });
+        setOdometerLogs([created, ...odometerLogs]);
+      }
+    } catch (err: any) {
+      alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
+    }
+    setOpenModal(null);
+    setEditingOdoLog(null);
+    setOdoLogForm({ date: '', odometer_km: '', note: '' });
+  };
+
   /* ── Edit & Delete Handlers for Expenses ── */
   const handleOpenEditExpense = (item: ExpenseRecord) => {
     setEditingExp(item);
@@ -1180,6 +1233,67 @@ export default function AssetDetailPage() {
                     <p className="font-bold mt-0.5" style={{ color: r.color }}>{r.value}</p>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* 📊 Nhật Ký Mốc Odometer & Chuyến Đi (Odometer_Log) */}
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider flex items-center space-x-2 text-cyan-400">
+                    <Activity className="w-4 h-4 text-cyan-400" />
+                    <span>Lịch Sử Ghi Nhận Mốc Odometer &amp; Hành Trình (Odometer_Log)</span>
+                  </h4>
+                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    Tổng cộng: <strong>{odometerLogs.length} mốc ghi nhận</strong> • Odometer mới nhất: <strong>{odometerLogs[0]?.odometer_km || asset.current_odometer_km} km</strong>
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setEditingOdoLog(null); setOdoLogForm({ date: new Date().toISOString().slice(0, 10), odometer_km: String(asset.current_odometer_km || ''), note: '' }); setOpenModal('odolog'); }}
+                  className="px-3.5 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90 flex items-center space-x-1.5 shadow-md"
+                >
+                  <Plus className="w-3.5 h-3.5" /><span>Ghi nhận mốc Odometer</span>
+                </button>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl max-h-96 overflow-y-auto" style={{ border: '1px solid var(--border-default)' }}>
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 z-10">
+                    <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-default)' }}>
+                      {['STT', 'Ngày ghi nhận', 'Mốc Odometer (km)', 'Nội dung hành trình / Ghi chú', 'Thao tác'].map(h => (
+                        <th key={h} className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {odometerLogs.map((item, idx) => (
+                      <tr key={item.id} className="transition hover:bg-white/5" style={{ borderBottom: '1px solid var(--border-subtle)', background: idx % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
+                        <td className="px-3.5 py-2.5 font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>#{odometerLogs.length - idx}</td>
+                        <td className="px-3.5 py-2.5 font-medium whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{fmtDate(item.date)}</td>
+                        <td className="px-3.5 py-2.5 font-mono font-bold text-cyan-400 whitespace-nowrap">{fmt(item.odometer_km)} km</td>
+                        <td className="px-3.5 py-2.5">
+                          {item.note ? (
+                            <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)' }}>
+                              {item.note}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] italic" style={{ color: 'var(--text-faint)' }}>— Theo dõi định kỳ</span>
+                          )}
+                        </td>
+                        <td className="px-3.5 py-2.5">
+                          <div className="flex items-center space-x-1">
+                            <button onClick={() => handleOpenEditOdoLog(item)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => handleDeleteOdoLog(item.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -2049,6 +2163,21 @@ export default function AssetDetailPage() {
               {editingExp ? 'Cập nhật chi phí' : 'Lưu chi phí'}
             </button>
             <button onClick={() => { setOpenModal(null); setEditingExp(null); }} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Odometer Log Modal */}
+      {openModal === 'odolog' && (
+        <Modal title={editingOdoLog ? 'Chỉnh sửa mốc Odometer' : 'Ghi nhận mốc Odometer mới'} onClose={() => { setOpenModal(null); setEditingOdoLog(null); }}>
+          <Field label="Ngày ghi nhận"><input type="date" className="theme-input" value={odoLogForm.date} onChange={e => setOdoLogForm(p => ({ ...p, date: e.target.value }))} /></Field>
+          <Field label="Mốc Odometer (km)"><input type="number" className="theme-input font-mono font-bold" placeholder="VD: 2651" value={odoLogForm.odometer_km} onChange={e => setOdoLogForm(p => ({ ...p, odometer_km: e.target.value }))} /></Field>
+          <Field label="Ghi chú chuyến đi / Sự kiện"><input type="text" className="theme-input" placeholder="VD: Xem nhà thầy tiếng Anh ở Bắc Đầm Vạc, Nhận xe..." value={odoLogForm.note} onChange={e => setOdoLogForm(p => ({ ...p, note: e.target.value }))} /></Field>
+          <div className="flex space-x-2 pt-2">
+            <button onClick={saveOdoLog} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">
+              {editingOdoLog ? 'Cập nhật' : 'Lưu mốc Odometer'}
+            </button>
+            <button onClick={() => { setOpenModal(null); setEditingOdoLog(null); }} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
           </div>
         </Modal>
       )}
