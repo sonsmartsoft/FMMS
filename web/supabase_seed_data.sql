@@ -1,5 +1,5 @@
 -- ============================================================================
--- FMMS SUPABASE DATABASE OFFICIAL SEED SCRIPT (SMART AUTO-LINKING)
+-- FMMS SUPABASE DEDUPLICATION & SEED SCRIPT (MASTER CLEANUP)
 -- Copy and run this script in your Supabase Dashboard -> SQL Editor
 -- ============================================================================
 
@@ -28,36 +28,40 @@ BEGIN
   SELECT id INTO target_user_id FROM auth.users LIMIT 1;
 
   -- --------------------------------------------------------------------------
-  -- A. DETECT EXISTING VEHICLES OR ASSIGN STABLE UUIDs
+  -- A. IDENTIFY THE PRIMARY/ORIGINAL ID FOR EACH VEHICLE (BY CREATED_AT)
   -- --------------------------------------------------------------------------
-  SELECT id INTO v_mazda_id FROM public.assets WHERE license_plate = '19B-213.87' OR name ILIKE '%Mazda%' LIMIT 1;
+  SELECT id INTO v_mazda_id FROM public.assets WHERE license_plate = '19B-213.87' OR name ILIKE '%Mazda%' ORDER BY created_at ASC LIMIT 1;
   IF v_mazda_id IS NULL THEN v_mazda_id := '22222222-2222-2222-2222-222222222222'; END IF;
 
-  SELECT id INTO v_bike16_id FROM public.assets WHERE license_plate = '88C1-210.63' OR name ILIKE '%2016%' LIMIT 1;
+  SELECT id INTO v_bike16_id FROM public.assets WHERE license_plate = '88C1-210.63' OR name ILIKE '%2016%' ORDER BY created_at ASC LIMIT 1;
   IF v_bike16_id IS NULL THEN v_bike16_id := '11111111-1111-1111-1111-111111111111'; END IF;
 
-  SELECT id INTO v_bike21_id FROM public.assets WHERE license_plate = '88L1-604.36' OR name ILIKE '%2021%' LIMIT 1;
+  SELECT id INTO v_bike21_id FROM public.assets WHERE license_plate = '88L1-604.36' OR name ILIKE '%2021%' ORDER BY created_at ASC LIMIT 1;
   IF v_bike21_id IS NULL THEN v_bike21_id := '33333333-3333-3333-3333-333333333333'; END IF;
 
-  SELECT id INTO v_mtb26_id FROM public.assets WHERE license_plate = 'MTB 26-555' OR name ILIKE '%26-05%' LIMIT 1;
+  SELECT id INTO v_mtb26_id FROM public.assets WHERE license_plate = 'MTB 26-555' OR name ILIKE '%26-05%' ORDER BY created_at ASC LIMIT 1;
   IF v_mtb26_id IS NULL THEN v_mtb26_id := '44444444-4444-4444-4444-444444444444'; END IF;
 
-  SELECT id INTO v_mtb20_id FROM public.assets WHERE license_plate = 'MTB 20-999' OR name ILIKE '%20-05%' LIMIT 1;
+  SELECT id INTO v_mtb20_id FROM public.assets WHERE license_plate = 'MTB 20-999' OR name ILIKE '%20-05%' ORDER BY created_at ASC LIMIT 1;
   IF v_mtb20_id IS NULL THEN v_mtb20_id := '55555555-5555-5555-5555-555555555555'; END IF;
 
-  SELECT id INTO v_carnival_id FROM public.assets WHERE license_plate = 'CANIVAL' OR name ILIKE '%Carnival%' LIMIT 1;
+  SELECT id INTO v_carnival_id FROM public.assets WHERE license_plate = 'CANIVAL' OR name ILIKE '%Carnival%' ORDER BY created_at ASC LIMIT 1;
   IF v_carnival_id IS NULL THEN v_carnival_id := '66666666-6666-6666-6666-666666666666'; END IF;
 
-  -- Delete duplicates if any redundant asset rows exist
-  DELETE FROM public.assets WHERE license_plate = '19B-213.87' AND id <> v_mazda_id;
-  DELETE FROM public.assets WHERE license_plate = '88C1-210.63' AND id <> v_bike16_id;
-  DELETE FROM public.assets WHERE license_plate = '88L1-604.36' AND id <> v_bike21_id;
-  DELETE FROM public.assets WHERE license_plate = 'MTB 26-555' AND id <> v_mtb26_id;
-  DELETE FROM public.assets WHERE license_plate = 'MTB 20-999' AND id <> v_mtb20_id;
-  DELETE FROM public.assets WHERE license_plate = 'CANIVAL' AND id <> v_carnival_id;
+  -- --------------------------------------------------------------------------
+  -- B. CLEAN UP ALL DUPLICATE ASSETS & THEIR LINKED DATA
+  -- --------------------------------------------------------------------------
+  DELETE FROM public.loans WHERE asset_id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
+  DELETE FROM public.expenses WHERE asset_id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
+  DELETE FROM public.fuel_logs WHERE asset_id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
+  DELETE FROM public.maintenance_records WHERE asset_id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
+  DELETE FROM public.parts WHERE asset_id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
+
+  -- Delete all extra duplicated vehicle rows
+  DELETE FROM public.assets WHERE id NOT IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id, v_carnival_id);
 
   -- --------------------------------------------------------------------------
-  -- B. UPSERT ASSETS INTO PRE-EXISTING OR NEW VEHICLE RECORDS
+  -- C. UPDATE / INSERT CLEAN UNIQUE VEHICLE RECORDS
   -- --------------------------------------------------------------------------
   INSERT INTO public.assets (
     id, owner_id, name, asset_type, category, brand, model, year, trim, color, license_plate, vin, engine, fuel_type, tank_capacity_liters, purchase_date, purchase_price, current_value, initial_odometer_km, current_odometer_km, virtual_odometer_km, odometer_source, status, image_url, description
@@ -75,7 +79,7 @@ BEGIN
     license_plate = EXCLUDED.license_plate;
 
   -- --------------------------------------------------------------------------
-  -- C. INSERT LOANS LINKED TO MAZDA 2 VEHICLE ID
+  -- D. INSERT LOANS LINKED TO MAZDA 2 VEHICLE ID
   -- --------------------------------------------------------------------------
   DELETE FROM public.loans WHERE asset_id = v_mazda_id;
   INSERT INTO public.loans (
@@ -84,7 +88,7 @@ BEGIN
   (v_mazda_id, 'TPBank', 295000000, 102000000, 8.0, 60, '2026-04-07', 7378216, 28, 270918368, 'ACTIVE', '8% năm đầu -> 11.5% các năm sau');
 
   -- --------------------------------------------------------------------------
-  -- D. INSERT EXPENSES LINKED DIRECTLY TO EXACT VEHICLE IDs
+  -- E. INSERT ALL EXPENSES LINKED TO EXACT CLEAN VEHICLE IDs
   -- --------------------------------------------------------------------------
   DELETE FROM public.expenses WHERE asset_id IN (v_mazda_id, v_bike16_id, v_bike21_id, v_mtb26_id, v_mtb20_id);
 
