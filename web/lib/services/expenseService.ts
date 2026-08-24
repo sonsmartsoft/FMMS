@@ -7,6 +7,7 @@ export interface ExpenseInput {
   asset_id: string;
   date: string;
   category: ExpenseRecord['category'];
+  subcategory?: string;
   amount: number;
   currency?: string;
   vendor?: string;
@@ -57,6 +58,7 @@ export async function createExpense(data: ExpenseInput) {
     asset_id: realId,
     date: data.date,
     category: data.category,
+    subcategory: data.subcategory ?? null,
     amount: data.amount,
     currency: data.currency ?? 'VND',
     vendor: data.vendor ?? null,
@@ -92,6 +94,7 @@ export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
     const target = (MOCK_EXPENSES as any[])[existingIdx];
     if (data.date != null) target.date = data.date;
     if (data.category != null) target.category = data.category;
+    if (data.subcategory != null) target.subcategory = data.subcategory;
     if (data.amount != null) target.amount = data.amount;
     if (data.vendor != null) target.vendor = data.vendor;
     if (data.odometer_km != null) target.odometer_km = data.odometer_km;
@@ -107,6 +110,7 @@ export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
         .update({
           ...(data.date ? { date: data.date } : {}),
           ...(data.category ? { category: data.category } : {}),
+          ...(data.subcategory ? { subcategory: data.subcategory } : {}),
           ...(data.amount != null ? { amount: data.amount } : {}),
           ...(data.vendor != null ? { vendor: data.vendor } : {}),
           ...(data.odometer_km != null ? { odometer_km: data.odometer_km } : {}),

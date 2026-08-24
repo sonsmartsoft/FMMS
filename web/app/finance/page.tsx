@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { getAssets } from '@/lib/services/assetService';
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import { getLoans, getLoanPayments, createLoan, createLoanPayment, updateLoan, LoanRow, LoanPaymentRow } from '@/lib/services/loanService';
-import { ExpenseRecord } from '@/types/mobility';
+import { ExpenseRecord, TAXONOMY } from '@/types/mobility';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
 import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2 } from 'lucide-react';
 
@@ -66,7 +66,7 @@ export default function FinancePage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ amount: '', paid_date: '', notes: '' });
   const [form, setForm] = useState({
-    asset_id: '', date: '', category: 'FUEL',
+    asset_id: '', date: '', category: 'Running', subcategory: 'Fuel',
     amount: '', vendor: '', description: '',
   });
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
@@ -147,7 +147,15 @@ export default function FinancePage() {
 
   const openEdit = (e: ExpenseRecord) => {
     setEditId(e.id);
-    setForm({ asset_id: e.asset_id, date: e.date, category: e.category, amount: String(e.amount), vendor: e.vendor || '', description: e.description || '' });
+    setForm({
+      asset_id: e.asset_id,
+      date: e.date,
+      category: e.category || 'Running',
+      subcategory: e.subcategory || 'Fuel',
+      amount: String(e.amount),
+      vendor: e.vendor || '',
+      description: e.description || '',
+    });
     setOpenModal(true);
   };
 
@@ -155,7 +163,8 @@ export default function FinancePage() {
     const payload = {
       asset_id: form.asset_id,
       date: form.date,
-      category: form.category as ExpenseRecord['category'],
+      category: form.category,
+      subcategory: form.subcategory || undefined,
       amount: parseFloat(form.amount) || 0,
       currency: 'VND',
       vendor: form.vendor || undefined,
@@ -173,7 +182,7 @@ export default function FinancePage() {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
     setOpenModal(false); setEditId(null);
-    setForm({ asset_id: assets[0]?.id || '', date: '', category: 'FUEL', amount: '', vendor: '', description: '' });
+    setForm({ asset_id: assets[0]?.id || '', date: '', category: 'Running', subcategory: 'Fuel', amount: '', vendor: '', description: '' });
   };
 
   const deleteExpenseHandler = async (id: string) => {
@@ -661,19 +670,62 @@ export default function FinancePage() {
               <button onClick={() => setOpenModal(false)} className="p-1 rounded-lg hover:bg-slate-500/10" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 text-xs">
-              {[
-                { label: 'Phương tiện', el: <select className="theme-select" value={form.asset_id} onChange={e => setForm(p => ({ ...p, asset_id: e.target.value }))}>{assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select> },
-                { label: 'Ngày', el: <input type="date" className="theme-input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} /> },
-                { label: 'Danh mục', el: <select className="theme-select" value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}>{Object.entries(CAT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select> },
-                { label: 'Số tiền (₫)', el: <input type="number" className="theme-input" placeholder="500000" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} /> },
-                { label: 'Nhà cung cấp', el: <input type="text" className="theme-input" value={form.vendor} onChange={e => setForm(p => ({ ...p, vendor: e.target.value }))} /> },
-                { label: 'Mô tả', el: <input type="text" className="theme-input" placeholder="Mô tả ngắn gọn" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} /> },
-              ].map(({ label, el }) => (
-                <div key={label} className="space-y-1">
-                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>{label}</label>
-                  {el}
-                </div>
-              ))}
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
+                <select className="theme-select" value={form.asset_id} onChange={e => setForm(p => ({ ...p, asset_id: e.target.value }))}>
+                  {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày thực hiện *</label>
+                <input type="date" className="theme-input" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Danh mục chính (Category) *</label>
+                <select
+                  className="theme-select font-semibold"
+                  value={form.category}
+                  onChange={e => {
+                    const newCat = e.target.value;
+                    const firstSub = Object.keys(TAXONOMY[newCat]?.subcategories || {})[0] || 'Fuel';
+                    setForm(p => ({ ...p, category: newCat, subcategory: firstSub }));
+                  }}
+                >
+                  {Object.entries(TAXONOMY).map(([catKey, catVal]) => (
+                    <option key={catKey} value={catKey}>{catVal.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Danh mục con (SubCategory) *</label>
+                <select
+                  className="theme-select"
+                  value={form.subcategory}
+                  onChange={e => setForm(p => ({ ...p, subcategory: e.target.value }))}
+                >
+                  {Object.entries(TAXONOMY[form.category]?.subcategories || { Other: 'Khác' }).map(([subKey, subLabel]) => (
+                    <option key={subKey} value={subKey}>{subLabel} ({subKey})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Số tiền (₫) *</label>
+                <input type="number" className="theme-input font-mono font-bold" placeholder="500000" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Nhà cung cấp / Đơn vị</label>
+                <input type="text" className="theme-input" placeholder="VD: Showroom, Zestech, TPBank..." value={form.vendor} onChange={e => setForm(p => ({ ...p, vendor: e.target.value }))} />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Mô tả ngắn gọn</label>
+                <input type="text" className="theme-input" placeholder="Nội dung mô tả chi phí" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+              </div>
             </div>
             <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <button onClick={saveExpense} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>Lưu chi phí</button>

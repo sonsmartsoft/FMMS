@@ -327,7 +327,8 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       await createExpense({
         asset_id: asset.id,
         date: new Date().toISOString().slice(0, 10),
-        category: 'INITIAL' as any,
+        category: 'Initial',
+        subcategory: 'Registration',
         amount: parseFloat(initialForm.amount) || 0,
         currency: 'VND',
         vendor: initialForm.vendor || undefined,
@@ -346,7 +347,8 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       await createExpense({
         asset_id: asset.id,
         date: upgradeForm.date || new Date().toISOString().slice(0, 10),
-        category: 'UPGRADE',
+        category: 'Upgrade',
+        subcategory: 'Accessorie',
         amount: parseFloat(upgradeForm.amount) || 0,
         currency: 'VND',
         vendor: upgradeForm.vendor || undefined,
@@ -365,7 +367,8 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       await createExpense({
         asset_id: asset.id,
         date: runningForm.date || new Date().toISOString().slice(0, 10),
-        category: runningForm.category as any,
+        category: 'Running',
+        subcategory: runningForm.category === 'CAR_WASH' ? 'Car Wash' : runningForm.category === 'PARKING' ? 'Parking' : runningForm.category === 'TOLL' ? 'Epass Fee' : 'Fuel',
         amount: parseFloat(runningForm.amount) || 0,
         currency: 'VND',
         vendor: runningForm.vendor || undefined,

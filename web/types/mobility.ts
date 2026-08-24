@@ -74,6 +74,54 @@ export interface CardDisplaySettings {
   cardStyle: 'grid' | 'compact' | 'list';
 }
 
+export const TAXONOMY: Record<string, { label: string; subcategories: Record<string, string> }> = {
+  Initial: {
+    label: '🚗 Chi phí mua xe & lăn bánh ban đầu (Initial)',
+    subcategories: {
+      Purchase: 'Đặt cọc & Tiền mua xe',
+      Registration: 'Trước bạ, Đăng kiểm, Phí biển số',
+      Insurance: 'Bảo hiểm thân vỏ',
+      'Loan Fee': 'Phí dịch vụ ngân hàng',
+      'Loan Insurance': 'Phí bảo hiểm khoản vay',
+    }
+  },
+  Upgrade: {
+    label: '🛠️ Nâng cấp & Đồ chơi xe (Upgrade)',
+    subcategories: {
+      Screen: 'Màn hình & ADAS',
+      'Mirror Folding': 'Gập gương điện',
+      'Control button': 'Phím media vô năng',
+      TPMS: 'Cảm biến áp suất lốp (TPMS)',
+      Accessorie: 'Phụ kiện & Đồ chơi (Thảm, Bơm, Sạc, Thùng rác...)',
+    }
+  },
+  Running: {
+    label: '⛽ Chi phí vận hành (Running)',
+    subcategories: {
+      Fuel: 'Xăng / Nhiên liệu / Sạc pin',
+      'Epass Fee': 'Phí trạm VETC / Epass',
+      Parking: 'Sân đỗ / Gửi xe',
+      'Car Wash': 'Rửa xe & Máy rửa xe gia đình',
+      'Running Fine': 'Phí phạt & Phí trạm khác',
+    }
+  },
+  Loan: {
+    label: '💳 Khoản vay mua xe (Loan)',
+    subcategories: {
+      'Monthly Payment': 'Trả gốc vay hàng tháng',
+      Interest: 'Trả lãi vay hàng tháng',
+    }
+  },
+  Maintenance: {
+    label: '🔧 Bảo dưỡng & Sửa chữa (Maintenance)',
+    subcategories: {
+      'General Service': 'Bảo dưỡng định kỳ',
+      Brake: 'Sửa phanh / Thay lốp / Phụ tùng',
+      Other: 'Khác',
+    }
+  }
+};
+
 export interface ExpenseRecord {
   id: string;
   asset_id: string;
