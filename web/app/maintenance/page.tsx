@@ -307,7 +307,7 @@ export default function MaintenancePage() {
 
       {/* Multi-Service Maintenance Modal */}
       {openModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md overflow-y-auto" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(false)}>
+        <div className="fixed inset-0 z-[9999] grid place-items-center pt-16 p-4 sm:p-6 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(false)}>
           <div className="relative rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
 
             {/* Modal Sticky Header */}

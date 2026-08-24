@@ -270,7 +270,7 @@ export default function DocumentsPage() {
 
       {/* Add Document Modal */}
       {openAddModal && (
-        <div className="fixed inset-0 z-[9999] grid place-items-center p-4 sm:p-6 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
+        <div className="fixed inset-0 z-[9999] grid place-items-center pt-16 p-4 sm:p-6 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
           <div className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 600px)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
@@ -337,7 +337,7 @@ export default function DocumentsPage() {
 
       {/* Edit Document Modal */}
       {editingItem && (
-        <div className="fixed inset-0 z-[9999] grid place-items-center p-4 sm:p-6 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingItem(null)}>
+        <div className="fixed inset-0 z-[9999] grid place-items-center pt-16 p-4 sm:p-6 backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingItem(null)}>
           <div className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 560px)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
