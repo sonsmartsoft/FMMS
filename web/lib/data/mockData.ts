@@ -357,6 +357,8 @@ export const MOCK_PARTS: PartRecord[] = [
   { id: 'p4', name: 'Cảm biến áp suất lốp Zestech (TPMS)', brand: 'Zestech', category: 'An toàn & Lốp', install_date: '2026-04-12', cost: 1500000, odometer_km: 24, warranty_months: 24, notes: 'TPMS hiển thị áp suất lốp trực tiếp' },
   { id: 'p5', name: 'Máy rửa xe gia đình', brand: 'Bosch', category: 'Thiết bị chăm sóc xe', install_date: '2026-04-19', cost: 2200000, odometer_km: 235, warranty_months: 6, notes: 'Máy rửa xe cao áp gia đình' },
   { id: 'p6', name: 'Bơm lốp Toyota điện tử', brand: 'Toyota', category: 'Thiết bị lốp', install_date: '2026-04-21', cost: 389000, odometer_km: 235, warranty_months: 12, notes: 'Bơm lốp điện tử cắm tẩu 12V' },
+];
+
 export interface OdometerLogRecord {
   id: string;
   asset_id: string;
