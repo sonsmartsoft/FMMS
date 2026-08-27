@@ -12,10 +12,22 @@ const fmt = (n: number) => n.toLocaleString('vi-VN');
 
 export default function AnalyticsPage() {
   const [assets, setAssets] = useState<any[]>([]);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [fuelLogs, setFuelLogs] = useState<any[]>([]);
   const [maintRecords, setMaintRecords] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [trips, setTrips] = useState<any[]>([]);
+
+  const isSameAsset = (recAssetId: string, targetAssetId: string) => {
+    if (recAssetId === targetAssetId) return true;
+    const targetAsset = assets.find(a => a.id === targetAssetId);
+    if (targetAsset?.license_plate === '19B-213.87' && (recAssetId === 'CAR01' || recAssetId === '22222222-2222-2222-2222-222222222222' || recAssetId === '20260308-0001-4222-8888-19b213872026')) return true;
+    if (targetAsset?.license_plate === '88C1-210.63' && (recAssetId === 'BIKE01' || recAssetId === '20170801-0002-4111-8888-88c121063016')) return true;
+    if (targetAsset?.license_plate === '88L1-604.36' && (recAssetId === 'BIKE02' || recAssetId === '20210405-0003-4333-8888-88l160436021')) return true;
+    if (targetAsset?.license_plate === 'MTB 26-555' && (recAssetId === 'BIKE03' || recAssetId === '20240310-0004-4444-8888-00000mtb2605')) return true;
+    if (targetAsset?.license_plate === 'MTB 20-999' && (recAssetId === 'BIKE04' || recAssetId === '20240310-0005-4555-8888-00000mtb2005')) return true;
+    return false;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -35,16 +47,22 @@ export default function AnalyticsPage() {
     };
   }, []);
 
-  const totalFuelCost = fuelLogs.reduce((s, f) => s + f.total_cost, 0);
-  const totalMaintCost = maintRecords.reduce((s, m) => s + m.cost, 0);
-  const totalInsurance = expenses.filter(e => e.category === 'INSURANCE').reduce((s, e) => s + e.amount, 0);
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
-  const totalKm = assets.reduce((s, a) => s + a.current_odometer_km, 0);
-  const totalTripKm = trips.reduce((s, t) => s + t.distance_km, 0);
-  const totalFleetValue = assets.reduce((s, a) => s + a.current_value, 0);
-  const totalPurchase = assets.reduce((s, a) => s + a.purchase_price, 0);
-  const totalDepreciation = totalPurchase - totalFleetValue;
-  const avgSpeed = trips.length > 0 ? trips.reduce((s, t) => s + t.average_speed_kmh, 0) / trips.length : 0;
+  const filteredFuelLogs = selectedAssetId ? fuelLogs.filter(f => isSameAsset(f.asset_id, selectedAssetId)) : fuelLogs;
+  const filteredMaintRecords = selectedAssetId ? maintRecords.filter(m => isSameAsset(m.asset_id, selectedAssetId)) : maintRecords;
+  const filteredExpenses = selectedAssetId ? expenses.filter(e => isSameAsset(e.asset_id, selectedAssetId)) : expenses;
+  const filteredTrips = selectedAssetId ? trips.filter(t => isSameAsset(t.asset_id, selectedAssetId)) : trips;
+  const filteredAssets = selectedAssetId ? assets.filter(a => a.id === selectedAssetId) : assets;
+
+  const totalFuelCost = filteredFuelLogs.reduce((s, f) => s + f.total_cost, 0);
+  const totalMaintCost = filteredMaintRecords.reduce((s, m) => s + m.cost, 0);
+  const totalInsurance = filteredExpenses.filter(e => e.category === 'INSURANCE').reduce((s, e) => s + e.amount, 0);
+  const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+  const totalKm = filteredAssets.reduce((s, a) => s + (a.current_odometer_km || 0), 0);
+  const totalTripKm = filteredTrips.reduce((s, t) => s + (t.distance_km || 0), 0);
+  const totalFleetValue = filteredAssets.reduce((s, a) => s + (a.current_value || 0), 0);
+  const totalPurchase = filteredAssets.reduce((s, a) => s + (a.purchase_price || 0), 0);
+  const totalDepreciation = Math.max(0, totalPurchase - totalFleetValue);
+  const avgSpeed = filteredTrips.length > 0 ? filteredTrips.reduce((s, t) => s + (t.average_speed_kmh || 0), 0) / filteredTrips.length : 0;
 
   const CAT_DATA = [
     { label: 'Nhiên liệu', total: totalFuelCost, color: '#F59E0B', pct: totalExpenses > 0 ? (totalFuelCost / totalExpenses * 100) : 0 },
@@ -54,28 +72,120 @@ export default function AnalyticsPage() {
   ];
   CAT_DATA[3].pct = totalExpenses > 0 ? (CAT_DATA[3].total / totalExpenses * 100) : 0;
 
-  const PER_ASSET = assets.map(a => ({
+  const PER_ASSET = filteredAssets.map(a => ({
     name: a.name.split(' ')[0] + ' ' + (a.license_plate || a.model),
     km: a.current_odometer_km,
     value: a.current_value,
-    depreciation: a.purchase_price - a.current_value,
-    depPct: a.purchase_price > 0 ? ((a.purchase_price - a.current_value) / a.purchase_price * 100).toFixed(1) : '0',
+    depreciation: (a.purchase_price || 0) - (a.current_value || 0),
+    depPct: a.purchase_price > 0 ? (((a.purchase_price - a.current_value) / a.purchase_price) * 100).toFixed(1) : '0',
   }));
 
   const monthlyTotals = Array.from({ length: 12 }, (_, i) => {
     const m = (i + 1).toString().padStart(2, '0');
-    return expenses.filter(e => (e.date || '').startsWith(`2026-${m}`)).reduce((s, e) => s + e.amount, 0);
+    return filteredExpenses.filter(e => (e.date || '').startsWith(`2026-${m}`)).reduce((s, e) => s + e.amount, 0);
   });
   const monthlyMax = Math.max(...monthlyTotals, 1);
   const currentMonthIdx = new Date().getMonth();
 
+  const selectedVehicleObj = assets.find(a => a.id === selectedAssetId);
+
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn pb-12">
       <div>
-        <h1 className="text-2xl font-extrabold" style={{ color: 'var(--text-primary)' }}>Báo Cáo & Phân Tích</h1>
+        <h1 className="text-2xl font-extrabold" style={{ color: 'var(--text-primary)' }}>Báo Cáo &amp; Phân Tích</h1>
         <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-          TCO — Total Cost of Ownership · Hiệu suất vận hành toàn bộ đội phương tiện
+          {selectedAssetId ? (
+            <span>Phương tiện: <strong className="text-cyan-400">{selectedVehicleObj?.name}</strong> · TCO &amp; Hiệu suất vận hành xe</span>
+          ) : (
+            <span>TCO — Total Cost of Ownership · Hiệu suất vận hành toàn bộ đội {assets.length} phương tiện</span>
+          )}
         </p>
+      </div>
+
+      {/* ─── Vehicle Filter Bar ─── */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            Lọc báo cáo theo phương tiện ({assets.length} xe)
+          </p>
+          {selectedAssetId && (
+            <button 
+              onClick={() => setSelectedAssetId(null)} 
+              className="text-[11px] font-bold underline transition hover:opacity-80 flex items-center space-x-1 cursor-pointer"
+              style={{ color: 'var(--accent-cyan)' }}
+            >
+              <span>Xem tất cả phương tiện</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {/* Option: Tất cả */}
+          <div
+            onClick={() => setSelectedAssetId(null)}
+            className={`p-3 rounded-2xl cursor-pointer border transition-all duration-200 flex flex-col justify-between ${
+              selectedAssetId === null ? 'shadow-md ring-2 ring-cyan-500 scale-[1.02]' : 'hover:border-cyan-500/50'
+            }`}
+            style={{
+              background: selectedAssetId === null ? 'rgba(14, 165, 233, 0.12)' : 'var(--bg-secondary)',
+              borderColor: selectedAssetId === null ? 'var(--accent-cyan)' : 'var(--border-default)',
+            }}
+          >
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0" style={{ background: 'var(--accent-cyan)', color: '#fff' }}>
+                ALL
+              </div>
+              <div className="overflow-hidden">
+                <p className="font-extrabold text-xs truncate" style={{ color: 'var(--text-primary)' }}>Tất cả xe</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{assets.length} xe</p>
+              </div>
+            </div>
+            <p className="text-right text-[11px] font-extrabold mt-2" style={{ color: 'var(--status-red)' }}>
+              {fmt(expenses.reduce((s, e) => s + e.amount, 0))} ₫
+            </p>
+          </div>
+
+          {/* Vehicle Cards */}
+          {assets.map(a => {
+            const isSelected = selectedAssetId === a.id;
+            const assetExps = expenses.filter(e => isSameAsset(e.asset_id, a.id));
+            const assetCost = assetExps.reduce((s, e) => s + e.amount, 0);
+
+            return (
+              <div
+                key={a.id}
+                onClick={() => setSelectedAssetId(isSelected ? null : a.id)}
+                className={`p-3 rounded-2xl cursor-pointer border transition-all duration-200 flex flex-col justify-between ${
+                  isSelected ? 'shadow-md ring-2 ring-cyan-500 scale-[1.02]' : 'hover:border-cyan-500/50 opacity-90 hover:opacity-100'
+                }`}
+                style={{
+                  background: isSelected ? 'rgba(14, 165, 233, 0.12)' : 'var(--bg-secondary)',
+                  borderColor: isSelected ? 'var(--accent-cyan)' : 'var(--border-default)',
+                }}
+              >
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0 border" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-primary)' }}>
+                    {a.image_url ? (
+                      <img src={a.image_url} alt={a.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center font-bold text-xs" style={{ color: 'var(--accent-cyan)' }}>
+                        {a.name.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="overflow-hidden min-w-0">
+                    <p className="font-extrabold text-xs truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</p>
+                    <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{a.license_plate || a.model}</p>
+                  </div>
+                </div>
+
+                <p className="text-right text-[11px] font-extrabold mt-2" style={{ color: 'var(--status-red)' }}>
+                  {fmt(assetCost)} ₫
+                </p>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* KPI Row */}

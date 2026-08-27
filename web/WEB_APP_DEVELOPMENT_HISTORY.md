@@ -200,9 +200,46 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
 
 ---
 
-## 8. CÁC LƯU Ý QUAN TRỌNG CHO ĐỢT PHÁT TRIỂN TIẾP THEO
+## 8. QUY CHUẨN THIẾT KẾ BỘ LỌC PHƯƠNG TIỆN (VEHICLE FILTER BAR RULE)
 
-1. **Tuyệt đối không dùng `glass-panel` trực tiếp trên card modal**: Tránh các lỗi liên quan đến `will-change` hoặc `transform` làm sai lệch tọa độ fixed.
-2. **Không kết hợp `flex items-center` và `overflow-y-auto` trên cùng một div**: Luôn dùng mô hình 2 lớp div (`overflow-y-auto` ở lớp ngoài và `flex min-h-full items-center justify-center pt-20` ở lớp trong).
-3. **Thêm style inline với CSS Variable cho màu sắc**: Giúp đảm bảo tương thích 100% khi chuyển đổi Light Mode và Dark Mode mà không bị phụ thuộc vào class cố định của Tailwind.
-4. **Mọi thay đổi giao diện phải kiểm tra đồng thời trên cả 9 màn hình**: `/dashboard`, `/assets`, `/assets/[id]`, `/fuel`, `/maintenance`, `/finance`, `/documents`, `/warranties`, `/settings/*`.
+> [!IMPORTANT]
+> **Quy định bất biến:** Mọi màn hình tổng hợp danh sách, hoạt động, chi phí, tài sản hoặc báo cáo (`/finance`, `/maintenance`, `/fuel`, `/documents`, `/analytics`, `/warranties`...) **BẮT BUỘC PHẢI CÓ THANH LỌC PHƯƠNG TIỆN (VEHICLE FILTER BAR)** đặt ngay dưới Header để hỗ trợ người dùng chuyển đổi linh hoạt giữa việc xem toàn bộ đội xe hoặc từng xe riêng lẻ.
+
+### Cấu trúc chuẩn của Vehicle Filter Bar:
+1. **Tiêu đề & Reset:** 
+   - `Lọc [chức năng] theo phương tiện ({N} xe)` bên trái.
+   - Nút `Xem tất cả phương tiện` (chỉ xuất hiện khi đang chọn 1 xe cụ thể) bên phải.
+2. **Grid thẻ chọn xe (Responsive Grid 2 -> 7 cột):**
+   - **Thẻ "Tất cả xe" (ALL):** Nằm đầu tiên, hiển thị tổng số mục / tổng chi phí của toàn bộ đội xe.
+   - **Thẻ từng xe:** Hiển thị Avatar / Ảnh xe, Tên xe, Biển số xe, Badge trạng thái (Có vay / Hết hạn / Số mục), và Số tiền / Thông số tương ứng.
+   - **Active State:** Hiệu ứng `ring-2 ring-cyan-500 scale-[1.02]` với nền sáng nổi bật.
+3. **Phản ứng dữ liệu khi chọn xe:**
+   - Khi chọn xe: Toàn bộ KPI tóm tắt, danh sách, biểu đồ, và các modal thêm mới tự động gán `asset_id` theo xe đang chọn.
+   - Khi chọn "Tất cả xe": Hiển thị tổng quan hợp nhất của cả gia đình.
+
+---
+
+## 9. LỊCH SỬ CÁC ĐỢT PHÁT TRIỂN & NÂNG CẤP
+
+### Đợt 7 (27/08/2026): Chuẩn Hóa Bộ Lọc Phương Tiện Toàn Hệ Thống & Hoàn Thiện Modal
+- **Trang Tài Chính & Khoản Vay (`/finance`):**
+  - Bổ sung Vehicle Filter Bar: Lọc linh hoạt giữa xem tất cả hoặc từng xe.
+  - Tự động lọc bảng phân bổ chi phí, danh sách chi phí và khoản vay theo xe.
+  - Khi xe chưa có khoản vay, cung cấp thẻ tạo khoản vay nhanh với 1 cú click.
+  - Cho phép sửa chi tiết từng kỳ trả nợ (lãi thực tế ngân hàng tính theo ngày làm việc).
+- **Trang Giấy Tờ & Bảo Hiểm (`/documents`):**
+  - Bổ sung Vehicle Filter Bar: Lọc giấy tờ theo từng phương tiện hoặc xem toàn bộ.
+  - Sửa lỗi Flexbox height collapse trên popup modal thêm giấy tờ (hỗ trợ nhập liệu 2 cột đầy đủ).
+- **Trang Báo Cáo & Phân Tích (`/analytics`):**
+  - Bổ sung Vehicle Filter Bar: Xem TCO, tỷ lệ khấu hao, và chi phí vận hành cho từng xe hoặc cả đội xe.
+
+---
+
+## 10. CÁC LƯU Ý QUAN TRỌNG CHO ĐỢT PHÁT TRIỂN TIẾP THEO
+
+1. **Tuân thủ Vehicle Filter Bar Rule trên mọi màn hình mới**: Đảm bảo trải nghiệm quản lý đa phương tiện đồng nhất.
+2. **Tuyệt đối không dùng `glass-panel` trực tiếp trên card modal**: Tránh các lỗi liên quan đến `will-change` hoặc `transform` làm sai lệch tọa độ fixed.
+3. **Không kết hợp `flex items-center` và `overflow-y-auto` trên cùng một div**: Luôn dùng mô hình 2 lớp div (`overflow-y-auto` ở lớp ngoài và `flex min-h-full items-center justify-center pt-20` ở lớp trong).
+4. **Thêm style inline với CSS Variable cho màu sắc**: Giúp đảm bảo tương thích 100% khi chuyển đổi Light Mode và Dark Mode mà không bị phụ thuộc vào class cố định của Tailwind.
+5. **Mọi thay đổi giao diện phải kiểm tra đồng thời trên cả 9 màn hình**: `/dashboard`, `/assets`, `/assets/[id]`, `/fuel`, `/maintenance`, `/finance`, `/documents`, `/warranties`, `/settings/*`.
+

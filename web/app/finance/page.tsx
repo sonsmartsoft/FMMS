@@ -99,6 +99,7 @@ export default function FinancePage() {
     asset_id: '', date: '', category: 'Running', subcategory: 'Fuel',
     amount: '', vendor: '', description: '',
   });
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
   const [openAddLoanModal, setOpenAddLoanModal] = useState(false);
   const [editingLoan, setEditingLoan] = useState<LoanRow | null>(null);
@@ -117,6 +118,17 @@ export default function FinancePage() {
     bank_hotline: '',
     notes: '',
   });
+
+  const isSameAsset = (recAssetId: string, targetAssetId: string) => {
+    if (recAssetId === targetAssetId) return true;
+    const targetAsset = assets.find(a => a.id === targetAssetId);
+    if (targetAsset?.license_plate === '19B-213.87' && (recAssetId === 'CAR01' || recAssetId === '22222222-2222-2222-2222-222222222222' || recAssetId === '20260308-0001-4222-8888-19b213872026')) return true;
+    if (targetAsset?.license_plate === '88C1-210.63' && (recAssetId === 'BIKE01' || recAssetId === '20170801-0002-4111-8888-88c121063016')) return true;
+    if (targetAsset?.license_plate === '88L1-604.36' && (recAssetId === 'BIKE02' || recAssetId === '20210405-0003-4333-8888-88l160436021')) return true;
+    if (targetAsset?.license_plate === 'MTB 26-555' && (recAssetId === 'BIKE03' || recAssetId === '20240310-0004-4444-8888-00000mtb2605')) return true;
+    if (targetAsset?.license_plate === 'MTB 20-999' && (recAssetId === 'BIKE04' || recAssetId === '20240310-0005-4555-8888-00000mtb2005')) return true;
+    return false;
+  };
 
   const loadData = async () => {
     try {
@@ -155,9 +167,22 @@ export default function FinancePage() {
     }
   }, [selectedLoanId]);
 
+  const filteredExpenses = useMemo(() => {
+    if (!selectedAssetId) return expenses;
+    return expenses.filter(e => isSameAsset(e.asset_id, selectedAssetId));
+  }, [expenses, selectedAssetId, assets]);
+
+  const filteredLoans = useMemo(() => {
+    if (!selectedAssetId) return loans;
+    return loans.filter(l => isSameAsset(l.asset_id, selectedAssetId));
+  }, [loans, selectedAssetId, assets]);
+
   const selectedLoan = useMemo(() => {
+    if (selectedAssetId) {
+      return filteredLoans[0] || null;
+    }
     return loans.find(l => l.id === selectedLoanId) || loans[0] || null;
-  }, [loans, selectedLoanId]);
+  }, [loans, filteredLoans, selectedAssetId, selectedLoanId]);
 
   // Auto-calculate monthly payment (EMI formula)
   const calculatedMonthly = useMemo(() => {
@@ -172,7 +197,7 @@ export default function FinancePage() {
   }, [loanForm.principal, loanForm.interest_rate_percent, loanForm.term_months]);
 
   const loanSchedule = useMemo(() => selectedLoan ? generateLoanSchedule(selectedLoan, payments) : [], [selectedLoan, payments]);
-  const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+  const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
   const paidPrincipal = selectedLoan ? selectedLoan.principal - selectedLoan.current_balance : 0;
   const loanProgress = selectedLoan && selectedLoan.principal > 0 ? (paidPrincipal / selectedLoan.principal) * 100 : 0;
   const paidPayments = loanSchedule.filter(p => p.status === 'PAID').length;
@@ -180,7 +205,7 @@ export default function FinancePage() {
 
   const breakdown = Object.entries(CAT_LABELS).map(([k]) => ({
     category: k, label: CAT_LABELS[k],
-    total: expenses.filter(e => e.category === k).reduce((s, e) => s + e.amount, 0),
+    total: filteredExpenses.filter(e => e.category === k).reduce((s, e) => s + e.amount, 0),
     color: CAT_COLORS[k] || '#6B7280',
   })).filter(b => b.total > 0).sort((a, b) => b.total - a.total);
 
@@ -449,31 +474,137 @@ export default function FinancePage() {
     return map[s] || map.PENDING;
   };
 
+  const selectedVehicleObj = assets.find(a => a.id === selectedAssetId);
+
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn pb-12">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold" style={{ color: 'var(--text-primary)' }}>Chi Phí & Khoản Vay</h1>
+          <h1 className="text-2xl font-extrabold" style={{ color: 'var(--text-primary)' }}>Chi Phí &amp; Khoản Vay</h1>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Tổng chi phí: <strong style={{ color: 'var(--status-red)' }}>{fmt(totalExpenses)} ₫</strong>
+            {selectedAssetId ? (
+              <span>Phương tiện: <strong className="text-cyan-400">{selectedVehicleObj?.name}</strong> · Chi phí: <strong style={{ color: 'var(--status-red)' }}>{fmt(totalExpenses)} ₫</strong></span>
+            ) : (
+              <span>Toàn bộ {assets.length} xe · Tổng chi phí: <strong style={{ color: 'var(--status-red)' }}>{fmt(totalExpenses)} ₫</strong></span>
+            )}
             {overduePayments > 0 && <span className="ml-3" style={{ color: 'var(--status-red)' }}>⚠ {overduePayments} khoản vay quá hạn</span>}
           </p>
         </div>
         <div className="flex items-center space-x-2">
           {activeSection === 'expenses' ? (
-            <button onClick={() => { setEditId(null); setOpenModal(true); }}
-              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold transition hover:opacity-90 shadow-md"
+            <button onClick={() => { setEditId(null); if (selectedAssetId) setForm(p => ({ ...p, asset_id: selectedAssetId })); setOpenModal(true); }}
+              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold transition hover:opacity-90 shadow-md cursor-pointer"
               style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
               <Plus className="w-4 h-4" /><span>Thêm chi phí</span>
             </button>
           ) : (
-            <button onClick={openAddLoan}
-              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold transition hover:opacity-90 shadow-md"
+            <button onClick={() => { if (selectedAssetId) setLoanForm(p => ({ ...p, asset_id: selectedAssetId })); openAddLoan(); }}
+              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white text-xs font-bold transition hover:opacity-90 shadow-md cursor-pointer"
               style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}>
               <Plus className="w-4 h-4" /><span>Tạo khoản vay mới</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* ─── Vehicle Filter Bar ─── */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+            Lọc tài chính theo phương tiện ({assets.length} xe)
+          </p>
+          {selectedAssetId && (
+            <button 
+              onClick={() => setSelectedAssetId(null)} 
+              className="text-[11px] font-bold underline transition hover:opacity-80 flex items-center space-x-1 cursor-pointer"
+              style={{ color: 'var(--accent-cyan)' }}
+            >
+              <span>Xem tất cả phương tiện</span>
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {/* Option: Tất cả */}
+          <div
+            onClick={() => setSelectedAssetId(null)}
+            className={`p-3 rounded-2xl cursor-pointer border transition-all duration-200 flex flex-col justify-between ${
+              selectedAssetId === null ? 'shadow-md ring-2 ring-cyan-500 scale-[1.02]' : 'hover:border-cyan-500/50'
+            }`}
+            style={{
+              background: selectedAssetId === null ? 'rgba(14, 165, 233, 0.12)' : 'var(--bg-secondary)',
+              borderColor: selectedAssetId === null ? 'var(--accent-cyan)' : 'var(--border-default)',
+            }}
+          >
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0" style={{ background: 'var(--accent-cyan)', color: '#fff' }}>
+                ALL
+              </div>
+              <div className="overflow-hidden">
+                <p className="font-extrabold text-xs truncate" style={{ color: 'var(--text-primary)' }}>Tất cả xe</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  {loans.length > 0 ? `${loans.length} khoản vay · ` : ''}{expenses.length} chi phí
+                </p>
+              </div>
+            </div>
+            <p className="text-right text-[11px] font-extrabold mt-2" style={{ color: 'var(--status-red)' }}>
+              {fmt(expenses.reduce((s, e) => s + e.amount, 0))} ₫
+            </p>
+          </div>
+
+          {/* Vehicle Cards */}
+          {assets.map(a => {
+            const isSelected = selectedAssetId === a.id;
+            const assetExps = expenses.filter(e => isSameAsset(e.asset_id, a.id));
+            const assetCost = assetExps.reduce((s, e) => s + e.amount, 0);
+            const assetLoan = loans.find(l => isSameAsset(l.asset_id, a.id));
+
+            return (
+              <div
+                key={a.id}
+                onClick={() => setSelectedAssetId(isSelected ? null : a.id)}
+                className={`p-3 rounded-2xl cursor-pointer border transition-all duration-200 flex flex-col justify-between ${
+                  isSelected ? 'shadow-md ring-2 ring-cyan-500 scale-[1.02]' : 'hover:border-cyan-500/50 opacity-90 hover:opacity-100'
+                }`}
+                style={{
+                  background: isSelected ? 'rgba(14, 165, 233, 0.12)' : 'var(--bg-secondary)',
+                  borderColor: isSelected ? 'var(--accent-cyan)' : 'var(--border-default)',
+                }}
+              >
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0 border" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-primary)' }}>
+                    {a.image_url ? (
+                      <img src={a.image_url} alt={a.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center font-bold text-xs" style={{ color: 'var(--accent-cyan)' }}>
+                        {a.name.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="overflow-hidden min-w-0">
+                    <p className="font-extrabold text-xs truncate" style={{ color: 'var(--text-primary)' }}>{a.name}</p>
+                    <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{a.license_plate || a.model}</p>
+                  </div>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between">
+                  {assetLoan ? (
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-400">
+                      🏦 Có vay
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-zinc-500">
+                      {assetExps.length} mục
+                    </span>
+                  )}
+                  <p className="text-right text-[11px] font-extrabold" style={{ color: 'var(--status-red)' }}>
+                    {fmt(assetCost)} ₫
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -501,7 +632,7 @@ export default function FinancePage() {
                   <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>{b.label}</span>
                 </div>
                 <p className="text-sm font-extrabold" style={{ color: b.color }}>{(b.total / 1_000_000).toFixed(1)}M ₫</p>
-                <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{((b.total / totalExpenses) * 100).toFixed(1)}%</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{((b.total / (totalExpenses || 1)) * 100).toFixed(1)}%</p>
               </div>
             ))}
           </div>
@@ -516,10 +647,10 @@ export default function FinancePage() {
                 </tr>
               </thead>
               <tbody>
-                {expenses.map((e, i) => (
+                {filteredExpenses.map((e, i) => (
                   <tr key={e.id} style={{ borderBottom: '1px solid var(--border-subtle)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
                     <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{fmtDate(e.date)}</td>
-                    <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{assets.find(a => a.id === e.asset_id)?.name?.split(' ')[0] || '—'}</td>
+                    <td className="px-4 py-3 font-semibold" style={{ color: 'var(--text-muted)' }}>{assets.find(a => a.id === e.asset_id)?.name?.split(' ')[0] || '—'}</td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: `${CAT_COLORS[e.category] || '#6B7280'}22`, color: CAT_COLORS[e.category] || 'var(--text-muted)' }}>
                         {CAT_LABELS[e.category] || e.category}
@@ -536,6 +667,13 @@ export default function FinancePage() {
                     </td>
                   </tr>
                 ))}
+                {filteredExpenses.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
+                      Không có chi phí nào cho phương tiện này.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -545,32 +683,69 @@ export default function FinancePage() {
       {/* ─── LOANS ─── */}
       {activeSection === 'loans' && (
         <div className="space-y-5">
-          {/* Loan Selector Bar */}
-          {loans.length > 0 ? (
-            <div className="flex items-center justify-between gap-3 flex-wrap p-3 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-              <div className="flex items-center space-x-2">
-                <CreditCard className="w-4 h-4 text-cyan-400" />
-                <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>Chọn khoản vay phương tiện:</span>
-                <select
-                  className="theme-select text-xs font-bold"
-                  value={selectedLoanId || ''}
-                  onChange={e => setSelectedLoanId(e.target.value)}
-                >
-                  {loans.map(l => {
-                    const vehicleName = assets.find(a => a.id === l.asset_id)?.name || 'Xe';
-                    return (
-                      <option key={l.id} value={l.id}>
-                        {vehicleName} ({l.lender}) — Vay {fmt(l.principal)}₫
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-              <button onClick={openAddLoan} className="text-xs font-bold px-3 py-1.5 rounded-xl text-white" style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}>
-                + Thêm khoản vay khác
+          {/* Active Loans Overview Cards when ALL is selected */}
+          {!selectedAssetId && loans.length > 1 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {loans.map(l => {
+                const asset = assets.find(a => a.id === l.asset_id);
+                const isCurrentLoan = selectedLoan?.id === l.id;
+                return (
+                  <div
+                    key={l.id}
+                    onClick={() => setSelectedLoanId(l.id)}
+                    className={`p-4 rounded-2xl cursor-pointer border transition-all ${
+                      isCurrentLoan ? 'ring-2 ring-emerald-500 shadow-lg' : 'hover:border-emerald-500/50'
+                    }`}
+                    style={{
+                      background: isCurrentLoan ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-secondary)',
+                      borderColor: isCurrentLoan ? 'var(--status-green)' : 'var(--border-default)',
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-extrabold text-xs" style={{ color: 'var(--text-primary)' }}>
+                        {asset?.name || 'Xe'}
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
+                        {l.lender}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-xs mt-2">
+                      <span style={{ color: 'var(--text-muted)' }}>Gốc vay:</span>
+                      <span className="font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{fmt(l.principal)} ₫</span>
+                    </div>
+                    <div className="flex justify-between text-xs mt-1">
+                      <span style={{ color: 'var(--text-muted)' }}>Dư nợ còn:</span>
+                      <span className="font-mono font-bold text-amber-400">{fmt(l.current_balance)} ₫</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* If specific vehicle is selected and has no loan */}
+          {selectedAssetId && filteredLoans.length === 0 ? (
+            <div className="p-8 rounded-2xl text-center space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <CreditCard className="w-10 h-10 mx-auto opacity-40 text-cyan-400" />
+              <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                {selectedVehicleObj?.name || 'Phương tiện này'} chưa có khoản vay mua xe
+              </p>
+              <p className="text-xs max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
+                Bạn có thể tạo khoản vay mua xe trả góp cho {selectedVehicleObj?.name || 'phương tiện'} để tự động tính lịch trả nợ dư nợ giảm dần.
+              </p>
+              <button
+                onClick={() => {
+                  setEditingLoan(null);
+                  setLoanForm(p => ({ ...p, asset_id: selectedAssetId || '' }));
+                  setOpenAddLoanModal(true);
+                }}
+                className="px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-md cursor-pointer"
+                style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}
+              >
+                + Tạo khoản vay cho {selectedVehicleObj?.name || 'xe này'}
               </button>
             </div>
-          ) : (
+          ) : loans.length === 0 ? (
             <div className="p-8 rounded-2xl text-center space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
               <CreditCard className="w-10 h-10 mx-auto opacity-40 text-cyan-400" />
               <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>Chưa có khoản vay mua xe nào</p>
@@ -581,7 +756,7 @@ export default function FinancePage() {
                 + Tạo khoản vay đầu tiên
               </button>
             </div>
-          )}
+          ) : null}
 
           {selectedLoan && (
             <div className="space-y-6">
@@ -592,7 +767,7 @@ export default function FinancePage() {
                   <VehicleFinanceOverview
                     asset={targetAsset}
                     loan={selectedLoan as any}
-                    expenses={expenses.filter(e => e.asset_id === selectedLoan.asset_id)}
+                    expenses={expenses.filter(e => isSameAsset(e.asset_id, selectedLoan.asset_id))}
                     onRefresh={loadData}
                   />
                 );
