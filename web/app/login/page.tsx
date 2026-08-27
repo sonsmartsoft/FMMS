@@ -225,68 +225,23 @@ export default function LoginPage() {
           </button>
           
           {!isMagicLink && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <span style={{ color: 'var(--text-secondary, #9ca3af)' }}>Chưa có tài khoản?</span>
               <button
                 type="button"
-                onClick={async () => {
-                  setLoading(true);
-                  setError(null);
-                  try {
-                    const demoEmail = 'demo@fmms.com';
-                    const demoPass = '12345678';
-                    const { error: signInErr } = await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPass });
-                    if (signInErr) {
-                      // Try sign up if demo account does not exist yet
-                      const { error: signUpErr } = await supabase.auth.signUp({ email: demoEmail, password: demoPass });
-                      if (signUpErr && !signUpErr.message.includes('already registered')) throw signUpErr;
-                      // Retry sign in after auto creation
-                      await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPass });
-                    }
-                    router.push('/');
-                    router.refresh();
-                  } catch (e: any) {
-                    // Fallback to local cookie session or redirect
-                    document.cookie = "fmms_demo_session=1; path=/; max-age=86400";
-                    router.push('/');
-                    router.refresh();
-                  } finally {
-                    setLoading(false);
-                  }
-                }}
+                onClick={handleSignUp}
+                disabled={loading}
                 style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(52,211,153,0.4)',
-                  background: 'rgba(52,211,153,0.15)',
-                  color: '#34d399',
-                  fontSize: '0.875rem',
-                  fontWeight: '600',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--btn-primary-bg, #3b82f6)',
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease',
+                  fontWeight: '600',
+                  padding: 0
                 }}
               >
-                ⚡ VÀO THỬ NHANH (Demo Mode)
+                Đăng ký ngay
               </button>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-                <span style={{ color: 'var(--text-secondary, #9ca3af)' }}>Chưa có tài khoản?</span>
-                <button
-                  type="button"
-                  onClick={handleSignUp}
-                  disabled={loading}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--btn-primary-bg, #3b82f6)',
-                    cursor: 'pointer',
-                    fontWeight: '600',
-                    padding: 0
-                  }}
-                >
-                  Đăng ký ngay
-                </button>
-              </div>
             </div>
           )}
         </div>
