@@ -123,7 +123,7 @@ export default function DocumentsPage() {
             id: i.id,
             sourceType: 'INSURANCE',
             assetId: asset.id,
-            name: POLICY_TYPE_LABELS[i.policy_type] || i.policy_type,
+            name: (POLICY_TYPE_LABELS as Record<string, string>)[i.policy_type] || i.policy_type || 'Bảo hiểm',
             issuer: i.provider,
             valid_until: i.expiry_date,
             cost: i.cost || undefined,
@@ -255,7 +255,7 @@ export default function DocumentsPage() {
 
   const allDocs = groups.flatMap(d => d.docs);
   const okCount = allDocs.filter(d => d.status === 'OK').length;
-  const soonCount = allDocs.filter(d => d.status === 'EXPIRING_SOON').length;
+  const soonCount = allDocs.filter(d => d.status === 'NEAR').length;
   const expiredCount = allDocs.filter(d => d.status === 'EXPIRED').length;
   const expiredSpecific = allDocs.filter(d => d.status === 'EXPIRED');
 
