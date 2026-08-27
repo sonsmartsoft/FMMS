@@ -39,24 +39,54 @@ function generateLoanSchedule(loan: any, payments: any[]) {
   const start = new Date(loan.start_date || new Date().toISOString().slice(0, 10));
   let balance = loan.principal;
   const schedule = [];
-  const paidKeys = new Set(payments.filter(p => p.status === 'PAID' || p.paid_date).map(p => {
-    const d = new Date(p.due_date);
-    return `${d.getFullYear()}-${d.getMonth()}`;
-  }));
+
+  const paymentMap = new Map<number, any>();
+  (payments || []).forEach(p => {
+    paymentMap.set(p.payment_number, p);
+  });
+
   for (let i = 1; i <= loan.term_months; i++) {
-    const interest = Math.round(balance * rate);
-    const principal = Math.round(monthly - interest);
-    balance = Math.max(0, balance - principal);
-    const due = new Date(start);
-    due.setMonth(due.getMonth() + i - 1);
-    due.setDate(loan.payment_day || 15);
-    const dueStr = due.toISOString().split('T')[0];
-    const today = new Date();
-    const key = `${due.getFullYear()}-${due.getMonth()}`;
+    const customPayment = paymentMap.get(i);
+    let interest = Math.round(balance * rate);
+    let principal = Math.round(monthly - interest);
+    let total = monthly;
+    let dueStr = '';
     let status: 'PAID' | 'PENDING' | 'OVERDUE' = 'PENDING';
-    if (paidKeys.has(key)) status = 'PAID';
-    else if (new Date(dueStr) < today) status = 'OVERDUE';
-    schedule.push({ payment_number: i, due_date: dueStr, principal_paid: principal, interest_paid: interest, total_payment: monthly, status, remaining_balance: balance });
+    let paidDate: string | undefined = undefined;
+
+    if (customPayment) {
+      dueStr = customPayment.due_date ? customPayment.due_date.slice(0, 10) : '';
+      principal = Number(customPayment.principal_paid) || principal;
+      interest = Number(customPayment.interest_paid) || interest;
+      total = Number(customPayment.total_payment) || (principal + interest);
+      status = customPayment.status;
+      paidDate = customPayment.paid_date;
+    }
+
+    if (!dueStr) {
+      const due = new Date(start);
+      due.setMonth(due.getMonth() + i - 1);
+      due.setDate(loan.payment_day || 15);
+      dueStr = due.toISOString().split('T')[0];
+    }
+
+    const today = new Date();
+    if (!customPayment) {
+      if (new Date(dueStr) < today) status = 'OVERDUE';
+    }
+
+    balance = Math.max(0, balance - principal);
+
+    schedule.push({
+      payment_number: i,
+      due_date: dueStr,
+      principal_paid: principal,
+      interest_paid: interest,
+      total_payment: total,
+      status,
+      paid_date: paidDate,
+      remaining_balance: balance,
+    });
   }
   return schedule;
 }
@@ -69,10 +99,10 @@ function Modal({ title, onClose, children, maxWidth = 'max-w-2xl' }: { title: st
       style={{ background: 'rgba(0,0,0,0.75)' }}
       onClick={onClose}
     >
-      <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
+      <div className="flex min-h-full items-center justify-center p-4 sm:p-6 py-12">
         <div
           className={`rounded-2xl w-full ${maxWidth} flex flex-col shadow-2xl overflow-hidden`}
-          style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }}
+          style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(88vh, 640px)' }}
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
@@ -337,6 +367,72 @@ export default function AssetDetailPage() {
       setLoanPayments([]);
     } catch (err: any) {
       alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
+    }
+  };
+
+  const [openEditPeriodModal, setOpenEditPeriodModal] = useState(false);
+  const [editingPeriod, setEditingPeriod] = useState<any | null>(null);
+  const [periodForm, setPeriodForm] = useState({
+    payment_number: 1,
+    due_date: '',
+    principal_paid: '',
+    interest_paid: '',
+    total_payment: '',
+    paid_date: '',
+    status: 'PENDING' as 'PAID' | 'PENDING' | 'OVERDUE',
+  });
+
+  const handleOpenEditPeriod = (p: any) => {
+    setEditingPeriod(p);
+    setPeriodForm({
+      payment_number: p.payment_number,
+      due_date: p.due_date ? p.due_date.slice(0, 10) : '',
+      principal_paid: String(p.principal_paid || ''),
+      interest_paid: String(p.interest_paid || ''),
+      total_payment: String(p.total_payment || (p.principal_paid + p.interest_paid) || ''),
+      paid_date: p.paid_date ? p.paid_date.slice(0, 10) : (p.status === 'PAID' ? (p.due_date ? p.due_date.slice(0, 10) : new Date().toISOString().slice(0, 10)) : ''),
+      status: p.status || 'PENDING',
+    });
+    setOpenEditPeriodModal(true);
+  };
+
+  const handleSavePeriod = async () => {
+    if (!loan || !editingPeriod) return;
+    const princ = parseFloat(periodForm.principal_paid) || 0;
+    const intr = parseFloat(periodForm.interest_paid) || 0;
+    const tot = parseFloat(periodForm.total_payment) || (princ + intr);
+    try {
+      const { createLoanPayment, updateLoanPayment, getLoanPayments, getLoadByAsset } = await import('@/lib/services/loanService');
+      const existing = loanPayments.find(pm => pm.payment_number === editingPeriod.payment_number);
+      if (existing) {
+        await updateLoanPayment(existing.id, {
+          due_date: periodForm.due_date,
+          principal_paid: princ,
+          interest_paid: intr,
+          total_payment: tot,
+          paid_date: periodForm.status === 'PAID' ? (periodForm.paid_date || new Date().toISOString().slice(0, 10)) : undefined,
+          status: periodForm.status,
+        });
+      } else {
+        await createLoanPayment({
+          loan_id: loan.id,
+          payment_number: editingPeriod.payment_number,
+          due_date: periodForm.due_date,
+          principal_paid: princ,
+          interest_paid: intr,
+          total_payment: tot,
+          paid_date: periodForm.status === 'PAID' ? (periodForm.paid_date || new Date().toISOString().slice(0, 10)) : undefined,
+          status: periodForm.status,
+          remaining_balance: editingPeriod.remaining_balance || 0,
+        });
+      }
+      const newL = await getLoadByAsset(assetId);
+      setLoan(newL ? { ...newL } as LoanRecord : null);
+      if (newL) setLoanPayments(await getLoanPayments(newL.id));
+      setOpenEditPeriodModal(false);
+      setEditingPeriod(null);
+    } catch (err: any) {
+      alert(`Lỗi khi cập nhật kỳ thanh toán: ${err?.message ?? 'Lỗi'}`);
     }
   };
 
@@ -1834,15 +1930,24 @@ export default function AssetDetailPage() {
                               </span>
                             </td>
                             <td className="px-3.5 py-2.5">
-                              <button
-                                onClick={() => toggleAssetLoanPayment(p)}
-                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition hover:opacity-80"
-                                style={p.status === 'PAID'
-                                  ? { background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }
-                                  : { background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}
-                              >
-                                {p.status === 'PAID' ? '↺ Đổi thành Chưa trả' : '✓ Đã trả kỳ này'}
-                              </button>
+                              <div className="flex items-center space-x-1.5">
+                                <button
+                                  onClick={() => handleOpenEditPeriod(p)}
+                                  className="p-1.5 rounded-lg text-cyan-400 hover:bg-cyan-500/15 transition"
+                                  title="Sửa chi tiết kỳ này (tiền lãi thực tế, gốc, ngày đến hạn...)"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => toggleAssetLoanPayment(p)}
+                                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition hover:opacity-80"
+                                  style={p.status === 'PAID'
+                                    ? { background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }
+                                    : { background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}
+                                >
+                                  {p.status === 'PAID' ? '↺ Chưa trả' : '✓ Đã trả'}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -2433,106 +2538,164 @@ export default function AssetDetailPage() {
       {/* Insurance Modal */}
       {openModal === 'insurance' && (
         <Modal title={editingInsurance ? 'Chỉnh sửa hợp đồng bảo hiểm' : 'Thêm thông tin bảo hiểm'} onClose={() => { setOpenModal(null); setEditingInsurance(null); }}>
-          <Field label="Loại bảo hiểm">
-            <select className="theme-select" value={insForm.type} onChange={e => setInsForm(p => ({ ...p, type: e.target.value }))}>
-              {['Bảo hiểm vật chất', 'Bảo hiểm TNDS bắt buộc', 'Bảo hiểm thân xe', 'Bảo hiểm xưởng sáng', 'Khác'].map(o => <option key={o}>{o}</option>)}
-            </select>
-          </Field>
-          <Field label="Công ty bảo hiểm"><input type="text" className="theme-input" placeholder="VD: Bảo Việt, PTI, AIA..." value={insForm.company} onChange={e => setInsForm(p => ({ ...p, company: e.target.value }))} /></Field>
-          <Field label="Số hợp đồng"><input type="text" className="theme-input" placeholder="VD: BV-2026-12345" value={insForm.policy_number} onChange={e => setInsForm(p => ({ ...p, policy_number: e.target.value }))} /></Field>
-          <Field label="Ngày bắt đầu"><input type="date" className="theme-input" value={insForm.start_date} onChange={e => setInsForm(p => ({ ...p, start_date: e.target.value }))} /></Field>
-          <Field label="Ngày hết hạn"><input type="date" className="theme-input" value={insForm.expiry_date} onChange={e => setInsForm(p => ({ ...p, expiry_date: e.target.value }))} /></Field>
-          <Field label="Phí hàng năm (₫)"><input type="number" className="theme-input" placeholder="VD: 6500000" value={insForm.annual_fee} onChange={e => setInsForm(p => ({ ...p, annual_fee: e.target.value }))} /></Field>
-          <Field label="Mức bồi thường (₫)"><input type="number" className="theme-input" placeholder="VD: 490000000" value={insForm.coverage_amount} onChange={e => setInsForm(p => ({ ...p, coverage_amount: e.target.value }))} /></Field>
-
-          <div className="p-3 rounded-xl space-y-2 mt-2 font-sans" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-            <p className="font-bold text-[11px] uppercase text-purple-400">📞 Đại lý Bảo hiểm &amp; Hotline Cứu hộ</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Tên cán bộ/Đại lý BH"><input type="text" className="theme-input" placeholder="VD: Chị Mai Bảo Việt" value={insForm.agent_name} onChange={e => setInsForm(p => ({ ...p, agent_name: e.target.value }))} /></Field>
-              <Field label="SĐT cán bộ BH"><input type="tel" className="theme-input font-mono font-bold" placeholder="0988..." value={insForm.agent_phone} onChange={e => setInsForm(p => ({ ...p, agent_phone: e.target.value }))} /></Field>
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+              <h4 className="font-bold text-xs uppercase tracking-wider text-purple-400">1. Thông tin hợp đồng bảo hiểm</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Loại bảo hiểm *</label>
+                  <select className="theme-select font-semibold" value={insForm.type} onChange={e => setInsForm(p => ({ ...p, type: e.target.value }))}>
+                    {['Bảo hiểm vật chất', 'Bảo hiểm TNDS bắt buộc', 'Bảo hiểm thân vỏ', 'Bảo hiểm ngập nước/thủy kích', 'Khác'].map(o => <option key={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Công ty / Nhà bảo hiểm *</label>
+                  <input type="text" className="theme-input" placeholder="VD: Bảo hiểm Quân Đội (MIC), Bảo Việt, PJICO..." value={insForm.company} onChange={e => setInsForm(p => ({ ...p, company: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số hợp đồng / Giấy chứng nhận BH</label>
+                  <input type="text" className="theme-input" placeholder="VD: BV-2026-12345" value={insForm.policy_number} onChange={e => setInsForm(p => ({ ...p, policy_number: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày bắt đầu hiệu lực</label>
+                  <input type="date" className="theme-input" value={insForm.start_date} onChange={e => setInsForm(p => ({ ...p, start_date: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày hết hạn *</label>
+                  <input type="date" className="theme-input" value={insForm.expiry_date} onChange={e => setInsForm(p => ({ ...p, expiry_date: e.target.value }))} />
+                </div>
+              </div>
             </div>
-            <Field label="Hotline bồi thường / cứu hộ BH"><input type="tel" className="theme-input font-mono" placeholder="VD: 1900 55 88 99" value={insForm.provider_hotline} onChange={e => setInsForm(p => ({ ...p, provider_hotline: e.target.value }))} /></Field>
+
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+              <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">2. Chi phí &amp; Quyền lợi bồi thường</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phí hàng năm (₫)</label>
+                  <input type="number" className="theme-input font-mono font-bold text-cyan-400" placeholder="VD: 6500000" value={insForm.annual_fee} onChange={e => setInsForm(p => ({ ...p, annual_fee: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Mức bồi thường tối đa (₫)</label>
+                  <input type="number" className="theme-input font-mono font-bold text-emerald-400" placeholder="VD: 500000000" value={insForm.coverage_amount} onChange={e => setInsForm(p => ({ ...p, coverage_amount: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+              <h4 className="font-bold text-xs uppercase tracking-wider text-amber-400">3. Đại lý phụ trách &amp; Hotline cứu hộ</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Tên cán bộ / Đại lý BH</label>
+                  <input type="text" className="theme-input" placeholder="VD: Chị Mai Bảo Việt" value={insForm.agent_name} onChange={e => setInsForm(p => ({ ...p, agent_name: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>SĐT cán bộ BH</label>
+                  <input type="tel" className="theme-input font-mono font-bold text-cyan-400" placeholder="0988..." value={insForm.agent_phone} onChange={e => setInsForm(p => ({ ...p, agent_phone: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Hotline bồi thường / Cứu hộ 24/7</label>
+                  <input type="tel" className="theme-input font-mono" placeholder="VD: 1900 55 88 99" value={insForm.provider_hotline} onChange={e => setInsForm(p => ({ ...p, provider_hotline: e.target.value }))} />
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex space-x-2 pt-2">
-            <button onClick={saveInsurance} className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white font-bold text-xs hover:opacity-90 transition">
+
+          <div className="flex space-x-2 pt-3 border-t mt-4 sticky bottom-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+            <button onClick={saveInsurance} className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white font-bold text-xs hover:opacity-90 shadow-md transition">
               {editingInsurance ? 'Cập nhật bảo hiểm' : 'Lưu bảo hiểm'}
             </button>
-            <button onClick={() => { setOpenModal(null); setEditingInsurance(null); }} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+            <button onClick={() => { setOpenModal(null); setEditingInsurance(null); }} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
           </div>
         </Modal>
       )}
 
       {/* Warranty Modal */}
       {openModal === 'warranty' && (
-        <Modal title={editingWarranty ? 'Chỉnh sửa thông tin bảo hành' : 'Thêm bảo hành mới'} onClose={() => { setOpenModal(null); setEditingWarranty(null); }}>
-          <Field label="Loại bảo hành">
-            <select className="theme-select" value={warrantyForm.item_type} onChange={e => setWarrantyForm(p => ({ ...p, item_type: e.target.value }))}>
-              <option value="VEHICLE">Bảo hành Phương tiện / Hãng xe</option>
-              <option value="PART">Bảo hành Phụ tùng / Nâng cấp</option>
-              <option value="UPGRADE">Bảo hành Thiết bị / Đồ chơi</option>
-              <option value="OTHER">Khác</option>
-            </select>
-          </Field>
-          <Field label="Hạng mục bảo hành *"><input type="text" className="theme-input" placeholder="VD: Màn hình Zestech, Bảo hành xe Mazda 2..." value={warrantyForm.item_name} onChange={e => setWarrantyForm(p => ({ ...p, item_name: e.target.value }))} /></Field>
-          <Field label="Đơn vị / Đại lý bảo hành *"><input type="text" className="theme-input" placeholder="VD: Thaco Mazda Hà Đông, Zestech..." value={warrantyForm.provider} onChange={e => setWarrantyForm(p => ({ ...p, provider: e.target.value }))} /></Field>
-          <Field label="Số thẻ / Số phiếu bảo hành"><input type="text" className="theme-input" placeholder="VD: BH-2026-999" value={warrantyForm.policy_number} onChange={e => setWarrantyForm(p => ({ ...p, policy_number: e.target.value }))} /></Field>
-          <Field label="Ngày bắt đầu"><input type="date" className="theme-input" value={warrantyForm.start_date} onChange={e => setWarrantyForm(p => ({ ...p, start_date: e.target.value }))} /></Field>
-          <Field label="Ngày hết hạn"><input type="date" className="theme-input" value={warrantyForm.expiry_date} onChange={e => setWarrantyForm(p => ({ ...p, expiry_date: e.target.value }))} /></Field>
-          <Field label="Chi tiết điều khoản / Phạm vi"><input type="text" className="theme-input" placeholder="VD: Bảo hành 24 tháng chính hãng..." value={warrantyForm.coverage_details} onChange={e => setWarrantyForm(p => ({ ...p, coverage_details: e.target.value }))} /></Field>
-          <div className="flex space-x-2 pt-2">
-            <button onClick={saveWarranty} className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white font-bold text-xs hover:opacity-90 transition shadow-md">
-              {editingWarranty ? 'Cập nhật bảo hành' : 'Lưu bảo hành'}
+        <Modal title={editingWarranty ? 'Chỉnh sửa sổ bảo hành' : 'Thêm sổ bảo hành mới'} onClose={() => { setOpenModal(null); setEditingWarranty(null); }}>
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+              <h4 className="font-bold text-xs uppercase tracking-wider text-amber-400">1. Thông tin bảo hành</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Loại hạng mục *</label>
+                  <select className="theme-select font-semibold" value={warrantyForm.item_type} onChange={e => setWarrantyForm(p => ({ ...p, item_type: e.target.value }))}>
+                    <option value="VEHICLE">Toàn xe / Chính hãng</option>
+                    <option value="BATTERY">Pin &amp; Động cơ</option>
+                    <option value="PART">Phụ tùng / Phụ kiện</option>
+                    <option value="COATING">Sơn &amp; Phim cách nhiệt</option>
+                    <option value="TIRE">Lốp &amp; La-zăng</option>
+                    <option value="OTHER">Hạng mục khác</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Tên hạng mục *</label>
+                  <input type="text" className="theme-input" placeholder="VD: Bảo hành chính hãng Thaco, Phim 3M Crystalline..." value={warrantyForm.item_name} onChange={e => setWarrantyForm(p => ({ ...p, item_name: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Nhà cung cấp / Đại lý</label>
+                  <input type="text" className="theme-input" placeholder="VD: Mazda Lê Văn Lương, 3M Auto..." value={warrantyForm.provider} onChange={e => setWarrantyForm(p => ({ ...p, provider: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số sổ BH / Mã kích hoạt điện tử</label>
+                  <input type="text" className="theme-input" placeholder="VD: EW-2026-9988" value={warrantyForm.policy_number} onChange={e => setWarrantyForm(p => ({ ...p, policy_number: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+              <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">2. Thời hạn &amp; Điều khoản bảo hành</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày bắt đầu hiệu lực</label>
+                  <input type="date" className="theme-input" value={warrantyForm.start_date} onChange={e => setWarrantyForm(p => ({ ...p, start_date: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày hết hạn bảo hành *</label>
+                  <input type="date" className="theme-input" value={warrantyForm.expiry_date} onChange={e => setWarrantyForm(p => ({ ...p, expiry_date: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phạm vi &amp; Điều khoản cam kết</label>
+                  <textarea rows={2} className="theme-input" placeholder="VD: 5 năm hoặc 150.000 km tùy điều kiện nào đến trước, miễn phí công sửa chữa..." value={warrantyForm.coverage_details} onChange={e => setWarrantyForm(p => ({ ...p, coverage_details: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex space-x-2 pt-3 border-t mt-4 sticky bottom-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+            <button onClick={saveWarranty} className="flex-1 py-2.5 rounded-xl bg-amber-500 text-white font-bold text-xs hover:opacity-90 shadow-md transition">
+              {editingWarranty ? 'Cập nhật sổ bảo hành' : 'Lưu sổ bảo hành'}
             </button>
-            <button onClick={() => { setOpenModal(null); setEditingWarranty(null); }} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+            <button onClick={() => { setOpenModal(null); setEditingWarranty(null); }} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
           </div>
         </Modal>
       )}
 
-      {/* Odometer Adjustment Modal (§204) */}
-      {openModal === 'odometer' && (
-        <Modal title="Hiệu chỉnh Odometer (Lưu nhật ký ODO Discrepancy)" onClose={() => setOpenModal(null)}>
-          <div className="p-3 rounded-xl text-xs space-y-1" style={{ background: 'var(--accent-cyan-bg)', color: 'var(--accent-cyan)' }}>
-            <p className="font-bold">Số Odometer hiện tại: {asset.current_odometer_km.toLocaleString('vi-VN')} km</p>
-            <p className="text-[11px]">Hiệu chỉnh này sẽ được lưu nhật ký Audit Log theo chuẩn v5.2 §204.</p>
-          </div>
-          <Field label="Số Odometer mới (km) *">
-            <input type="number" className="theme-input" placeholder="VD: 12900" value={odoForm.new_value_km} onChange={e => setOdoForm(p => ({ ...p, new_value_km: e.target.value }))} />
-          </Field>
-          <Field label="Lý do hiệu chỉnh *">
-            <input type="text" className="theme-input" placeholder="VD: Sai số đồng hồ, Thay cụm ODO, Cân chỉnh lại..." value={odoForm.reason} onChange={e => setOdoForm(p => ({ ...p, reason: e.target.value }))} />
-          </Field>
-          <div className="flex space-x-2 pt-2">
-            <button onClick={saveOdoAdjustment} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">
-              Lưu hiệu chỉnh Odometer
-            </button>
-            <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Warranty Claim Modal (§216) */}
+      {/* Claim Modal */}
       {openModal === 'claim' && (
-        <Modal title="Tạo Yêu cầu Bảo hành / Claim (§216)" onClose={() => setOpenModal(null)}>
-          <Field label="Hạng mục bảo hành *">
-            <input type="text" className="theme-input" placeholder="VD: Lên kính tự động, Camera 360, Bình ắc-quy..." value={claimForm.item_name} onChange={e => setClaimForm(p => ({ ...p, item_name: e.target.value }))} />
-          </Field>
-          <Field label="Số tiền yêu cầu bồi thường (₫)">
-            <input type="number" className="theme-input" placeholder="VD: 1500000" value={claimForm.amount_claimed} onChange={e => setClaimForm(p => ({ ...p, amount_claimed: e.target.value }))} />
-          </Field>
-          <Field label="Đại lý / Trung tâm bảo hành">
-            <input type="text" className="theme-input" placeholder="VD: Zestech Hà Đông, Mazda Việt Nam" value={claimForm.vendor} onChange={e => setClaimForm(p => ({ ...p, vendor: e.target.value }))} />
-          </Field>
-          <Field label="Mô tả sự cố / Lý do Claim *">
-            <input type="text" className="theme-input" placeholder="Mô tả chi tiết hiện tượng lỗi..." value={claimForm.description} onChange={e => setClaimForm(p => ({ ...p, description: e.target.value }))} />
-          </Field>
-          <div className="flex space-x-2 pt-2">
-            <button onClick={saveClaim} className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white font-bold text-xs hover:opacity-90 transition">
-              Gửi Yêu cầu Claim
-            </button>
-            <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+        <Modal title="Tạo yêu cầu Claim Bảo hành" onClose={() => setOpenModal(null)}>
+          <div className="space-y-3">
+            <Field label="Hạng mục / Phụ tùng yêu cầu claim *">
+              <input type="text" className="theme-input" placeholder="VD: Cảm biến lùi kêu bất thường, Hỏng mô tơ gập gương..." value={claimForm.item_name} onChange={e => setClaimForm(p => ({ ...p, item_name: e.target.value }))} />
+            </Field>
+            <Field label="Garage / Đại lý tiếp nhận">
+              <input type="text" className="theme-input" placeholder="VD: Mazda Cầu Giấy" value={claimForm.vendor} onChange={e => setClaimForm(p => ({ ...p, vendor: e.target.value }))} />
+            </Field>
+            <Field label="Số tiền ước tính yêu cầu claim (₫)">
+              <input type="number" className="theme-input font-mono font-bold text-amber-400" placeholder="0 nếu bảo hành 100%" value={claimForm.amount_claimed} onChange={e => setClaimForm(p => ({ ...p, amount_claimed: e.target.value }))} />
+            </Field>
+            <Field label="Mô tả hiện tượng &amp; Lý do claim *">
+              <textarea rows={3} className="theme-input" placeholder="Mô tả chi tiết hiện tượng lỗi để theo dõi giải quyết..." value={claimForm.description} onChange={e => setClaimForm(p => ({ ...p, description: e.target.value }))} />
+            </Field>
+            <div className="flex space-x-2 pt-2">
+              <button onClick={saveClaim} className="flex-1 py-2.5 rounded-xl bg-purple-500 text-white font-bold text-xs hover:opacity-90 shadow-md transition">
+                Gửi yêu cầu claim
+              </button>
+              <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+            </div>
           </div>
         </Modal>
       )}
+
       {/* Add / Edit Loan Modal */}
       {openLoanModal && (
         <Modal title={editingLoan ? '✏️ Chỉnh sửa thông tin khoản vay' : '🏦 Thêm khoản vay mua xe mới'} onClose={() => setOpenLoanModal(false)}>
@@ -2576,6 +2739,138 @@ export default function AssetDetailPage() {
             <button onClick={() => setOpenLoanModal(false)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
           </div>
         </Modal>
+      )}
+
+      {/* Edit Single Period Payment Modal */}
+      {openEditPeriodModal && editingPeriod && (
+        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenEditPeriodModal(false)}>
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 py-12">
+            <div
+              className="relative rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden"
+              style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(88vh, 640px)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+                <div>
+                  <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    <span>✏️ Chỉnh Sửa Kỳ Trả Góp #{periodForm.payment_number}</span>
+                  </h3>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Cập nhật số tiền gốc, lãi thực tế theo thông báo ngân hàng</p>
+                </div>
+                <button onClick={() => setOpenEditPeriodModal(false)} className="p-1.5 rounded-xl hover:bg-white/10 transition" style={{ color: 'var(--text-muted)' }}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+                <div className="p-3.5 rounded-xl text-xs space-y-1" style={{ background: 'var(--accent-cyan-bg)', border: '1px solid var(--accent-cyan-border)' }}>
+                  <p className="font-bold text-cyan-400">ℹ️ Lưu ý ngân hàng tính theo ngày làm việc thực tế</p>
+                  <p style={{ color: 'var(--text-secondary)' }}>Số tiền lãi và hạn đóng từng tháng có thể lệch nhẹ so với dự kiến. Bạn hãy nhập chính xác số tiền theo sao kê ngân hàng.</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Hạn thanh toán *</label>
+                    <input
+                      type="date"
+                      className="theme-input font-mono"
+                      value={periodForm.due_date}
+                      onChange={e => setPeriodForm(p => ({ ...p, due_date: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Trạng thái thanh toán *</label>
+                    <select
+                      className="theme-select font-bold"
+                      value={periodForm.status}
+                      onChange={e => setPeriodForm(p => ({ ...p, status: e.target.value as any }))}
+                    >
+                      <option value="PENDING">⏳ Chưa thanh toán (Pending)</option>
+                      <option value="PAID">✓ Đã thanh toán (Paid)</option>
+                      <option value="OVERDUE">⚠ Quá hạn (Overdue)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">Chi tiết số tiền kỳ này</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tiền gốc thực tế (₫) *</label>
+                      <input
+                        type="number"
+                        className="theme-input font-mono font-bold text-emerald-400"
+                        value={periodForm.principal_paid}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setPeriodForm(p => {
+                            const newP = parseFloat(val) || 0;
+                            const intr = parseFloat(p.interest_paid) || 0;
+                            return { ...p, principal_paid: val, total_payment: String(newP + intr) };
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tiền lãi thực tế (₫) *</label>
+                      <input
+                        type="number"
+                        className="theme-input font-mono font-bold text-amber-400"
+                        value={periodForm.interest_paid}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setPeriodForm(p => {
+                            const newI = parseFloat(val) || 0;
+                            const princ = parseFloat(p.principal_paid) || 0;
+                            return { ...p, interest_paid: val, total_payment: String(princ + newI) };
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tổng tiền thanh toán kỳ này (₫)</label>
+                      <input
+                        type="number"
+                        className="theme-input font-mono font-bold text-cyan-400"
+                        value={periodForm.total_payment}
+                        onChange={e => setPeriodForm(p => ({ ...p, total_payment: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {periodForm.status === 'PAID' && (
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày thanh toán thực tế</label>
+                    <input
+                      type="date"
+                      className="theme-input font-mono"
+                      value={periodForm.paid_date}
+                      onChange={e => setPeriodForm(p => ({ ...p, paid_date: e.target.value }))}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+                <button
+                  onClick={handleSavePeriod}
+                  className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition"
+                  style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+                >
+                  Lưu kỳ thanh toán
+                </button>
+                <button
+                  onClick={() => setOpenEditPeriodModal(false)}
+                  className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition"
+                  style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
+                >
+                  Hủy
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

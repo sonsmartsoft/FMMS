@@ -56,10 +56,15 @@ export default function DocumentsPage() {
     asset_id: '',
     title: '',
     document_type: 'Bảo hiểm vật chất',
-    provider: 'MIC Quân Đội',
+    provider: 'Bảo hiểm Quân Đội (MIC)',
     policy_number: '',
+    start_date: new Date().toISOString().split('T')[0],
     expiry_date: '',
     cost: '',
+    coverage_amount: '',
+    agent_name: '',
+    agent_phone: '',
+    provider_hotline: '',
   });
 
   const [editForm, setEditForm] = useState({
@@ -156,14 +161,18 @@ export default function DocumentsPage() {
           provider: docForm.provider || 'Bảo hiểm Quân Đội (MIC)',
           policy_number: docForm.policy_number || `BH-${Date.now().toString().slice(-6)}`,
           policy_type: docForm.document_type.includes('TNDS') ? 'MANDATORY' : 'COMPREHENSIVE',
-          start_date: new Date().toISOString().split('T')[0],
+          start_date: docForm.start_date || new Date().toISOString().split('T')[0],
           expiry_date: docForm.expiry_date || new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0],
-          cost: parseFloat(docForm.cost) || 1200000,
+          cost: parseFloat(docForm.cost) || 0,
+          coverage_amount: parseFloat(docForm.coverage_amount) || undefined,
+          agent_name: docForm.agent_name || undefined,
+          agent_phone: docForm.agent_phone || undefined,
+          provider_hotline: docForm.provider_hotline || undefined,
         });
       } else {
         await createDocument({
           asset_id: docForm.asset_id || assets[0]?.id,
-          title: docForm.title || 'Tài liệu mới',
+          title: docForm.title || docForm.document_type,
           document_type: docForm.document_type,
           expiry_date: docForm.expiry_date || undefined,
           storage_path: 'documents/file.pdf',
@@ -171,7 +180,20 @@ export default function DocumentsPage() {
       }
       await loadData();
       setOpenAddModal(false);
-      setDocForm({ asset_id: assets[0]?.id || '', title: '', document_type: 'Bảo hiểm vật chất', provider: 'MIC', policy_number: '', expiry_date: '', cost: '' });
+      setDocForm({
+        asset_id: assets[0]?.id || '',
+        title: '',
+        document_type: 'Bảo hiểm vật chất',
+        provider: 'Bảo hiểm Quân Đội (MIC)',
+        policy_number: '',
+        start_date: new Date().toISOString().split('T')[0],
+        expiry_date: '',
+        cost: '',
+        coverage_amount: '',
+        agent_name: '',
+        agent_phone: '',
+        provider_hotline: '',
+      });
     } catch (e: any) {
       alert(`Lỗi khi lưu: ${e?.message ?? 'Không lưu được'}`);
     }
@@ -271,10 +293,10 @@ export default function DocumentsPage() {
       {/* Add Document Modal */}
       {openAddModal && (
         <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 py-12">
             <div
               className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden"
-              style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }}
+              style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(88vh, 640px)' }}
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
@@ -286,12 +308,14 @@ export default function DocumentsPage() {
                 </div>
                 <button onClick={() => setOpenAddModal(false)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
               </div>
+
               <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
+                {/* Section 1: Phương tiện & Loại giấy tờ */}
                 <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">1. Thông tin tài liệu &amp; Phương tiện</h4>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">1. Thông tin phương tiện &amp; Loại tài liệu</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phương tiện *</label>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phương tiện áp dụng *</label>
                       <select className="theme-select font-semibold" value={docForm.asset_id} onChange={e => setDocForm(p => ({ ...p, asset_id: e.target.value }))}>
                         {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.brand})</option>)}
                       </select>
@@ -299,37 +323,63 @@ export default function DocumentsPage() {
                     <div>
                       <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Loại tài liệu / Giấy tờ *</label>
                       <select className="theme-select font-semibold" value={docForm.document_type} onChange={e => setDocForm(p => ({ ...p, document_type: e.target.value }))}>
-                        {['Bảo hiểm vật chất', 'Bảo hiểm TNDS bắt buộc', 'Đăng ký xe', 'Đăng kiểm', 'Hóa đơn / Chứng từ', 'Sổ bảo hành', 'Khác'].map(t => <option key={t}>{t}</option>)}
+                        {['Bảo hiểm vật chất', 'Bảo hiểm TNDS bắt buộc', 'Đăng kiểm (Kiểm định)', 'Đăng ký xe (Cà vẹt)', 'Sổ bảo hành chính hãng', 'Hóa đơn / Hợp đồng', 'Khác'].map(t => <option key={t}>{t}</option>)}
                       </select>
                     </div>
                     <div className="col-span-2">
                       <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Tên tài liệu / Tên Hợp đồng *</label>
-                      <input type="text" className="theme-input" placeholder="VD: Bảo hiểm vật chất MIC, Đăng kiểm định kỳ..." value={docForm.title} onChange={e => setDocForm(p => ({ ...p, title: e.target.value }))} />
+                      <input type="text" className="theme-input" placeholder="VD: Bảo hiểm vật chất xe MIC, Đăng kiểm định kỳ..." value={docForm.title} onChange={e => setDocForm(p => ({ ...p, title: e.target.value }))} />
                     </div>
                   </div>
                 </div>
+
+                {/* Section 2: Đơn vị cấp, Số HĐ & Thời hạn */}
                 <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-purple-400">2. Số hợp đồng, Thời hạn &amp; Chi phí</h4>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-purple-400">2. Đơn vị phát hành, Số hợp đồng &amp; Thời hạn</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị cấp / Nhà bảo hiểm</label>
-                      <input type="text" className="theme-input" placeholder="VD: Bảo hiểm Quân Đội (MIC), PJICO..." value={docForm.provider} onChange={e => setDocForm(p => ({ ...p, provider: e.target.value }))} />
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị phát hành / Nhà bảo hiểm</label>
+                      <input type="text" className="theme-input" placeholder="VD: Bảo hiểm MIC Quân Đội, PJICO, Cục CSGT..." value={docForm.provider} onChange={e => setDocForm(p => ({ ...p, provider: e.target.value }))} />
                     </div>
                     <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số hợp đồng / Số giấy tờ</label>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số hợp đồng / Mã giấy tờ</label>
                       <input type="text" className="theme-input" placeholder="VD: BH-2026-8899" value={docForm.policy_number} onChange={e => setDocForm(p => ({ ...p, policy_number: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày bắt đầu hiệu lực</label>
+                      <input type="date" className="theme-input" value={docForm.start_date} onChange={e => setDocForm(p => ({ ...p, start_date: e.target.value }))} />
                     </div>
                     <div>
                       <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày hết hạn *</label>
                       <input type="date" className="theme-input" value={docForm.expiry_date} onChange={e => setDocForm(p => ({ ...p, expiry_date: e.target.value }))} />
                     </div>
+                  </div>
+                </div>
+
+                {/* Section 3: Chi phí & Hotline */}
+                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">3. Chi phí, Hạn mức &amp; Hotline hỗ trợ</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phí hàng năm / Chi phí (₫)</label>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phí thường niên / Chi phí (₫)</label>
                       <input type="number" className="theme-input font-mono font-bold text-cyan-400" placeholder="VD: 1500000" value={docForm.cost} onChange={e => setDocForm(p => ({ ...p, cost: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Mức bồi thường tối đa (₫)</label>
+                      <input type="number" className="theme-input font-mono font-bold text-emerald-400" placeholder="VD: 500000000" value={docForm.coverage_amount} onChange={e => setDocForm(p => ({ ...p, coverage_amount: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Cán bộ / Đại lý phụ trách</label>
+                      <input type="text" className="theme-input" placeholder="VD: Chị Mai MIC" value={docForm.agent_name} onChange={e => setDocForm(p => ({ ...p, agent_name: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>SĐT cán bộ / Hotline cứu hộ 24/7</label>
+                      <input type="tel" className="theme-input font-mono font-bold text-cyan-400" placeholder="VD: 1900 55 88 99" value={docForm.provider_hotline || docForm.agent_phone} onChange={e => setDocForm(p => ({ ...p, provider_hotline: e.target.value, agent_phone: e.target.value }))} />
                     </div>
                   </div>
                 </div>
               </div>
+
               <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
                 <button onClick={saveDoc} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
                   Lưu tài liệu mới
@@ -344,19 +394,20 @@ export default function DocumentsPage() {
       {/* Edit Document Modal */}
       {editingItem && (
         <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingItem(null)}>
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 py-12">
             <div
               className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden"
-              style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }}
+              style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(88vh, 640px)' }}
               onClick={e => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
                 <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                   <Pencil className="w-4 h-4 text-cyan-400" />
                   Chỉnh sửa Giấy tờ / Hợp đồng Bảo hiểm
                 </h3>
                 <button onClick={() => setEditingItem(null)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
               </div>
+
               <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
                 <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -385,7 +436,8 @@ export default function DocumentsPage() {
                   </div>
                 </div>
               </div>
-              <div className="p-4 shrink-0 border-t flex justify-between items-center" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+
+              <div className="p-4 shrink-0 border-t flex justify-between items-center z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
                 <button
                   type="button"
                   onClick={() => handleDeleteItem(editingItem)}

@@ -61,7 +61,17 @@
 - **Giải pháp:** Sanitize (lọc sạch) payload trong `createLoan` và `updateLoanFull`, chỉ gửi chính xác các cột thực tế tồn tại trong database bảng `loans`.
 - **Vấn đề 2:** Nút "Thêm phương tiện" tại trang danh sách (`/assets`) bấm vào không phản hồi.
 - **Giải pháp:** Bổ sung state `openAddModal`, `assetForm`, kết nối trực tiếp với service `createAsset`, và xây dựng đầy đủ Modal 2 lớp chuẩn hóa với đầy đủ thông số kỹ thuật, biển số, giá trị mua, odometer ban đầu.
-- **Vấn đề 3:** Bổ sung ràng buộc `maxHeight: 'min(85vh, 620px)'` trên toàn bộ modal tại `/documents` và `/assets/[id]` để đảm bảo cuộn form trên mọi kích thước màn hình.
+
+### 🔄 Đợt 6: Chỉnh Sửa Từng Kỳ Trả Góp & Tái Thiết Kế Toàn Bộ Popup Giấy Tờ / Bảo Hiểm
+- **Yêu cầu 1 (Sửa chi tiết từng kỳ vay):** Vì ngân hàng tính lãi theo số ngày làm việc thực tế của từng tháng nên số tiền lãi thực tế có thể khác so với dự kiến.
+- **Giải pháp 1:**
+  - Bổ sung nút ✏️ Chỉnh sửa kỳ thanh toán tại từng dòng của bảng Lịch trả nợ (cả ở `/finance` và `/assets/[id]`).
+  - Cho phép người dùng linh hoạt điều chỉnh: Tiền gốc thực tế, Tiền lãi thực tế, Tổng tiền trả, Hạn thanh toán, Ngày đã trả và Trạng thái.
+  - Cập nhật hàm `generateLoanSchedule` tự động ánh xạ dữ liệu kỳ đã chỉnh sửa đè lên lịch dự tính.
+- **Yêu cầu 2 (Popup Giấy tờ & Bảo hiểm):** Sửa dứt điểm tình trạng popup bị cắt khuất hoặc không đủ form nhập liệu.
+- **Giải pháp 2:**
+  - Thiết kế lại Modal Giấy tờ & Bảo hiểm thành layout Grid 2 cột theo 3 Section rõ ràng (1. Phương tiện & Loại giấy tờ, 2. Đơn vị cấp & Thời hạn hiệu lực, 3. Chi phí, Hạn mức bồi thường & Hotline cứu hộ).
+  - Sử dụng padding `py-12 px-4` ở lớp căn giữa kết hợp `maxHeight: 'min(88vh, 640px)'`, đảm bảo Header và Footer (Lưu/Hủy) luôn cố định (sticky) và form cuộn mượt mà trên mọi kích thước màn hình.
 
 ---
 

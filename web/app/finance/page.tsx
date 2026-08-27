@@ -26,31 +26,61 @@ const CAT_COLORS: Record<string, string> = {
   INITIAL: '#10B981', UPGRADE: '#6366F1', CAR_WASH: '#06B6D4', OTHER: '#6B7280',
 };
 
-// Generate loan payment schedule
+// Generate loan payment schedule (with custom per-period overrides)
 function generateLoanSchedule(loan: LoanRow, payments: LoanPaymentRow[]) {
   const monthly = loan.monthly_payment;
-  const rate = loan.interest_rate_percent / 100 / 12;
+  const rate = (loan.interest_rate_percent || 0) / 100 / 12;
   const start = new Date(loan.start_date || new Date().toISOString().slice(0, 10));
   let balance = loan.principal;
   const schedule = [];
-  const paidKeys = new Set(payments.filter(p => p.status === 'PAID' || p.paid_date).map(p => {
-    const d = new Date(p.due_date);
-    return `${d.getFullYear()}-${d.getMonth()}`;
-  }));
+  
+  const paymentMap = new Map<number, LoanPaymentRow>();
+  payments.forEach(p => {
+    paymentMap.set(p.payment_number, p);
+  });
+
   for (let i = 1; i <= loan.term_months; i++) {
-    const interest = Math.round(balance * rate);
-    const principal = Math.round(monthly - interest);
-    balance = Math.max(0, balance - principal);
-    const due = new Date(start);
-    due.setMonth(due.getMonth() + i - 1);
-    due.setDate(loan.payment_day);
-    const dueStr = due.toISOString().split('T')[0];
-    const today = new Date();
-    const key = `${due.getFullYear()}-${due.getMonth()}`;
+    const customPayment = paymentMap.get(i);
+    let interest = Math.round(balance * rate);
+    let principal = Math.round(monthly - interest);
+    let total = monthly;
+    let dueStr = '';
     let status: 'PAID' | 'PENDING' | 'OVERDUE' = 'PENDING';
-    if (paidKeys.has(key)) status = 'PAID';
-    else if (new Date(dueStr) < today) status = 'OVERDUE';
-    schedule.push({ payment_number: i, due_date: dueStr, principal_paid: principal, interest_paid: interest, total_payment: monthly, status, remaining_balance: balance });
+    let paidDate: string | undefined = undefined;
+
+    if (customPayment) {
+      dueStr = customPayment.due_date ? customPayment.due_date.slice(0, 10) : '';
+      principal = Number(customPayment.principal_paid) || principal;
+      interest = Number(customPayment.interest_paid) || interest;
+      total = Number(customPayment.total_payment) || (principal + interest);
+      status = customPayment.status;
+      paidDate = customPayment.paid_date;
+    }
+
+    if (!dueStr) {
+      const due = new Date(start);
+      due.setMonth(due.getMonth() + i - 1);
+      due.setDate(loan.payment_day || 15);
+      dueStr = due.toISOString().split('T')[0];
+    }
+
+    const today = new Date();
+    if (!customPayment) {
+      if (new Date(dueStr) < today) status = 'OVERDUE';
+    }
+
+    balance = Math.max(0, balance - principal);
+
+    schedule.push({
+      payment_number: i,
+      due_date: dueStr,
+      principal_paid: principal,
+      interest_paid: interest,
+      total_payment: total,
+      status,
+      paid_date: paidDate,
+      remaining_balance: balance,
+    });
   }
   return schedule;
 }
@@ -316,6 +346,70 @@ export default function FinancePage() {
     setPaymentForm({ amount: '', paid_date: '', notes: '' });
   };
 
+  const [openEditPeriodModal, setOpenEditPeriodModal] = useState(false);
+  const [editingPeriod, setEditingPeriod] = useState<any | null>(null);
+  const [periodForm, setPeriodForm] = useState({
+    payment_number: 1,
+    due_date: '',
+    principal_paid: '',
+    interest_paid: '',
+    total_payment: '',
+    paid_date: '',
+    status: 'PENDING' as 'PAID' | 'PENDING' | 'OVERDUE',
+  });
+
+  const handleOpenEditPeriod = (p: any) => {
+    setEditingPeriod(p);
+    setPeriodForm({
+      payment_number: p.payment_number,
+      due_date: p.due_date ? p.due_date.slice(0, 10) : '',
+      principal_paid: String(p.principal_paid || ''),
+      interest_paid: String(p.interest_paid || ''),
+      total_payment: String(p.total_payment || (p.principal_paid + p.interest_paid) || ''),
+      paid_date: p.paid_date ? p.paid_date.slice(0, 10) : (p.status === 'PAID' ? (p.due_date ? p.due_date.slice(0, 10) : new Date().toISOString().slice(0, 10)) : ''),
+      status: p.status || 'PENDING',
+    });
+    setOpenEditPeriodModal(true);
+  };
+
+  const handleSavePeriod = async () => {
+    if (!selectedLoan || !editingPeriod) return;
+    const princ = parseFloat(periodForm.principal_paid) || 0;
+    const intr = parseFloat(periodForm.interest_paid) || 0;
+    const tot = parseFloat(periodForm.total_payment) || (princ + intr);
+    try {
+      const { createLoanPayment, updateLoanPayment } = await import('@/lib/services/loanService');
+      const existing = payments.find(pm => pm.payment_number === editingPeriod.payment_number);
+      if (existing) {
+        await updateLoanPayment(existing.id, {
+          due_date: periodForm.due_date,
+          principal_paid: princ,
+          interest_paid: intr,
+          total_payment: tot,
+          paid_date: periodForm.status === 'PAID' ? (periodForm.paid_date || new Date().toISOString().slice(0, 10)) : undefined,
+          status: periodForm.status,
+        });
+      } else {
+        await createLoanPayment({
+          loan_id: selectedLoan.id,
+          payment_number: editingPeriod.payment_number,
+          due_date: periodForm.due_date,
+          principal_paid: princ,
+          interest_paid: intr,
+          total_payment: tot,
+          paid_date: periodForm.status === 'PAID' ? (periodForm.paid_date || new Date().toISOString().slice(0, 10)) : undefined,
+          status: periodForm.status,
+          remaining_balance: editingPeriod.remaining_balance || 0,
+        });
+      }
+      await loadData();
+      setOpenEditPeriodModal(false);
+      setEditingPeriod(null);
+    } catch (err: any) {
+      alert(`Lỗi khi cập nhật kỳ thanh toán: ${err?.message ?? 'Lỗi'}`);
+    }
+  };
+
   const toggleSchedulePayment = async (item: any) => {
     if (!selectedLoan) return;
     try {
@@ -550,15 +644,24 @@ export default function FinancePage() {
                             </span>
                           </td>
                           <td className="px-3.5 py-2.5">
-                            <button
-                              onClick={() => toggleSchedulePayment(p)}
-                              className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition hover:opacity-80"
-                              style={p.status === 'PAID'
-                                ? { background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }
-                                : { background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}
-                            >
-                              {p.status === 'PAID' ? '↺ Đổi thành Chưa trả' : '✓ Đã trả kỳ này'}
-                            </button>
+                            <div className="flex items-center space-x-1.5">
+                              <button
+                                onClick={() => handleOpenEditPeriod(p)}
+                                className="p-1.5 rounded-lg text-cyan-400 hover:bg-cyan-500/15 transition"
+                                title="Sửa chi tiết kỳ này (tiền lãi thực tế, gốc, ngày đến hạn...)"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => toggleSchedulePayment(p)}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold transition hover:opacity-80"
+                                style={p.status === 'PAID'
+                                  ? { background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }
+                                  : { background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}
+                              >
+                                {p.status === 'PAID' ? '↺ Chưa trả' : '✓ Đã trả'}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -794,6 +897,138 @@ export default function FinancePage() {
           </div>
         </div>
       </div>
+      )}
+
+      {/* ─── Edit Single Period Payment Modal ─── */}
+      {openEditPeriodModal && editingPeriod && (
+        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenEditPeriodModal(false)}>
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
+            <div
+              className="relative rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden"
+              style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+                <div>
+                  <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    <span>✏️ Chỉnh Sửa Kỳ Trả Góp #{periodForm.payment_number}</span>
+                  </h3>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Cập nhật số tiền gốc, lãi thực tế theo thông báo ngân hàng</p>
+                </div>
+                <button onClick={() => setOpenEditPeriodModal(false)} className="p-1.5 rounded-xl hover:bg-white/10 transition" style={{ color: 'var(--text-muted)' }}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+                <div className="p-3.5 rounded-xl text-xs space-y-1" style={{ background: 'var(--accent-cyan-bg)', border: '1px solid var(--accent-cyan-border)' }}>
+                  <p className="font-bold text-cyan-400">ℹ️ Lưu ý ngân hàng tính theo ngày làm việc thực tế</p>
+                  <p style={{ color: 'var(--text-secondary)' }}>Số tiền lãi và hạn đóng từng tháng có thể lệch nhẹ so với dự kiến. Bạn hãy nhập chính xác số tiền theo sao kê ngân hàng.</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Hạn thanh toán *</label>
+                    <input
+                      type="date"
+                      className="theme-input font-mono"
+                      value={periodForm.due_date}
+                      onChange={e => setPeriodForm(p => ({ ...p, due_date: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Trạng thái thanh toán *</label>
+                    <select
+                      className="theme-select font-bold"
+                      value={periodForm.status}
+                      onChange={e => setPeriodForm(p => ({ ...p, status: e.target.value as any }))}
+                    >
+                      <option value="PENDING">⏳ Chưa thanh toán (Pending)</option>
+                      <option value="PAID">✓ Đã thanh toán (Paid)</option>
+                      <option value="OVERDUE">⚠ Quá hạn (Overdue)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">Chi tiết số tiền kỳ này</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tiền gốc thực tế (₫) *</label>
+                      <input
+                        type="number"
+                        className="theme-input font-mono font-bold text-emerald-400"
+                        value={periodForm.principal_paid}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setPeriodForm(p => {
+                            const newP = parseFloat(val) || 0;
+                            const intr = parseFloat(p.interest_paid) || 0;
+                            return { ...p, principal_paid: val, total_payment: String(newP + intr) };
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tiền lãi thực tế (₫) *</label>
+                      <input
+                        type="number"
+                        className="theme-input font-mono font-bold text-amber-400"
+                        value={periodForm.interest_paid}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setPeriodForm(p => {
+                            const newI = parseFloat(val) || 0;
+                            const princ = parseFloat(p.principal_paid) || 0;
+                            return { ...p, interest_paid: val, total_payment: String(princ + newI) };
+                          });
+                        }}
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tổng tiền thanh toán kỳ này (₫)</label>
+                      <input
+                        type="number"
+                        className="theme-input font-mono font-bold text-cyan-400"
+                        value={periodForm.total_payment}
+                        onChange={e => setPeriodForm(p => ({ ...p, total_payment: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {periodForm.status === 'PAID' && (
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày thanh toán thực tế</label>
+                    <input
+                      type="date"
+                      className="theme-input font-mono"
+                      value={periodForm.paid_date}
+                      onChange={e => setPeriodForm(p => ({ ...p, paid_date: e.target.value }))}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+                <button
+                  onClick={handleSavePeriod}
+                  className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition"
+                  style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+                >
+                  Lưu kỳ thanh toán
+                </button>
+                <button
+                  onClick={() => setOpenEditPeriodModal(false)}
+                  className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition"
+                  style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
+                >
+                  Hủy
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
