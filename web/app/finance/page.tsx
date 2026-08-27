@@ -203,19 +203,81 @@ export default function FinancePage() {
   const paidPayments = loanSchedule.filter(p => p.status === 'PAID').length;
   const overduePayments = loanSchedule.filter(p => p.status === 'OVERDUE').length;
 
-  const breakdown = Object.entries(CAT_LABELS).map(([k]) => ({
-    category: k, label: CAT_LABELS[k],
-    total: filteredExpenses.filter(e => e.category === k).reduce((s, e) => s + e.amount, 0),
-    color: CAT_COLORS[k] || '#6B7280',
-  })).filter(b => b.total > 0).sort((a, b) => b.total - a.total);
+  const normalizeCategory = (cat?: string, sub?: string) => {
+    if (!cat) return { category: 'Running', subcategory: 'Fuel' };
+    if (taxMap[cat]) {
+      const subKeys = Object.keys(taxMap[cat]?.subcategories || {});
+      const matchedSub = sub && subKeys.includes(sub) ? sub : (subKeys[0] || 'Other');
+      return { category: cat, subcategory: matchedSub };
+    }
+
+    const legacyMap: Record<string, { cat: string; sub: string }> = {
+      FUEL: { cat: 'Running', sub: 'Fuel' },
+      MAINTENANCE: { cat: 'Maintenance', sub: 'General Service' },
+      PARTS: { cat: 'Maintenance', sub: 'Brake' },
+      LABOR: { cat: 'Maintenance', sub: 'General Service' },
+      INSURANCE: { cat: 'Initial', sub: 'Insurance' },
+      REGISTRATION: { cat: 'Initial', sub: 'Registration' },
+      INSPECTION: { cat: 'Initial', sub: 'Registration' },
+      TOLL: { cat: 'Running', sub: 'Epass Fee' },
+      PARKING: { cat: 'Running', sub: 'Parking' },
+      WASH: { cat: 'Running', sub: 'Car Wash' },
+      CAR_WASH: { cat: 'Running', sub: 'Car Wash' },
+      UPGRADE: { cat: 'Upgrade', sub: 'Accessorie' },
+      LOAN: { cat: 'Loan', sub: 'Monthly Payment' },
+      LOAN_PAYMENT: { cat: 'Loan', sub: 'Monthly Payment' },
+      LOAN_INTEREST: { cat: 'Loan', sub: 'Interest' },
+      INITIAL: { cat: 'Initial', sub: 'Purchase' },
+      OTHER: { cat: 'Maintenance', sub: 'Other' },
+    };
+
+    const upperCat = cat.toUpperCase();
+    if (legacyMap[upperCat]) {
+      const found = legacyMap[upperCat];
+      const validSub = sub && taxMap[found.cat]?.subcategories?.[sub] ? sub : found.sub;
+      return { category: found.cat, subcategory: validSub };
+    }
+
+    for (const [cKey, cVal] of Object.entries(taxMap)) {
+      if (cKey.toLowerCase() === cat.toLowerCase()) {
+        const subKeys = Object.keys(cVal.subcategories || {});
+        return { category: cKey, subcategory: sub && subKeys.includes(sub) ? sub : (subKeys[0] || 'Other') };
+      }
+      for (const sKey of Object.keys(cVal.subcategories || {})) {
+        if (sKey.toLowerCase() === cat.toLowerCase() || (sub && sKey.toLowerCase() === sub.toLowerCase())) {
+          return { category: cKey, subcategory: sKey };
+        }
+      }
+    }
+
+    return { category: Object.keys(taxMap)[0] || 'Running', subcategory: 'Fuel' };
+  };
+
+  const breakdown = useMemo(() => {
+    const map = new Map<string, { label: string; total: number; color: string }>();
+    filteredExpenses.forEach(e => {
+      const norm = normalizeCategory(e.category, e.subcategory);
+      const cat = norm.category;
+      const label = taxMap[cat]?.label ? taxMap[cat].label.replace(/^[^\s]+\s+/, '') : (CAT_LABELS[cat] || cat);
+      const color = CAT_COLORS[cat] || CAT_COLORS[e.category] || '#6B7280';
+      const prev = map.get(cat) || { label, total: 0, color };
+      prev.total += e.amount;
+      map.set(cat, prev);
+    });
+    return Array.from(map.entries())
+      .map(([k, v]) => ({ category: k, label: v.label, total: v.total, color: v.color }))
+      .filter(b => b.total > 0)
+      .sort((a, b) => b.total - a.total);
+  }, [filteredExpenses, taxMap]);
 
   const openEdit = (e: ExpenseRecord) => {
     setEditId(e.id);
+    const norm = normalizeCategory(e.category, e.subcategory);
     setForm({
       asset_id: e.asset_id,
-      date: e.date,
-      category: e.category || 'Running',
-      subcategory: e.subcategory || 'Fuel',
+      date: e.date ? e.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+      category: norm.category,
+      subcategory: norm.subcategory,
       amount: String(e.amount),
       vendor: e.vendor || '',
       description: e.description || '',
@@ -225,8 +287,8 @@ export default function FinancePage() {
 
   const saveExpense = async () => {
     const payload = {
-      asset_id: form.asset_id,
-      date: form.date,
+      asset_id: form.asset_id || assets[0]?.id,
+      date: form.date || new Date().toISOString().slice(0, 10),
       category: form.category,
       subcategory: form.subcategory || undefined,
       amount: parseFloat(form.amount) || 0,
@@ -242,6 +304,7 @@ export default function FinancePage() {
         const created = await createExpense(payload);
         setExpenses(prev => [created, ...prev]);
       }
+      await loadData();
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }

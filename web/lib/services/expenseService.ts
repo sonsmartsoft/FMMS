@@ -21,7 +21,7 @@ export function mapExpenseRow(row: any): ExpenseRecord {
     asset_id: row.asset_id,
     date: row.date,
     category: row.category,
-    subcategory: row.subcategory ?? undefined,
+    subcategory: row.subcategory || row.sub_category || undefined,
     amount: Number(row.amount) || 0,
     currency: row.currency || 'VND',
     vendor: row.vendor ?? undefined,
@@ -32,6 +32,14 @@ export function mapExpenseRow(row: any): ExpenseRecord {
 
 export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
   const realId = assetId ? resolveAssetId(assetId) : undefined;
+  let customMap: Record<string, any> = {};
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_expenses');
+      if (stored) customMap = JSON.parse(stored);
+    } catch {}
+  }
+
   try {
     const supabase = createClient();
     let query = supabase.from('expenses').select('*').order('date', { ascending: false });
@@ -40,11 +48,13 @@ export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
     }
     const { data, error } = await query;
     if (!error && data && data.length > 0) {
-      return data.map(mapExpenseRow);
+      const rows = data.map(mapExpenseRow);
+      return rows.map(r => customMap[r.id] ? { ...r, ...customMap[r.id] } : r);
     }
   } catch {}
 
-  return MOCK_EXPENSES.filter(e => 
+  const mergedMock = MOCK_EXPENSES.map(e => customMap[e.id] ? { ...e, ...customMap[e.id] } : e);
+  return mergedMock.filter(e => 
     !assetId || 
     e.asset_id === realId || 
     e.asset_id === assetId
@@ -54,11 +64,12 @@ export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
 export async function createExpense(data: ExpenseInput) {
   const realId = resolveAssetId(data.asset_id);
   const supabase = createClient();
-  const payload = {
+  const payload: any = {
     asset_id: realId,
     date: data.date,
     category: data.category,
     subcategory: data.subcategory ?? null,
+    sub_category: data.subcategory ?? null,
     amount: data.amount,
     currency: data.currency ?? 'VND',
     vendor: data.vendor ?? null,
@@ -73,15 +84,40 @@ export async function createExpense(data: ExpenseInput) {
     description: payload.description || '',
   } as ExpenseRecord;
 
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_expenses');
+      const customMap: Record<string, any> = stored ? JSON.parse(stored) : {};
+      customMap[newExpObj.id] = newExpObj;
+      localStorage.setItem('fmms_custom_expenses', JSON.stringify(customMap));
+    } catch {}
+  }
+
   (MOCK_EXPENSES as any[]).unshift(newExpObj);
 
   try {
-    const { data: created, error } = await supabase
+    let { data: created, error } = await supabase
       .from('expenses')
       .insert(payload)
       .select()
       .maybeSingle();
-    if (!error && created) return mapExpenseRow(created);
+
+    if (error && error.message?.includes('subcategory')) {
+      delete payload.subcategory;
+      const res2 = await supabase
+        .from('expenses')
+        .insert(payload)
+        .select()
+        .maybeSingle();
+      created = res2.data;
+      error = res2.error;
+    }
+
+    if (error) {
+      console.warn('Supabase createExpense warning:', error.message);
+    } else if (created) {
+      return mapExpenseRow(created);
+    }
   } catch (err) {
     console.warn('createExpense Supabase fallback:', err);
   }
@@ -89,6 +125,8 @@ export async function createExpense(data: ExpenseInput) {
 }
 
 export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
+  const realAssetId = data.asset_id ? resolveAssetId(data.asset_id) : undefined;
+  
   const existingIdx = (MOCK_EXPENSES as any[]).findIndex((e: any) => e.id === id);
   if (existingIdx >= 0) {
     const target = (MOCK_EXPENSES as any[])[existingIdx];
@@ -99,27 +137,70 @@ export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
     if (data.vendor != null) target.vendor = data.vendor;
     if (data.odometer_km != null) target.odometer_km = data.odometer_km;
     if (data.description != null) target.description = data.description;
-    if (data.asset_id != null) target.asset_id = resolveAssetId(data.asset_id);
+    if (realAssetId != null) target.asset_id = realAssetId;
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_expenses');
+      const customMap: Record<string, any> = stored ? JSON.parse(stored) : {};
+      customMap[id] = {
+        id,
+        asset_id: realAssetId || (existingIdx >= 0 ? (MOCK_EXPENSES as any[])[existingIdx].asset_id : '22222222-2222-2222-2222-222222222222'),
+        date: data.date,
+        category: data.category,
+        subcategory: data.subcategory,
+        amount: data.amount,
+        vendor: data.vendor,
+        odometer_km: data.odometer_km,
+        description: data.description,
+      };
+      localStorage.setItem('fmms_custom_expenses', JSON.stringify(customMap));
+    } catch {}
   }
 
   if (isValidUuid(id)) {
     try {
       const supabase = createClient();
-      const { data: updated, error } = await supabase
+      const updatePayload: any = {
+        ...(data.date ? { date: data.date } : {}),
+        ...(data.category ? { category: data.category } : {}),
+        ...(data.amount != null ? { amount: data.amount } : {}),
+        ...(data.vendor !== undefined ? { vendor: data.vendor } : {}),
+        ...(data.odometer_km !== undefined ? { odometer_km: data.odometer_km } : {}),
+        ...(data.description !== undefined ? { description: data.description } : {}),
+        ...(realAssetId ? { asset_id: realAssetId } : {}),
+      };
+
+      if (data.subcategory !== undefined) {
+        updatePayload.subcategory = data.subcategory;
+        updatePayload.sub_category = data.subcategory;
+      }
+
+      let { data: updated, error } = await supabase
         .from('expenses')
-        .update({
-          ...(data.date ? { date: data.date } : {}),
-          ...(data.category ? { category: data.category } : {}),
-          ...(data.subcategory ? { subcategory: data.subcategory } : {}),
-          ...(data.amount != null ? { amount: data.amount } : {}),
-          ...(data.vendor != null ? { vendor: data.vendor } : {}),
-          ...(data.odometer_km != null ? { odometer_km: data.odometer_km } : {}),
-          ...(data.description != null ? { description: data.description } : {}),
-        })
+        .update(updatePayload)
         .eq('id', id)
         .select()
         .maybeSingle();
-      if (!error && updated) return mapExpenseRow(updated);
+
+      if (error && error.message?.includes('subcategory')) {
+        delete updatePayload.subcategory;
+        const res2 = await supabase
+          .from('expenses')
+          .update(updatePayload)
+          .eq('id', id)
+          .select()
+          .maybeSingle();
+        updated = res2.data;
+        error = res2.error;
+      }
+
+      if (error) {
+        console.warn('Supabase updateExpense warning:', error.message);
+      } else if (updated) {
+        return mapExpenseRow(updated);
+      }
     } catch (err) {
       console.warn('updateExpense Supabase fallback:', err);
     }
@@ -127,9 +208,10 @@ export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
 
   return mapExpenseRow({
     id,
-    asset_id: resolveAssetId(data.asset_id),
+    asset_id: realAssetId || '22222222-2222-2222-2222-222222222222',
     date: data.date || new Date().toISOString().slice(0, 10),
-    category: data.category || 'FUEL',
+    category: data.category || 'Running',
+    subcategory: data.subcategory,
     amount: data.amount || 0,
     currency: data.currency || 'VND',
     vendor: data.vendor,
@@ -141,6 +223,17 @@ export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
 export async function deleteExpense(id: string) {
   const delIdx = (MOCK_EXPENSES as any[]).findIndex((e: any) => e.id === id);
   if (delIdx >= 0) (MOCK_EXPENSES as any[]).splice(delIdx, 1);
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_expenses');
+      if (stored) {
+        const customMap = JSON.parse(stored);
+        delete customMap[id];
+        localStorage.setItem('fmms_custom_expenses', JSON.stringify(customMap));
+      }
+    } catch {}
+  }
 
   if (isValidUuid(id)) {
     try {

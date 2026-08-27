@@ -622,13 +622,64 @@ export default function AssetDetailPage() {
     setOdoLogForm({ date: '', odometer_km: '', note: '' });
   };
 
+  const normalizeCategory = (cat?: string, sub?: string) => {
+    if (!cat) return { category: 'Running', subcategory: 'Fuel' };
+    if (taxMap[cat]) {
+      const subKeys = Object.keys(taxMap[cat]?.subcategories || {});
+      const matchedSub = sub && subKeys.includes(sub) ? sub : (subKeys[0] || 'Other');
+      return { category: cat, subcategory: matchedSub };
+    }
+
+    const legacyMap: Record<string, { cat: string; sub: string }> = {
+      FUEL: { cat: 'Running', sub: 'Fuel' },
+      MAINTENANCE: { cat: 'Maintenance', sub: 'General Service' },
+      PARTS: { cat: 'Maintenance', sub: 'Brake' },
+      LABOR: { cat: 'Maintenance', sub: 'General Service' },
+      INSURANCE: { cat: 'Initial', sub: 'Insurance' },
+      REGISTRATION: { cat: 'Initial', sub: 'Registration' },
+      INSPECTION: { cat: 'Initial', sub: 'Registration' },
+      TOLL: { cat: 'Running', sub: 'Epass Fee' },
+      PARKING: { cat: 'Running', sub: 'Parking' },
+      WASH: { cat: 'Running', sub: 'Car Wash' },
+      CAR_WASH: { cat: 'Running', sub: 'Car Wash' },
+      UPGRADE: { cat: 'Upgrade', sub: 'Accessorie' },
+      LOAN: { cat: 'Loan', sub: 'Monthly Payment' },
+      LOAN_PAYMENT: { cat: 'Loan', sub: 'Monthly Payment' },
+      LOAN_INTEREST: { cat: 'Loan', sub: 'Interest' },
+      INITIAL: { cat: 'Initial', sub: 'Purchase' },
+      OTHER: { cat: 'Maintenance', sub: 'Other' },
+    };
+
+    const upperCat = cat.toUpperCase();
+    if (legacyMap[upperCat]) {
+      const found = legacyMap[upperCat];
+      const validSub = sub && taxMap[found.cat]?.subcategories?.[sub] ? sub : found.sub;
+      return { category: found.cat, subcategory: validSub };
+    }
+
+    for (const [cKey, cVal] of Object.entries(taxMap)) {
+      if (cKey.toLowerCase() === cat.toLowerCase()) {
+        const subKeys = Object.keys(cVal.subcategories || {});
+        return { category: cKey, subcategory: sub && subKeys.includes(sub) ? sub : (subKeys[0] || 'Other') };
+      }
+      for (const sKey of Object.keys(cVal.subcategories || {})) {
+        if (sKey.toLowerCase() === cat.toLowerCase() || (sub && sKey.toLowerCase() === sub.toLowerCase())) {
+          return { category: cKey, subcategory: sKey };
+        }
+      }
+    }
+
+    return { category: Object.keys(taxMap)[0] || 'Running', subcategory: 'Fuel' };
+  };
+
   /* ── Edit & Delete Handlers for Expenses ── */
   const handleOpenEditExpense = (item: ExpenseRecord) => {
     setEditingExp(item);
+    const norm = normalizeCategory(item.category, item.subcategory);
     setExpForm({
       date: item.date ? item.date.slice(0, 10) : '',
-      category: item.category || 'Running',
-      subcategory: item.subcategory || 'Fuel',
+      category: norm.category,
+      subcategory: norm.subcategory,
       amount: String(item.amount || ''),
       vendor: item.vendor || '',
       odometer_km: item.odometer_km ? String(item.odometer_km) : '',
@@ -844,6 +895,7 @@ export default function AssetDetailPage() {
         });
         setExpenses([created, ...expenses]);
       }
+      await loadData();
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
