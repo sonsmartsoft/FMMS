@@ -895,7 +895,8 @@ export default function AssetDetailPage() {
         });
         setExpenses([created, ...expenses]);
       }
-      await loadData();
+      const refreshedExps = await getExpenses(assetId);
+      setExpenses(refreshedExps);
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
