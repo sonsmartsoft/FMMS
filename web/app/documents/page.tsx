@@ -77,17 +77,24 @@ export default function DocumentsPage() {
 
   const loadData = async () => {
     try {
-      const [a, insurance, regs, docs] = await Promise.all([
-        getAssets(), getInsurancePolicies(), getRegistrations(), getDocuments(),
-      ]);
-      setAssets(a);
-      if (a.length > 0 && !docForm.asset_id) setDocForm(p => ({ ...p, asset_id: a[0].id }));
+      const a = await getAssets();
+      setAssets(a || []);
+      if (a && a.length > 0) {
+        setDocForm(p => p.asset_id ? p : ({ ...p, asset_id: a[0].id }));
+      }
 
-      const grouped = a.map(asset => {
+      let insurance: any[] = [];
+      let regs: any[] = [];
+      let docs: any[] = [];
+
+      try { insurance = await getInsurancePolicies(); } catch (e) { console.warn('getInsurancePolicies err', e); }
+      try { regs = await getRegistrations(); } catch (e) { console.warn('getRegistrations err', e); }
+      try { docs = await getDocuments(); } catch (e) { console.warn('getDocuments err', e); }
+
+      const grouped = (a || []).map(asset => {
         const items: DocItem[] = [];
 
-        // Registrations
-        regs.filter(r => r.asset_id === asset.id).forEach(r => {
+        (regs || []).filter(r => r.asset_id === asset.id).forEach(r => {
           items.push({
             id: r.id,
             sourceType: 'REGISTRATION',
@@ -111,8 +118,7 @@ export default function DocumentsPage() {
           }
         });
 
-        // Insurance Policies
-        insurance.filter(i => i.asset_id === asset.id).forEach(i => {
+        (insurance || []).filter(i => i.asset_id === asset.id).forEach(i => {
           items.push({
             id: i.id,
             sourceType: 'INSURANCE',
@@ -127,8 +133,7 @@ export default function DocumentsPage() {
           });
         });
 
-        // Custom Documents
-        (docs as DocumentRow[]).filter(d => d.asset_id === asset.id).forEach(d => {
+        (docs as DocumentRow[] || []).filter(d => d.asset_id === asset.id).forEach(d => {
           items.push({
             id: d.id,
             sourceType: 'DOCUMENT',
@@ -145,8 +150,8 @@ export default function DocumentsPage() {
       }).filter(g => g.docs.length > 0);
 
       setGroups(grouped);
-    } catch {
-      setAssets([]); setGroups([]);
+    } catch (err) {
+      console.error('Error loading documents data:', err);
     }
   };
 
@@ -199,14 +204,14 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleOpenEdit = (item: DocItem) => {
-    setEditingItem(item);
+  const handleOpenEdit = (doc: DocItem) => {
+    setEditingItem(doc);
     setEditForm({
-      title: item.name,
-      issuer: item.issuer,
-      policy_number: item.policy_number || '',
-      expiry_date: item.valid_until || '',
-      cost: item.cost ? String(item.cost) : '',
+      title: doc.name,
+      issuer: doc.issuer,
+      policy_number: doc.policy_number || '',
+      expiry_date: doc.valid_until || '',
+      cost: doc.cost ? String(doc.cost) : '',
     });
   };
 
@@ -216,61 +221,65 @@ export default function DocumentsPage() {
       if (editingItem.sourceType === 'INSURANCE') {
         await updateInsurancePolicy(editingItem.id, {
           provider: editForm.issuer,
-          policy_number: editForm.policy_number || undefined,
+          policy_number: editForm.policy_number,
           expiry_date: editForm.expiry_date || undefined,
-          cost: editForm.cost ? parseFloat(editForm.cost) : undefined,
+          cost: parseFloat(editForm.cost) || 0,
         });
       } else if (editingItem.sourceType === 'DOCUMENT') {
         await updateDocument(editingItem.id, {
           title: editForm.title,
-          document_type: editForm.issuer,
           expiry_date: editForm.expiry_date || undefined,
         });
       }
-      setEditingItem(null);
       await loadData();
+      setEditingItem(null);
     } catch (e: any) {
-      alert(`Lỗi khi cập nhật: ${e?.message ?? 'Không cập nhật được'}`);
+      alert(`Lỗi khi sửa: ${e?.message ?? 'Không cập nhật được'}`);
     }
   };
 
-  const handleDeleteItem = async (item: DocItem) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa "${item.name}"?`)) return;
+  const handleDeleteItem = async (doc: DocItem) => {
+    if (!confirm(`Bạn có chắc muốn xóa "${doc.name}"?`)) return;
     try {
-      if (item.sourceType === 'INSURANCE') {
-        await deleteInsurancePolicy(item.id);
-      } else if (item.sourceType === 'DOCUMENT') {
-        await deleteDocument(item.id);
+      if (doc.sourceType === 'INSURANCE') {
+        await deleteInsurancePolicy(doc.id);
+      } else if (doc.sourceType === 'DOCUMENT') {
+        await deleteDocument(doc.id);
       }
       await loadData();
+      if (editingItem?.id === doc.id) setEditingItem(null);
     } catch (e: any) {
       alert(`Lỗi khi xóa: ${e?.message ?? 'Không xóa được'}`);
     }
   };
 
   const allDocs = groups.flatMap(d => d.docs);
+  const okCount = allDocs.filter(d => d.status === 'OK').length;
+  const soonCount = allDocs.filter(d => d.status === 'EXPIRING_SOON').length;
   const expiredCount = allDocs.filter(d => d.status === 'EXPIRED').length;
-  const totalDocs = allDocs.length;
-  const expiredSpecific = groups
-    .flatMap(g => g.docs.filter(d => d.status === 'EXPIRED').map(d => ({ assetId: g.asset_id, name: d.name })))
-    .slice(0, 2);
+  const expiredSpecific = allDocs.filter(d => d.status === 'EXPIRED');
 
   return (
-    <div className="space-y-6 animate-fadeIn">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-6 animate-fadeIn pb-12">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <FileText className="w-6 h-6 text-cyan-400" />
+          <h1 className="text-xl font-black uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
             Giấy Tờ &amp; Bảo Hiểm
           </h1>
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            {totalDocs} tài liệu · <span style={{ color: 'var(--status-green)' }}>{totalDocs - expiredCount} còn hạn</span>
-            {expiredCount > 0 && <span style={{ color: 'var(--status-red)' }}> · {expiredCount} hết hạn ⚠</span>}
+          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+            {allDocs.length} tài liệu · {okCount} còn hạn · {soonCount} sắp hết hạn · {expiredCount} hết hạn
           </p>
         </div>
-        <button onClick={() => setOpenAddModal(true)} className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition hover:opacity-90"
-          style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+        <button
+          onClick={() => {
+            if (assets.length > 0 && !docForm.asset_id) {
+              setDocForm(p => ({ ...p, asset_id: assets[0].id }));
+            }
+            setOpenAddModal(true);
+          }}
+          className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition hover:opacity-90 cursor-pointer"
+          style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+        >
           <Plus className="w-4 h-4" /><span>Thêm giấy tờ / bảo hiểm</span>
         </button>
       </div>
@@ -279,191 +288,206 @@ export default function DocumentsPage() {
         <div className="p-4 rounded-2xl flex items-start space-x-3" style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)' }}>
           <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" style={{ color: 'var(--status-red)' }} />
           <div>
-            <p className="font-bold text-xs" style={{ color: 'var(--status-red)' }}>Cảnh báo: Có tài liệu đã hết hạn!</p>
+            <p className="font-bold text-xs" style={{ color: 'var(--status-red)' }}>Cảnh báo: Có {expiredCount} tài liệu đã hết hạn!</p>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-              {expiredSpecific.map(d => {
-                const asset = assets.find(a => a.id === d.assetId);
-                return `${asset?.name?.split(' ')[0] || 'Xe'}: ${d.name}`;
-              }).join(' · ')}. Vui lòng gia hạn ngay.
+              {expiredSpecific.map(d => d.name).join(' · ')}. Vui lòng gia hạn ngay.
             </p>
           </div>
         </div>
       )}
 
-      {/* Add Document Modal */}
       {openAddModal && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 py-12">
-            <div
-              className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden"
-              style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(88vh, 640px)' }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
-                <div>
-                  <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                    <span>📑 Thêm Giấy Tờ / Hợp Đồng Bảo Hiểm Mới</span>
-                  </h3>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Quản lý thời hạn đăng kiểm, bảo hiểm vật chất và giấy tờ xe</p>
-                </div>
-                <button onClick={() => setOpenAddModal(false)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
+          <div
+            className="rounded-2xl w-full max-w-2xl my-auto flex flex-col shadow-2xl overflow-hidden"
+            style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: '90vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <div>
+                <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                  <span>📑 Thêm Giấy Tờ / Hợp Đồng Bảo Hiểm Mới</span>
+                </h3>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Quản lý thời hạn đăng kiểm, bảo hiểm vật chất và giấy tờ xe</p>
               </div>
+              <button onClick={() => setOpenAddModal(false)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
-                {/* Section 1: Phương tiện & Loại giấy tờ */}
-                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">1. Thông tin phương tiện &amp; Loại tài liệu</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phương tiện áp dụng *</label>
+            <div className="flex-1 min-h-[300px] overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">1. Thông tin phương tiện &amp; Loại tài liệu</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phương tiện áp dụng *</label>
+                    {assets.length > 0 ? (
                       <select className="theme-select font-semibold" value={docForm.asset_id} onChange={e => setDocForm(p => ({ ...p, asset_id: e.target.value }))}>
                         {assets.map(a => <option key={a.id} value={a.id}>{a.name} ({a.brand})</option>)}
                       </select>
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Loại tài liệu / Giấy tờ *</label>
-                      <select className="theme-select font-semibold" value={docForm.document_type} onChange={e => setDocForm(p => ({ ...p, document_type: e.target.value }))}>
-                        {['Bảo hiểm vật chất', 'Bảo hiểm TNDS bắt buộc', 'Đăng kiểm (Kiểm định)', 'Đăng ký xe (Cà vẹt)', 'Sổ bảo hành chính hãng', 'Hóa đơn / Hợp đồng', 'Khác'].map(t => <option key={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Tên tài liệu / Tên Hợp đồng *</label>
-                      <input type="text" className="theme-input" placeholder="VD: Bảo hiểm vật chất xe MIC, Đăng kiểm định kỳ..." value={docForm.title} onChange={e => setDocForm(p => ({ ...p, title: e.target.value }))} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 2: Đơn vị cấp, Số HĐ & Thời hạn */}
-                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-purple-400">2. Đơn vị phát hành, Số hợp đồng &amp; Thời hạn</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị phát hành / Nhà bảo hiểm</label>
-                      <input type="text" className="theme-input" placeholder="VD: Bảo hiểm MIC Quân Đội, PJICO, Cục CSGT..." value={docForm.provider} onChange={e => setDocForm(p => ({ ...p, provider: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số hợp đồng / Mã giấy tờ</label>
-                      <input type="text" className="theme-input" placeholder="VD: BH-2026-8899" value={docForm.policy_number} onChange={e => setDocForm(p => ({ ...p, policy_number: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày bắt đầu hiệu lực</label>
-                      <input type="date" className="theme-input" value={docForm.start_date} onChange={e => setDocForm(p => ({ ...p, start_date: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày hết hạn *</label>
-                      <input type="date" className="theme-input" value={docForm.expiry_date} onChange={e => setDocForm(p => ({ ...p, expiry_date: e.target.value }))} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 3: Chi phí & Hotline */}
-                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">3. Chi phí, Hạn mức &amp; Hotline hỗ trợ</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phí thường niên / Chi phí (₫)</label>
-                      <input type="number" className="theme-input font-mono font-bold text-cyan-400" placeholder="VD: 1500000" value={docForm.cost} onChange={e => setDocForm(p => ({ ...p, cost: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Mức bồi thường tối đa (₫)</label>
-                      <input type="number" className="theme-input font-mono font-bold text-emerald-400" placeholder="VD: 500000000" value={docForm.coverage_amount} onChange={e => setDocForm(p => ({ ...p, coverage_amount: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Cán bộ / Đại lý phụ trách</label>
-                      <input type="text" className="theme-input" placeholder="VD: Chị Mai MIC" value={docForm.agent_name} onChange={e => setDocForm(p => ({ ...p, agent_name: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>SĐT cán bộ / Hotline cứu hộ 24/7</label>
-                      <input type="tel" className="theme-input font-mono font-bold text-cyan-400" placeholder="VD: 1900 55 88 99" value={docForm.provider_hotline || docForm.agent_phone} onChange={e => setDocForm(p => ({ ...p, provider_hotline: e.target.value, agent_phone: e.target.value }))} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
-                <button onClick={saveDoc} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
-                  Lưu tài liệu mới
-                </button>
-                <button onClick={() => setOpenAddModal(false)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Document Modal */}
-      {editingItem && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingItem(null)}>
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 py-12">
-            <div
-              className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden"
-              style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(88vh, 640px)' }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
-                <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-                  <Pencil className="w-4 h-4 text-cyan-400" />
-                  Chỉnh sửa Giấy tờ / Hợp đồng Bảo hiểm
-                </h3>
-                <button onClick={() => setEditingItem(null)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
-                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Tên giấy tờ / Bảo hiểm</label>
-                      <input type="text" className="theme-input" value={editForm.title} onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Nhà phát hành / Đơn vị cấp</label>
-                      <input type="text" className="theme-input" value={editForm.issuer} onChange={e => setEditForm(p => ({ ...p, issuer: e.target.value }))} />
-                    </div>
-                    {editingItem.sourceType === 'INSURANCE' && (
-                      <div>
-                        <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số hợp đồng bảo hiểm</label>
-                        <input type="text" className="theme-input" value={editForm.policy_number} onChange={e => setEditForm(p => ({ ...p, policy_number: e.target.value }))} />
-                      </div>
+                    ) : (
+                      <input type="text" className="theme-input font-semibold" disabled value="Đang tải phương tiện..." />
                     )}
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày hết hạn</label>
-                      <input type="date" className="theme-input" value={editForm.expiry_date} onChange={e => setEditForm(p => ({ ...p, expiry_date: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Chi phí hàng năm (₫)</label>
-                      <input type="number" className="theme-input font-mono font-bold text-cyan-400" value={editForm.cost} onChange={e => setEditForm(p => ({ ...p, cost: e.target.value }))} />
-                    </div>
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Loại tài liệu / Giấy tờ *</label>
+                    <select className="theme-select font-semibold" value={docForm.document_type} onChange={e => setDocForm(p => ({ ...p, document_type: e.target.value }))}>
+                      {['Bảo hiểm vật chất', 'Bảo hiểm TNDS bắt buộc', 'Đăng kiểm (Kiểm định)', 'Đăng ký xe (Cà vẹt)', 'Sổ bảo hành chính hãng', 'Hóa đơn / Hợp đồng', 'Khác'].map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Tên tài liệu / Tên Hợp đồng *</label>
+                    <input type="text" className="theme-input font-bold" placeholder="VD: Bảo hiểm vật chất xe MIC, Đăng kiểm định kỳ..." value={docForm.title} onChange={e => setDocForm(p => ({ ...p, title: e.target.value }))} />
                   </div>
                 </div>
               </div>
 
-              <div className="p-4 shrink-0 border-t flex justify-between items-center z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteItem(editingItem)}
-                  className="px-3.5 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 font-bold flex items-center gap-1.5 transition text-xs"
-                >
-                  <Trash2 className="w-4 h-4" /> Xóa tài liệu
-                </button>
-                <div className="flex items-center space-x-2">
-                  <button onClick={() => setEditingItem(null)} className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-black/5" style={{ color: 'var(--text-muted)' }}>Hủy</button>
-                  <button onClick={handleSaveEdit} className="px-5 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
-                    <Save className="w-4 h-4" /> Lưu thay đổi
-                  </button>
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-purple-400">2. Đơn vị phát hành, Số hợp đồng &amp; Thời hạn</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị phát hành / Nhà bảo hiểm</label>
+                    <input type="text" className="theme-input" placeholder="VD: Bảo hiểm MIC Quân Đội, PJICO, Cục CSGT..." value={docForm.provider} onChange={e => setDocForm(p => ({ ...p, provider: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số hợp đồng / Mã giấy tờ</label>
+                    <input type="text" className="theme-input" placeholder="VD: BH-2026-8899" value={docForm.policy_number} onChange={e => setDocForm(p => ({ ...p, policy_number: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày bắt đầu hiệu lực</label>
+                    <input type="date" className="theme-input font-mono" value={docForm.start_date} onChange={e => setDocForm(p => ({ ...p, start_date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày hết hạn *</label>
+                    <input type="date" className="theme-input font-mono" value={docForm.expiry_date} onChange={e => setDocForm(p => ({ ...p, expiry_date: e.target.value }))} />
+                  </div>
                 </div>
+              </div>
+
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">3. Chi phí, Hạn mức &amp; Hotline hỗ trợ</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Phí thường niên / Chi phí (₫)</label>
+                    <input type="number" className="theme-input font-mono font-bold text-cyan-400" placeholder="VD: 1500000" value={docForm.cost} onChange={e => setDocForm(p => ({ ...p, cost: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Mức bồi thường tối đa (₫)</label>
+                    <input type="number" className="theme-input font-mono font-bold text-emerald-400" placeholder="VD: 500000000" value={docForm.coverage_amount} onChange={e => setDocForm(p => ({ ...p, coverage_amount: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Cán bộ / Đại lý phụ trách</label>
+                    <input type="text" className="theme-input" placeholder="VD: Chị Mai MIC" value={docForm.agent_name} onChange={e => setDocForm(p => ({ ...p, agent_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>SĐT cán bộ / Hotline cứu hộ 24/7</label>
+                    <input type="tel" className="theme-input font-mono font-bold text-cyan-400" placeholder="VD: 1900 55 88 99" value={docForm.provider_hotline || docForm.agent_phone} onChange={e => setDocForm(p => ({ ...p, provider_hotline: e.target.value, agent_phone: e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 shrink-0 border-t flex space-x-2 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <button onClick={saveDoc} className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                Lưu tài liệu mới
+              </button>
+              <button onClick={() => setOpenAddModal(false)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingItem && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingItem(null)}>
+          <div
+            className="rounded-2xl w-full max-w-2xl my-auto flex flex-col shadow-2xl overflow-hidden"
+            style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: '90vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Pencil className="w-4 h-4 text-cyan-400" />
+                Chỉnh sửa Giấy tờ / Hợp đồng Bảo hiểm
+              </h3>
+              <button onClick={() => setEditingItem(null)} className="p-1.5 rounded-xl hover:bg-black/10 transition" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="flex-1 min-h-[220px] overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">
+              <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Tên giấy tờ / Bảo hiểm</label>
+                    <input type="text" className="theme-input" value={editForm.title} onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Nhà phát hành / Đơn vị cấp</label>
+                    <input type="text" className="theme-input" value={editForm.issuer} onChange={e => setEditForm(p => ({ ...p, issuer: e.target.value }))} />
+                  </div>
+                  {editingItem.sourceType === 'INSURANCE' && (
+                    <div>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số hợp đồng bảo hiểm</label>
+                      <input type="text" className="theme-input" value={editForm.policy_number} onChange={e => setEditForm(p => ({ ...p, policy_number: e.target.value }))} />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày hết hạn</label>
+                    <input type="date" className="theme-input font-mono" value={editForm.expiry_date} onChange={e => setEditForm(p => ({ ...p, expiry_date: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Chi phí hàng năm (₫)</label>
+                    <input type="number" className="theme-input font-mono font-bold text-cyan-400" value={editForm.cost} onChange={e => setEditForm(p => ({ ...p, cost: e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 shrink-0 border-t flex justify-between items-center z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <button
+                type="button"
+                onClick={() => handleDeleteItem(editingItem)}
+                className="px-3.5 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 font-bold flex items-center gap-1.5 transition text-xs"
+              >
+                <Trash2 className="w-4 h-4" /> Xóa tài liệu
+              </button>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => setEditingItem(null)} className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-black/5" style={{ color: 'var(--text-muted)' }}>Hủy</button>
+                <button onClick={handleSaveEdit} className="px-5 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 shadow-md transition" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                  <Save className="w-4 h-4" /> Lưu thay đổi
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Doc Groups List */}
+      {groups.length === 0 && (
+        <div className="p-12 text-center rounded-2xl space-y-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <FileText className="w-12 h-12 mx-auto text-cyan-400 opacity-40" />
+          <div>
+            <h3 className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>Chưa có giấy tờ hoặc bảo hiểm nào</h3>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Bắt đầu bằng cách thêm bảo hiểm vật chất, TNDS, đăng kiểm hoặc giấy tờ xe</p>
+          </div>
+          <button
+            onClick={() => {
+              if (assets.length > 0 && !docForm.asset_id) {
+                setDocForm(p => ({ ...p, asset_id: assets[0].id }));
+              }
+              setOpenAddModal(true);
+            }}
+            className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+          >
+            <Plus className="w-4 h-4" />
+            <span>Thêm giấy tờ / bảo hiểm ngay</span>
+          </button>
+        </div>
+      )}
+
       {groups.map(({ asset_id, docs }) => {
         const asset = assets.find(a => a.id === asset_id);
         if (!asset) return null;
         return (
           <div key={asset_id} className="rounded-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)' }}>
-            {/* Asset Header */}
             <div className="flex items-center space-x-3 px-5 py-4" style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
               <div className="w-10 h-10 rounded-xl overflow-hidden" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                 {asset.image_url && <img src={asset.image_url} alt={asset.name} className="w-full h-full object-cover" />}
@@ -474,7 +498,6 @@ export default function DocumentsPage() {
               </div>
             </div>
 
-            {/* Doc rows */}
             <div className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
               {docs.map((doc, i) => {
                 const cfg = STATUS_CONFIG[doc.status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.OK;
