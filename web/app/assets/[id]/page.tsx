@@ -428,7 +428,7 @@ export default function AssetDetailPage() {
       if (periodForm.status === 'PAID') {
         try {
           await createExpense({
-            asset_id: asset.id,
+            asset_id: asset?.id || assetId,
             date: periodForm.paid_date || new Date().toISOString().slice(0, 10),
             category: 'Loan',
             subcategory: 'Monthly Payment',
@@ -482,7 +482,7 @@ export default function AssetDetailPage() {
         // Auto create expense
         try {
           await createExpense({
-            asset_id: asset.id,
+            asset_id: asset?.id || assetId,
             date: paidDateStr,
             category: 'Loan',
             subcategory: 'Monthly Payment',
