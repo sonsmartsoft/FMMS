@@ -23,7 +23,7 @@ export default function MaintenancePage() {
   const [openModal, setOpenModal] = useState(false);
   const [form, setForm] = useState({
     asset_id: '', date: '', maintenance_type: 'Thay dầu máy',
-    odometer_km: '', cost: '', vendor: '', notes: '', next_due_km: '', next_due_date: '',
+    odometer_km: '', cost: '', discount: '', vendor: '', notes: '', next_due_km: '', next_due_date: '',
   });
   const [serviceItems, setServiceItems] = useState<{ name: string; cost: string }[]>([
     { name: 'Thay dầu máy', cost: '650000' },
@@ -125,9 +125,13 @@ export default function MaintenancePage() {
   const save = async () => {
     try {
       const itemsCost = calculatedItemsCost;
-      const finalCost = itemsCost > 0 ? itemsCost : (parseFloat(form.cost) || 0);
+      const subtotal = itemsCost > 0 ? itemsCost : (parseFloat(form.cost) || 0);
+      const discount = parseFloat(form.discount) || 0;
+      const finalCost = Math.max(0, subtotal - discount);
+
       const itemsNotes = serviceItems.filter(i => i.name).map(i => `${i.name} (${fmt(parseFloat(i.cost) || 0)}₫)`).join(', ');
-      const combinedNotes = itemsNotes ? `${itemsNotes}${form.notes ? ' | ' + form.notes : ''}` : form.notes;
+      const discountNote = discount > 0 ? `[Giảm giá: -${fmt(discount)}₫]` : '';
+      const combinedNotes = [itemsNotes, discountNote, form.notes].filter(Boolean).join(' | ');
 
       const created = await createMaintenanceRecord({
         asset_id: form.asset_id || assets[0]?.id,
@@ -152,7 +156,7 @@ export default function MaintenancePage() {
             amount: finalCost,
             currency: 'VND',
             vendor: form.vendor || undefined,
-            description: `Bảo dưỡng: ${form.maintenance_type}`,
+            description: `Bảo dưỡng: ${form.maintenance_type}${discount > 0 ? ` (Giảm -${fmt(discount)}₫)` : ''}`,
           });
         } catch (expErr) {
           console.warn('Auto expense sync warning:', expErr);
@@ -601,9 +605,40 @@ export default function MaintenancePage() {
                   ))}
                 </div>
 
-                <div className="flex justify-between items-center pt-3 border-t font-bold text-xs" style={{ borderColor: 'var(--border-default)' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Tổng chi phí các hạng mục:</span>
-                  <span className="text-sm font-mono text-rose-400 font-extrabold">{fmt(calculatedItemsCost)} ₫</span>
+                {/* Discount & Final Total */}
+                <div className="p-3.5 rounded-xl space-y-2.5 mt-2" style={{ background: 'var(--bg-hover)', border: '1px dashed var(--border-default)' }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-xs font-bold text-amber-400 flex items-center gap-1">
+                      <span>🎁 Giảm giá / Chiết khấu (₫):</span>
+                    </label>
+                    <input
+                      type="number"
+                      className="theme-input font-mono font-bold text-xs text-amber-400"
+                      style={{ width: '160px' }}
+                      placeholder="0"
+                      value={form.discount}
+                      onChange={e => setForm(p => ({ ...p, discount: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t space-y-1.5 text-xs" style={{ borderColor: 'var(--border-default)' }}>
+                    <div className="flex justify-between" style={{ color: 'var(--text-muted)' }}>
+                      <span>Tổng tiền dịch vụ:</span>
+                      <span className="font-mono">{fmt(calculatedItemsCost > 0 ? calculatedItemsCost : (parseFloat(form.cost) || 0))} ₫</span>
+                    </div>
+                    {parseFloat(form.discount) > 0 && (
+                      <div className="flex justify-between text-amber-400 font-semibold">
+                        <span>Chiết khấu giảm giá:</span>
+                        <span className="font-mono">-{fmt(parseFloat(form.discount) || 0)} ₫</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center pt-1 border-t font-extrabold text-sm" style={{ borderColor: 'var(--border-default)' }}>
+                      <span style={{ color: 'var(--text-primary)' }}>Thực thanh toán:</span>
+                      <span className="font-mono text-emerald-400 font-bold">
+                        {fmt(Math.max(0, (calculatedItemsCost > 0 ? calculatedItemsCost : (parseFloat(form.cost) || 0)) - (parseFloat(form.discount) || 0)))} ₫
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

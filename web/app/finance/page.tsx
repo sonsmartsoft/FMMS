@@ -97,7 +97,7 @@ export default function FinancePage() {
   const [paymentForm, setPaymentForm] = useState({ amount: '', paid_date: '', notes: '' });
   const [form, setForm] = useState({
     asset_id: '', date: '', category: 'Running', subcategory: 'Fuel',
-    amount: '', vendor: '', description: '',
+    amount: '', discount: '', vendor: '', description: '',
   });
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
@@ -322,6 +322,7 @@ export default function FinancePage() {
       category: norm.category,
       subcategory: norm.subcategory,
       amount: String(e.amount),
+      discount: '',
       vendor: e.vendor || '',
       description: e.description || '',
     });
@@ -329,15 +330,20 @@ export default function FinancePage() {
   };
 
   const saveExpense = async () => {
+    const subtotal = parseFloat(form.amount) || 0;
+    const discount = parseFloat(form.discount) || 0;
+    const finalAmount = Math.max(0, subtotal - discount);
+    const fullDesc = discount > 0 ? `${form.description || ''} [Giảm giá: -${fmt(discount)}₫]`.trim() : (form.description || undefined);
+
     const payload = {
       asset_id: form.asset_id || assets[0]?.id,
       date: form.date || new Date().toISOString().slice(0, 10),
       category: form.category,
       subcategory: form.subcategory || undefined,
-      amount: parseFloat(form.amount) || 0,
+      amount: finalAmount,
       currency: 'VND',
       vendor: form.vendor || undefined,
-      description: form.description || undefined,
+      description: fullDesc,
     };
     try {
       if (editId) {
@@ -1347,10 +1353,25 @@ export default function FinancePage() {
                 </select>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Số tiền (₫) *</label>
-                <input type="number" className="theme-input font-mono font-bold" placeholder="500000" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Số tiền gốc (₫) *</label>
+                  <input type="number" className="theme-input font-mono font-bold" placeholder="500000" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold uppercase text-amber-400">🎁 Giảm giá / Voucher (₫)</label>
+                  <input type="number" className="theme-input font-mono font-bold text-amber-400" placeholder="0" value={form.discount} onChange={e => setForm(p => ({ ...p, discount: e.target.value }))} />
+                </div>
               </div>
+
+              {parseFloat(form.discount) > 0 && (
+                <div className="p-2.5 rounded-xl text-xs flex justify-between items-center font-bold" style={{ background: 'var(--bg-hover)', border: '1px dashed var(--border-default)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Thực chi sau giảm giá:</span>
+                  <span className="font-mono text-emerald-400 text-sm">
+                    {fmt(Math.max(0, (parseFloat(form.amount) || 0) - (parseFloat(form.discount) || 0)))} ₫
+                  </span>
+                </div>
+              )}
 
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Nhà cung cấp / Đơn vị</label>

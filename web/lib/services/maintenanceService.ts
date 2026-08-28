@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { MaintenanceRecord } from '@/types/mobility';
 import { MOCK_MAINTENANCE_RECORDS } from '@/lib/data/mockData';
+import { resolveAssetId, isValidUuid } from './assetService';
 
 export interface MaintenanceInput {
   asset_id: string;
@@ -32,7 +33,7 @@ export function mapMaintenanceRow(row: any): MaintenanceRecord {
     id: row.id,
     asset_id: row.asset_id,
     maintenance_type: row.maintenance_type,
-    date: row.date,
+    date: row.date ? row.date.slice(0, 10) : '',
     odometer_km: Number(row.odometer_km) || 0,
     cost: Number(row.cost) || 0,
     vendor: row.vendor ?? '',
@@ -44,20 +45,32 @@ export function mapMaintenanceRow(row: any): MaintenanceRecord {
 }
 
 export async function getMaintenanceRecords(assetId?: string): Promise<MaintenanceRecord[]> {
+  const realId = assetId ? resolveAssetId(assetId) : undefined;
+  let customMap: Record<string, any> = {};
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_maintenance');
+      if (stored) customMap = JSON.parse(stored);
+    } catch {}
+  }
+
   try {
     const supabase = createClient();
     let query = supabase.from('maintenance_records').select('*').order('date', { ascending: false });
-    if (assetId) {
-      query = query.eq('asset_id', assetId);
+    if (realId) {
+      query = query.or(`asset_id.eq.${realId},asset_id.eq.${assetId}`);
     }
     const { data, error } = await query;
     if (!error && data && data.length > 0) {
-      return data.map(mapMaintenanceRow);
+      const rows = data.map(mapMaintenanceRow);
+      return rows.map(r => customMap[r.id] ? { ...r, ...customMap[r.id] } : r);
     }
   } catch {}
 
-  return MOCK_MAINTENANCE_RECORDS.filter(m => 
+  const mergedMock = MOCK_MAINTENANCE_RECORDS.map(m => customMap[m.id] ? { ...m, ...customMap[m.id] } : m);
+  return mergedMock.filter(m => 
     !assetId || 
+    m.asset_id === realId || 
     m.asset_id === assetId || 
     (assetId === 'CAR01' && m.asset_id === '22222222-2222-2222-2222-222222222222') || 
     (m.asset_id === 'CAR01' && assetId === '22222222-2222-2222-2222-222222222222')
@@ -65,51 +78,158 @@ export async function getMaintenanceRecords(assetId?: string): Promise<Maintenan
 }
 
 export async function createMaintenanceRecord(data: MaintenanceInput) {
+  const realId = resolveAssetId(data.asset_id);
   const supabase = createClient();
-  const { data: created, error } = await supabase
-    .from('maintenance_records')
-    .insert({
-      asset_id: data.asset_id,
-      maintenance_type: data.maintenance_type,
-      date: data.date,
-      odometer_km: data.odometer_km ?? null,
-      cost: data.cost ?? 0,
-      currency: data.currency ?? 'VND',
-      vendor: data.vendor ?? null,
-      notes: data.notes ?? null,
-      next_due_km: data.next_due_km ?? null,
-      next_due_date: data.next_due_date ?? null,
-      warranty_until: data.warranty_until ?? null,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return mapMaintenanceRow(created);
+  const payload = {
+    asset_id: realId,
+    maintenance_type: data.maintenance_type,
+    date: data.date,
+    odometer_km: data.odometer_km ?? null,
+    cost: data.cost ?? 0,
+    currency: data.currency ?? 'VND',
+    vendor: data.vendor ?? null,
+    notes: data.notes ?? null,
+    next_due_km: data.next_due_km ?? null,
+    next_due_date: data.next_due_date ?? null,
+    warranty_until: data.warranty_until ?? null,
+  };
+
+  const newMaintObj: MaintenanceRecord = {
+    id: `MT_${Date.now()}`,
+    ...payload,
+    vendor: payload.vendor || '',
+    notes: payload.notes || undefined,
+    odometer_km: payload.odometer_km || 0,
+    cost: payload.cost,
+    status: computeStatus(payload),
+  };
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_maintenance');
+      const customMap: Record<string, any> = stored ? JSON.parse(stored) : {};
+      customMap[newMaintObj.id] = newMaintObj;
+      localStorage.setItem('fmms_custom_maintenance', JSON.stringify(customMap));
+    } catch {}
+  }
+
+  (MOCK_MAINTENANCE_RECORDS as any[]).unshift(newMaintObj);
+
+  try {
+    const { data: created, error } = await supabase
+      .from('maintenance_records')
+      .insert(payload)
+      .select()
+      .maybeSingle();
+    if (!error && created) {
+      return mapMaintenanceRow(created);
+    }
+  } catch (err) {
+    console.warn('createMaintenanceRecord Supabase fallback:', err);
+  }
+  return newMaintObj;
 }
 
 export async function updateMaintenanceRecord(id: string, data: Partial<MaintenanceInput>) {
-  const supabase = createClient();
-  const { data: updated, error } = await supabase
-    .from('maintenance_records')
-    .update({
-      ...(data.maintenance_type ? { maintenance_type: data.maintenance_type } : {}),
-      ...(data.date ? { date: data.date } : {}),
-      ...(data.odometer_km != null ? { odometer_km: data.odometer_km } : {}),
-      ...(data.cost != null ? { cost: data.cost } : {}),
-      ...(data.vendor != null ? { vendor: data.vendor } : {}),
-      ...(data.notes != null ? { notes: data.notes } : {}),
-      ...(data.next_due_km != null ? { next_due_km: data.next_due_km } : {}),
-      ...(data.next_due_date != null ? { next_due_date: data.next_due_date } : {}),
-    })
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return mapMaintenanceRow(updated);
+  const realAssetId = data.asset_id ? resolveAssetId(data.asset_id) : undefined;
+
+  const existingIdx = (MOCK_MAINTENANCE_RECORDS as any[]).findIndex((m: any) => m.id === id);
+  if (existingIdx >= 0) {
+    const target = (MOCK_MAINTENANCE_RECORDS as any[])[existingIdx];
+    if (data.maintenance_type != null) target.maintenance_type = data.maintenance_type;
+    if (data.date != null) target.date = data.date;
+    if (data.odometer_km != null) target.odometer_km = data.odometer_km;
+    if (data.cost != null) target.cost = data.cost;
+    if (data.vendor != null) target.vendor = data.vendor;
+    if (data.notes != null) target.notes = data.notes;
+    if (data.next_due_km != null) target.next_due_km = data.next_due_km;
+    if (data.next_due_date != null) {
+      target.next_due_date = data.next_due_date;
+      target.status = computeStatus({ next_due_date: data.next_due_date });
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_maintenance');
+      const customMap: Record<string, any> = stored ? JSON.parse(stored) : {};
+      customMap[id] = {
+        id,
+        asset_id: realAssetId || (existingIdx >= 0 ? (MOCK_MAINTENANCE_RECORDS as any[])[existingIdx].asset_id : '22222222-2222-2222-2222-222222222222'),
+        maintenance_type: data.maintenance_type,
+        date: data.date,
+        odometer_km: data.odometer_km,
+        cost: data.cost,
+        vendor: data.vendor,
+        notes: data.notes,
+        next_due_km: data.next_due_km,
+        next_due_date: data.next_due_date,
+      };
+      localStorage.setItem('fmms_custom_maintenance', JSON.stringify(customMap));
+    } catch {}
+  }
+
+  if (isValidUuid(id)) {
+    try {
+      const supabase = createClient();
+      const { data: updated, error } = await supabase
+        .from('maintenance_records')
+        .update({
+          ...(data.maintenance_type ? { maintenance_type: data.maintenance_type } : {}),
+          ...(data.date ? { date: data.date } : {}),
+          ...(data.odometer_km != null ? { odometer_km: data.odometer_km } : {}),
+          ...(data.cost != null ? { cost: data.cost } : {}),
+          ...(data.vendor != null ? { vendor: data.vendor } : {}),
+          ...(data.notes != null ? { notes: data.notes } : {}),
+          ...(data.next_due_km != null ? { next_due_km: data.next_due_km } : {}),
+          ...(data.next_due_date != null ? { next_due_date: data.next_due_date } : {}),
+        })
+        .eq('id', id)
+        .select()
+        .maybeSingle();
+      if (!error && updated) return mapMaintenanceRow(updated);
+    } catch (err) {
+      console.warn('updateMaintenanceRecord Supabase fallback:', err);
+    }
+  }
+
+  return mapMaintenanceRow({
+    id,
+    asset_id: realAssetId || '22222222-2222-2222-2222-222222222222',
+    maintenance_type: data.maintenance_type || 'Bảo dưỡng',
+    date: data.date || new Date().toISOString().slice(0, 10),
+    odometer_km: data.odometer_km || 0,
+    cost: data.cost || 0,
+    vendor: data.vendor || '',
+    notes: data.notes,
+    next_due_km: data.next_due_km,
+    next_due_date: data.next_due_date,
+  });
 }
 
 export async function deleteMaintenanceRecord(id: string) {
-  const supabase = createClient();
-  const { error } = await supabase.from('maintenance_records').delete().eq('id', id);
-  if (error) throw error;
+  const existingIdx = (MOCK_MAINTENANCE_RECORDS as any[]).findIndex((m: any) => m.id === id);
+  if (existingIdx >= 0) {
+    (MOCK_MAINTENANCE_RECORDS as any[]).splice(existingIdx, 1);
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_maintenance');
+      if (stored) {
+        const customMap = JSON.parse(stored);
+        delete customMap[id];
+        localStorage.setItem('fmms_custom_maintenance', JSON.stringify(customMap));
+      }
+    } catch {}
+  }
+
+  if (isValidUuid(id)) {
+    try {
+      const supabase = createClient();
+      await supabase.from('maintenance_records').delete().eq('id', id);
+    } catch (err) {
+      console.warn('deleteMaintenanceRecord Supabase fallback:', err);
+    }
+  }
 }

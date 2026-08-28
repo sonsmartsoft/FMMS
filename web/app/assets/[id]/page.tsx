@@ -507,7 +507,7 @@ export default function AssetDetailPage() {
 
   /* ── Form states ── */
   const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
-  const [maintForm, setMaintForm] = useState({ date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
+  const [maintForm, setMaintForm] = useState({ date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', discount: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
   const [categories, setCategories] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
   const [serviceItems, setServiceItems] = useState<{ name: string; cost: string }[]>([
     { name: 'Thay dầu máy', cost: '' },
@@ -556,9 +556,9 @@ export default function AssetDetailPage() {
   const [editingFuel, setEditingFuel] = useState<FuelLog | null>(null);
   const [editingPartItem, setEditingPartItem] = useState<any | null>(null);
 
-  const [expForm, setExpForm] = useState({ date: '', category: 'Running', subcategory: 'Fuel', amount: '', vendor: '', odometer_km: '', description: '' });
+  const [expForm, setExpForm] = useState({ date: '', category: 'Running', subcategory: 'Fuel', amount: '', discount: '', vendor: '', odometer_km: '', description: '' });
   const [tripForm, setTripForm] = useState({ start_time: '', end_time: '', distance_km: '', start_location: '', end_location: '', fuel_used_liters: '', average_speed_kmh: '' });
-  const [partForm, setPartForm] = useState({ name: '', brand: '', category: 'Điện tử', install_date: '', cost: '', odometer_km: '', warranty_months: '', notes: '' });
+  const [partForm, setPartForm] = useState({ name: '', brand: '', category: 'Điện tử', install_date: '', cost: '', discount: '', odometer_km: '', warranty_months: '', notes: '' });
   const [insForm, setInsForm] = useState({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', agent_name: '', agent_phone: '', provider_hotline: '', notes: '' });
   const [editForm, setEditForm] = useState({
     name: '', brand: '', model: '', year: '', color: '',
@@ -961,9 +961,12 @@ export default function AssetDetailPage() {
 
   const saveMaint = async () => {
     try {
-      const totalCost = calculatedItemsCost > 0 ? calculatedItemsCost : (parseFloat(maintForm.cost) || 0);
+      const subtotal = calculatedItemsCost > 0 ? calculatedItemsCost : (parseFloat(maintForm.cost) || 0);
+      const discount = parseFloat(maintForm.discount) || 0;
+      const totalCost = Math.max(0, subtotal - discount);
       const itemsSummary = serviceItems.map(s => `${s.name}: ${s.cost ? parseInt(s.cost).toLocaleString('vi-VN') + '₫' : '—'}`).join(' + ');
-      const fullNotes = maintForm.notes ? `${maintForm.notes} | Các hạng mục: ${itemsSummary}` : `Các hạng mục: ${itemsSummary}`;
+      const discountNote = discount > 0 ? `[Giảm giá: -${parseInt(String(discount)).toLocaleString('vi-VN')}₫]` : '';
+      const fullNotes = [maintForm.notes, `Các hạng mục: ${itemsSummary}`, discountNote].filter(Boolean).join(' | ');
 
       if (editingMaint) {
         const updated = await updateMaintenanceRecord(editingMaint.id, {
@@ -1004,7 +1007,7 @@ export default function AssetDetailPage() {
               currency: 'VND',
               vendor: maintForm.vendor || undefined,
               odometer_km: maintForm.odometer_km ? parseFloat(maintForm.odometer_km) : undefined,
-              description: `Bảo dưỡng: ${maintForm.maintenance_type || serviceItems[0]?.name || 'Bảo dưỡng định kỳ'}`,
+              description: `Bảo dưỡng: ${maintForm.maintenance_type || serviceItems[0]?.name || 'Bảo dưỡng định kỳ'}${discount > 0 ? ` (Giảm -${parseInt(String(discount)).toLocaleString('vi-VN')}₫)` : ''}`,
             });
             const refreshedExps = await getExpenses(assetId);
             setExpenses(refreshedExps);
@@ -1023,22 +1026,25 @@ export default function AssetDetailPage() {
 
   const saveExpense = async () => {
     try {
+      const subtotal = parseFloat(expForm.amount) || 0;
+      const discount = parseFloat(expForm.discount) || 0;
+      const expAmount = Math.max(0, subtotal - discount);
+      const expCategory = expForm.category as ExpenseRecord['category'];
+      const expDate = expForm.date || new Date().toISOString().slice(0, 10);
+      const fullDesc = discount > 0 ? `${expForm.description || ''} [Giảm giá: -${parseInt(String(discount)).toLocaleString('vi-VN')}₫]`.trim() : (expForm.description || undefined);
+
       if (editingExp) {
         const updated = await updateExpense(editingExp.id, {
           date: expForm.date,
           category: expForm.category as ExpenseRecord['category'],
           subcategory: expForm.subcategory,
-          amount: parseFloat(expForm.amount) || 0,
+          amount: expAmount,
           vendor: expForm.vendor || undefined,
           odometer_km: expForm.odometer_km ? parseFloat(expForm.odometer_km) : undefined,
-          description: expForm.description || undefined,
+          description: fullDesc,
         });
         setExpenses(prev => prev.map(e => e.id === editingExp.id ? updated : e));
       } else {
-        const expAmount = parseFloat(expForm.amount) || 0;
-        const expCategory = expForm.category as ExpenseRecord['category'];
-        const expDate = expForm.date || new Date().toISOString().slice(0, 10);
-
         const created = await createExpense({
           asset_id: asset.id,
           date: expDate,
@@ -1047,7 +1053,7 @@ export default function AssetDetailPage() {
           amount: expAmount,
           vendor: expForm.vendor || undefined,
           odometer_km: expForm.odometer_km ? parseFloat(expForm.odometer_km) : undefined,
-          description: expForm.description || undefined,
+          description: fullDesc,
         });
         setExpenses([created, ...expenses]);
 
@@ -1117,15 +1123,19 @@ export default function AssetDetailPage() {
     }
     setOpenModal(null);
     setEditingExp(null);
-    setExpForm({ date: '', category: 'Running', subcategory: 'Fuel', amount: '', vendor: '', odometer_km: '', description: '' });
+    setExpForm({ date: '', category: 'Running', subcategory: 'Fuel', amount: '', discount: '', vendor: '', odometer_km: '', description: '' });
   };
 
   const savePart = async () => {
     try {
       let partResult: any = null;
-      const partCost = parseFloat(partForm.cost) || 0;
+      const subtotal = parseFloat(partForm.cost) || 0;
+      const discount = parseFloat(partForm.discount) || 0;
+      const partCost = Math.max(0, subtotal - discount);
       const partName = partForm.name || 'Phụ tùng';
       const wMonths = parseInt(partForm.warranty_months) || 0;
+      const discountNote = discount > 0 ? `[Giảm giá: -${parseInt(String(discount)).toLocaleString('vi-VN')}₫]` : '';
+      const fullPartNotes = [partForm.notes, discountNote].filter(Boolean).join(' | ');
 
       if (editingPartItem) {
         partResult = await updatePart(editingPartItem.id, {
@@ -1135,7 +1145,7 @@ export default function AssetDetailPage() {
           installation_date: partForm.install_date || undefined,
           cost: partCost,
           installed_odometer_km: partForm.odometer_km ? parseFloat(partForm.odometer_km) : undefined,
-          notes: partForm.notes || undefined,
+          notes: fullPartNotes || undefined,
         });
         setParts(prev => prev.map(p => p.id === editingPartItem.id ? partResult : p));
       } else {
@@ -1147,7 +1157,7 @@ export default function AssetDetailPage() {
           installation_date: partForm.install_date || undefined,
           cost: partCost,
           installed_odometer_km: partForm.odometer_km ? parseFloat(partForm.odometer_km) : undefined,
-          notes: partForm.notes || undefined,
+          notes: fullPartNotes || undefined,
         });
         setParts([partResult, ...parts]);
 
@@ -1164,7 +1174,7 @@ export default function AssetDetailPage() {
               amount: partCost,
               vendor: partForm.brand || undefined,
               odometer_km: partForm.odometer_km ? parseFloat(partForm.odometer_km) : undefined,
-              description: `Lắp phụ tùng: ${partName}${partForm.brand ? ' (' + partForm.brand + ')' : ''}`,
+              description: `Lắp phụ tùng: ${partName}${partForm.brand ? ' (' + partForm.brand + ')' : ''}${discount > 0 ? ` (Giảm -${parseInt(String(discount)).toLocaleString('vi-VN')}₫)` : ''}`,
             });
             const refreshedExps = await getExpenses(assetId);
             setExpenses(refreshedExps);
@@ -2927,9 +2937,25 @@ export default function AssetDetailPage() {
                 ))}
               </div>
 
-              <div className="flex justify-between items-center pt-2 border-t font-bold text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Tổng chi phí các hạng mục:</span>
-                <span style={{ color: 'var(--status-red)' }}>{fmt(calculatedItemsCost)} ₫</span>
+              {/* Discount & Net Total */}
+              <div className="p-3 rounded-xl space-y-2 mt-2" style={{ background: 'var(--bg-hover)', border: '1px dashed var(--border-default)' }}>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-xs font-bold text-amber-400">🎁 Giảm giá / Chiết khấu (₫):</label>
+                  <input
+                    type="number"
+                    className="theme-input font-mono font-bold text-xs text-amber-400"
+                    style={{ width: '150px' }}
+                    placeholder="0"
+                    value={maintForm.discount}
+                    onChange={e => setMaintForm(p => ({ ...p, discount: e.target.value }))}
+                  />
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t font-bold text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Tổng thanh toán thực tế:</span>
+                  <span className="font-mono text-emerald-400 text-sm">
+                    {fmt(Math.max(0, (calculatedItemsCost > 0 ? calculatedItemsCost : (parseFloat(maintForm.cost) || 0)) - (parseFloat(maintForm.discount) || 0)))} ₫
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -2992,7 +3018,18 @@ export default function AssetDetailPage() {
             </select>
           </Field>
 
-          <Field label="Số tiền (₫)"><input type="number" className="theme-input font-mono font-bold" placeholder="VD: 808500" value={expForm.amount} onChange={e => setExpForm(p => ({ ...p, amount: e.target.value }))} /></Field>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Số tiền gốc (₫)"><input type="number" className="theme-input font-mono font-bold" placeholder="VD: 808500" value={expForm.amount} onChange={e => setExpForm(p => ({ ...p, amount: e.target.value }))} /></Field>
+            <Field label="🎁 Giảm giá / Chiết khấu (₫)"><input type="number" className="theme-input font-mono font-bold text-amber-400" placeholder="0" value={expForm.discount} onChange={e => setExpForm(p => ({ ...p, discount: e.target.value }))} /></Field>
+          </div>
+          {parseFloat(expForm.discount) > 0 && (
+            <div className="p-2 rounded-xl text-xs flex justify-between items-center font-bold" style={{ background: 'var(--bg-hover)', border: '1px dashed var(--border-default)' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Thực chi sau giảm:</span>
+              <span className="font-mono text-emerald-400 text-sm">
+                {fmt(Math.max(0, (parseFloat(expForm.amount) || 0) - (parseFloat(expForm.discount) || 0)))} ₫
+              </span>
+            </div>
+          )}
           <Field label="Nhà cung cấp / Địa điểm"><input type="text" className="theme-input" value={expForm.vendor} onChange={e => setExpForm(p => ({ ...p, vendor: e.target.value }))} /></Field>
           <Field label="Odometer (km - tuỳ chọn)"><input type="number" className="theme-input font-mono" value={expForm.odometer_km} onChange={e => setExpForm(p => ({ ...p, odometer_km: e.target.value }))} /></Field>
           <Field label="Mô tả"><input type="text" className="theme-input" placeholder="Mô tả ngắn gọn..." value={expForm.description} onChange={e => setExpForm(p => ({ ...p, description: e.target.value }))} /></Field>
@@ -3048,7 +3085,18 @@ export default function AssetDetailPage() {
             </select>
           </Field>
           <Field label="Ngày lắp đặt"><input type="date" className="theme-input" value={partForm.install_date} onChange={e => setPartForm(p => ({ ...p, install_date: e.target.value }))} /></Field>
-          <Field label="Chi phí (₫)"><input type="number" className="theme-input" value={partForm.cost} onChange={e => setPartForm(p => ({ ...p, cost: e.target.value }))} /></Field>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Chi phí gốc (₫)"><input type="number" className="theme-input font-mono font-bold" placeholder="VD: 1500000" value={partForm.cost} onChange={e => setPartForm(p => ({ ...p, cost: e.target.value }))} /></Field>
+            <Field label="🎁 Giảm giá / Chiết khấu (₫)"><input type="number" className="theme-input font-mono font-bold text-amber-400" placeholder="0" value={partForm.discount} onChange={e => setPartForm(p => ({ ...p, discount: e.target.value }))} /></Field>
+          </div>
+          {parseFloat(partForm.discount) > 0 && (
+            <div className="p-2 rounded-xl text-xs flex justify-between items-center font-bold" style={{ background: 'var(--bg-hover)', border: '1px dashed var(--border-default)' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Thực chi sau giảm:</span>
+              <span className="font-mono text-emerald-400 text-sm">
+                {fmt(Math.max(0, (parseFloat(partForm.cost) || 0) - (parseFloat(partForm.discount) || 0)))} ₫
+              </span>
+            </div>
+          )}
           <Field label="Odometer lúc lắp (km)"><input type="number" className="theme-input" value={partForm.odometer_km} onChange={e => setPartForm(p => ({ ...p, odometer_km: e.target.value }))} /></Field>
           <Field label="Bảo hành (tháng)"><input type="number" className="theme-input" value={partForm.warranty_months} onChange={e => setPartForm(p => ({ ...p, warranty_months: e.target.value }))} /></Field>
           <Field label="Ghi chú"><input type="text" className="theme-input" value={partForm.notes} onChange={e => setPartForm(p => ({ ...p, notes: e.target.value }))} /></Field>
