@@ -419,7 +419,7 @@ export default function FinancePage() {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
     setOpenModal(false); setEditId(null);
-    setForm({ asset_id: assets[0]?.id || '', date: '', category: 'Running', subcategory: 'Fuel', amount: '', vendor: '', description: '' });
+    setForm({ asset_id: assets[0]?.id || '', date: '', category: 'Running', subcategory: 'Fuel', amount: '', discount: '', vendor: '', description: '' });
   };
 
   const deleteExpenseHandler = async (id: string) => {
