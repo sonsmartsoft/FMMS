@@ -313,12 +313,12 @@ export default function FinancePage() {
               const activeLoan = assetLoans[0];
               const payments = await getLoanPayments(activeLoan.id);
               const sched = generateLoanSchedule(activeLoan, payments);
-              const nextPending = sched.find(s => s.status !== 'PAID');
+              const nextPending = sched.find((s: any) => s.status !== 'PAID');
               if (nextPending) {
-                const existingPayment = payments.find(p => p.payment_number === nextPending.period);
-                const princ = nextPending.principal;
-                const intr = nextPending.interest;
-                const tot = payload.amount || nextPending.total;
+                const existingPayment = payments.find(p => p.payment_number === nextPending.payment_number);
+                const princ = nextPending.principal_paid;
+                const intr = nextPending.interest_paid;
+                const tot = payload.amount || nextPending.total_payment;
                 if (existingPayment) {
                   const { updateLoanPayment } = await import('@/lib/services/loanService');
                   await updateLoanPayment(existingPayment.id, {
@@ -329,8 +329,8 @@ export default function FinancePage() {
                 } else {
                   await createLoanPayment({
                     loan_id: activeLoan.id,
-                    payment_number: nextPending.period,
-                    due_date: nextPending.dueDate,
+                    payment_number: nextPending.payment_number,
+                    due_date: nextPending.due_date,
                     principal_paid: princ,
                     interest_paid: intr,
                     total_payment: tot,

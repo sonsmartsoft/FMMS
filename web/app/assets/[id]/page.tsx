@@ -922,13 +922,13 @@ export default function AssetDetailPage() {
         if ((expCategory === 'Loan' || expForm.subcategory === 'Monthly Payment') && loan) {
           try {
             const sched = generateLoanSchedule(loan, loanPayments);
-            const nextPending = sched.find(s => s.status !== 'PAID');
+            const nextPending = sched.find((s: any) => s.status !== 'PAID');
             if (nextPending) {
               const { createLoanPayment, updateLoanPayment, updateLoan, getLoanPayments, getLoadByAsset } = await import('@/lib/services/loanService');
-              const existingPayment = loanPayments.find(p => p.payment_number === nextPending.period);
-              const princ = nextPending.principal;
-              const intr = nextPending.interest;
-              const tot = expAmount || nextPending.total;
+              const existingPayment = loanPayments.find(p => p.payment_number === nextPending.payment_number);
+              const princ = nextPending.principal_paid;
+              const intr = nextPending.interest_paid;
+              const tot = expAmount || nextPending.total_payment;
               if (existingPayment) {
                 await updateLoanPayment(existingPayment.id, {
                   status: 'PAID',
@@ -938,8 +938,8 @@ export default function AssetDetailPage() {
               } else {
                 await createLoanPayment({
                   loan_id: loan.id,
-                  payment_number: nextPending.period,
-                  due_date: nextPending.dueDate,
+                  payment_number: nextPending.payment_number,
+                  due_date: nextPending.due_date,
                   principal_paid: princ,
                   interest_paid: intr,
                   total_payment: tot,
