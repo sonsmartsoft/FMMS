@@ -342,6 +342,11 @@ export default function FinancePage() {
                 await updateLoan(activeLoan.id, { current_balance: Math.max(0, activeLoan.current_balance - princ) });
               }
             }
+          } catch (loanSyncErr) {
+            console.warn('Auto loan payment sync warning:', loanSyncErr);
+          }
+        }
+
         // Auto-link part if this expense is an Upgrade or Maintenance part
         if ((payload.category === 'Upgrade' || payload.category === 'Maintenance') && payload.amount > 0 && payload.description) {
           try {
