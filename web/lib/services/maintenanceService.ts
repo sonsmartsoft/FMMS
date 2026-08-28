@@ -96,11 +96,15 @@ export async function createMaintenanceRecord(data: MaintenanceInput) {
 
   const newMaintObj: MaintenanceRecord = {
     id: `MT_${Date.now()}`,
-    ...payload,
-    vendor: payload.vendor || '',
-    notes: payload.notes || undefined,
-    odometer_km: payload.odometer_km || 0,
-    cost: payload.cost,
+    asset_id: realId,
+    maintenance_type: data.maintenance_type,
+    date: data.date,
+    odometer_km: data.odometer_km ?? 0,
+    cost: data.cost ?? 0,
+    vendor: data.vendor ?? '',
+    notes: data.notes ?? undefined,
+    next_due_km: data.next_due_km ?? undefined,
+    next_due_date: data.next_due_date ?? undefined,
     status: computeStatus(payload),
   };
 
