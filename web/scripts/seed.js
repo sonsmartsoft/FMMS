@@ -1,8 +1,13 @@
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://opslebsdmwsnsyfmbynf.supabase.co';
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_AateqAZXqTwmEsSwqweiPA_iGelY6O3';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('❌ Error: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are required to seed.');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -31,8 +36,8 @@ const INITIAL_ASSETS = [
     year: 2026,
     trim: '1.5L AT',
     color: 'Đỏ Soul Red Crystal',
-    license_plate: '19B-213.87',
-    vin: 'JM1DJ1010102026',
+    license_plate: '30A-999.99',
+    vin: 'DEMOVIN123456789',
     engine: '1.5L SkyActiv-G',
     fuel_type: 'PETROL',
     tank_capacity_liters: 44.0,
@@ -45,7 +50,7 @@ const INITIAL_ASSETS = [
     odometer_source: 'VIRTUAL',
     status: 'ACTIVE',
     image_url: 'https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?q=80&w=1000&auto=format&fit=crop',
-    description: 'Xe ô tô gia đình chính Mazda 2 (19B-213.87). Vay ngân hàng TPBank 295,000,000 ₫.',
+    description: 'Xe ô tô gia đình chính Mazda 2 (30A-999.99). Vay ngân hàng TPBank 295,000,000 ₫.',
   },
   {
     id: UUID_MAP.BIKE01,
@@ -57,7 +62,7 @@ const INITIAL_ASSETS = [
     year: 2016,
     trim: '125cc FI',
     color: 'Đen Nhám',
-    license_plate: '88C1-210.63',
+    license_plate: '29B1-888.88',
     fuel_type: 'PETROL',
     tank_capacity_liters: 4.4,
     purchase_date: '2017-08-01',
@@ -81,7 +86,7 @@ const INITIAL_ASSETS = [
     year: 2021,
     trim: '125cc Special',
     color: 'Xanh Xám',
-    license_plate: '88L1-604.36',
+    license_plate: '29B2-777.77',
     fuel_type: 'PETROL',
     tank_capacity_liters: 4.4,
     purchase_date: '2021-04-05',
