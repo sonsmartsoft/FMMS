@@ -1,0 +1,204 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================
+   CSS VARIABLES — Light / Dark Theme System
+   ================================================ */
+:root {
+  /* Light Mode */
+  --bg-primary:   #F0F4F8;
+  --bg-secondary: #FFFFFF;
+  --bg-card:      rgba(255, 255, 255, 0.85);
+  --bg-panel:     rgba(240, 244, 248, 0.85);
+  --bg-input:     #FFFFFF;
+  --bg-hover:     rgba(0, 0, 0, 0.05);
+
+  --text-primary:   #0F172A;
+  --text-secondary: #334155;
+  --text-muted:     #64748B;
+  --text-faint:     #94A3B8;
+
+  --border-default: rgba(0, 0, 0, 0.1);
+  --border-subtle:  rgba(0, 0, 0, 0.06);
+
+  --accent-cyan:        #0EA5E9;
+  --accent-cyan-bg:     rgba(14, 165, 233, 0.1);
+  --accent-cyan-border: rgba(14, 165, 233, 0.3);
+
+  --status-green:  #10B981;
+  --status-amber:  #F59E0B;
+  --status-red:    #EF4444;
+  --status-purple: #8B5CF6;
+  --status-rose:   #F43F5E;
+
+  --glass-bg:     rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+
+  --scrollbar-track:      #E2E8F0;
+  --scrollbar-thumb:      #CBD5E1;
+  --scrollbar-thumb-hover: #0EA5E9;
+}
+
+.dark {
+  /* Dark Mode */
+  --bg-primary:   #0B0F19;
+  --bg-secondary: #111827;
+  --bg-card:      rgba(30, 41, 59, 0.6);
+  --bg-panel:     rgba(17, 24, 39, 0.7);
+  --bg-input:     #0F172A;
+  --bg-hover:     rgba(255, 255, 255, 0.04);
+
+  --text-primary:   #F1F5F9;
+  --text-secondary: #CBD5E1;
+  --text-muted:     #64748B;
+  --text-faint:     #475569;
+
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+
+  --accent-cyan:        #38BDF8;
+  --accent-cyan-bg:     rgba(56, 189, 248, 0.15);
+  --accent-cyan-border: rgba(56, 189, 248, 0.3);
+
+  --status-green:  #34D399;
+  --status-amber:  #FBBF24;
+  --status-red:    #F87171;
+  --status-purple: #A78BFA;
+  --status-rose:   #FB7185;
+
+  --glass-bg:     rgba(17, 24, 39, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  --scrollbar-track:       #0B0F19;
+  --scrollbar-thumb:       #1E293B;
+  --scrollbar-thumb-hover: #38BDF8;
+}
+
+/* ================================================
+   Base
+   ================================================ */
+@layer base {
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    @apply antialiased font-sans min-h-screen;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    selection-color: white;
+    -webkit-tap-highlight-color: transparent;
+  }
+  ::selection {
+    background: var(--accent-cyan);
+    color: white;
+  }
+}
+
+/* ================================================
+   Glassmorphism
+   ================================================ */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--glass-shadow);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card:hover {
+  border-color: var(--accent-cyan-border);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(14, 165, 233, 0.15);
+}
+
+/* ================================================
+   Gradient Text
+   ================================================ */
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent-cyan), #3B82F6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ================================================
+   Custom Scrollbar
+   ================================================ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+/* ================================================
+   Animations
+   ================================================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn { animation: fadeIn 0.4s ease forwards; }
+
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+.animate-spin-slow { animation: spin-slow 4s linear infinite; }
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px var(--accent-cyan); }
+  50%       { box-shadow: 0 0 20px var(--accent-cyan), 0 0 40px var(--accent-cyan-bg); }
+}
+.animate-glow { animation: pulse-glow 2s ease infinite; }
+
+@keyframes slideLeft {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slideLeft { animation: slideLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+@keyframes bounceSub {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+.animate-bounce-subtle { animation: bounceSub 3s ease-in-out infinite; }
+
+/* ================================================
+   Theme-aware form inputs — in @layer components so
+   Tailwind utilities (pl-9, pl-10, etc.) can override
+   ================================================ */
+@layer components {
+  .theme-input {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .theme-input:focus { border-color: var(--accent-cyan); }
+
+  .theme-select {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-default);
+    border-radius: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    width: 100%;
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+  }
+  .theme-select:focus { border-color: var(--accent-cyan); }
+}

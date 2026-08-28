@@ -1,0 +1,14 @@
+package com.fmms.carlogger.core.obd
+
+enum class OBDConnectionState {
+    DISCONNECTED, SCANNING, CONNECTING, CONNECTED, RECONNECTING, ERROR
+}
+
+enum class OBDRecentActivity(val display: String) {
+    OBD_CONNECTED("OBD CONNECTED"),
+    OBD_DISCONNECTED("OBD DISCONNECTED"),
+    RECONNECTING("OBD RECONNECTING"),
+    SCANNING("SCANNING BLUETOOTH"),
+    ERROR("OBD ERROR"),
+    DEMO_MODE("DEMO / MOCK MODE")
+}

@@ -303,6 +303,49 @@ export default function FinancePage() {
       } else {
         const created = await createExpense(payload);
         setExpenses(prev => [created, ...prev]);
+
+        // Auto-link loan payment if this expense is a Loan payment
+        if (payload.category === 'Loan' || payload.category === 'LOAN' || payload.category === 'LOAN_PAYMENT' || payload.subcategory === 'Monthly Payment') {
+          try {
+            const targetAssetId = payload.asset_id;
+            const assetLoans = loans.filter(l => l.asset_id === targetAssetId);
+            if (assetLoans.length > 0) {
+              const activeLoan = assetLoans[0];
+              const payments = await getLoanPayments(activeLoan.id);
+              const sched = generateLoanSchedule(activeLoan, payments);
+              const nextPending = sched.find(s => s.status !== 'PAID');
+              if (nextPending) {
+                const existingPayment = payments.find(p => p.payment_number === nextPending.period);
+                const princ = nextPending.principal;
+                const intr = nextPending.interest;
+                const tot = payload.amount || nextPending.total;
+                if (existingPayment) {
+                  const { updateLoanPayment } = await import('@/lib/services/loanService');
+                  await updateLoanPayment(existingPayment.id, {
+                    status: 'PAID',
+                    paid_date: payload.date || new Date().toISOString().slice(0, 10),
+                    total_payment: tot,
+                  });
+                } else {
+                  await createLoanPayment({
+                    loan_id: activeLoan.id,
+                    payment_number: nextPending.period,
+                    due_date: nextPending.dueDate,
+                    principal_paid: princ,
+                    interest_paid: intr,
+                    total_payment: tot,
+                    paid_date: payload.date || new Date().toISOString().slice(0, 10),
+                    status: 'PAID',
+                    remaining_balance: Math.max(0, activeLoan.current_balance - princ),
+                  });
+                }
+                await updateLoan(activeLoan.id, { current_balance: Math.max(0, activeLoan.current_balance - princ) });
+              }
+            }
+          } catch (loanSyncErr) {
+            console.warn('Auto loan payment sync warning:', loanSyncErr);
+          }
+        }
       }
       await loadData();
     } catch (err: any) {

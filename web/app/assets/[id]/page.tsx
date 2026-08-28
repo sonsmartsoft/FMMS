@@ -883,17 +883,80 @@ export default function AssetDetailPage() {
         });
         setExpenses(prev => prev.map(e => e.id === editingExp.id ? updated : e));
       } else {
+        const expAmount = parseFloat(expForm.amount) || 0;
+        const expCategory = expForm.category as ExpenseRecord['category'];
+        const expDate = expForm.date || new Date().toISOString().slice(0, 10);
+
         const created = await createExpense({
           asset_id: asset.id,
-          date: expForm.date || new Date().toISOString().slice(0, 10),
-          category: expForm.category as ExpenseRecord['category'],
+          date: expDate,
+          category: expCategory,
           subcategory: expForm.subcategory,
-          amount: parseFloat(expForm.amount) || 0,
+          amount: expAmount,
           vendor: expForm.vendor || undefined,
           odometer_km: expForm.odometer_km ? parseFloat(expForm.odometer_km) : undefined,
           description: expForm.description || undefined,
         });
         setExpenses([created, ...expenses]);
+
+        // Auto 1: If expense is Upgrade or Maintenance parts, auto create part record
+        if ((expCategory === 'Upgrade' || expCategory === 'Maintenance') && expAmount > 0 && expForm.description) {
+          try {
+            const createdPart = await createPart({
+              asset_id: asset.id,
+              part_name: expForm.description,
+              brand: expForm.vendor || undefined,
+              supplier: expCategory === 'Upgrade' ? 'Nâng cấp' : 'Bảo dưỡng',
+              installation_date: expDate,
+              cost: expAmount,
+              installed_odometer_km: expForm.odometer_km ? parseFloat(expForm.odometer_km) : undefined,
+              notes: `Tự động tạo từ chi phí ${expForm.subcategory || expCategory}`,
+            });
+            setParts(p => [createdPart, ...p]);
+          } catch (partErr) {
+            console.warn('Auto part link error:', partErr);
+          }
+        }
+
+        // Auto 2: If expense is Loan payment, auto mark next pending period as PAID
+        if ((expCategory === 'Loan' || expForm.subcategory === 'Monthly Payment') && loan) {
+          try {
+            const sched = generateLoanSchedule(loan, loanPayments);
+            const nextPending = sched.find(s => s.status !== 'PAID');
+            if (nextPending) {
+              const { createLoanPayment, updateLoanPayment, updateLoan, getLoanPayments, getLoadByAsset } = await import('@/lib/services/loanService');
+              const existingPayment = loanPayments.find(p => p.payment_number === nextPending.period);
+              const princ = nextPending.principal;
+              const intr = nextPending.interest;
+              const tot = expAmount || nextPending.total;
+              if (existingPayment) {
+                await updateLoanPayment(existingPayment.id, {
+                  status: 'PAID',
+                  paid_date: expDate,
+                  total_payment: tot,
+                });
+              } else {
+                await createLoanPayment({
+                  loan_id: loan.id,
+                  payment_number: nextPending.period,
+                  due_date: nextPending.dueDate,
+                  principal_paid: princ,
+                  interest_paid: intr,
+                  total_payment: tot,
+                  paid_date: expDate,
+                  status: 'PAID',
+                  remaining_balance: Math.max(0, loan.current_balance - princ),
+                });
+              }
+              await updateLoan(loan.id, { current_balance: Math.max(0, loan.current_balance - princ) });
+              const newL = await getLoadByAsset(assetId);
+              setLoan(newL ? { ...newL } as LoanRecord : null);
+              if (newL) setLoanPayments(await getLoanPayments(newL.id));
+            }
+          } catch (loanErr) {
+            console.warn('Auto loan sync error:', loanErr);
+          }
+        }
       }
       const refreshedExps = await getExpenses(assetId);
       setExpenses(refreshedExps);
@@ -907,29 +970,83 @@ export default function AssetDetailPage() {
 
   const savePart = async () => {
     try {
+      let partResult: any = null;
+      const partCost = parseFloat(partForm.cost) || 0;
+      const partName = partForm.name || 'Phụ tùng';
+      const wMonths = parseInt(partForm.warranty_months) || 0;
+
       if (editingPartItem) {
-        const updated = await updatePart(editingPartItem.id, {
-          part_name: partForm.name,
+        partResult = await updatePart(editingPartItem.id, {
+          part_name: partName,
           brand: partForm.brand || undefined,
           supplier: partForm.category || undefined,
           installation_date: partForm.install_date || undefined,
-          cost: parseFloat(partForm.cost) || 0,
+          cost: partCost,
           installed_odometer_km: partForm.odometer_km ? parseFloat(partForm.odometer_km) : undefined,
           notes: partForm.notes || undefined,
         });
-        setParts(prev => prev.map(p => p.id === editingPartItem.id ? updated : p));
+        setParts(prev => prev.map(p => p.id === editingPartItem.id ? partResult : p));
       } else {
-        const created = await createPart({
+        partResult = await createPart({
           asset_id: asset.id,
-          part_name: partForm.name,
+          part_name: partName,
           brand: partForm.brand || undefined,
           supplier: partForm.category || undefined,
           installation_date: partForm.install_date || undefined,
-          cost: parseFloat(partForm.cost) || 0,
+          cost: partCost,
           installed_odometer_km: partForm.odometer_km ? parseFloat(partForm.odometer_km) : undefined,
           notes: partForm.notes || undefined,
         });
-        setParts([created, ...parts]);
+        setParts([partResult, ...parts]);
+
+        // Auto 1: Create expense record if cost > 0
+        if (partCost > 0) {
+          try {
+            const expDate = partForm.install_date || new Date().toISOString().slice(0, 10);
+            const isUpgrade = partForm.category === 'Điện tử' || partForm.category === 'Nội thất' || partForm.category === 'Ngoại thất';
+            await createExpense({
+              asset_id: asset.id,
+              date: expDate,
+              category: isUpgrade ? 'Upgrade' : 'Maintenance',
+              subcategory: partForm.category === 'Điện tử' ? 'Screen' : (isUpgrade ? 'Accessorie' : 'Brake'),
+              amount: partCost,
+              vendor: partForm.brand || undefined,
+              odometer_km: partForm.odometer_km ? parseFloat(partForm.odometer_km) : undefined,
+              description: `Lắp phụ tùng: ${partName}${partForm.brand ? ' (' + partForm.brand + ')' : ''}`,
+            });
+            const refreshedExps = await getExpenses(assetId);
+            setExpenses(refreshedExps);
+          } catch (expErr) {
+            console.warn('Auto expense link error:', expErr);
+          }
+        }
+
+        // Auto 2: Create warranty record if warranty_months > 0
+        if (wMonths > 0) {
+          try {
+            const startDateStr = partForm.install_date || new Date().toISOString().slice(0, 10);
+            const sDate = new Date(startDateStr);
+            const eDate = new Date(sDate);
+            eDate.setMonth(eDate.getMonth() + wMonths);
+            const endDateStr = eDate.toISOString().slice(0, 10);
+
+            const { createWarranty, getWarranties } = await import('@/lib/services/warrantyService');
+            await createWarranty({
+              asset_id: asset.id,
+              item_type: 'PART',
+              item_name: partName,
+              provider: partForm.brand || 'Nhà phân phối',
+              start_date: startDateStr,
+              expiry_date: endDateStr,
+              coverage_details: `Bảo hành ${wMonths} tháng chính hãng (${partForm.brand || 'Nhà cung cấp'})`,
+              status: 'ACTIVE',
+            });
+            const wRes = await getWarranties(asset.id);
+            if (wRes?.data) setWarranties(wRes.data);
+          } catch (wErr) {
+            console.warn('Auto warranty creation error:', wErr);
+          }
+        }
       }
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
