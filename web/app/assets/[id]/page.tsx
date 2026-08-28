@@ -585,6 +585,84 @@ export default function AssetDetailPage() {
   const [loanSortCol, setLoanSortCol] = useState<string>('payment_number');
   const [loanSortDir, setLoanSortDir] = useState<'asc' | 'desc'>('asc');
 
+  const displayedExpenses = useMemo(() => {
+    let list = expenses;
+    if (tabStartDate) list = list.filter(e => e.date && e.date.slice(0, 10) >= tabStartDate);
+    if (tabEndDate) list = list.filter(e => e.date && e.date.slice(0, 10) <= tabEndDate);
+    return [...list].sort((a, b) => {
+      let valA: any = a[expSortCol as keyof ExpenseRecord] ?? '';
+      let valB: any = b[expSortCol as keyof ExpenseRecord] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return expSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return expSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [expenses, tabStartDate, tabEndDate, expSortCol, expSortDir]);
+
+  const displayedFuelLogs = useMemo(() => {
+    let list = fuelLogs;
+    if (tabStartDate) list = list.filter(f => f.date && f.date.slice(0, 10) >= tabStartDate);
+    if (tabEndDate) list = list.filter(f => f.date && f.date.slice(0, 10) <= tabEndDate);
+    return [...list].sort((a, b) => {
+      let valA: any = a[fuelSortCol as keyof FuelLog] ?? '';
+      let valB: any = b[fuelSortCol as keyof FuelLog] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return fuelSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return fuelSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [fuelLogs, tabStartDate, tabEndDate, fuelSortCol, fuelSortDir]);
+
+  const displayedMaintenance = useMemo(() => {
+    let list = maintenance;
+    if (tabStartDate) list = list.filter(m => m.date && m.date.slice(0, 10) >= tabStartDate);
+    if (tabEndDate) list = list.filter(m => m.date && m.date.slice(0, 10) <= tabEndDate);
+    return [...list].sort((a, b) => {
+      let valA: any = a[maintSortCol as keyof MaintenanceRecord] ?? '';
+      let valB: any = b[maintSortCol as keyof MaintenanceRecord] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return maintSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return maintSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [maintenance, tabStartDate, tabEndDate, maintSortCol, maintSortDir]);
+
+  const displayedParts = useMemo(() => {
+    let list = parts;
+    if (tabStartDate) list = list.filter(p => p.install_date && p.install_date.slice(0, 10) >= tabStartDate);
+    if (tabEndDate) list = list.filter(p => p.install_date && p.install_date.slice(0, 10) <= tabEndDate);
+    return [...list].sort((a: any, b: any) => {
+      let valA: any = a[partSortCol] ?? '';
+      let valB: any = b[partSortCol] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return partSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return partSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [parts, tabStartDate, tabEndDate, partSortCol, partSortDir]);
+
+  const displayedLoanSchedule = useMemo(() => {
+    const sched = loan ? generateLoanSchedule(loan, loanPayments) : [];
+    return [...sched].sort((a: any, b: any) => {
+      const valA = a[loanSortCol] ?? '';
+      const valB = b[loanSortCol] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return loanSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return loanSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [loan, loanPayments, loanSortCol, loanSortDir]);
+
   if (loading) {
     return (
       <div className="py-20 text-center" style={{ color: 'var(--text-muted)' }}>
@@ -723,84 +801,6 @@ export default function AssetDetailPage() {
 
     return { category: Object.keys(taxMap)[0] || 'Running', subcategory: 'Fuel' };
   };
-
-  const displayedExpenses = useMemo(() => {
-    let list = expenses;
-    if (tabStartDate) list = list.filter(e => e.date && e.date.slice(0, 10) >= tabStartDate);
-    if (tabEndDate) list = list.filter(e => e.date && e.date.slice(0, 10) <= tabEndDate);
-    return [...list].sort((a, b) => {
-      let valA: any = a[expSortCol as keyof ExpenseRecord] ?? '';
-      let valB: any = b[expSortCol as keyof ExpenseRecord] ?? '';
-      if (typeof valA === 'number' && typeof valB === 'number') {
-        return expSortDir === 'asc' ? valA - valB : valB - valA;
-      }
-      return expSortDir === 'asc'
-        ? String(valA).localeCompare(String(valB), 'vi')
-        : String(valB).localeCompare(String(valA), 'vi');
-    });
-  }, [expenses, tabStartDate, tabEndDate, expSortCol, expSortDir]);
-
-  const displayedFuelLogs = useMemo(() => {
-    let list = fuelLogs;
-    if (tabStartDate) list = list.filter(f => f.date && f.date.slice(0, 10) >= tabStartDate);
-    if (tabEndDate) list = list.filter(f => f.date && f.date.slice(0, 10) <= tabEndDate);
-    return [...list].sort((a, b) => {
-      let valA: any = a[fuelSortCol as keyof FuelLog] ?? '';
-      let valB: any = b[fuelSortCol as keyof FuelLog] ?? '';
-      if (typeof valA === 'number' && typeof valB === 'number') {
-        return fuelSortDir === 'asc' ? valA - valB : valB - valA;
-      }
-      return fuelSortDir === 'asc'
-        ? String(valA).localeCompare(String(valB), 'vi')
-        : String(valB).localeCompare(String(valA), 'vi');
-    });
-  }, [fuelLogs, tabStartDate, tabEndDate, fuelSortCol, fuelSortDir]);
-
-  const displayedMaintenance = useMemo(() => {
-    let list = maintenance;
-    if (tabStartDate) list = list.filter(m => m.date && m.date.slice(0, 10) >= tabStartDate);
-    if (tabEndDate) list = list.filter(m => m.date && m.date.slice(0, 10) <= tabEndDate);
-    return [...list].sort((a, b) => {
-      let valA: any = a[maintSortCol as keyof MaintenanceRecord] ?? '';
-      let valB: any = b[maintSortCol as keyof MaintenanceRecord] ?? '';
-      if (typeof valA === 'number' && typeof valB === 'number') {
-        return maintSortDir === 'asc' ? valA - valB : valB - valA;
-      }
-      return maintSortDir === 'asc'
-        ? String(valA).localeCompare(String(valB), 'vi')
-        : String(valB).localeCompare(String(valA), 'vi');
-    });
-  }, [maintenance, tabStartDate, tabEndDate, maintSortCol, maintSortDir]);
-
-  const displayedParts = useMemo(() => {
-    let list = parts;
-    if (tabStartDate) list = list.filter(p => p.install_date && p.install_date.slice(0, 10) >= tabStartDate);
-    if (tabEndDate) list = list.filter(p => p.install_date && p.install_date.slice(0, 10) <= tabEndDate);
-    return [...list].sort((a: any, b: any) => {
-      let valA: any = a[partSortCol] ?? '';
-      let valB: any = b[partSortCol] ?? '';
-      if (typeof valA === 'number' && typeof valB === 'number') {
-        return partSortDir === 'asc' ? valA - valB : valB - valA;
-      }
-      return partSortDir === 'asc'
-        ? String(valA).localeCompare(String(valB), 'vi')
-        : String(valB).localeCompare(String(valA), 'vi');
-    });
-  }, [parts, tabStartDate, tabEndDate, partSortCol, partSortDir]);
-
-  const displayedLoanSchedule = useMemo(() => {
-    const sched = loan ? generateLoanSchedule(loan, loanPayments) : [];
-    return [...sched].sort((a: any, b: any) => {
-      const valA = a[loanSortCol] ?? '';
-      const valB = b[loanSortCol] ?? '';
-      if (typeof valA === 'number' && typeof valB === 'number') {
-        return loanSortDir === 'asc' ? valA - valB : valB - valA;
-      }
-      return loanSortDir === 'asc'
-        ? String(valA).localeCompare(String(valB), 'vi')
-        : String(valB).localeCompare(String(valA), 'vi');
-    });
-  }, [loan, loanPayments, loanSortCol, loanSortDir]);
 
   /* ── Edit & Delete Handlers for Expenses ── */
   const handleOpenEditExpense = (item: ExpenseRecord) => {
