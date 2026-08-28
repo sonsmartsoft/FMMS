@@ -2203,7 +2203,8 @@ export default function AssetDetailPage() {
                       </div>
                       <p className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{m.maintenance_type}</p>
                       <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                        {fmtDate(m.date)} • {fmt(m.odometer_km)} km • {m.vendor}
+                        {fmtDate(m.date)} • {fmt(m.odometer_km)} km • {m.vendor || 'Đại lý chính hãng'}
+                      </p>
                         {/* Itemized Service Breakdown Badges */}
                         {(() => {
                           const parsed = parseMaintenanceNotes(m.notes, m.cost, m.maintenance_type);

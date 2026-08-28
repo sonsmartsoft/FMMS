@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { getAssets } from '@/lib/services/assetService';
-import { getMaintenanceRecords, createMaintenanceRecord } from '@/lib/services/maintenanceService';
+import { getMaintenanceRecords, createMaintenanceRecord, updateMaintenanceRecord, deleteMaintenanceRecord } from '@/lib/services/maintenanceService';
 import { Asset, MaintenanceRecord } from '@/types/mobility';
 import { Wrench, Plus, X, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 
@@ -20,6 +20,7 @@ export default function MaintenancePage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [openModal, setOpenModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     asset_id: '', date: '', maintenance_type: 'Thay dầu máy',
