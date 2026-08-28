@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { getAssets } from '@/lib/services/assetService';
 import { getMaintenanceRecords, createMaintenanceRecord } from '@/lib/services/maintenanceService';
 import { Asset, MaintenanceRecord } from '@/types/mobility';
