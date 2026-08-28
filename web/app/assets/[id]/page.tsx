@@ -860,6 +860,28 @@ export default function AssetDetailPage() {
           next_due_date: maintForm.next_due_date || undefined,
         });
         setMaintenance([created, ...maintenance]);
+
+        // Auto-create expense record if totalCost > 0
+        if (totalCost > 0) {
+          try {
+            const expDate = maintForm.date || new Date().toISOString().split('T')[0];
+            await createExpense({
+              asset_id: asset.id,
+              date: expDate,
+              category: 'Maintenance',
+              subcategory: 'Maintenance',
+              amount: totalCost,
+              currency: 'VND',
+              vendor: maintForm.vendor || undefined,
+              odometer_km: maintForm.odometer_km ? parseFloat(maintForm.odometer_km) : undefined,
+              description: `Bảo dưỡng: ${maintForm.maintenance_type || serviceItems[0]?.name || 'Bảo dưỡng định kỳ'}`,
+            });
+            const refreshedExps = await getExpenses(assetId);
+            setExpenses(refreshedExps);
+          } catch (expErr) {
+            console.warn('Auto expense sync warning:', expErr);
+          }
+        }
       }
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);

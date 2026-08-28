@@ -113,6 +113,25 @@ export default function MaintenancePage() {
         next_due_km: form.next_due_km ? parseFloat(form.next_due_km) : undefined,
         next_due_date: form.next_due_date || undefined,
       });
+      // Auto-create expense record
+      if (finalCost > 0) {
+        try {
+          const { createExpense } = await import('@/lib/services/expenseService');
+          await createExpense({
+            asset_id: form.asset_id || assets[0]?.id,
+            date: form.date || new Date().toISOString().split('T')[0],
+            category: 'Maintenance',
+            subcategory: 'Maintenance',
+            amount: finalCost,
+            currency: 'VND',
+            vendor: form.vendor || undefined,
+            description: `Bảo dưỡng: ${form.maintenance_type}`,
+          });
+        } catch (expErr) {
+          console.warn('Auto expense sync warning:', expErr);
+        }
+      }
+
       setRecords([created, ...records]);
       setOpenModal(false);
     } catch (err: any) {

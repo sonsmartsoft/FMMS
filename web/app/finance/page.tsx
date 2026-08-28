@@ -342,8 +342,21 @@ export default function FinancePage() {
                 await updateLoan(activeLoan.id, { current_balance: Math.max(0, activeLoan.current_balance - princ) });
               }
             }
-          } catch (loanSyncErr) {
-            console.warn('Auto loan payment sync warning:', loanSyncErr);
+        // Auto-link part if this expense is an Upgrade or Maintenance part
+        if ((payload.category === 'Upgrade' || payload.category === 'Maintenance') && payload.amount > 0 && payload.description) {
+          try {
+            const { createPart } = await import('@/lib/services/partService');
+            await createPart({
+              asset_id: payload.asset_id,
+              part_name: payload.description,
+              brand: payload.vendor || undefined,
+              supplier: payload.category === 'Upgrade' ? 'Nâng cấp' : 'Bảo dưỡng',
+              installation_date: payload.date,
+              cost: payload.amount,
+              notes: `Tự động tạo từ chi phí ${payload.subcategory || payload.category}`,
+            });
+          } catch (partSyncErr) {
+            console.warn('Auto part sync warning:', partSyncErr);
           }
         }
       }
