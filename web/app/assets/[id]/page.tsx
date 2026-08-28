@@ -424,6 +424,26 @@ export default function AssetDetailPage() {
           remaining_balance: editingPeriod.remaining_balance || 0,
         });
       }
+
+      if (periodForm.status === 'PAID') {
+        try {
+          await createExpense({
+            asset_id: asset.id,
+            date: periodForm.paid_date || new Date().toISOString().slice(0, 10),
+            category: 'Loan',
+            subcategory: 'Monthly Payment',
+            amount: tot,
+            currency: 'VND',
+            vendor: loan.lender || 'Ngân hàng',
+            description: `Thanh toán khoản vay kỳ ${editingPeriod.payment_number} (${loan.lender || 'Ngân hàng'})`,
+          });
+          const refreshedExps = await getExpenses(assetId);
+          setExpenses(refreshedExps);
+        } catch (eErr) {
+          console.warn('Auto expense sync error:', eErr);
+        }
+      }
+
       const newL = await getLoadByAsset(assetId);
       setLoan(newL ? { ...newL } as LoanRecord : null);
       if (newL) setLoanPayments(await getLoanPayments(newL.id));
@@ -445,6 +465,7 @@ export default function AssetDetailPage() {
           await updateLoan(loan.id, { current_balance: Math.min(loan.principal, loan.current_balance + item.principal_paid) });
         }
       } else {
+        const paidDateStr = new Date().toISOString().slice(0, 10);
         await createLoanPayment({
           loan_id: loan.id,
           payment_number: item.payment_number,
@@ -452,11 +473,29 @@ export default function AssetDetailPage() {
           principal_paid: item.principal_paid,
           interest_paid: item.interest_paid,
           total_payment: item.total_payment,
-          paid_date: new Date().toISOString().slice(0, 10),
+          paid_date: paidDateStr,
           status: 'PAID',
           remaining_balance: Math.max(0, loan.current_balance - item.principal_paid),
         });
         await updateLoan(loan.id, { current_balance: Math.max(0, loan.current_balance - item.principal_paid) });
+
+        // Auto create expense
+        try {
+          await createExpense({
+            asset_id: asset.id,
+            date: paidDateStr,
+            category: 'Loan',
+            subcategory: 'Monthly Payment',
+            amount: item.total_payment,
+            currency: 'VND',
+            vendor: loan.lender || 'Ngân hàng',
+            description: `Thanh toán khoản vay kỳ ${item.payment_number} (${loan.lender || 'Ngân hàng'})`,
+          });
+          const refreshedExps = await getExpenses(assetId);
+          setExpenses(refreshedExps);
+        } catch (eErr) {
+          console.warn('Auto expense sync error:', eErr);
+        }
       }
       const newL = await getLoadByAsset(assetId);
       setLoan(newL ? { ...newL } as LoanRecord : null);
@@ -532,6 +571,19 @@ export default function AssetDetailPage() {
   const [odoForm, setOdoForm] = useState({ new_value_km: '', reason: 'Hiệu chỉnh sai số đồng hồ' });
   const [claimForm, setClaimForm] = useState({ item_name: '', description: '', amount_claimed: '', vendor: '' });
   const [savingEdit, setSavingEdit] = useState(false);
+
+  const [tabStartDate, setTabStartDate] = useState<string>('');
+  const [tabEndDate, setTabEndDate] = useState<string>('');
+  const [expSortCol, setExpSortCol] = useState<string>('date');
+  const [expSortDir, setExpSortDir] = useState<'asc' | 'desc'>('desc');
+  const [fuelSortCol, setFuelSortCol] = useState<string>('date');
+  const [fuelSortDir, setFuelSortDir] = useState<'asc' | 'desc'>('desc');
+  const [partSortCol, setPartSortCol] = useState<string>('install_date');
+  const [partSortDir, setPartSortDir] = useState<'asc' | 'desc'>('desc');
+  const [maintSortCol, setMaintSortCol] = useState<string>('date');
+  const [maintSortDir, setMaintSortDir] = useState<'asc' | 'desc'>('desc');
+  const [loanSortCol, setLoanSortCol] = useState<string>('payment_number');
+  const [loanSortDir, setLoanSortDir] = useState<'asc' | 'desc'>('asc');
 
   if (loading) {
     return (
@@ -671,6 +723,84 @@ export default function AssetDetailPage() {
 
     return { category: Object.keys(taxMap)[0] || 'Running', subcategory: 'Fuel' };
   };
+
+  const displayedExpenses = useMemo(() => {
+    let list = expenses;
+    if (tabStartDate) list = list.filter(e => e.date && e.date.slice(0, 10) >= tabStartDate);
+    if (tabEndDate) list = list.filter(e => e.date && e.date.slice(0, 10) <= tabEndDate);
+    return [...list].sort((a, b) => {
+      let valA: any = a[expSortCol as keyof ExpenseRecord] ?? '';
+      let valB: any = b[expSortCol as keyof ExpenseRecord] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return expSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return expSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [expenses, tabStartDate, tabEndDate, expSortCol, expSortDir]);
+
+  const displayedFuelLogs = useMemo(() => {
+    let list = fuelLogs;
+    if (tabStartDate) list = list.filter(f => f.date && f.date.slice(0, 10) >= tabStartDate);
+    if (tabEndDate) list = list.filter(f => f.date && f.date.slice(0, 10) <= tabEndDate);
+    return [...list].sort((a, b) => {
+      let valA: any = a[fuelSortCol as keyof FuelLog] ?? '';
+      let valB: any = b[fuelSortCol as keyof FuelLog] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return fuelSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return fuelSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [fuelLogs, tabStartDate, tabEndDate, fuelSortCol, fuelSortDir]);
+
+  const displayedMaintenance = useMemo(() => {
+    let list = maintenance;
+    if (tabStartDate) list = list.filter(m => m.date && m.date.slice(0, 10) >= tabStartDate);
+    if (tabEndDate) list = list.filter(m => m.date && m.date.slice(0, 10) <= tabEndDate);
+    return [...list].sort((a, b) => {
+      let valA: any = a[maintSortCol as keyof MaintenanceRecord] ?? '';
+      let valB: any = b[maintSortCol as keyof MaintenanceRecord] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return maintSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return maintSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [maintenance, tabStartDate, tabEndDate, maintSortCol, maintSortDir]);
+
+  const displayedParts = useMemo(() => {
+    let list = parts;
+    if (tabStartDate) list = list.filter(p => p.install_date && p.install_date.slice(0, 10) >= tabStartDate);
+    if (tabEndDate) list = list.filter(p => p.install_date && p.install_date.slice(0, 10) <= tabEndDate);
+    return [...list].sort((a: any, b: any) => {
+      let valA: any = a[partSortCol] ?? '';
+      let valB: any = b[partSortCol] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return partSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return partSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [parts, tabStartDate, tabEndDate, partSortCol, partSortDir]);
+
+  const displayedLoanSchedule = useMemo(() => {
+    const sched = loan ? generateLoanSchedule(loan, loanPayments) : [];
+    return [...sched].sort((a: any, b: any) => {
+      const valA = a[loanSortCol] ?? '';
+      const valB = b[loanSortCol] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return loanSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return loanSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [loan, loanPayments, loanSortCol, loanSortDir]);
 
   /* ── Edit & Delete Handlers for Expenses ── */
   const handleOpenEditExpense = (item: ExpenseRecord) => {
@@ -1778,11 +1908,39 @@ export default function AssetDetailPage() {
               </button>
             </div>
 
+            {/* 📅 Date Filter */}
+            <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
+                {[
+                  { label: 'Tất cả', start: '', end: '' },
+                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
+                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
+                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
+                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
+                ].map(p => (
+                  <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
+                    style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center space-x-2">
+                <input type="date" value={tabStartDate} onChange={e => setTabStartDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>-</span>
+                <input type="date" value={tabEndDate} onChange={e => setTabEndDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                {(tabStartDate || tabEndDate) && (
+                  <button onClick={() => { setTabStartDate(''); setTabEndDate(''); }} className="text-[10px] font-bold text-rose-400">✕ Xóa</button>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-3 text-xs text-center">
               {[
                 { label: 'Tổng chi phí xăng', value: `${fmt(totalFuelCost)} ₫`, color: 'var(--status-amber)' },
                 { label: 'TB L/100km', value: `${asset.avg_consumption_l100km || '—'} L`, color: 'var(--accent-cyan)' },
-                { label: 'Số lần đổ', value: fuelLogs.length, color: 'var(--text-primary)' },
+                { label: 'Số lần đổ', value: displayedFuelLogs.length, color: 'var(--text-primary)' },
               ].map((s, i) => (
                 <div key={i} className="p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <p className="font-extrabold text-sm" style={{ color: s.color }}>{s.value}</p>
@@ -1795,13 +1953,42 @@ export default function AssetDetailPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-default)' }}>
-                    {['Ngày', 'Số lít', 'Giá/L', 'Tổng tiền', 'Odometer', 'Cây xăng', 'L/100km', 'Thao tác'].map(h => (
-                      <th key={h} className="text-left px-3 py-2.5 font-semibold uppercase text-[10px] tracking-wide">{h}</th>
-                    ))}
+                    {[
+                      { key: 'date', label: 'Ngày' },
+                      { key: 'liters', label: 'Số lít' },
+                      { key: 'price_per_liter', label: 'Giá/L' },
+                      { key: 'total_cost', label: 'Tổng tiền' },
+                      { key: 'odometer_km', label: 'Odometer' },
+                      { key: 'station', label: 'Cây xăng' },
+                      { key: 'consumption_l100km', label: 'L/100km' },
+                    ].map(col => {
+                      const isSorted = fuelSortCol === col.key;
+                      return (
+                        <th
+                          key={col.key}
+                          onClick={() => {
+                            if (fuelSortCol === col.key) {
+                              setFuelSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setFuelSortCol(col.key);
+                              setFuelSortDir('asc');
+                            }
+                          }}
+                          className="text-left px-3 py-2.5 font-semibold uppercase text-[10px] tracking-wide cursor-pointer select-none hover:text-cyan-400 transition"
+                          style={{ color: isSorted ? 'var(--accent-cyan)' : 'var(--text-muted)' }}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>{col.label}</span>
+                            <span className="text-[9px]">{isSorted ? (fuelSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                          </div>
+                        </th>
+                      );
+                    })}
+                    <th className="text-left px-3 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {fuelLogs.map((f, i) => (
+                  {displayedFuelLogs.map((f, i) => (
                     <tr key={f.id} className="transition" style={{ borderBottom: '1px solid var(--border-subtle)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
                       <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--text-secondary)' }}>{fmtDate(f.date)}</td>
                       <td className="px-3 py-2.5 font-bold" style={{ color: 'var(--accent-cyan)' }}>{f.liters}L</td>
@@ -1840,8 +2027,47 @@ export default function AssetDetailPage() {
               </button>
             </div>
 
+            {/* 📅 Date Filter & Sort */}
+            <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
+                {[
+                  { label: 'Tất cả', start: '', end: '' },
+                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
+                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
+                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
+                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
+                ].map(p => (
+                  <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
+                    style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center space-x-2">
+                <input type="date" value={tabStartDate} onChange={e => setTabStartDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>-</span>
+                <input type="date" value={tabEndDate} onChange={e => setTabEndDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                {(tabStartDate || tabEndDate) && (
+                  <button onClick={() => { setTabStartDate(''); setTabEndDate(''); }} className="text-[10px] font-bold text-rose-400">✕ Xóa</button>
+                )}
+                <div className="flex items-center space-x-1 border-l pl-2" style={{ borderColor: 'var(--border-default)' }}>
+                  <select value={maintSortCol} onChange={e => setMaintSortCol(e.target.value)} className="theme-select text-[10px] py-1 px-1.5 font-semibold" style={{ width: 'auto' }}>
+                    <option value="date">Ngày</option>
+                    <option value="cost">Chi phí</option>
+                    <option value="maintenance_type">Hạng mục</option>
+                    <option value="odometer_km">Số Km</option>
+                  </select>
+                  <button onClick={() => setMaintSortDir(p => p === 'asc' ? 'desc' : 'asc')} className="px-1.5 py-1 rounded text-[10px] font-bold border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--accent-cyan)' }}>
+                    {maintSortDir === 'asc' ? '▲' : '▼'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              {maintenance.map((m) => (
+              {displayedMaintenance.map((m) => (
                 <div key={m.id} className="p-4 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
@@ -1885,8 +2111,48 @@ export default function AssetDetailPage() {
                 <Plus className="w-3.5 h-3.5" /><span>Thêm phụ tùng</span>
               </button>
             </div>
+
+            {/* 📅 Date Filter & Sort */}
+            <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
+                {[
+                  { label: 'Tất cả', start: '', end: '' },
+                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
+                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
+                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
+                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
+                ].map(p => (
+                  <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
+                    style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center space-x-2">
+                <input type="date" value={tabStartDate} onChange={e => setTabStartDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>-</span>
+                <input type="date" value={tabEndDate} onChange={e => setTabEndDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                {(tabStartDate || tabEndDate) && (
+                  <button onClick={() => { setTabStartDate(''); setTabEndDate(''); }} className="text-[10px] font-bold text-rose-400">✕ Xóa</button>
+                )}
+                <div className="flex items-center space-x-1 border-l pl-2" style={{ borderColor: 'var(--border-default)' }}>
+                  <select value={partSortCol} onChange={e => setPartSortCol(e.target.value)} className="theme-select text-[10px] py-1 px-1.5 font-semibold" style={{ width: 'auto' }}>
+                    <option value="install_date">Ngày lắp</option>
+                    <option value="cost">Chi phí</option>
+                    <option value="name">Tên (A-Z)</option>
+                    <option value="brand">Thương hiệu</option>
+                  </select>
+                  <button onClick={() => setPartSortDir(p => p === 'asc' ? 'desc' : 'asc')} className="px-1.5 py-1 rounded text-[10px] font-bold border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--accent-cyan)' }}>
+                    {partSortDir === 'asc' ? '▲' : '▼'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              {parts.map((p) => (
+              {displayedParts.map((p) => (
                 <div key={p.id} className="p-4 rounded-xl flex justify-between items-start" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <div>
                     <p className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
@@ -1924,8 +2190,47 @@ export default function AssetDetailPage() {
               </button>
             </div>
 
+            {/* 📅 Date Filter & Sort */}
+            <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
+                {[
+                  { label: 'Tất cả', start: '', end: '' },
+                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
+                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
+                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
+                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
+                ].map(p => (
+                  <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
+                    style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center space-x-2">
+                <input type="date" value={tabStartDate} onChange={e => setTabStartDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>-</span>
+                <input type="date" value={tabEndDate} onChange={e => setTabEndDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                {(tabStartDate || tabEndDate) && (
+                  <button onClick={() => { setTabStartDate(''); setTabEndDate(''); }} className="text-[10px] font-bold text-rose-400">✕ Xóa</button>
+                )}
+                <div className="flex items-center space-x-1 border-l pl-2" style={{ borderColor: 'var(--border-default)' }}>
+                  <select value={expSortCol} onChange={e => setExpSortCol(e.target.value)} className="theme-select text-[10px] py-1 px-1.5 font-semibold" style={{ width: 'auto' }}>
+                    <option value="date">Ngày</option>
+                    <option value="amount">Số tiền</option>
+                    <option value="category">Danh mục</option>
+                    <option value="description">Mô tả</option>
+                  </select>
+                  <button onClick={() => setExpSortDir(p => p === 'asc' ? 'desc' : 'asc')} className="px-1.5 py-1 rounded text-[10px] font-bold border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--accent-cyan)' }}>
+                    {expSortDir === 'asc' ? '▲' : '▼'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-2">
-              {expenses.map((e) => (
+              {displayedExpenses.map((e) => (
                 <div key={e.id} className="p-3.5 rounded-xl flex items-center justify-between text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <div className="flex items-center space-x-3">
                     <span className="w-2 h-2 rounded-full shrink-0" style={{ background: CAT_COLORS[e.category] || '#6B7280' }} />
@@ -2097,13 +2402,42 @@ export default function AssetDetailPage() {
                     <table className="w-full text-xs">
                       <thead>
                         <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
-                          {['Kỳ #', 'Hạn đóng', 'Tiền gốc (₫)', 'Tiền lãi (₫)', 'Tổng trả (₫)', 'Dư nợ còn (₫)', 'Trạng thái', 'Thao tác'].map(h => (
-                            <th key={h} className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{h}</th>
-                          ))}
+                          {[
+                            { key: 'payment_number', label: 'Kỳ #' },
+                            { key: 'due_date', label: 'Hạn đóng' },
+                            { key: 'principal_paid', label: 'Tiền gốc (₫)' },
+                            { key: 'interest_paid', label: 'Tiền lãi (₫)' },
+                            { key: 'total_payment', label: 'Tổng trả (₫)' },
+                            { key: 'remaining_balance', label: 'Dư nợ còn (₫)' },
+                            { key: 'status', label: 'Trạng thái' },
+                          ].map(col => {
+                            const isSorted = loanSortCol === col.key;
+                            return (
+                              <th
+                                key={col.key}
+                                onClick={() => {
+                                  if (loanSortCol === col.key) {
+                                    setLoanSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                                  } else {
+                                    setLoanSortCol(col.key);
+                                    setLoanSortDir('asc');
+                                  }
+                                }}
+                                className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-emerald-400 transition"
+                                style={{ color: isSorted ? 'var(--status-green)' : 'var(--text-muted)' }}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>{col.label}</span>
+                                  <span className="text-[9px]">{isSorted ? (loanSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                </div>
+                              </th>
+                            );
+                          })}
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {assetLoanSchedule.map((p: any, i: number) => (
+                        {displayedLoanSchedule.map((p: any, i: number) => (
                           <tr key={p.payment_number} style={{ borderBottom: '1px solid var(--border-subtle)', background: p.status === 'OVERDUE' ? 'rgba(248,113,113,0.05)' : i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
                             <td className="px-3.5 py-2.5 font-bold" style={{ color: 'var(--text-muted)' }}>Kỳ {p.payment_number}</td>
                             <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--text-secondary)' }}>{fmtDate(p.due_date)}</td>

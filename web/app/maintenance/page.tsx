@@ -74,9 +74,36 @@ export default function MaintenancePage() {
     return false;
   };
 
-  const displayRecords = selectedAssetId
-    ? records.filter(r => isSameAsset(r.asset_id, selectedAssetId))
-    : records;
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [sortCol, setSortCol] = useState<string>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const displayRecords = useMemo(() => {
+    let list = selectedAssetId
+      ? records.filter(r => isSameAsset(r.asset_id, selectedAssetId))
+      : records;
+    if (startDate) {
+      list = list.filter(r => r.date && r.date.slice(0, 10) >= startDate);
+    }
+    if (endDate) {
+      list = list.filter(r => r.date && r.date.slice(0, 10) <= endDate);
+    }
+    return [...list].sort((a, b) => {
+      let valA: any = a[sortCol as keyof MaintenanceRecord] ?? '';
+      let valB: any = b[sortCol as keyof MaintenanceRecord] ?? '';
+      if (sortCol === 'asset_id') {
+        valA = assets.find(x => x.id === a.asset_id)?.name || '';
+        valB = assets.find(x => x.id === b.asset_id)?.name || '';
+      }
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return sortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [records, selectedAssetId, startDate, endDate, sortCol, sortDir, assets]);
 
   const totalCost = displayRecords.reduce((s, r) => s + r.cost, 0);
   const calculatedItemsCost = serviceItems.reduce((s, item) => s + (parseFloat(item.cost) || 0), 0);
@@ -277,6 +304,104 @@ export default function MaintenancePage() {
                 <li key={a.id}>→ <strong>{a.name}</strong> ({a.license_plate}): {a.next_maintenance_due}</li>
               ))}
           </ul>
+        </div>
+      </div>
+
+      {/* 📅 Date Range Filter Toolbar */}
+      <div className="p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="flex items-center space-x-2 flex-wrap gap-2">
+          <span className="font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--accent-cyan)' }}>
+            <span>📅 Lọc ngày:</span>
+          </span>
+          <div className="flex items-center space-x-1">
+            {[
+              { label: 'Tất cả', start: '', end: '' },
+              { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
+              {
+                label: 'Tháng này',
+                start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
+                end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10),
+              },
+              {
+                label: 'Tháng trước',
+                start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10),
+                end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10),
+              },
+              {
+                label: 'Năm nay',
+                start: `${new Date().getFullYear()}-01-01`,
+                end: `${new Date().getFullYear()}-12-31`,
+              },
+            ].map(preset => {
+              const isActive = startDate === preset.start && endDate === preset.end;
+              return (
+                <button
+                  key={preset.label}
+                  onClick={() => { setStartDate(preset.start); setEndDate(preset.end); }}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${
+                    isActive ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-white/10'
+                  }`}
+                  style={!isActive ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2 flex-wrap gap-2">
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Từ:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={e => setStartDate(e.target.value)}
+              className="theme-input text-[11px] py-1 px-2 font-mono"
+              style={{ width: '130px' }}
+            />
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Đến:</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={e => setEndDate(e.target.value)}
+              className="theme-input text-[11px] py-1 px-2 font-mono"
+              style={{ width: '130px' }}
+            />
+          </div>
+          {(startDate || endDate) && (
+            <button
+              onClick={() => { setStartDate(''); setEndDate(''); }}
+              className="text-[10px] font-bold text-rose-400 hover:underline px-1.5 py-1"
+            >
+              ✕ Xóa lọc
+            </button>
+          )}
+          {/* Sorting Controls */}
+          <div className="flex items-center space-x-1 border-l pl-2" style={{ borderColor: 'var(--border-default)' }}>
+            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Sắp xếp:</span>
+            <select
+              value={sortCol}
+              onChange={e => setSortCol(e.target.value)}
+              className="theme-select text-[10px] py-1 px-2 font-semibold"
+              style={{ width: 'auto' }}
+            >
+              <option value="date">Ngày thực hiện</option>
+              <option value="cost">Chi phí</option>
+              <option value="maintenance_type">Hạng mục (A-Z)</option>
+              <option value="odometer_km">Số Km (ODO)</option>
+            </select>
+            <button
+              onClick={() => setSortDir(p => p === 'asc' ? 'desc' : 'asc')}
+              className="px-2 py-1 rounded-lg text-[10px] font-bold border hover:bg-white/10 transition"
+              style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--accent-cyan)' }}
+              title={sortDir === 'asc' ? 'Tăng dần (A→Z)' : 'Giảm dần (Z→A)'}
+            >
+              {sortDir === 'asc' ? '▲ A→Z' : '▼ Z→A'}
+            </button>
+          </div>
         </div>
       </div>
 

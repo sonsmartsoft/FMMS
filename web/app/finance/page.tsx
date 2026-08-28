@@ -167,10 +167,40 @@ export default function FinancePage() {
     }
   }, [selectedLoanId]);
 
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [expenseSortCol, setExpenseSortCol] = useState<string>('date');
+  const [expenseSortDir, setExpenseSortDir] = useState<'asc' | 'desc'>('desc');
+  const [loanSortCol, setLoanSortCol] = useState<string>('payment_number');
+  const [loanSortDir, setLoanSortDir] = useState<'asc' | 'desc'>('asc');
+
   const filteredExpenses = useMemo(() => {
-    if (!selectedAssetId) return expenses;
-    return expenses.filter(e => isSameAsset(e.asset_id, selectedAssetId));
-  }, [expenses, selectedAssetId, assets]);
+    let list = expenses;
+    if (selectedAssetId) {
+      list = list.filter(e => isSameAsset(e.asset_id, selectedAssetId));
+    }
+    if (startDate) {
+      list = list.filter(e => e.date && e.date.slice(0, 10) >= startDate);
+    }
+    if (endDate) {
+      list = list.filter(e => e.date && e.date.slice(0, 10) <= endDate);
+    }
+
+    return [...list].sort((a, b) => {
+      let valA: any = a[expenseSortCol as keyof ExpenseRecord] ?? '';
+      let valB: any = b[expenseSortCol as keyof ExpenseRecord] ?? '';
+      if (expenseSortCol === 'asset_id') {
+        valA = assets.find(x => x.id === a.asset_id)?.name || '';
+        valB = assets.find(x => x.id === b.asset_id)?.name || '';
+      }
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return expenseSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return expenseSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [expenses, selectedAssetId, startDate, endDate, expenseSortCol, expenseSortDir, assets]);
 
   const filteredLoans = useMemo(() => {
     if (!selectedAssetId) return loans;
@@ -196,7 +226,20 @@ export default function FinancePage() {
     return 0;
   }, [loanForm.principal, loanForm.interest_rate_percent, loanForm.term_months]);
 
-  const loanSchedule = useMemo(() => selectedLoan ? generateLoanSchedule(selectedLoan, payments) : [], [selectedLoan, payments]);
+  const loanSchedule = useMemo(() => {
+    const sched = selectedLoan ? generateLoanSchedule(selectedLoan, payments) : [];
+    return [...sched].sort((a: any, b: any) => {
+      const valA = a[loanSortCol] ?? '';
+      const valB = b[loanSortCol] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return loanSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return loanSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [selectedLoan, payments, loanSortCol, loanSortDir]);
+
   const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
   const paidPrincipal = selectedLoan ? selectedLoan.principal - selectedLoan.current_balance : 0;
   const loanProgress = selectedLoan && selectedLoan.principal > 0 ? (paidPrincipal / selectedLoan.principal) * 100 : 0;
@@ -551,6 +594,24 @@ export default function FinancePage() {
           remaining_balance: editingPeriod.remaining_balance || 0,
         });
       }
+
+      if (periodForm.status === 'PAID') {
+        try {
+          await createExpense({
+            asset_id: selectedLoan.asset_id,
+            date: periodForm.paid_date || new Date().toISOString().slice(0, 10),
+            category: 'Loan',
+            subcategory: 'Monthly Payment',
+            amount: tot,
+            currency: 'VND',
+            vendor: selectedLoan.lender || 'Ngân hàng',
+            description: `Thanh toán khoản vay kỳ ${editingPeriod.payment_number} (${selectedLoan.lender || 'Ngân hàng'})`,
+          });
+        } catch (eErr) {
+          console.warn('Auto expense sync error:', eErr);
+        }
+      }
+
       await loadData();
       setOpenEditPeriodModal(false);
       setEditingPeriod(null);
@@ -570,6 +631,7 @@ export default function FinancePage() {
           await updateLoan(selectedLoan.id, { current_balance: Math.min(selectedLoan.principal, selectedLoan.current_balance + item.principal_paid) });
         }
       } else {
+        const paidDateStr = new Date().toISOString().slice(0, 10);
         await createLoanPayment({
           loan_id: selectedLoan.id,
           payment_number: item.payment_number,
@@ -577,11 +639,27 @@ export default function FinancePage() {
           principal_paid: item.principal_paid,
           interest_paid: item.interest_paid,
           total_payment: item.total_payment,
-          paid_date: new Date().toISOString().slice(0, 10),
+          paid_date: paidDateStr,
           status: 'PAID',
           remaining_balance: Math.max(0, selectedLoan.current_balance - item.principal_paid),
         });
         await updateLoan(selectedLoan.id, { current_balance: Math.max(0, selectedLoan.current_balance - item.principal_paid) });
+
+        // Auto-create expense record for this loan payment
+        try {
+          await createExpense({
+            asset_id: selectedLoan.asset_id,
+            date: paidDateStr,
+            category: 'Loan',
+            subcategory: 'Monthly Payment',
+            amount: item.total_payment,
+            currency: 'VND',
+            vendor: selectedLoan.lender || 'Ngân hàng',
+            description: `Thanh toán khoản vay kỳ ${item.payment_number} (${selectedLoan.lender || 'Ngân hàng'})`,
+          });
+        } catch (eErr) {
+          console.warn('Auto expense sync from loan payment failed:', eErr);
+        }
       }
       await loadData();
     } catch (err: any) {
@@ -748,6 +826,81 @@ export default function FinancePage() {
       {/* ─── EXPENSES ─── */}
       {activeSection === 'expenses' && (
         <>
+          {/* 📅 Date Range Filter Toolbar */}
+          <div className="p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+            <div className="flex items-center space-x-2 flex-wrap gap-2">
+              <span className="font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--accent-cyan)' }}>
+                <span>📅 Lọc thời gian:</span>
+              </span>
+              <div className="flex items-center space-x-1">
+                {[
+                  { label: 'Tất cả', start: '', end: '' },
+                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
+                  {
+                    label: 'Tháng này',
+                    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
+                    end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10),
+                  },
+                  {
+                    label: 'Tháng trước',
+                    start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10),
+                    end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10),
+                  },
+                  {
+                    label: 'Năm nay',
+                    start: `${new Date().getFullYear()}-01-01`,
+                    end: `${new Date().getFullYear()}-12-31`,
+                  },
+                ].map(preset => {
+                  const isActive = startDate === preset.start && endDate === preset.end;
+                  return (
+                    <button
+                      key={preset.label}
+                      onClick={() => { setStartDate(preset.start); setEndDate(preset.end); }}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${
+                        isActive ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-white/10'
+                      }`}
+                      style={!isActive ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 flex-wrap gap-2">
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Từ:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  className="theme-input text-[11px] py-1 px-2 font-mono"
+                  style={{ width: '130px' }}
+                />
+              </div>
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Đến:</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                  className="theme-input text-[11px] py-1 px-2 font-mono"
+                  style={{ width: '130px' }}
+                />
+              </div>
+              {(startDate || endDate) && (
+                <button
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  className="text-[10px] font-bold text-rose-400 hover:underline px-1.5 py-1"
+                >
+                  ✕ Xóa lọc
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {breakdown.map(b => (
               <div key={b.category} className="p-4 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
@@ -765,9 +918,37 @@ export default function FinancePage() {
             <table className="w-full text-xs">
               <thead>
                 <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
-                  {['Ngày', 'Phương tiện', 'Danh mục', 'Mô tả', 'Nhà cung cấp', 'Số tiền', ''].map(h => (
-                    <th key={h} className="text-left px-4 py-3 font-semibold uppercase text-[10px] tracking-wide" style={{ color: 'var(--text-muted)' }}>{h}</th>
-                  ))}
+                  {[
+                    { key: 'date', label: 'Ngày' },
+                    { key: 'asset_id', label: 'Phương tiện' },
+                    { key: 'category', label: 'Danh mục' },
+                    { key: 'description', label: 'Mô tả' },
+                    { key: 'vendor', label: 'Nhà cung cấp' },
+                    { key: 'amount', label: 'Số tiền' },
+                  ].map(col => {
+                    const isSorted = expenseSortCol === col.key;
+                    return (
+                      <th
+                        key={col.key}
+                        onClick={() => {
+                          if (expenseSortCol === col.key) {
+                            setExpenseSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setExpenseSortCol(col.key);
+                            setExpenseSortDir('asc');
+                          }
+                        }}
+                        className="text-left px-4 py-3 font-semibold uppercase text-[10px] tracking-wide cursor-pointer select-none hover:text-cyan-400 transition"
+                        style={{ color: isSorted ? 'var(--accent-cyan)' : 'var(--text-muted)' }}
+                      >
+                        <div className="flex items-center space-x-1">
+                          <span>{col.label}</span>
+                          <span className="text-[9px]">{isSorted ? (expenseSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </div>
+                      </th>
+                    );
+                  })}
+                  <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
@@ -920,9 +1101,38 @@ export default function FinancePage() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
-                        {['Kỳ #', 'Hạn đóng', 'Tiền gốc (₫)', 'Tiền lãi (₫)', 'Tổng trả (₫)', 'Dư nợ còn lại (₫)', 'Trạng thái', 'Thao tác'].map(h => (
-                          <th key={h} className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>{h}</th>
-                        ))}
+                        {[
+                          { key: 'payment_number', label: 'Kỳ #' },
+                          { key: 'due_date', label: 'Hạn đóng' },
+                          { key: 'principal_paid', label: 'Tiền gốc (₫)' },
+                          { key: 'interest_paid', label: 'Tiền lãi (₫)' },
+                          { key: 'total_payment', label: 'Tổng trả (₫)' },
+                          { key: 'remaining_balance', label: 'Dư nợ còn lại (₫)' },
+                          { key: 'status', label: 'Trạng thái' },
+                        ].map(col => {
+                          const isSorted = loanSortCol === col.key;
+                          return (
+                            <th
+                              key={col.key}
+                              onClick={() => {
+                                if (loanSortCol === col.key) {
+                                  setLoanSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                                } else {
+                                  setLoanSortCol(col.key);
+                                  setLoanSortDir('asc');
+                                }
+                              }}
+                              className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide whitespace-nowrap cursor-pointer select-none hover:text-emerald-400 transition"
+                              style={{ color: isSorted ? 'var(--status-green)' : 'var(--text-muted)' }}
+                            >
+                              <div className="flex items-center space-x-1">
+                                <span>{col.label}</span>
+                                <span className="text-[9px]">{isSorted ? (loanSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                              </div>
+                            </th>
+                          );
+                        })}
+                        <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide whitespace-nowrap" style={{ color: 'var(--text-muted)' }}>Thao tác</th>
                       </tr>
                     </thead>
                     <tbody>
