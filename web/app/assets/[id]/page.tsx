@@ -427,16 +427,34 @@ export default function AssetDetailPage() {
 
       if (periodForm.status === 'PAID') {
         try {
-          await createExpense({
-            asset_id: asset?.id || assetId,
-            date: periodForm.paid_date || new Date().toISOString().slice(0, 10),
-            category: 'Loan',
-            subcategory: 'Monthly Payment',
-            amount: tot,
-            currency: 'VND',
-            vendor: loan.lender || 'Ngân hàng',
-            description: `Thanh toán khoản vay kỳ ${editingPeriod.payment_number} (${loan.lender || 'Ngân hàng'})`,
-          });
+          const paidDate = periodForm.paid_date || new Date().toISOString().slice(0, 10);
+          const lenderName = loan.lender || 'Ngân hàng';
+          const periodNum = editingPeriod.payment_number;
+
+          if (princ > 0) {
+            await createExpense({
+              asset_id: asset?.id || assetId,
+              date: paidDate,
+              category: 'Loan',
+              subcategory: 'Monthly Payment',
+              amount: princ,
+              currency: 'VND',
+              vendor: lenderName,
+              description: `Trả gốc khoản vay kỳ ${periodNum} (${lenderName})`,
+            });
+          }
+          if (intr > 0) {
+            await createExpense({
+              asset_id: asset?.id || assetId,
+              date: paidDate,
+              category: 'Loan',
+              subcategory: 'Interest',
+              amount: intr,
+              currency: 'VND',
+              vendor: lenderName,
+              description: `Tiền lãi khoản vay kỳ ${periodNum} (${lenderName})`,
+            });
+          }
           const refreshedExps = await getExpenses(assetId);
           setExpenses(refreshedExps);
         } catch (eErr) {
@@ -466,31 +484,50 @@ export default function AssetDetailPage() {
         }
       } else {
         const paidDateStr = new Date().toISOString().slice(0, 10);
+        const lenderName = loan.lender || 'Ngân hàng';
+        const periodNum = item.payment_number;
+        const princ = item.principal_paid || 0;
+        const intr = item.interest_paid || 0;
+
         await createLoanPayment({
           loan_id: loan.id,
-          payment_number: item.payment_number,
+          payment_number: periodNum,
           due_date: item.due_date,
-          principal_paid: item.principal_paid,
-          interest_paid: item.interest_paid,
+          principal_paid: princ,
+          interest_paid: intr,
           total_payment: item.total_payment,
           paid_date: paidDateStr,
           status: 'PAID',
-          remaining_balance: Math.max(0, loan.current_balance - item.principal_paid),
+          remaining_balance: Math.max(0, loan.current_balance - princ),
         });
-        await updateLoan(loan.id, { current_balance: Math.max(0, loan.current_balance - item.principal_paid) });
+        await updateLoan(loan.id, { current_balance: Math.max(0, loan.current_balance - princ) });
 
-        // Auto create expense
+        // Auto create expense (Split Principal & Interest)
         try {
-          await createExpense({
-            asset_id: asset?.id || assetId,
-            date: paidDateStr,
-            category: 'Loan',
-            subcategory: 'Monthly Payment',
-            amount: item.total_payment,
-            currency: 'VND',
-            vendor: loan.lender || 'Ngân hàng',
-            description: `Thanh toán khoản vay kỳ ${item.payment_number} (${loan.lender || 'Ngân hàng'})`,
-          });
+          if (princ > 0) {
+            await createExpense({
+              asset_id: asset?.id || assetId,
+              date: paidDateStr,
+              category: 'Loan',
+              subcategory: 'Monthly Payment',
+              amount: princ,
+              currency: 'VND',
+              vendor: lenderName,
+              description: `Trả gốc khoản vay kỳ ${periodNum} (${lenderName})`,
+            });
+          }
+          if (intr > 0) {
+            await createExpense({
+              asset_id: asset?.id || assetId,
+              date: paidDateStr,
+              category: 'Loan',
+              subcategory: 'Interest',
+              amount: intr,
+              currency: 'VND',
+              vendor: lenderName,
+              description: `Tiền lãi khoản vay kỳ ${periodNum} (${lenderName})`,
+            });
+          }
           const refreshedExps = await getExpenses(assetId);
           setExpenses(refreshedExps);
         } catch (eErr) {
@@ -829,20 +866,92 @@ export default function AssetDetailPage() {
     }
   };
 
+  const parseMaintenanceNotes = (notes?: string, defaultCost?: number, defaultType?: string) => {
+    let discount = '';
+    let items: { name: string; cost: string }[] = [];
+    let userNotes = notes || '';
+
+    if (userNotes) {
+      const discountMatch = userNotes.match(/\[Giảm giá:\s*-?([0-9.,]+)\s*₫?\]/i);
+      if (discountMatch) {
+        const discRaw = discountMatch[1].replace(/[.,]/g, '');
+        if (discRaw) discount = discRaw;
+        userNotes = userNotes.replace(discountMatch[0], '').trim();
+      }
+
+      const itemsPrefixMatch = userNotes.match(/Các hạng mục:\s*([^|]+)/i);
+      if (itemsPrefixMatch) {
+        const itemsStr = itemsPrefixMatch[1];
+        const rawParts = itemsStr.split('+');
+        rawParts.forEach(p => {
+          const colonIdx = p.lastIndexOf(':');
+          if (colonIdx > 0) {
+            const name = p.slice(0, colonIdx).trim();
+            const costStr = p.slice(colonIdx + 1).replace(/[^0-9]/g, '');
+            if (name) items.push({ name, cost: costStr });
+          }
+        });
+        userNotes = userNotes.replace(itemsPrefixMatch[0], '').trim();
+      } else {
+        const itemMatches = Array.from(userNotes.matchAll(/([^,|]+?)\s*\(([0-9.,]+)\s*₫?\)/g));
+        if (itemMatches.length > 0) {
+          itemMatches.forEach(m => {
+            const name = m[1].trim();
+            const costStr = m[2].replace(/[.,]/g, '');
+            if (name && !name.includes('Giảm giá')) {
+              items.push({ name, cost: costStr });
+            }
+          });
+          userNotes = userNotes.replace(/([^,|]+?)\s*\(([0-9.,]+)\s*₫?\)[,\s]*/g, '').trim();
+        }
+      }
+
+      userNotes = userNotes.replace(/^[|\s,]+|[|\s,]+$/g, '').trim();
+    }
+
+    if (items.length === 0) {
+      items = [{ name: defaultType || 'Thay dầu máy', cost: defaultCost ? String(defaultCost) : '' }];
+    }
+
+    return { discount, items, cleanNotes: userNotes };
+  };
+
   /* ── Edit & Delete Handlers for Maintenance ── */
   const handleOpenEditMaint = (item: MaintenanceRecord) => {
     setEditingMaint(item);
+    const parsed = parseMaintenanceNotes(item.notes, item.cost, item.maintenance_type);
+    setServiceItems(parsed.items);
     setMaintForm({
       date: item.date ? item.date.slice(0, 10) : '',
-      maintenance_type: item.maintenance_type || 'Thay dầu máy',
+      maintenance_type: item.maintenance_type || parsed.items[0]?.name || 'Thay dầu máy',
       odometer_km: item.odometer_km ? String(item.odometer_km) : '',
       cost: String(item.cost || ''),
-      discount: '',
+      discount: parsed.discount,
       vendor: item.vendor || '',
-      notes: item.notes || '',
+      notes: parsed.cleanNotes,
       next_due_km: item.next_due_km ? String(item.next_due_km) : '',
       next_due_date: item.next_due_date ? item.next_due_date.slice(0, 10) : '',
     });
+    setOpenModal('maintenance');
+  };
+
+  const handleOpenAddMaint = () => {
+    setEditingMaint(null);
+    setMaintForm({
+      date: new Date().toISOString().split('T')[0],
+      maintenance_type: 'Thay dầu máy',
+      odometer_km: asset?.current_odometer_km ? String(asset.current_odometer_km) : '',
+      cost: '',
+      discount: '',
+      vendor: '',
+      notes: '',
+      next_due_km: '',
+      next_due_date: '',
+    });
+    setServiceItems([
+      { name: 'Thay dầu máy', cost: '650000' },
+      { name: 'Thay lọc dầu', cost: '220000' },
+    ]);
     setOpenModal('maintenance');
   };
 
@@ -1523,7 +1632,7 @@ export default function AssetDetailPage() {
             style={{ background: 'rgba(245,158,11,0.15)', color: 'var(--status-amber)', border: '1px solid rgba(245,158,11,0.3)' }}>
             <Plus className="w-3.5 h-3.5" /><span>Thêm chi phí</span>
           </button>
-          <button onClick={() => setOpenModal('maintenance')}
+          <button onClick={handleOpenAddMaint}
             className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition hover:opacity-90"
             style={{ background: 'rgba(56,189,248,0.15)', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan-border)' }}>
             <Wrench className="w-3.5 h-3.5" /><span>Thêm bảo dưỡng</span>
@@ -2035,14 +2144,14 @@ export default function AssetDetailPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Lịch sử bảo dưỡng</h3>
-              <button onClick={() => { setEditingMaint(null); setOpenModal('maintenance'); }} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
+              <button onClick={handleOpenAddMaint} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
                 <Plus className="w-3.5 h-3.5" /><span>Thêm bảo dưỡng</span>
               </button>
             </div>
 
             {/* 📅 Date Filter & Sort */}
             <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-              <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                          <div className="flex items-center space-x-1.5 flex-wrap gap-1">
                 <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
                 {[
                   { label: 'Tất cả', start: '', end: '' },
@@ -2095,8 +2204,30 @@ export default function AssetDetailPage() {
                       <p className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{m.maintenance_type}</p>
                       <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
                         {fmtDate(m.date)} • {fmt(m.odometer_km)} km • {m.vendor}
-                      </p>
-                      {m.notes && <p className="text-[10px] mt-0.5 italic" style={{ color: 'var(--text-faint)' }}>{m.notes}</p>}
+                        {/* Itemized Service Breakdown Badges */}
+                        {(() => {
+                          const parsed = parseMaintenanceNotes(m.notes, m.cost, m.maintenance_type);
+                          return (
+                            <>
+                              {parsed.items.length > 0 && (
+                                <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                                  {parsed.items.map((item, idx) => (
+                                    <span key={idx} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold border flex items-center gap-1" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+                                      <span>🔧 {item.name}:</span>
+                                      <strong className="text-cyan-400 font-mono">{item.cost ? `${fmt(parseFloat(item.cost))}₫` : '—'}</strong>
+                                    </span>
+                                  ))}
+                                  {parsed.discount && parseFloat(parsed.discount) > 0 && (
+                                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold border text-amber-400 border-amber-500/30" style={{ background: 'rgba(245, 158, 11, 0.1)' }}>
+                                      🎁 Giảm giá: -{fmt(parseFloat(parsed.discount))}₫
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {parsed.cleanNotes && <p className="text-[10px] mt-1.5 p-2 rounded-lg" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>📝 {parsed.cleanNotes}</p>}
+                            </>
+                          );
+                        })()}
                       {m.next_due_km && <p className="text-[10px] mt-0.5" style={{ color: 'var(--accent-cyan)' }}>Kỳ tiếp: {fmt(m.next_due_km)} km {m.next_due_date ? `(${fmtDate(m.next_due_date)})` : ''}</p>}
                     </div>
                     <div className="flex items-center space-x-2 shrink-0">

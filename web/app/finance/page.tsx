@@ -523,19 +523,56 @@ export default function FinancePage() {
     if (!selectedLoan) return;
     const next = loanSchedule.find(p => p.status !== 'PAID');
     const amount = parseFloat(paymentForm.amount) || selectedLoan.monthly_payment;
+    const princ = next?.principal_paid ?? Math.round(amount);
+    const intr = next?.interest_paid ?? 0;
+    const paidDate = paymentForm.paid_date || new Date().toISOString().slice(0, 10);
+    const periodNum = next?.payment_number ?? (loanSchedule.length + 1);
+    const lenderName = selectedLoan.lender || 'Ngân hàng';
+
     try {
       await createLoanPayment({
         loan_id: selectedLoan.id,
-        payment_number: next?.payment_number ?? (loanSchedule.length + 1),
-        due_date: next?.due_date ?? new Date().toISOString().slice(0, 10),
-        principal_paid: next?.principal_paid ?? Math.round(amount),
-        interest_paid: next?.interest_paid ?? 0,
+        payment_number: periodNum,
+        due_date: next?.due_date ?? paidDate,
+        principal_paid: princ,
+        interest_paid: intr,
         total_payment: amount,
-        paid_date: paymentForm.paid_date || new Date().toISOString().slice(0, 10),
+        paid_date: paidDate,
         status: 'PAID',
-        remaining_balance: Math.max(0, selectedLoan.current_balance - amount),
+        remaining_balance: Math.max(0, selectedLoan.current_balance - princ),
       });
-      await updateLoan(selectedLoan.id, { current_balance: Math.max(0, selectedLoan.current_balance - amount) });
+      await updateLoan(selectedLoan.id, { current_balance: Math.max(0, selectedLoan.current_balance - princ) });
+
+      // Auto-create distinct expense records for Principal and Interest
+      try {
+        if (princ > 0) {
+          await createExpense({
+            asset_id: selectedLoan.asset_id,
+            date: paidDate,
+            category: 'Loan',
+            subcategory: 'Monthly Payment',
+            amount: princ,
+            currency: 'VND',
+            vendor: lenderName,
+            description: `Trả gốc khoản vay kỳ ${periodNum} (${lenderName})`,
+          });
+        }
+        if (intr > 0) {
+          await createExpense({
+            asset_id: selectedLoan.asset_id,
+            date: paidDate,
+            category: 'Loan',
+            subcategory: 'Interest',
+            amount: intr,
+            currency: 'VND',
+            vendor: lenderName,
+            description: `Tiền lãi khoản vay kỳ ${periodNum} (${lenderName})`,
+          });
+        }
+      } catch (eErr) {
+        console.warn('Auto expense sync error:', eErr);
+      }
+
       await loadData();
     } catch (err: any) {
       alert(`Lỗi khi ghi thanh toán: ${err?.message ?? 'Không ghi được'}`);
@@ -603,16 +640,34 @@ export default function FinancePage() {
 
       if (periodForm.status === 'PAID') {
         try {
-          await createExpense({
-            asset_id: selectedLoan.asset_id,
-            date: periodForm.paid_date || new Date().toISOString().slice(0, 10),
-            category: 'Loan',
-            subcategory: 'Monthly Payment',
-            amount: tot,
-            currency: 'VND',
-            vendor: selectedLoan.lender || 'Ngân hàng',
-            description: `Thanh toán khoản vay kỳ ${editingPeriod.payment_number} (${selectedLoan.lender || 'Ngân hàng'})`,
-          });
+          const paidDate = periodForm.paid_date || new Date().toISOString().slice(0, 10);
+          const lenderName = selectedLoan.lender || 'Ngân hàng';
+          const periodNum = editingPeriod.payment_number;
+
+          if (princ > 0) {
+            await createExpense({
+              asset_id: selectedLoan.asset_id,
+              date: paidDate,
+              category: 'Loan',
+              subcategory: 'Monthly Payment',
+              amount: princ,
+              currency: 'VND',
+              vendor: lenderName,
+              description: `Trả gốc khoản vay kỳ ${periodNum} (${lenderName})`,
+            });
+          }
+          if (intr > 0) {
+            await createExpense({
+              asset_id: selectedLoan.asset_id,
+              date: paidDate,
+              category: 'Loan',
+              subcategory: 'Interest',
+              amount: intr,
+              currency: 'VND',
+              vendor: lenderName,
+              description: `Tiền lãi khoản vay kỳ ${periodNum} (${lenderName})`,
+            });
+          }
         } catch (eErr) {
           console.warn('Auto expense sync error:', eErr);
         }
@@ -638,33 +693,52 @@ export default function FinancePage() {
         }
       } else {
         const paidDateStr = new Date().toISOString().slice(0, 10);
+        const lenderName = selectedLoan.lender || 'Ngân hàng';
+        const periodNum = item.payment_number;
+        const princ = item.principal_paid || 0;
+        const intr = item.interest_paid || 0;
+
         await createLoanPayment({
           loan_id: selectedLoan.id,
-          payment_number: item.payment_number,
+          payment_number: periodNum,
           due_date: item.due_date,
-          principal_paid: item.principal_paid,
-          interest_paid: item.interest_paid,
+          principal_paid: princ,
+          interest_paid: intr,
           total_payment: item.total_payment,
           paid_date: paidDateStr,
           status: 'PAID',
-          remaining_balance: Math.max(0, selectedLoan.current_balance - item.principal_paid),
+          remaining_balance: Math.max(0, selectedLoan.current_balance - princ),
         });
-        await updateLoan(selectedLoan.id, { current_balance: Math.max(0, selectedLoan.current_balance - item.principal_paid) });
+        await updateLoan(selectedLoan.id, { current_balance: Math.max(0, selectedLoan.current_balance - princ) });
 
-        // Auto-create expense record for this loan payment
+        // Auto-create distinct expense records for Principal and Interest
         try {
-          await createExpense({
-            asset_id: selectedLoan.asset_id,
-            date: paidDateStr,
-            category: 'Loan',
-            subcategory: 'Monthly Payment',
-            amount: item.total_payment,
-            currency: 'VND',
-            vendor: selectedLoan.lender || 'Ngân hàng',
-            description: `Thanh toán khoản vay kỳ ${item.payment_number} (${selectedLoan.lender || 'Ngân hàng'})`,
-          });
-        } catch (eErr) {
-          console.warn('Auto expense sync from loan payment failed:', eErr);
+          if (princ > 0) {
+            await createExpense({
+              asset_id: selectedLoan.asset_id,
+              date: paidDateStr,
+              category: 'Loan',
+              subcategory: 'Monthly Payment',
+              amount: princ,
+              currency: 'VND',
+              vendor: lenderName,
+              description: `Trả gốc khoản vay kỳ ${periodNum} (${lenderName})`,
+            });
+          }
+          if (intr > 0) {
+            await createExpense({
+              asset_id: selectedLoan.asset_id,
+              date: paidDateStr,
+              category: 'Loan',
+              subcategory: 'Interest',
+              amount: intr,
+              currency: 'VND',
+              vendor: lenderName,
+              description: `Tiền lãi khoản vay kỳ ${periodNum} (${lenderName})`,
+            });
+          }
+        } catch (expErr) {
+          console.warn('Auto expense creation warning:', expErr);
         }
       }
       await loadData();

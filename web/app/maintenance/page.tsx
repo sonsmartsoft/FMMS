@@ -20,7 +20,7 @@ export default function MaintenancePage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
-  const [openModal, setOpenModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({
     asset_id: '', date: '', maintenance_type: 'Thay dầu máy',
     odometer_km: '', cost: '', discount: '', vendor: '', notes: '', next_due_km: '', next_due_date: '',
@@ -29,6 +29,106 @@ export default function MaintenancePage() {
     { name: 'Thay dầu máy', cost: '650000' },
     { name: 'Thay lọc dầu', cost: '220000' },
   ]);
+
+  const parseMaintenanceNotes = (notes?: string, defaultCost?: number, defaultType?: string) => {
+    let discount = '';
+    let items: { name: string; cost: string }[] = [];
+    let userNotes = notes || '';
+
+    if (userNotes) {
+      const discountMatch = userNotes.match(/\[Giảm giá:\s*-?([0-9.,]+)\s*₫?\]/i);
+      if (discountMatch) {
+        const discRaw = discountMatch[1].replace(/[.,]/g, '');
+        if (discRaw) discount = discRaw;
+        userNotes = userNotes.replace(discountMatch[0], '').trim();
+      }
+
+      const itemsPrefixMatch = userNotes.match(/Các hạng mục:\s*([^|]+)/i);
+      if (itemsPrefixMatch) {
+        const itemsStr = itemsPrefixMatch[1];
+        const rawParts = itemsStr.split('+');
+        rawParts.forEach(p => {
+          const colonIdx = p.lastIndexOf(':');
+          if (colonIdx > 0) {
+            const name = p.slice(0, colonIdx).trim();
+            const costStr = p.slice(colonIdx + 1).replace(/[^0-9]/g, '');
+            if (name) items.push({ name, cost: costStr });
+          }
+        });
+        userNotes = userNotes.replace(itemsPrefixMatch[0], '').trim();
+      } else {
+        const itemMatches = Array.from(userNotes.matchAll(/([^,|]+?)\s*\(([0-9.,]+)\s*₫?\)/g));
+        if (itemMatches.length > 0) {
+          itemMatches.forEach(m => {
+            const name = m[1].trim();
+            const costStr = m[2].replace(/[.,]/g, '');
+            if (name && !name.includes('Giảm giá')) {
+              items.push({ name, cost: costStr });
+            }
+          });
+          userNotes = userNotes.replace(/([^,|]+?)\s*\(([0-9.,]+)\s*₫?\)[,\s]*/g, '').trim();
+        }
+      }
+
+      userNotes = userNotes.replace(/^[|\s,]+|[|\s,]+$/g, '').trim();
+    }
+
+    if (items.length === 0) {
+      items = [{ name: defaultType || 'Thay dầu máy', cost: defaultCost ? String(defaultCost) : '' }];
+    }
+
+    return { discount, items, cleanNotes: userNotes };
+  };
+
+  const handleOpenAdd = () => {
+    setEditingId(null);
+    setForm({
+      asset_id: selectedAssetId || assets[0]?.id || '',
+      date: new Date().toISOString().split('T')[0],
+      maintenance_type: categories[0] || 'Thay dầu máy',
+      odometer_km: '',
+      cost: '',
+      discount: '',
+      vendor: '',
+      notes: '',
+      next_due_km: '',
+      next_due_date: '',
+    });
+    setServiceItems([
+      { name: 'Thay dầu máy', cost: '650000' },
+      { name: 'Thay lọc dầu', cost: '220000' },
+    ]);
+    setOpenModal(true);
+  };
+
+  const handleOpenEdit = (r: MaintenanceRecord) => {
+    setEditingId(r.id);
+    const parsed = parseMaintenanceNotes(r.notes, r.cost, r.maintenance_type);
+    setServiceItems(parsed.items);
+    setForm({
+      asset_id: r.asset_id,
+      date: r.date ? r.date.slice(0, 10) : '',
+      maintenance_type: r.maintenance_type || parsed.items[0]?.name || 'Thay dầu máy',
+      odometer_km: r.odometer_km ? String(r.odometer_km) : '',
+      cost: String(r.cost || ''),
+      discount: parsed.discount,
+      vendor: r.vendor || '',
+      notes: parsed.cleanNotes,
+      next_due_km: r.next_due_km ? String(r.next_due_km) : '',
+      next_due_date: r.next_due_date ? r.next_due_date.slice(0, 10) : '',
+    });
+    setOpenModal(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Bạn có chắc muốn xóa đợt bảo dưỡng này?')) return;
+    try {
+      await deleteMaintenanceRecord(id);
+      setRecords(prev => prev.filter(r => r.id !== id));
+    } catch (err: any) {
+      alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -129,42 +229,58 @@ export default function MaintenancePage() {
       const discount = parseFloat(form.discount) || 0;
       const finalCost = Math.max(0, subtotal - discount);
 
-      const itemsNotes = serviceItems.filter(i => i.name).map(i => `${i.name} (${fmt(parseFloat(i.cost) || 0)}₫)`).join(', ');
-      const discountNote = discount > 0 ? `[Giảm giá: -${fmt(discount)}₫]` : '';
-      const combinedNotes = [itemsNotes, discountNote, form.notes].filter(Boolean).join(' | ');
+      const itemsNotes = serviceItems.filter(i => i.name).map(i => `${i.name}: ${parseInt(i.cost || '0').toLocaleString('vi-VN')}₫`).join(' + ');
+      const discountNote = discount > 0 ? `[Giảm giá: -${parseInt(String(discount)).toLocaleString('vi-VN')}₫]` : '';
+      const combinedNotes = [`Các hạng mục: ${itemsNotes}`, discountNote, form.notes].filter(Boolean).join(' | ');
 
-      const created = await createMaintenanceRecord({
-        asset_id: form.asset_id || assets[0]?.id,
-        maintenance_type: form.maintenance_type,
-        date: form.date || new Date().toISOString().split('T')[0],
-        odometer_km: parseFloat(form.odometer_km) || 0,
-        cost: finalCost,
-        vendor: form.vendor || undefined,
-        notes: combinedNotes || undefined,
-        next_due_km: form.next_due_km ? parseFloat(form.next_due_km) : undefined,
-        next_due_date: form.next_due_date || undefined,
-      });
-      // Auto-create expense record
-      if (finalCost > 0) {
-        try {
-          const { createExpense } = await import('@/lib/services/expenseService');
-          await createExpense({
-            asset_id: form.asset_id || assets[0]?.id,
-            date: form.date || new Date().toISOString().split('T')[0],
-            category: 'Maintenance',
-            subcategory: 'Maintenance',
-            amount: finalCost,
-            currency: 'VND',
-            vendor: form.vendor || undefined,
-            description: `Bảo dưỡng: ${form.maintenance_type}${discount > 0 ? ` (Giảm -${fmt(discount)}₫)` : ''}`,
-          });
-        } catch (expErr) {
-          console.warn('Auto expense sync warning:', expErr);
+      if (editingId) {
+        const updated = await updateMaintenanceRecord(editingId, {
+          asset_id: form.asset_id || assets[0]?.id,
+          maintenance_type: form.maintenance_type,
+          date: form.date || new Date().toISOString().split('T')[0],
+          odometer_km: parseFloat(form.odometer_km) || 0,
+          cost: finalCost,
+          vendor: form.vendor || undefined,
+          notes: combinedNotes || undefined,
+          next_due_km: form.next_due_km ? parseFloat(form.next_due_km) : undefined,
+          next_due_date: form.next_due_date || undefined,
+        });
+        setRecords(prev => prev.map(r => r.id === editingId ? updated : r));
+      } else {
+        const created = await createMaintenanceRecord({
+          asset_id: form.asset_id || assets[0]?.id,
+          maintenance_type: form.maintenance_type,
+          date: form.date || new Date().toISOString().split('T')[0],
+          odometer_km: parseFloat(form.odometer_km) || 0,
+          cost: finalCost,
+          vendor: form.vendor || undefined,
+          notes: combinedNotes || undefined,
+          next_due_km: form.next_due_km ? parseFloat(form.next_due_km) : undefined,
+          next_due_date: form.next_due_date || undefined,
+        });
+        // Auto-create expense record
+        if (finalCost > 0) {
+          try {
+            const { createExpense } = await import('@/lib/services/expenseService');
+            await createExpense({
+              asset_id: form.asset_id || assets[0]?.id,
+              date: form.date || new Date().toISOString().split('T')[0],
+              category: 'Maintenance',
+              subcategory: 'Maintenance',
+              amount: finalCost,
+              currency: 'VND',
+              vendor: form.vendor || undefined,
+              description: `Bảo dưỡng: ${form.maintenance_type}${discount > 0 ? ` (Giảm -${fmt(discount)}₫)` : ''}`,
+            });
+          } catch (expErr) {
+            console.warn('Auto expense sync warning:', expErr);
+          }
         }
+        setRecords([created, ...records]);
       }
 
-      setRecords([created, ...records]);
       setOpenModal(false);
+      setEditingId(null);
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
@@ -186,7 +302,7 @@ export default function MaintenancePage() {
             )}
           </p>
         </div>
-        <button onClick={() => setOpenModal(true)} className="flex items-center space-x-2 px-4 py-2 rounded-xl text-white text-xs font-bold transition hover:opacity-90 shadow-md"
+        <button onClick={handleOpenAdd} className="flex items-center space-x-2 px-4 py-2 rounded-xl text-white text-xs font-bold transition hover:opacity-90 shadow-md"
           style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
           <Plus className="w-4 h-4" /><span>Thêm bảo dưỡng</span>
         </button>
@@ -420,6 +536,8 @@ export default function MaintenancePage() {
           displayRecords.map((r) => {
             const StatusIcon = r.status === 'OK' ? CheckCircle2 : r.status === 'DUE_SOON' ? Clock : AlertTriangle;
             const statusColor = r.status === 'OK' ? 'var(--status-green)' : r.status === 'DUE_SOON' ? 'var(--status-amber)' : 'var(--status-red)';
+            const parsed = parseMaintenanceNotes(r.notes, r.cost, r.maintenance_type);
+
             return (
               <div key={r.id} className="p-4 rounded-2xl transition hover:border-cyan-500/40" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                 <div className="flex items-start justify-between gap-3">
@@ -427,7 +545,7 @@ export default function MaintenancePage() {
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${statusColor}20`, color: statusColor }}>
                       <StatusIcon className="w-4 h-4" />
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2 flex-wrap gap-1">
                         <p className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{r.maintenance_type}</p>
                         <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: `${statusColor}20`, color: statusColor }}>
@@ -437,7 +555,30 @@ export default function MaintenancePage() {
                       <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
                         <strong>{getAssetName(r.asset_id)}</strong> · {fmtDate(r.date)} · {fmt(r.odometer_km)} km · {r.vendor || 'Đại lý chính hãng'}
                       </p>
-                      {r.notes && <p className="text-[10px] mt-1 p-2 rounded-lg" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>📝 {r.notes}</p>}
+
+                      {/* Itemized Service Breakdown Badges */}
+                      {parsed.items.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                          {parsed.items.map((item, idx) => (
+                            <span key={idx} className="px-2 py-0.5 rounded-lg text-[10px] font-semibold border flex items-center gap-1" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+                              <span>🔧 {item.name}:</span>
+                              <strong className="text-cyan-400 font-mono">{item.cost ? `${fmt(parseFloat(item.cost))}₫` : '—'}</strong>
+                            </span>
+                          ))}
+                          {parsed.discount && parseFloat(parsed.discount) > 0 && (
+                            <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold border text-amber-400 border-amber-500/30" style={{ background: 'rgba(245, 158, 11, 0.1)' }}>
+                              🎁 Giảm giá: -{fmt(parseFloat(parsed.discount))}₫
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {parsed.cleanNotes && (
+                        <p className="text-[10px] mt-1.5 p-2 rounded-lg" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>
+                          📝 {parsed.cleanNotes}
+                        </p>
+                      )}
+
                       {r.next_due_km && (
                         <p className="text-[11px] mt-1 font-semibold" style={{ color: 'var(--accent-cyan)' }}>
                           Kỳ tiếp: {fmt(r.next_due_km)} km {r.next_due_date ? `(${fmtDate(r.next_due_date)})` : ''}
@@ -445,7 +586,24 @@ export default function MaintenancePage() {
                       )}
                     </div>
                   </div>
-                  <span className="font-bold text-sm shrink-0" style={{ color: 'var(--status-red)' }}>{fmt(r.cost)} ₫</span>
+
+                  <div className="flex flex-col items-end shrink-0 space-y-2">
+                    <span className="font-bold text-sm" style={{ color: 'var(--status-red)' }}>{fmt(r.cost)} ₫</span>
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        onClick={() => handleOpenEdit(r)}
+                        className="px-2 py-1 rounded-lg text-[10px] font-bold border transition hover:bg-cyan-500/20 text-cyan-400 border-cyan-500/30"
+                      >
+                        ✏️ Sửa
+                      </button>
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        className="px-2 py-1 rounded-lg text-[10px] font-bold border transition hover:bg-rose-500/20 text-rose-400 border-rose-500/30"
+                      >
+                        🗑️ Xóa
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             );
