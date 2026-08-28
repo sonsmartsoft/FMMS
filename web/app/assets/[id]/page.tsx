@@ -543,6 +543,7 @@ export default function AssetDetailPage() {
   };
 
   /* ── Form states ── */
+  const [odoViewMode, setOdoViewMode] = useState<'daily' | 'monthly' | 'yearly'>('daily');
   const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
   const [maintForm, setMaintForm] = useState({ date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', discount: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
   const [categories, setCategories] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
@@ -767,11 +768,15 @@ export default function AssetDetailPage() {
     try {
       if (editingOdoLog) {
         const updated = await updateOdometerLog(editingOdoLog.id, {
+          asset_id: asset.id,
           date: odoLogForm.date || new Date().toISOString().slice(0, 10),
           odometer_km: km,
           note: odoLogForm.note,
         });
         setOdometerLogs(prev => prev.map(o => o.id === editingOdoLog.id ? updated : o));
+        if (km > (asset.current_odometer_km || 0)) {
+          setAsset(p => p ? { ...p, current_odometer_km: km } : p);
+        }
       } else {
         const created = await createOdometerLog({
           asset_id: asset.id,
@@ -780,6 +785,9 @@ export default function AssetDetailPage() {
           note: odoLogForm.note,
         });
         setOdometerLogs([created, ...odometerLogs]);
+        if (km > (asset.current_odometer_km || 0)) {
+          setAsset(p => p ? { ...p, current_odometer_km: km } : p);
+        }
       }
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
@@ -1031,6 +1039,10 @@ export default function AssetDetailPage() {
           notes: fuelForm.notes || undefined,
         });
         setFuelLogs(prev => prev.map(f => f.id === editingFuel.id ? updated : f));
+        const odo = parseFloat(fuelForm.odometer_km) || 0;
+        if (odo > (asset.current_odometer_km || 0)) {
+          setAsset(p => p ? { ...p, current_odometer_km: odo } : p);
+        }
       } else {
         const created = await createFuelLog({
           asset_id: asset.id,
@@ -1043,6 +1055,10 @@ export default function AssetDetailPage() {
           tank_full: true,
         });
         setFuelLogs([created, ...fuelLogs]);
+        const odo = parseFloat(fuelForm.odometer_km) || 0;
+        if (odo > (asset.current_odometer_km || 0)) {
+          setAsset(p => p ? { ...p, current_odometer_km: odo } : p);
+        }
       }
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
@@ -1092,6 +1108,10 @@ export default function AssetDetailPage() {
           next_due_date: maintForm.next_due_date || undefined,
         });
         setMaintenance(prev => prev.map(m => m.id === editingMaint.id ? updated : m));
+        const odo = parseFloat(maintForm.odometer_km) || 0;
+        if (odo > (asset.current_odometer_km || 0)) {
+          setAsset(p => p ? { ...p, current_odometer_km: odo } : p);
+        }
       } else {
         const created = await createMaintenanceRecord({
           asset_id: asset.id,
@@ -1105,6 +1125,10 @@ export default function AssetDetailPage() {
           next_due_date: maintForm.next_due_date || undefined,
         });
         setMaintenance([created, ...maintenance]);
+        const odo = parseFloat(maintForm.odometer_km) || 0;
+        if (odo > (asset.current_odometer_km || 0)) {
+          setAsset(p => p ? { ...p, current_odometer_km: odo } : p);
+        }
 
         // Auto-create expense record if totalCost > 0
         if (totalCost > 0) {
@@ -1576,6 +1600,258 @@ export default function AssetDetailPage() {
   const paidPrincipal = loan ? loan.principal - loan.current_balance : 0;
   const loanProgress = loan && loan.principal > 0 ? (paidPrincipal / loan.principal) * 100 : 0;
 
+  const mileageAnalytics = useMemo(() => {
+    type OdoEvent = {
+      date: string;
+      odometer_km: number;
+      type: 'ODO_LOG' | 'FUEL' | 'MAINTENANCE' | 'TRIP';
+      note: string;
+      id: string;
+      raw?: any;
+    };
+
+    const events: OdoEvent[] = [];
+
+    // Odometer logs
+    odometerLogs.forEach(o => {
+      if (o.odometer_km) {
+        events.push({
+          date: o.date ? o.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          odometer_km: o.odometer_km,
+          type: 'ODO_LOG',
+          note: o.note || 'Ghi nhận Odometer',
+          id: o.id,
+          raw: o,
+        });
+      }
+    });
+
+    // Fuel logs
+    fuelLogs.forEach(f => {
+      if (f.odometer_km) {
+        events.push({
+          date: f.date ? f.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          odometer_km: f.odometer_km,
+          type: 'FUEL',
+          note: `Đổ ${f.liters}L xăng${f.station ? ` tại ${f.station}` : ''}${f.notes ? ` (${f.notes})` : ''}`,
+          id: f.id,
+          raw: f,
+        });
+      }
+    });
+
+    // Maintenance records
+    maintenance.forEach(m => {
+      if (m.odometer_km) {
+        events.push({
+          date: m.date ? m.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          odometer_km: m.odometer_km,
+          type: 'MAINTENANCE',
+          note: `Bảo dưỡng: ${m.maintenance_type}${m.vendor ? ` tại ${m.vendor}` : ''}`,
+          id: m.id,
+          raw: m,
+        });
+      }
+    });
+
+    // Trips
+    trips.forEach(t => {
+      const dStr = t.start_time ? t.start_time.slice(0, 10) : new Date().toISOString().slice(0, 10);
+      events.push({
+        date: dStr,
+        odometer_km: 0,
+        type: 'TRIP',
+        note: `Chuyến đi: ${t.start_location || 'Xuất phát'} → ${t.end_location || 'Điểm đến'} (${t.distance_km} km)`,
+        id: t.id,
+        raw: t,
+      });
+    });
+
+    // Sort events by date ascending
+    events.sort((a, b) => {
+      const dCmp = a.date.localeCompare(b.date);
+      if (dCmp !== 0) return dCmp;
+      return a.odometer_km - b.odometer_km;
+    });
+
+    // Group by Day
+    const dailyMap = new Map<string, {
+      date: string;
+      minOdo: number;
+      maxOdo: number;
+      tripDistance: number;
+      notes: { type: string; text: string; id: string; raw?: any }[];
+    }>();
+
+    events.forEach(ev => {
+      if (!dailyMap.has(ev.date)) {
+        dailyMap.set(ev.date, {
+          date: ev.date,
+          minOdo: ev.odometer_km || 0,
+          maxOdo: ev.odometer_km || 0,
+          tripDistance: ev.type === 'TRIP' ? (ev.raw?.distance_km || 0) : 0,
+          notes: [{ type: ev.type, text: ev.note, id: ev.id, raw: ev.raw }],
+        });
+      } else {
+        const cur = dailyMap.get(ev.date)!;
+        if (ev.odometer_km > 0) {
+          if (cur.minOdo === 0 || ev.odometer_km < cur.minOdo) cur.minOdo = ev.odometer_km;
+          if (ev.odometer_km > cur.maxOdo) cur.maxOdo = ev.odometer_km;
+        }
+        if (ev.type === 'TRIP') {
+          cur.tripDistance += (ev.raw?.distance_km || 0);
+        }
+        cur.notes.push({ type: ev.type, text: ev.note, id: ev.id, raw: ev.raw });
+      }
+    });
+
+    const sortedDays = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    let prevOdo = 0;
+
+    const dailyReport = sortedDays.map((day) => {
+      let kmRun = 0;
+      if (day.maxOdo > 0 && prevOdo > 0 && day.maxOdo >= prevOdo) {
+        kmRun = day.maxOdo - prevOdo;
+      } else if (day.tripDistance > 0) {
+        kmRun = day.tripDistance;
+      } else if (day.maxOdo > 0 && day.minOdo > 0 && day.maxOdo > day.minOdo) {
+        kmRun = day.maxOdo - day.minOdo;
+      }
+
+      if (day.maxOdo > 0) {
+        prevOdo = day.maxOdo;
+      }
+
+      const dObj = new Date(day.date);
+      const dayOfWeekNames = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+      const dayOfWeek = dayOfWeekNames[dObj.getDay()] || '';
+
+      return {
+        ...day,
+        dayOfWeek,
+        kmRun,
+        displayOdo: day.maxOdo || prevOdo,
+      };
+    }).reverse();
+
+    // Group by Month
+    const monthlyMap = new Map<string, {
+      monthKey: string;
+      monthLabel: string;
+      totalKm: number;
+      activeDays: number;
+      fuelCost: number;
+      maintCost: number;
+      otherCost: number;
+      dayList: typeof dailyReport;
+    }>();
+
+    dailyReport.forEach(day => {
+      const mKey = day.date.slice(0, 7);
+      const [year, month] = mKey.split('-');
+      const mLabel = `Tháng ${month}/${year}`;
+
+      if (!monthlyMap.has(mKey)) {
+        monthlyMap.set(mKey, {
+          monthKey: mKey,
+          monthLabel: mLabel,
+          totalKm: 0,
+          activeDays: 0,
+          fuelCost: 0,
+          maintCost: 0,
+          otherCost: 0,
+          dayList: [],
+        });
+      }
+
+      const mData = monthlyMap.get(mKey)!;
+      mData.totalKm += day.kmRun;
+      if (day.kmRun > 0 || day.notes.length > 0) mData.activeDays += 1;
+      mData.dayList.push(day);
+    });
+
+    expenses.forEach(exp => {
+      if (exp.date) {
+        const mKey = exp.date.slice(0, 7);
+        if (monthlyMap.has(mKey)) {
+          const mData = monthlyMap.get(mKey)!;
+          if (exp.category === 'Running' || exp.category === 'Fuel') mData.fuelCost += exp.amount;
+          else if (exp.category === 'Maintenance') mData.maintCost += exp.amount;
+          else mData.otherCost += exp.amount;
+        }
+      }
+    });
+
+    const monthlyReport = Array.from(monthlyMap.values()).map(m => {
+      const totalCost = m.fuelCost + m.maintCost + m.otherCost;
+      const costPerKm = m.totalKm > 0 ? Math.round(totalCost / m.totalKm) : 0;
+      const avgKmPerActiveDay = m.activeDays > 0 ? Math.round(m.totalKm / m.activeDays) : 0;
+      return {
+        ...m,
+        totalCost,
+        costPerKm,
+        avgKmPerActiveDay,
+      };
+    }).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+
+    // Group by Year
+    const yearlyMap = new Map<string, {
+      yearKey: string;
+      totalKm: number;
+      totalCost: number;
+      fuelCost: number;
+      maintCost: number;
+      monthsCount: number;
+      activeDays: number;
+    }>();
+
+    monthlyReport.forEach(m => {
+      const yKey = m.monthKey.slice(0, 4);
+      if (!yearlyMap.has(yKey)) {
+        yearlyMap.set(yKey, {
+          yearKey: yKey,
+          totalKm: 0,
+          totalCost: 0,
+          fuelCost: 0,
+          maintCost: 0,
+          monthsCount: 0,
+          activeDays: 0,
+        });
+      }
+      const yData = yearlyMap.get(yKey)!;
+      yData.totalKm += m.totalKm;
+      yData.totalCost += m.totalCost;
+      yData.fuelCost += m.fuelCost;
+      yData.maintCost += m.maintCost;
+      yData.monthsCount += 1;
+      yData.activeDays += m.activeDays;
+    });
+
+    const yearlyReport = Array.from(yearlyMap.values()).map(y => {
+      const costPerKm = y.totalKm > 0 ? Math.round(y.totalCost / y.totalKm) : 0;
+      const avgKmPerMonth = y.monthsCount > 0 ? Math.round(y.totalKm / y.monthsCount) : 0;
+      const avgKmPerDay = y.activeDays > 0 ? Math.round(y.totalKm / y.activeDays) : 0;
+      return {
+        ...y,
+        costPerKm,
+        avgKmPerMonth,
+        avgKmPerDay,
+      };
+    }).sort((a, b) => b.yearKey.localeCompare(a.yearKey));
+
+    const currentMKey = new Date().toISOString().slice(0, 7);
+    const currentMonthData = monthlyMap.get(currentMKey);
+    const currentMonthKm = currentMonthData?.totalKm || 0;
+
+    return {
+      dailyReport,
+      monthlyReport,
+      yearlyReport,
+      currentMonthKm,
+      totalActiveDays: dailyReport.filter(d => d.kmRun > 0).length,
+    };
+  }, [odometerLogs, fuelLogs, maintenance, trips, expenses]);
+
   /* ══════════════════════════════════════════════
      RENDER
      ══════════════════════════════════════════════ */
@@ -1911,65 +2187,241 @@ export default function AssetDetailPage() {
               </div>
             </div>
 
-            {/* 📊 Nhật Ký Mốc Odometer & Chuyến Đi (Odometer_Log) */}
+            {/* 📊 BÁO CÁO PHÂN TÍCH QUÃNG ĐƯỜNG & NHẬT KÝ ODOMETER THEO NGÀY/THÁNG/NĂM */}
             <div className="space-y-4 pt-2">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div>
                   <h4 className="text-xs font-extrabold uppercase tracking-wider flex items-center space-x-2 text-cyan-400">
                     <Activity className="w-4 h-4 text-cyan-400" />
-                    <span>Lịch Sử Ghi Nhận Mốc Odometer &amp; Hành Trình (Odometer_Log)</span>
+                    <span>Báo Cáo Phân Tích Di Chuyển &amp; Nhật Ký Hành Trình (ODO)</span>
                   </h4>
                   <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                    Tổng cộng: <strong>{odometerLogs.length} mốc ghi nhận</strong> • Odometer mới nhất: <strong>{odometerLogs[0]?.odometer_km || asset.current_odometer_km} km</strong>
+                    Tổng ODO hiện tại: <strong className="text-cyan-400">{fmt(asset.current_odometer_km)} km</strong> • Tháng này: <strong className="text-emerald-400">+{fmt(mileageAnalytics.currentMonthKm)} km</strong> • Lăn bánh: <strong>{mileageAnalytics.totalActiveDays} ngày</strong>
                   </p>
                 </div>
-                <button
-                  onClick={() => { setEditingOdoLog(null); setOdoLogForm({ date: new Date().toISOString().slice(0, 10), odometer_km: String(asset.current_odometer_km || ''), note: '' }); setOpenModal('odolog'); }}
-                  className="px-3.5 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90 flex items-center space-x-1.5 shadow-md"
-                >
-                  <Plus className="w-3.5 h-3.5" /><span>Ghi nhận mốc Odometer</span>
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => { setEditingOdoLog(null); setOdoLogForm({ date: new Date().toISOString().slice(0, 10), odometer_km: String(asset.current_odometer_km || ''), note: '' }); setOpenModal('odolog'); }}
+                    className="px-3.5 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90 flex items-center space-x-1.5 shadow-md"
+                  >
+                    <Plus className="w-3.5 h-3.5" /><span>Ghi nhận mốc Odometer</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="overflow-x-auto rounded-2xl max-h-96 overflow-y-auto" style={{ border: '1px solid var(--border-default)' }}>
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 z-10">
-                    <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-default)' }}>
-                      {['STT', 'Ngày ghi nhận', 'Mốc Odometer (km)', 'Nội dung hành trình / Ghi chú', 'Thao tác'].map(h => (
-                        <th key={h} className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {odometerLogs.map((item, idx) => (
-                      <tr key={item.id} className="transition hover:bg-white/5" style={{ borderBottom: '1px solid var(--border-subtle)', background: idx % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
-                        <td className="px-3.5 py-2.5 font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>#{odometerLogs.length - idx}</td>
-                        <td className="px-3.5 py-2.5 font-medium whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>{fmtDate(item.date)}</td>
-                        <td className="px-3.5 py-2.5 font-mono font-bold text-cyan-400 whitespace-nowrap">{fmt(item.odometer_km)} km</td>
-                        <td className="px-3.5 py-2.5">
-                          {item.note ? (
-                            <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)' }}>
-                              {item.note}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] italic" style={{ color: 'var(--text-faint)' }}>— Theo dõi định kỳ</span>
-                          )}
-                        </td>
-                        <td className="px-3.5 py-2.5">
-                          <div className="flex items-center space-x-1">
-                            <button onClick={() => handleOpenEditOdoLog(item)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => handleDeleteOdoLog(item.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {/* View Switcher: Theo Ngày / Theo Tháng / Theo Năm */}
+              <div className="flex items-center space-x-2 border-b pb-2 text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="font-bold text-[11px] uppercase text-cyan-400">📊 Chế độ xem:</span>
+                {[
+                  { id: 'daily', label: '📅 Theo Ngày (Nhật ký hành trình)', count: mileageAnalytics.dailyReport.length },
+                  { id: 'monthly', label: '📆 Theo Tháng (Báo cáo tháng)', count: mileageAnalytics.monthlyReport.length },
+                  { id: 'yearly', label: '🗓️ Theo Năm (Báo cáo năm)', count: mileageAnalytics.yearlyReport.length },
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setOdoViewMode(m.id as any)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
+                      odoViewMode === m.id
+                        ? 'bg-cyan-500 text-white shadow-md'
+                        : 'hover:bg-white/10'
+                    }`}
+                    style={odoViewMode !== m.id ? { background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' } : {}}
+                  >
+                    <span>{m.label}</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${odoViewMode === m.id ? 'bg-white/25 text-white' : 'bg-black/20 text-slate-400'}`}>
+                      {m.count}
+                    </span>
+                  </button>
+                ))}
               </div>
+
+              {/* 1. THEO NGÀY (DAILY VIEW) */}
+              {odoViewMode === 'daily' && (
+                <div className="space-y-3">
+                  <div className="overflow-x-auto rounded-2xl max-h-[500px] overflow-y-auto" style={{ border: '1px solid var(--border-default)' }}>
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 z-10">
+                        <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-default)' }}>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Ngày</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Km trong ngày</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Mốc ODO</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Nội dung hành trình / Sự kiện ghi nhận</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mileageAnalytics.dailyReport.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-8 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+                              Chưa có dữ liệu nhật ký di chuyển. Bấm "Ghi nhận mốc Odometer" để bắt đầu theo dõi.
+                            </td>
+                          </tr>
+                        ) : (
+                          mileageAnalytics.dailyReport.map((day, idx) => (
+                            <tr key={day.date} className="transition hover:bg-white/5" style={{ borderBottom: '1px solid var(--border-subtle)', background: idx % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
+                              <td className="px-3.5 py-2.5 whitespace-nowrap">
+                                <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{fmtDate(day.date)}</p>
+                                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{day.dayOfWeek}</span>
+                              </td>
+                              <td className="px-3.5 py-2.5 font-mono whitespace-nowrap">
+                                {day.kmRun > 0 ? (
+                                  <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                    +{fmt(day.kmRun)} km
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>— 0 km</span>
+                                )}
+                              </td>
+                              <td className="px-3.5 py-2.5 font-mono font-bold text-cyan-400 whitespace-nowrap">
+                                {day.displayOdo > 0 ? `${fmt(day.displayOdo)} km` : '—'}
+                              </td>
+                              <td className="px-3.5 py-2.5">
+                                <div className="space-y-1">
+                                  {day.notes.map((n, nIdx) => (
+                                    <div key={nIdx} className="flex items-center gap-1.5 text-xs flex-wrap">
+                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={{
+                                        background: n.type === 'FUEL' ? 'rgba(245,158,11,0.15)' : n.type === 'MAINTENANCE' ? 'rgba(56,189,248,0.15)' : n.type === 'TRIP' ? 'rgba(168,85,247,0.15)' : 'rgba(52,211,153,0.15)',
+                                        color: n.type === 'FUEL' ? 'var(--status-amber)' : n.type === 'MAINTENANCE' ? 'var(--accent-cyan)' : n.type === 'TRIP' ? '#C084FC' : 'var(--status-green)',
+                                      }}>
+                                        {n.type === 'FUEL' ? '⛽ Xăng' : n.type === 'MAINTENANCE' ? '🔧 Bảo dưỡng' : n.type === 'TRIP' ? '📍 Chuyến đi' : '🚗 ODO'}
+                                      </span>
+                                      <span style={{ color: 'var(--text-secondary)' }}>{n.text}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-3.5 py-2.5 whitespace-nowrap">
+                                {day.notes.some(n => n.type === 'ODO_LOG') && (
+                                  <div className="flex items-center space-x-1">
+                                    {day.notes.filter(n => n.type === 'ODO_LOG').map(n => (
+                                      <React.Fragment key={n.id}>
+                                        <button onClick={() => handleOpenEditOdoLog(n.raw || { id: n.id, date: day.date, odometer_km: day.displayOdo, note: n.text })} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa mốc ODO">
+                                          <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={() => handleDeleteOdoLog(n.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </React.Fragment>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 2. THEO THÁNG (MONTHLY VIEW) */}
+              {odoViewMode === 'monthly' && (
+                <div className="space-y-4">
+                  {/* Monthly Summary Cards / Bars */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {mileageAnalytics.monthlyReport.map((m) => {
+                      const maxKmInMonth = Math.max(...mileageAnalytics.monthlyReport.map(x => x.totalKm), 1000);
+                      const percent = Math.min(100, (m.totalKm / maxKmInMonth) * 100);
+                      return (
+                        <div key={m.monthKey} className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                          <div className="flex items-center justify-between">
+                            <h5 className="font-extrabold text-sm" style={{ color: 'var(--text-primary)' }}>{m.monthLabel}</h5>
+                            <span className="px-2 py-0.5 rounded-lg text-xs font-bold bg-cyan-500/15 text-cyan-400 font-mono">
+                              {fmt(m.totalKm)} km
+                            </span>
+                          </div>
+
+                          {/* Progress bar */}
+                          <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
+                            <div className="h-full rounded-full transition-all" style={{ width: `${percent}%`, background: 'linear-gradient(90deg, #0EA5E9, #10B981)' }} />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                            <div className="p-2 rounded-lg" style={{ background: 'var(--bg-primary)' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Lăn bánh:</span>
+                              <p className="font-bold text-xs" style={{ color: 'var(--text-secondary)' }}>{m.activeDays} ngày ({m.avgKmPerActiveDay} km/ngày)</p>
+                            </div>
+                            <div className="p-2 rounded-lg" style={{ background: 'var(--bg-primary)' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Chi phí vận hành:</span>
+                              <p className="font-bold text-xs" style={{ color: 'var(--status-amber)' }}>{fmt(m.totalCost)} ₫</p>
+                            </div>
+                          </div>
+
+                          {m.totalKm > 0 && (
+                            <p className="text-[11px] text-right font-semibold" style={{ color: 'var(--accent-cyan)' }}>
+                              Chi phí / km: <strong>{fmt(m.costPerKm)} ₫/km</strong>
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Monthly Table Details */}
+                  <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-default)' }}>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Tháng</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Tổng Km chạy</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Số ngày lăn bánh</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">TB Km / Ngày chạy</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Tiền Xăng (₫)</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Bảo Dưỡng (₫)</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Chi phí / Km</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mileageAnalytics.monthlyReport.map((m, idx) => (
+                          <tr key={m.monthKey} style={{ borderBottom: '1px solid var(--border-subtle)', background: idx % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
+                            <td className="px-3.5 py-2.5 font-bold whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{m.monthLabel}</td>
+                            <td className="px-3.5 py-2.5 font-mono font-bold text-emerald-400 whitespace-nowrap">{fmt(m.totalKm)} km</td>
+                            <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--text-secondary)' }}>{m.activeDays} ngày</td>
+                            <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--accent-cyan)' }}>{m.avgKmPerActiveDay} km/ngày</td>
+                            <td className="px-3.5 py-2.5 font-mono text-amber-400">{fmt(m.fuelCost)} ₫</td>
+                            <td className="px-3.5 py-2.5 font-mono text-cyan-400">{fmt(m.maintCost)} ₫</td>
+                            <td className="px-3.5 py-2.5 font-mono font-bold" style={{ color: 'var(--status-red)' }}>{m.costPerKm > 0 ? `${fmt(m.costPerKm)} ₫` : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 3. THEO NĂM (YEARLY VIEW) */}
+              {odoViewMode === 'yearly' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {mileageAnalytics.yearlyReport.map((y) => (
+                      <div key={y.yearKey} className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                        <div className="flex items-center justify-between">
+                          <h5 className="font-extrabold text-base" style={{ color: 'var(--text-primary)' }}>Năm {y.yearKey}</h5>
+                          <span className="px-2.5 py-1 rounded-xl text-xs font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            {fmt(y.totalKm)} km
+                          </span>
+                        </div>
+
+                        <div className="space-y-1.5 text-xs pt-1">
+                          <div className="flex justify-between" style={{ color: 'var(--text-muted)' }}>
+                            <span>Trung bình mỗi tháng:</span>
+                            <strong className="font-mono text-cyan-400">{fmt(y.avgKmPerMonth)} km/tháng</strong>
+                          </div>
+                          <div className="flex justify-between" style={{ color: 'var(--text-muted)' }}>
+                            <span>Tổng chi phí vận hành:</span>
+                            <strong className="font-mono text-amber-400">{fmt(y.totalCost)} ₫</strong>
+                          </div>
+                          <div className="flex justify-between" style={{ color: 'var(--text-muted)' }}>
+                            <span>Chi phí trung bình / km:</span>
+                            <strong className="font-mono text-rose-400">{fmt(y.costPerKm)} ₫/km</strong>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

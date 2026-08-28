@@ -33,23 +33,57 @@ export function mapTripRow(row: any): TripRecord {
   };
 }
 
-export async function getTrips(assetId?: string): Promise<TripRecord[]> {
-  const supabase = createClient();
-  let query = supabase
-    .from('trips')
-    .select('*')
-    .order('start_time', { ascending: false })
-    .limit(100);
-  if (assetId) {
-    query = query.eq('asset_id', assetId);
+const LOCAL_TRIPS_KEY = 'fmms_local_trips';
+
+function getLocalTrips(): TripRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_TRIPS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
   }
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map(mapTripRow);
+}
+
+function saveLocalTrips(trips: TripRecord[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_TRIPS_KEY, JSON.stringify(trips));
+  } catch {}
+}
+
+export async function getTrips(assetId?: string): Promise<TripRecord[]> {
+  let supabaseTrips: TripRecord[] = [];
+  try {
+    const supabase = createClient();
+    let query = supabase
+      .from('trips')
+      .select('*')
+      .order('start_time', { ascending: false })
+      .limit(200);
+    if (assetId) {
+      query = query.eq('asset_id', assetId);
+    }
+    const { data, error } = await query;
+    if (!error && data) {
+      supabaseTrips = data.map(mapTripRow);
+    }
+  } catch {}
+
+  const localTrips = getLocalTrips().filter(t => !assetId || t.asset_id === assetId);
+
+  // Merge unique trips
+  const map = new Map<string, TripRecord>();
+  [...supabaseTrips, ...localTrips].forEach(item => {
+    if (!map.has(item.id)) {
+      map.set(item.id, item);
+    }
+  });
+
+  return Array.from(map.values()).sort((a, b) => (b.start_time || '').localeCompare(a.start_time || ''));
 }
 
 export async function createTrip(input: TripInput) {
-  const supabase = createClient();
   let duration = input.duration_seconds;
   if (duration == null && input.start_time && input.end_time) {
     duration = Math.max(
@@ -57,24 +91,111 @@ export async function createTrip(input: TripInput) {
       Math.round((new Date(input.end_time).getTime() - new Date(input.start_time).getTime()) / 1000),
     );
   }
-  const { data, error } = await supabase
-    .from('trips')
-    .insert({
-      asset_id: input.asset_id,
-      start_time: input.start_time,
-      end_time: input.end_time ?? input.start_time,
-      distance_km: input.distance_km ?? 0,
-      duration_seconds: duration ?? 0,
-      fuel_used_liters: input.fuel_used_liters ?? 0,
-      average_speed_kmh: input.average_speed_kmh ?? 0,
-      max_speed_kmh: input.max_speed_kmh ?? 0,
-      notes: input.start_location || input.end_location
-        ? `${input.start_location ?? ''}|${input.end_location ?? ''}`
-        : null,
-      status: 'COMPLETED',
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return mapTripRow(data);
+
+  let createdTrip: TripRecord = {
+    id: `TRIP_${Date.now()}`,
+    asset_id: input.asset_id,
+    start_time: input.start_time,
+    end_time: input.end_time ?? input.start_time,
+    distance_km: input.distance_km ?? 0,
+    duration_seconds: duration ?? 0,
+    fuel_used_liters: input.fuel_used_liters ?? 0,
+    average_speed_kmh: input.average_speed_kmh ?? 0,
+    max_speed_kmh: input.max_speed_kmh ?? 0,
+    start_location: input.start_location,
+    end_location: input.end_location,
+  };
+
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('trips')
+      .insert({
+        asset_id: input.asset_id,
+        start_time: input.start_time,
+        end_time: input.end_time ?? input.start_time,
+        distance_km: input.distance_km ?? 0,
+        duration_seconds: duration ?? 0,
+        fuel_used_liters: input.fuel_used_liters ?? 0,
+        average_speed_kmh: input.average_speed_kmh ?? 0,
+        max_speed_kmh: input.max_speed_kmh ?? 0,
+        notes: input.start_location || input.end_location
+          ? `${input.start_location ?? ''}|${input.end_location ?? ''}`
+          : input.notes || null,
+        status: 'COMPLETED',
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      createdTrip = mapTripRow(data);
+    }
+  } catch (err) {
+    console.warn('Supabase createTrip warning:', err);
+  }
+
+  const locals = getLocalTrips().filter(t => t.id !== createdTrip.id);
+  saveLocalTrips([createdTrip, ...locals]);
+
+  return createdTrip;
+}
+
+export async function updateTrip(id: string, input: Partial<TripInput>) {
+  try {
+    const supabase = createClient();
+    const updatePayload: any = {};
+    if (input.start_time) updatePayload.start_time = input.start_time;
+    if (input.end_time) updatePayload.end_time = input.end_time;
+    if (input.distance_km != null) updatePayload.distance_km = input.distance_km;
+    if (input.duration_seconds != null) updatePayload.duration_seconds = input.duration_seconds;
+    if (input.fuel_used_liters != null) updatePayload.fuel_used_liters = input.fuel_used_liters;
+    if (input.average_speed_kmh != null) updatePayload.average_speed_kmh = input.average_speed_kmh;
+    if (input.start_location || input.end_location) {
+      updatePayload.notes = `${input.start_location ?? ''}|${input.end_location ?? ''}`;
+    }
+
+    await supabase.from('trips').update(updatePayload).eq('id', id);
+  } catch (err) {
+    console.warn('Supabase updateTrip warning:', err);
+  }
+
+  const locals = getLocalTrips();
+  const idx = locals.findIndex(t => t.id === id);
+  if (idx >= 0) {
+    if (input.start_time) locals[idx].start_time = input.start_time;
+    if (input.end_time) locals[idx].end_time = input.end_time;
+    if (input.distance_km != null) locals[idx].distance_km = input.distance_km;
+    if (input.fuel_used_liters != null) locals[idx].fuel_used_liters = input.fuel_used_liters;
+    if (input.average_speed_kmh != null) locals[idx].average_speed_kmh = input.average_speed_kmh;
+    if (input.start_location != null) locals[idx].start_location = input.start_location;
+    if (input.end_location != null) locals[idx].end_location = input.end_location;
+    saveLocalTrips(locals);
+    return locals[idx];
+  }
+
+  return {
+    id,
+    asset_id: input.asset_id || '',
+    start_time: input.start_time || new Date().toISOString(),
+    end_time: input.end_time || new Date().toISOString(),
+    distance_km: input.distance_km || 0,
+    duration_seconds: input.duration_seconds || 0,
+    average_speed_kmh: input.average_speed_kmh || 0,
+    max_speed_kmh: 0,
+    start_location: input.start_location,
+    end_location: input.end_location,
+  };
+}
+
+export async function deleteTrip(id: string) {
+  try {
+    const supabase = createClient();
+    await supabase.from('trips').delete().eq('id', id);
+  } catch (err) {
+    console.warn('Supabase deleteTrip warning:', err);
+  }
+
+  const locals = getLocalTrips().filter(t => t.id !== id);
+  saveLocalTrips(locals);
+  return true;
 }
