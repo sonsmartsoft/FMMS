@@ -101,15 +101,25 @@ export async function createLoan(input: LoanInput): Promise<LoanRow> {
 
   const newLoan: LoanRow = {
     id: `loan_${Date.now()}`,
-    ...payload,
+    asset_id: realAssetId,
+    lender: input.lender,
     principal: Number(payload.principal),
     down_payment: Number(payload.down_payment) || 0,
     interest_rate_percent: Number(payload.interest_rate_percent),
+    preferred_rate_percent: input.preferred_rate_percent,
+    preferred_months: input.preferred_months,
+    floating_rate_percent: input.floating_rate_percent,
+    loan_ratio_percent: input.loan_ratio_percent,
     term_months: Number(payload.term_months),
+    start_date: input.start_date,
     monthly_payment: Number(payload.monthly_payment),
     payment_day: Number(payload.payment_day) || 15,
     current_balance: Number(payload.current_balance),
-    status: payload.status,
+    status: (payload.status ?? 'ACTIVE') as LoanRow['status'],
+    notes: input.notes,
+    bank_contact_name: input.bank_contact_name,
+    bank_contact_phone: input.bank_contact_phone,
+    bank_hotline: input.bank_hotline,
   };
 
   // 1. Save to LocalStorage
