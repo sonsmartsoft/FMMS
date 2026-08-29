@@ -611,20 +611,26 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
 
       {/* 1. Investment Modal (Mandatory Initial Rollout Expenses) */}
       {activeModal === 'investment' && (
-        <DrillDownModal title="💵 Investment — Chi phí mua xe &amp; Lăn bánh ban đầu" onClose={() => setActiveModal(null)}>
+        <DrillDownModal title="💵 Investment — Vốn tự có ban đầu (Trả trước + Lăn bánh)" onClose={() => setActiveModal(null)}>
           <div className="space-y-5 text-xs">
-            <div className="p-4 rounded-xl space-y-2 font-sans" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-              <div className="flex justify-between"><span>Giá niêm yết xe:</span><strong className="font-mono text-cyan-400">{fmt(investment)} ₫</strong></div>
-              <div className="flex justify-between"><span>Tổng chi phí lăn bánh ban đầu:</span><strong className="font-mono text-purple-400">{fmt(initialFeesTotal)} ₫</strong></div>
-              <div className="flex justify-between border-t pt-2 mt-1" style={{ borderColor: 'var(--border-subtle)' }}>
-                <span className="font-bold text-xs uppercase" style={{ color: 'var(--text-primary)' }}>TỔNG ĐẦU TƯ BAN ĐẦU:</span>
-                <strong className="font-mono text-base text-emerald-400 font-black">{fmt(totalValue)} ₫</strong>
+            <div className="p-4 rounded-xl space-y-2.5 font-sans" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="flex justify-between items-center py-0.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span>1. Tiền trả trước mua xe (Down payment):</span>
+                <strong className="font-mono text-cyan-400">{fmt(downPayment)} ₫</strong>
+              </div>
+              <div className="flex justify-between items-center py-0.5 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span>2. Tổng chi phí lăn bánh ban đầu (Thuế trước bạ, Biển số, BH...):</span>
+                <strong className="font-mono text-purple-400">{fmt(initialFeesTotal)} ₫</strong>
+              </div>
+              <div className="flex justify-between items-center pt-2 font-bold text-xs uppercase" style={{ color: 'var(--text-primary)' }}>
+                <span className="text-emerald-400">VỐN TỰ CÓ BAN ĐẦU (TOTAL INVESTMENT):</span>
+                <strong className="font-mono text-base text-emerald-400 font-black">{fmt(investment)} ₫</strong>
               </div>
             </div>
 
-            {/* Edit Purchase Price */}
+            {/* Edit Purchase Price & Down Payment */}
             <div className="p-3 rounded-xl space-y-2" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
-              <label className="text-[11px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Chỉnh sửa giá mua xe gốc (₫)</label>
+              <label className="text-[11px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Chỉnh sửa giá mua xe niêm yết (₫)</label>
               <div className="flex gap-2">
                 <input type="number" className="theme-input font-mono font-bold text-xs flex-1" value={purchasePriceInput} onChange={e => setPurchasePriceInput(e.target.value)} />
                 <button onClick={async () => {
@@ -891,20 +897,36 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
         <DrillDownModal title="💵 Cash Out — Thực chi dòng tiền từ túi" onClose={() => setActiveModal(null)}>
           <div className="space-y-4 text-xs">
             <p style={{ color: 'var(--text-muted)' }}>
-              Toàn bộ số tiền thực tế đã chi ra từ túi của chủ xe (Total Cost + Tiền gốc vay đã thanh toán).
+              Toàn bộ số tiền thực tế đã chi ra khỏi ví của chủ xe (Trả trước + Chi phí lăn bánh + Nâng cấp + Vận hành + Lãi vay + Gốc vay đã trả).
             </p>
-            <div className="space-y-2 p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+            <div className="space-y-2 p-3.5 rounded-xl font-sans" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
               <div className="flex justify-between items-center py-1 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                <span className="font-medium text-cyan-400">1. Tổng chi phí (Total Cost):</span>
-                <strong className="font-mono text-sm">{fmt(totalCost)} ₫</strong>
+                <span className="text-cyan-400 font-medium">1. Tiền trả trước mua xe (Down payment):</span>
+                <strong className="font-mono text-sm">{fmt(downPayment)} ₫</strong>
               </div>
               <div className="flex justify-between items-center py-1 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-                <span className="font-medium text-emerald-400">2. Gốc vay đã trả ngân hàng:</span>
+                <span className="text-purple-400 font-medium">2. Chi phí lăn bánh ban đầu (Initial rollout):</span>
+                <strong className="font-mono text-sm">{fmt(initialFeesTotal)} ₫</strong>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="text-indigo-400 font-medium">3. Nâng cấp &amp; Đồ độ (Upgrade):</span>
+                <strong className="font-mono text-sm">{fmt(totalUpgradeCost)} ₫</strong>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="text-amber-400 font-medium">4. Chi phí vận hành (Running: Xăng, Bảo dưỡng, BOT...):</span>
+                <strong className="font-mono text-sm">{fmt(totalRunningCost)} ₫</strong>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="text-pink-400 font-medium">5. Tiền lãi vay đã trả ngân hàng (Paid Interest):</span>
+                <strong className="font-mono text-sm">{fmt(totalInterest)} ₫</strong>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="text-emerald-400 font-medium">6. Tiền gốc vay đã trả ngân hàng (Paid Principal):</span>
                 <strong className="font-mono text-sm">{fmt(paidPrincipal)} ₫</strong>
               </div>
               <div className="flex justify-between items-center pt-2 font-bold text-sm">
-                <span className="text-rose-400">THỰC CHI TỪ TÚI (CASH OUT):</span>
-                <span className="font-mono text-base text-rose-400">{fmt(cashOut)} ₫</span>
+                <span className="text-rose-400 uppercase">TỔNG THỰC CHI TỪ TÚI (CASH OUT):</span>
+                <span className="font-mono text-base text-rose-400 font-black">{fmt(cashOut)} ₫</span>
               </div>
             </div>
           </div>
@@ -913,18 +935,48 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
 
       {/* 7. Total Value Modal */}
       {activeModal === 'totalValue' && (
-        <DrillDownModal title="🛡️ Total Value — Cập nhật giá trị thị trường xe" onClose={() => setActiveModal(null)}>
+        <DrillDownModal title="🛡️ Total Value — Tổng giá trị xe &amp; Lăn bánh ban đầu" onClose={() => setActiveModal(null)}>
           <div className="space-y-4 text-xs">
             <p style={{ color: 'var(--text-muted)' }}>
-              Cập nhật định giá thị trường xe hiện tại để tính chính xác Chi phí sở hữu (Ownership Cost).
+              Tổng giá trị ban đầu để sở hữu chiếc xe hợp pháp trên đường = Giá mua niêm yết + Toàn bộ chi phí lăn bánh ban đầu.
             </p>
-            <div className="space-y-1">
-              <label className="font-bold" style={{ color: 'var(--text-muted)' }}>Giá trị xe ước tính hiện tại (₫)</label>
-              <input type="number" className="theme-input font-mono font-bold" value={marketValueInput} onChange={e => setMarketValueInput(e.target.value)} />
+            <div className="space-y-2.5 p-3.5 rounded-xl font-sans" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="flex justify-between items-center py-1 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="text-blue-400 font-medium">1. Giá niêm yết xe (Car Purchase Price):</span>
+                <strong className="font-mono text-sm">{fmt(purchasePrice)} ₫</strong>
+              </div>
+              {loan && (
+                <div className="pl-3 py-1 space-y-1 text-[11px] border-b" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
+                  <div className="flex justify-between">
+                    <span>• Tiền trả trước (Down payment):</span>
+                    <span className="font-mono">{fmt(loan.down_payment)} ₫</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>• Vay ngân hàng (Loan principal):</span>
+                    <span className="font-mono">{fmt(loan.principal)} ₫</span>
+                  </div>
+                </div>
+              )}
+              <div className="flex justify-between items-center py-1 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="text-purple-400 font-medium">2. Chi phí lăn bánh ban đầu (Initial Rollout Fees):</span>
+                <strong className="font-mono text-sm">{fmt(initialFeesTotal)} ₫</strong>
+              </div>
+              <div className="flex justify-between items-center pt-2 font-bold text-sm">
+                <span className="text-emerald-400 uppercase">TỔNG GIÁ TRỊ XE LĂN BÁNH (TOTAL VALUE):</span>
+                <span className="font-mono text-base text-emerald-400 font-black">{fmt(totalValue)} ₫</span>
+              </div>
             </div>
-            <button onClick={handleSaveMarketValue} className="w-full py-2.5 rounded-xl bg-emerald-500 text-white font-bold text-xs">
-              Lưu định giá xe
-            </button>
+
+            {/* Quick Update Current Market Value */}
+            <div className="p-3 rounded-xl space-y-2" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+              <label className="text-[11px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Cập nhật định giá thị trường xe hiện tại (₫)</label>
+              <div className="flex gap-2">
+                <input type="number" className="theme-input font-mono font-bold text-xs flex-1" value={marketValueInput} onChange={e => setMarketValueInput(e.target.value)} />
+                <button onClick={handleSaveMarketValue} className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white font-bold text-xs shrink-0">
+                  Lưu định giá
+                </button>
+              </div>
+            </div>
           </div>
         </DrillDownModal>
       )}
