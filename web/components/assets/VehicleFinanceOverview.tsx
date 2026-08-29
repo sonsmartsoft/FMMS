@@ -10,7 +10,7 @@ import DraggableModal from '@/components/ui/DraggableModal';
 import {
   DollarSign, TrendingUp, TrendingDown, Wrench, Fuel, ShieldCheck,
   CreditCard, Landmark, PieChart, Plus, X, Edit2, Trash2, CheckCircle2, AlertCircle, ChevronRight, Sliders
-} from 'lucide-react';
+, Gauge } from 'lucide-react';
 
 interface PartItem {
   id?: string;
