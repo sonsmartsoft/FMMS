@@ -89,8 +89,8 @@ export default function DraggableModal({
       className={`fixed z-[9999] shadow-2xl ${className}`}
       style={{
         left: isMoved ? `${position.x}px` : '50%',
-        top: isMoved ? `${position.y}px` : '50%',
-        transform: isMoved ? 'none' : 'translate(-50%, -50%)',
+        top: isMoved ? `${position.y}px` : '140px',
+        transform: isMoved ? 'none' : 'translateX(-50%)',
         touchAction: 'none',
         cursor: isDragging ? 'grabbing' : 'auto',
       }}
