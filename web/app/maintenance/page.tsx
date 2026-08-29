@@ -808,6 +808,7 @@ export default function MaintenancePage() {
               <button onClick={() => setOpenModal(false)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
             </div>
           
+</div>
 </DraggableModal>
 
       )}

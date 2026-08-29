@@ -306,6 +306,7 @@ export default function MasterDataPage() {
               </button>
             </div>
           
+</div>
 </DraggableModal>
 
       )}
@@ -335,6 +336,7 @@ export default function MasterDataPage() {
               </button>
             </div>
           
+</div>
 </DraggableModal>
 
       )}

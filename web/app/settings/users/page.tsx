@@ -365,6 +365,7 @@ export default function UsersManagementPage() {
               </div>
             </div>
           
+</div>
 </DraggableModal>
 
       )}
@@ -418,6 +419,7 @@ export default function UsersManagementPage() {
               </div>
             </div>
           
+</div>
 </DraggableModal>
 
       )}
