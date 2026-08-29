@@ -615,11 +615,8 @@ export default function MaintenancePage() {
 
       {/* Multi-Service Maintenance Modal */}
       {openModal && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(false)}>
-
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-
-            <div className="relative rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+        <DraggableModal isOpen={true} onClose={() => setOpenModal(false)}>
+<div className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-3xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
 
             {/* Modal Sticky Header */}
             <div className="flex items-center justify-between p-4 sm:p-5 shrink-0 border-b z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
@@ -810,9 +807,9 @@ export default function MaintenancePage() {
               </button>
               <button onClick={() => setOpenModal(false)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
             </div>
-          </div>
-        </div>
-      </div>
+          
+</DraggableModal>
+
       )}
     </div>
   );

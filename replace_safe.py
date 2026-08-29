@@ -32,14 +32,12 @@ for path in files:
             last = imports[-1].end()
             content = content[:last] + "import DraggableModal from '@/components/ui/DraggableModal';\n" + content[last:]
 
-    # Match the start of the modal
     pattern = re.compile(
-        r'(<div[^>]*className="fixed\s+inset-0\s+z-\[9999\][^>]*>)\s*'
-        r'(<div[^>]*className="flex[^>]*>)\s*'
-        r'(<div[^>]*className="relative\s+rounded-2xl[^>]*>)'
+        r'(<div\s+className="fixed\s+inset-0\s+z-\[9999\].*?>)\s*'
+        r'(<div\s+className="flex.*?>)\s*'
+        r'(<div\s+className="relative\s+rounded-2xl.*?>)'
     )
     
-    # We will find all matches
     offset = 0
     while True:
         match = pattern.search(content, offset)
@@ -49,10 +47,6 @@ for path in files:
         start_idx = match.start()
         end_idx = match.end()
         
-        # We need to find the matching closing tag for the outer div (match.group(1))
-        # The outer div starts at match.start(1)
-        
-        # Bracket matching logic
         div_count = 0
         i = match.start(1)
         
@@ -60,8 +54,6 @@ for path in files:
         close_flex_idx = -1
         close_inner_idx = -1
         
-        # We are going to parse tags
-        # Find all <div and </div
         tag_pattern = re.compile(r'<\s*(/?)\s*div[^>]*>')
         
         for m in tag_pattern.finditer(content, i):
@@ -81,9 +73,6 @@ for path in files:
                     break
         
         if close_outer_idx != -1 and close_flex_idx != -1 and close_inner_idx != -1:
-            # We found the exact bounds!
-            
-            # Extract onClose
             m_onClick = re.search(r'onClick={\(\)\s*=>\s*([^}]+)}', match.group(1))
             if not m_onClick:
                 m_onClick = re.search(r'onClick={([^}]+)}', match.group(1))
@@ -100,12 +89,9 @@ for path in files:
             
             new_modal = f"<DraggableModal isOpen={{true}} onClose={{{on_close}}}>\n{inner_div}"
             
-            # Now we construct the new content
-            # Everything up to start_idx + new_modal + content between inner start and inner close + </DraggableModal> + content after outer close
             new_content = content[:start_idx] + new_modal + content[end_idx:close_inner_idx] + "\n</DraggableModal>\n" + content[close_outer_end:]
             
             content = new_content
-            # Next iteration starts from start_idx + length of new modal
             offset = start_idx + len(new_modal)
         else:
             offset = end_idx
