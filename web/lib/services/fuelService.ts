@@ -101,7 +101,37 @@ export async function getFuelLogs(assetId?: string): Promise<FuelLog[]> {
     }
   });
 
-  return allLogs;
+  // Calculate consumption_l100km per vehicle in chronological order
+  const logsByAsset: Record<string, FuelLog[]> = {};
+  allLogs.forEach(log => {
+    const aid = log.asset_id || 'DEFAULT';
+    if (!logsByAsset[aid]) logsByAsset[aid] = [];
+    logsByAsset[aid].push(log);
+  });
+
+  Object.values(logsByAsset).forEach(assetLogs => {
+    assetLogs.sort((a, b) => {
+      if (a.odometer_km && b.odometer_km && a.odometer_km !== b.odometer_km) {
+        return a.odometer_km - b.odometer_km;
+      }
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+
+    for (let i = 1; i < assetLogs.length; i++) {
+      const prev = assetLogs[i - 1];
+      const cur = assetLogs[i];
+      const deltaKm = cur.odometer_km - prev.odometer_km;
+      if (deltaKm > 5 && cur.liters > 0) {
+        cur.consumption_l100km = Number(((cur.liters / deltaKm) * 100).toFixed(1));
+      }
+    }
+  });
+
+  // Return sorted descending by date & odometer for display
+  return allLogs.sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return (b.odometer_km || 0) - (a.odometer_km || 0);
+  });
 }
 
 export async function createFuelLog(input: FuelLogInput, skipExpenseSync = false): Promise<FuelLog> {
@@ -110,10 +140,19 @@ export async function createFuelLog(input: FuelLogInput, skipExpenseSync = false
   const timestamp = input.timestamp?.includes('T') ? input.timestamp : `${input.timestamp || new Date().toISOString().slice(0, 10)}T12:00:00.000Z`;
   const cost = input.total_cost || Math.round((input.fuel_liters || 0) * (input.price_per_liter || 0));
 
+  let odo = input.odometer_km || 0;
+  if (!odo) {
+    try {
+      const { getAsset } = await import('./assetService');
+      const curAsset = await getAsset(realId);
+      odo = curAsset?.current_odometer_km || curAsset?.initial_odometer_km || 0;
+    } catch {}
+  }
+
   const payload = {
     asset_id: realId,
     timestamp,
-    odometer_km: input.odometer_km ?? 0,
+    odometer_km: odo,
     fuel_liters: input.fuel_liters ?? 0,
     price_per_liter: input.price_per_liter ?? 0,
     total_cost: cost,
@@ -148,7 +187,18 @@ export async function createFuelLog(input: FuelLogInput, skipExpenseSync = false
   // 2. Mutate in-memory mock data
   (MOCK_FUEL_LOGS as any[]).unshift(newLogObj);
 
-  // 3. Auto-sync to Expense Service if not skipped
+  // 3. Update Asset's current ODO if higher
+  if (odo > 0) {
+    try {
+      const { getAsset, updateAsset } = await import('./assetService');
+      const currentA = await getAsset(realId);
+      if (currentA && odo > (currentA.current_odometer_km || 0)) {
+        await updateAsset(realId, { current_odometer_km: odo });
+      }
+    } catch {}
+  }
+
+  // 4. Auto-sync to Expense Service if not skipped
   if (!skipExpenseSync && cost > 0) {
     try {
       const { createExpense } = await import('./expenseService');
@@ -160,9 +210,9 @@ export async function createFuelLog(input: FuelLogInput, skipExpenseSync = false
         amount: cost,
         currency: 'VND',
         vendor: input.station || undefined,
-        odometer_km: input.odometer_km || undefined,
+        odometer_km: odo > 0 ? odo : undefined,
         description: `Đổ ${input.fuel_liters}L xăng${input.station ? ` tại ${input.station}` : ''}${input.notes ? ` (${input.notes})` : ''}`,
-      }, true); // skip fuel sync back to prevent infinite loop
+      }, true); // skip fuel sync back
     } catch (eErr) {
       console.warn('Auto expense sync warning from createFuelLog:', eErr);
     }

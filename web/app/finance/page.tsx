@@ -97,7 +97,7 @@ export default function FinancePage() {
   const [paymentForm, setPaymentForm] = useState({ amount: '', paid_date: '', notes: '' });
   const [form, setForm] = useState({
     asset_id: '', date: '', category: 'Running', subcategory: 'Fuel',
-    amount: '', discount: '', vendor: '', description: '',
+    amount: '', discount: '', vendor: '', odometer_km: '', description: '',
   });
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
@@ -324,6 +324,7 @@ export default function FinancePage() {
       amount: String(e.amount),
       discount: '',
       vendor: e.vendor || '',
+      odometer_km: e.odometer_km ? String(e.odometer_km) : '',
       description: e.description || '',
     });
     setOpenModal(true);
@@ -343,6 +344,7 @@ export default function FinancePage() {
       amount: finalAmount,
       currency: 'VND',
       vendor: form.vendor || undefined,
+      odometer_km: form.odometer_km ? parseFloat(form.odometer_km) : undefined,
       description: fullDesc,
     };
     try {
@@ -1447,9 +1449,21 @@ export default function FinancePage() {
                 </div>
               )}
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Nhà cung cấp / Đơn vị</label>
-                <input type="text" className="theme-input" placeholder="VD: Showroom, Zestech, TPBank..." value={form.vendor} onChange={e => setForm(p => ({ ...p, vendor: e.target.value }))} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Số Odometer (KM hiện tại)</label>
+                  <input
+                    type="number"
+                    className="theme-input font-mono"
+                    placeholder={String(assets.find(a => a.id === form.asset_id)?.current_odometer_km || 0)}
+                    value={form.odometer_km}
+                    onChange={e => setForm(p => ({ ...p, odometer_km: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Nhà cung cấp / Cây xăng / Đơn vị</label>
+                  <input type="text" className="theme-input" placeholder="VD: Cây xăng Thaco, Garage..." value={form.vendor} onChange={e => setForm(p => ({ ...p, vendor: e.target.value }))} />
+                </div>
               </div>
 
               <div className="space-y-1">
