@@ -15,6 +15,7 @@ import { createOdometerAdjustment, getOdometerLogs, createOdometerLog, updateOdo
 import { getWarranties, createWarranty, updateWarranty, deleteWarranty, createWarrantyClaim } from '@/lib/services/warrantyService';
 import { createClient } from '@/lib/supabase/client';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
+import DraggableModal from '@/components/ui/DraggableModal';
 import {
   ArrowLeft, Gauge, Fuel, Wrench, DollarSign, FileText, BarChart3,
   Cpu, CheckCircle2, Plus, MapPin, Activity, Layers, Car, X, Pencil,

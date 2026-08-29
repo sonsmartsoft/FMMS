@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Users, Shield, Plus, Search, Key, Trash2, Check, Car, UserPlus, X, RefreshCw, Edit3 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getAssets } from '@/lib/services/assetService';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 interface UserMember {
   id: string;

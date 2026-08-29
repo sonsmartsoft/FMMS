@@ -5,6 +5,7 @@ import { getAssets } from '@/lib/services/assetService';
 import { getMaintenanceRecords, createMaintenanceRecord, updateMaintenanceRecord, deleteMaintenanceRecord } from '@/lib/services/maintenanceService';
 import { Asset, MaintenanceRecord } from '@/types/mobility';
 import { Wrench, Plus, X, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');

@@ -7,6 +7,7 @@ import { getLoans, getLoanPayments, createLoan, createLoanPayment, updateLoan, L
 import { ExpenseRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
 import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2, Pencil } from 'lucide-react';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
@@ -421,7 +422,7 @@ export default function FinancePage() {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
     setOpenModal(false); setEditId(null);
-    setForm({ asset_id: assets[0]?.id || '', date: '', category: 'Running', subcategory: 'Fuel', amount: '', discount: '', vendor: '', description: '' });
+    setForm({ asset_id: assets[0]?.id || '', date: '', category: 'Running', subcategory: 'Fuel', amount: '', discount: '', vendor: '', odometer_km: '', description: '' });
   };
 
   const deleteExpenseHandler = async (id: string) => {

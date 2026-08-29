@@ -9,6 +9,7 @@ import { getAssets } from '@/lib/services/assetService';
 import { getDeviceLatestPositions, subscribeToLivePositions, DeviceLatestPosition } from '@/lib/services/gpsService';
 import { getDevices, updateDevice, assignDeviceToVehicle, deleteDevice, DeviceRecord } from '@/lib/services/deviceService';
 import { Asset } from '@/types/mobility';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 

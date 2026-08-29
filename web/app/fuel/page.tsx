@@ -6,6 +6,7 @@ import { getAssets } from '@/lib/services/assetService';
 import { getFuelLogs, createFuelLog, updateFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
 import { Asset } from '@/types/mobility';
 import { Fuel, Zap, TrendingDown, Plus, X, Pencil, Trash2, Check } from 'lucide-react';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => {

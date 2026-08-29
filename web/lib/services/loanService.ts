@@ -79,6 +79,7 @@ export async function createLoan(input: LoanInput): Promise<LoanRow> {
   const supabase = createClient();
   const payload: Record<string, any> = {
     asset_id: realAssetId,
+    start_date: input.start_date,
     lender: input.lender,
     principal: input.principal,
     down_payment: input.down_payment,
@@ -102,6 +103,7 @@ export async function createLoan(input: LoanInput): Promise<LoanRow> {
   const newLoan: LoanRow = {
     id: `loan_${Date.now()}`,
     asset_id: realAssetId,
+    start_date: input.start_date,
     lender: input.lender,
     principal: Number(payload.principal),
     down_payment: Number(payload.down_payment) || 0,

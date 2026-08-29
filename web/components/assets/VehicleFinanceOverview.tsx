@@ -5,6 +5,7 @@ import { Asset, LoanRecord, ExpenseRecord } from '@/types/mobility';
 import { getLoanPayments, createLoanPayment, updateLoanPayment, updateLoan, createLoan, updateLoanFull, deleteLoan } from '@/lib/services/loanService';
 import { updateAsset } from '@/lib/services/assetService';
 import { createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
+import DraggableModal from '@/components/ui/DraggableModal';
 import {
   DollarSign, TrendingUp, TrendingDown, Wrench, Fuel, ShieldCheck,
   CreditCard, Landmark, PieChart, Plus, X, Edit2, Trash2, CheckCircle2, AlertCircle, ChevronRight, Sliders

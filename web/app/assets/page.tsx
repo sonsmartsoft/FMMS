@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getAssets, createAsset } from '@/lib/services/assetService';
 import { Asset, AssetType } from '@/types/mobility';
 import { Car, Bike, Zap, Plus, Search, Filter, ChevronRight, X } from 'lucide-react';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 const TYPE_LABELS: Record<string, string> = {
   ALL: 'Tất cả', CAR: 'Ô Tô', MOTORCYCLE: 'Mô Tô', BICYCLE: 'Xe Đạp', E_BIKE: 'Xe Điện',

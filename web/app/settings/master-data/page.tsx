@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Database, Plus, Trash2, Check, Pencil, Sliders, X, Save, Wrench } from 'lucide-react';
 
 import { TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 export default function MasterDataPage() {
   const [taxonomy, setTaxonomy] = useState<Record<string, { label: string; subcategories: Record<string, string> }>>(TAXONOMY);

@@ -11,6 +11,7 @@ import { getExpenses } from '@/lib/services/expenseService';
 import { getLoans } from '@/lib/services/loanService';
 import { importSampleData } from '@/lib/services/sampleDataImporter';
 import { Plus, Car, Bike, Zap, Gauge, DollarSign, Fuel, Sparkles, Search, X, Download, Sliders } from 'lucide-react';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 interface HomePageProps {
   cardSettings?: CardDisplaySettings;

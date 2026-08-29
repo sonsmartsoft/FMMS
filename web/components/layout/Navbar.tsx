@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Car, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, X, Save } from 'lucide-react';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { createClient } from '@/lib/supabase/client';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 interface NavbarProps {
   onOpenSettings?: () => void;

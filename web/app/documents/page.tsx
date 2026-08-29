@@ -10,6 +10,7 @@ import {
   getDocuments, createDocument, updateDocument, deleteDocument, DocumentRow
 } from '@/lib/services/documentService';
 import { FileText, CheckCircle2, AlertCircle, Clock, Plus, X, Pencil, Trash2, Shield, Save } from 'lucide-react';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
 

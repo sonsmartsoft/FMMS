@@ -6,6 +6,7 @@ import { Award, Plus, Search, CheckCircle2, Clock, AlertCircle, Shield, FileText
 import { getAssets } from '@/lib/services/assetService';
 import { getWarranties, getWarrantyClaims, createWarranty, createWarrantyClaim, WarrantyRecord, WarrantyClaimRecord } from '@/lib/services/warrantyService';
 import { getParts } from '@/lib/services/partService';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';

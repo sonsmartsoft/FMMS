@@ -3,6 +3,7 @@
 import React from 'react';
 import { CardDisplaySettings } from '@/types/mobility';
 import { X, Check, Sliders } from 'lucide-react';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 interface DisplaySettingsModalProps {
   isOpen: boolean;
