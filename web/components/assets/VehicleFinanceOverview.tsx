@@ -593,7 +593,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
           return (
             <div
               key={card.id}
-              onClick={() => { if(card.href) router.push(card.href); else handleCardClick(card.id); }}
+              onClick={() => handleCardClick(card.id)}
               className="glass-card p-4 rounded-2xl cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg relative overflow-hidden group"
               style={{ background: 'var(--bg-secondary)', border: `1px solid ${card.border}` }}
             >
