@@ -88,7 +88,6 @@ export async function createLoan(input: LoanInput): Promise<LoanRow> {
     preferred_months: input.preferred_months,
     floating_rate_percent: input.floating_rate_percent,
     loan_ratio_percent: input.loan_ratio_percent,
-    term_months: Number(payload.term_months),
     term_months: input.term_months,
     monthly_payment: input.monthly_payment,
     payment_day: input.payment_day,
