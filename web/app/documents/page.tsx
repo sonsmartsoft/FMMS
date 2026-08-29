@@ -420,9 +420,9 @@ export default function DocumentsPage() {
       )}
 
       {openAddModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
-          <div
-            className="rounded-2xl w-full max-w-2xl my-auto flex flex-col shadow-2xl overflow-hidden"
+        <DraggableModal isOpen={true} onClose={() => () => {}}>
+<div
+            className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-2xl my-auto flex flex-col shadow-2xl overflow-hidden"
             style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: '90vh' }}
             onClick={e => e.stopPropagation()}
           >
@@ -516,14 +516,16 @@ export default function DocumentsPage() {
               </button>
               <button onClick={() => setOpenAddModal(false)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
             </div>
-          </div>
-        </div>
+          
+</div>
+</DraggableModal>
+
       )}
 
       {editingItem && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setEditingItem(null)}>
-          <div
-            className="rounded-2xl w-full max-w-2xl my-auto flex flex-col shadow-2xl overflow-hidden"
+        <DraggableModal isOpen={true} onClose={() => () => {}}>
+<div
+            className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-2xl my-auto flex flex-col shadow-2xl overflow-hidden"
             style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: '90vh' }}
             onClick={e => e.stopPropagation()}
           >
@@ -579,8 +581,10 @@ export default function DocumentsPage() {
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+          
+</div>
+</DraggableModal>
+
       )}
 
       {filteredGroups.length === 0 && (

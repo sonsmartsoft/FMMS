@@ -378,9 +378,8 @@ export default function WarrantiesPage() {
 
       {/* Add Warranty Modal */}
       {openModal === 'warranty' && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-            <div className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }} onClick={e => e.stopPropagation()}>
+        <DraggableModal isOpen={true} onClose={() => () => {}}>
+<div className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
                 <div>
                   <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -440,16 +439,16 @@ export default function WarrantiesPage() {
                 </button>
                 <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
               </div>
-            </div>
-          </div>
-        </div>
+            
+</div>
+</DraggableModal>
+
       )}
 
       {/* Add Claim Modal */}
       {openModal === 'claim' && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenModal(null)}>
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-            <div className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 580px)' }} onClick={e => e.stopPropagation()}>
+        <DraggableModal isOpen={true} onClose={() => () => {}}>
+<div className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-2xl flex flex-col shadow-2xl overflow-hidden" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 580px)' }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
                 <div>
                   <h3 className="font-extrabold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -497,9 +496,10 @@ export default function WarrantiesPage() {
                 </button>
                 <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-black/5 transition" style={{ color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
               </div>
-            </div>
-          </div>
-        </div>
+            
+</div>
+</DraggableModal>
+
       )}
     </div>
   );

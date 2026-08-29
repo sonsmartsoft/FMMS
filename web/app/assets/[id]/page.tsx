@@ -95,13 +95,9 @@ function generateLoanSchedule(loan: any, payments: any[]) {
 /* ── Shared Modal Wrapper ─────────────────────────────────────── */
 function Modal({ title, onClose, children, maxWidth = 'max-w-2xl' }: { title: string; onClose: () => void; children: React.ReactNode; maxWidth?: string }) {
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto backdrop-blur-md"
-      style={{ background: 'rgba(0,0,0,0.75)' }}
-      onClick={onClose}
-    >
-      <div
-        className={`rounded-2xl w-full ${maxWidth} my-auto flex flex-col shadow-2xl overflow-hidden`}
+    <DraggableModal isOpen={true} onClose={() => onClose}>
+<div
+        className={`rounded-2xl w-[90vw] sm:w-[600px] ${maxWidth} my-auto flex flex-col shadow-2xl overflow-hidden`}
         style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: '90vh' }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -114,8 +110,10 @@ function Modal({ title, onClose, children, maxWidth = 'max-w-2xl' }: { title: st
           </button>
         </div>
         <div className="flex-1 min-h-[250px] overflow-y-auto p-4 sm:p-6 space-y-4 text-xs">{children}</div>
-      </div>
-    </div>
+      
+</div>
+</DraggableModal>
+
   );
 }
 

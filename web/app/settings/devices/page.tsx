@@ -336,10 +336,8 @@ export default function DeviceManagementPage() {
 
       {/* EDIT & DEVICE ASSIGNMENT MODAL */}
       {editingDevice && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md"
-          style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setEditingDevice(null)}>
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-            <div className="w-full max-w-md p-6 rounded-2xl space-y-4 border shadow-2xl animate-scaleIn"
+        <DraggableModal isOpen={true} onClose={() => () => {}}>
+<div className="cursor-grab active:cursor-grabbing relative w-[90vw] sm:w-[600px] max-w-md p-6 rounded-2xl space-y-4 border shadow-2xl animate-scaleIn"
               style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)' }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
                 <h3 className="font-bold text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
@@ -450,9 +448,10 @@ export default function DeviceManagementPage() {
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
+            
+</div>
+</DraggableModal>
+
       )}
     </div>
   );

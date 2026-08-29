@@ -269,10 +269,9 @@ export default function AssetsPage() {
 
       {/* Add Asset Modal */}
       {openAddModal && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-            <div
-              className="rounded-2xl w-full max-w-2xl flex flex-col shadow-2xl overflow-hidden"
+        <DraggableModal isOpen={true} onClose={() => () => {}}>
+<div
+              className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-2xl flex flex-col shadow-2xl overflow-hidden"
               style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }}
               onClick={e => e.stopPropagation()}
             >
@@ -508,9 +507,10 @@ export default function AssetsPage() {
                   Hủy
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
+            
+</div>
+</DraggableModal>
+
       )}
     </div>
   );

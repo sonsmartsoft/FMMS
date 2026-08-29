@@ -1150,8 +1150,8 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
 
 function DrillDownModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 backdrop-blur-md overflow-hidden" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={onClose}>
-      <div className="glass-panel rounded-2xl w-full max-w-lg my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+    <DraggableModal isOpen={true} onClose={() => onClose}>
+<div className="cursor-grab active:cursor-grabbing relative glass-panel rounded-2xl w-[90vw] sm:w-[600px] max-w-lg my-auto max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-4 sm:p-5 border-b shrink-0 z-20" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
           <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{title}</h3>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-500/10" style={{ color: 'var(--text-muted)' }}><X className="w-5 h-5" /></button>
@@ -1159,7 +1159,9 @@ function DrillDownModal({ title, onClose, children }: { title: string; onClose: 
         <div className="flex-1 overflow-y-auto p-4 sm:p-5">
           {children}
         </div>
-      </div>
-    </div>
+      
+</div>
+</DraggableModal>
+
   );
 }

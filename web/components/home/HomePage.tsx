@@ -373,8 +373,8 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       </div>
       {/* ─── Add Asset Modal ─── */}
       {openAddModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenAddModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-lg my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+        <DraggableModal isOpen={true} onClose={() => () => {}}>
+<div className="cursor-grab active:cursor-grabbing relative glass-panel rounded-2xl w-[90vw] sm:w-[600px] max-w-lg my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
                 <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Thêm phương tiện mới</h3>
@@ -454,13 +454,15 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
                   style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
               </div>
             </div>
-          </div>
-        </div>
+          
+</div>
+</DraggableModal>
+
       )}
       {/* ─── Card Configuration Modal (Spec v5.2 §224) ─── */}
       {openCardConfigModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenCardConfigModal(false)}>
-          <div className="glass-panel rounded-2xl w-full max-w-md my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
+        <DraggableModal isOpen={true} onClose={() => () => {}}>
+<div className="cursor-grab active:cursor-grabbing relative glass-panel rounded-2xl w-[90vw] sm:w-[600px] max-w-md my-auto max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 sticky top-0 z-10" style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
                 <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Cấu hình hiển thị thẻ phương tiện</h3>
@@ -494,8 +496,10 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+          
+</div>
+</DraggableModal>
+
       )}
     </div>
   );

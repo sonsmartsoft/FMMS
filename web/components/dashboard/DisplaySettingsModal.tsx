@@ -46,9 +46,8 @@ export const DisplaySettingsModal: React.FC<DisplaySettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 backdrop-blur-md animate-fadeIn"
-      style={{ background: 'rgba(0,0,0,0.75)' }}>
-      <div className="glass-panel w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+    <DraggableModal isOpen={true} onClose={() => () => {}}>
+<div className="cursor-grab active:cursor-grabbing relative glass-panel w-[90vw] sm:w-[600px] max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}>
 
         {/* Header */}
@@ -114,7 +113,9 @@ export const DisplaySettingsModal: React.FC<DisplaySettingsModalProps> = ({
             Lưu cấu hình
           </button>
         </div>
-      </div>
-    </div>
+      
+</div>
+</DraggableModal>
+
   );
 };

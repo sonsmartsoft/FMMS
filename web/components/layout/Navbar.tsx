@@ -273,13 +273,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
           so it is not constrained by z-40 stacking ctx
           ══════════════════════════════════════════════ */}
       {showEditModal && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-md"
-          style={{ background: 'rgba(0,0,0,0.75)' }}
-          onClick={() => setShowEditModal(false)}
-        >
-          <div
-            className="glass-panel rounded-2xl w-full max-w-md my-auto shadow-2xl overflow-hidden"
+        <DraggableModal isOpen={true} onClose={() => () => {}}>
+<div
+            className="cursor-grab active:cursor-grabbing relative glass-panel rounded-2xl w-[90vw] sm:w-[600px] max-w-md my-auto shadow-2xl overflow-hidden"
             style={{ border: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}
             onClick={e => e.stopPropagation()}
           >
@@ -341,8 +337,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+          
+</div>
+</DraggableModal>
+
       )}
     </>
   );
