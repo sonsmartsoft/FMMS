@@ -1516,10 +1516,9 @@ export default function FinancePage() {
 
       {/* ─── Edit Single Period Payment Modal ─── */}
       {openEditPeriodModal && editingPeriod && (
-        <div className="fixed inset-0 z-[9999] overflow-y-auto backdrop-blur-md" style={{ background: 'rgba(0,0,0,0.75)' }} onClick={() => setOpenEditPeriodModal(false)}>
-          <div className="flex min-h-full items-center justify-center p-4 sm:p-6 pt-20">
-            <div
-              className="relative rounded-2xl w-full max-w-lg flex flex-col shadow-2xl overflow-hidden"
+        <DraggableModal isOpen={true} onClose={() => setOpenEditPeriodModal(false)}>
+<div
+              className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-lg flex flex-col shadow-2xl overflow-hidden"
               style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)', maxHeight: 'min(85vh, 620px)' }}
               onClick={e => e.stopPropagation()}
             >
@@ -1641,9 +1640,10 @@ export default function FinancePage() {
                   Hủy
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
+            
+</div>
+</DraggableModal>
+
       )}
     </div>
   );
