@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Asset, LoanRecord, ExpenseRecord } from '@/types/mobility';
 import { getLoanPayments, createLoanPayment, updateLoanPayment, updateLoan, createLoan, updateLoanFull, deleteLoan } from '@/lib/services/loanService';
 import { updateAsset } from '@/lib/services/assetService';
