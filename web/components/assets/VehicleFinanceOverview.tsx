@@ -529,7 +529,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       id: 'usage',
       title: 'Usage / Odometer',
       sub: 'Quãng đường & Tình trạng',
-      value: `${fmt(asset.odometer_km || 0)} km`,
+      value: `${fmt(asset.current_odometer_km || 0)} km`,
       color: '#10B981',
       bg: 'rgba(16,185,129,0.12)',
       border: 'rgba(16,185,129,0.3)',
