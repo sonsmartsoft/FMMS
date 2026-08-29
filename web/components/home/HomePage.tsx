@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useEffect, useState } from 'react';
 import { DEFAULT_CARD_SETTINGS } from '@/lib/data/mockData';
 import { AssetCard } from '@/components/dashboard/AssetCard';
@@ -172,6 +173,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
   const KPI = [
     {
       label: 'Tổng phương tiện',
+      href: '/assets',
       value: `${assets.length} tài sản`,
       sub: loading ? 'Đang tải...' : assets.some(a => a.status === 'MAINTENANCE') ? '● Có xe đang bảo dưỡng' : '● Tất cả đang hoạt động tốt',
       subColor: 'var(--status-green)',
@@ -183,6 +185,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
     },
     {
       label: 'Quãng đường tháng này',
+      href: '/fuel',
       value: `${totalDistanceThisMonth.toLocaleString('vi-VN')} km`,
       sub: trips.length > 0 ? `${trips.length} chuyến ghi nhận` : 'Chưa có chuyến đi',
       subColor: 'var(--accent-cyan)',
@@ -194,6 +197,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
     },
     {
       label: 'Tốn nhiên liệu / Pin',
+      href: '/fuel',
       value: `${totalFuelCostThisMonth.toLocaleString('vi-VN')} ₫`,
       sub: `${fuelLogs.length} lần ghi nhận`,
       subColor: 'var(--text-muted)',
@@ -205,6 +209,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
     },
     {
       label: 'Dư nợ khoản vay',
+      href: '/finance',
       value: totalLoanBalance > 0 ? `${(totalLoanBalance / 1_000_000).toFixed(0)}M ₫` : '0 ₫',
       sub: loans.length > 0 ? `${loans.length} khoản · ${(totalLoanMonthly / 1_000_000).toFixed(1)}M ₫/tháng` : 'Không có khoản vay',
       subColor: 'var(--text-muted)',
@@ -280,7 +285,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {KPI.map((k, i) => (
-          <div key={i} className="glass-card p-4 rounded-2xl flex items-center justify-between"
+          <Link href={k.href} key={i} className="glass-card p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:scale-[1.02] transition-transform"
             style={{ border: '1px solid var(--border-default)' }}>
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{k.label}</p>
@@ -291,7 +296,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
               style={{ background: k.iconBg, color: k.iconColor, border: `1px solid ${k.iconBorder}` }}>
               <k.icon className="w-5 h-5" />
             </div>
-          </div>
+          </Link>
         ))}
       </div>
 

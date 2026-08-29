@@ -138,6 +138,7 @@ function generate2TierLoanSchedule(loan: LoanRecord | null, payments: any[]) {
 }
 
 export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRefresh, onNavigateTab }: VehicleFinanceOverviewProps) {
+  const router = useRouter();
   const [payments, setPayments] = useState<any[]>([]);
   const [bankList, setBankList] = useState<string[]>(DEFAULT_BANKS);
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -454,6 +455,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     {
       id: 'investment',
       title: 'Investment',
+      href: '/assets',
       sub: 'Vốn tự có ban đầu',
       value: `${fmt(investment)} ₫`,
       color: '#3B82F6',
@@ -465,6 +467,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     {
       id: 'upgrade',
       title: 'Upgrade',
+      href: '/maintenance',
       sub: 'Đồ độ & Nâng cấp',
       value: `${fmt(totalUpgradeCost)} ₫`,
       color: '#A78BFA',
@@ -476,6 +479,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     {
       id: 'running',
       title: 'Running',
+      href: '/fuel',
       sub: 'Chi phí vận hành',
       value: `${fmt(totalRunningCost)} ₫`,
       color: '#F59E0B',
@@ -487,6 +491,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     {
       id: 'interest',
       title: 'Interest',
+      href: '/finance',
       sub: 'Lãi vay ngân hàng',
       value: `${fmt(totalInterest)} ₫`,
       color: '#EC4899',
@@ -498,6 +503,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     {
       id: 'totalCost',
       title: 'Total Cost',
+      href: '/finance',
       sub: 'Tổng chi phí toàn bộ',
       value: `${fmt(totalCost)} ₫`,
       color: '#0EA5E9',
@@ -509,6 +515,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     {
       id: 'cashOut',
       title: 'Cash Out',
+      href: '/finance',
       sub: 'Thực chi từ túi',
       value: `${fmt(cashOut)} ₫`,
       color: '#F43F5E',
@@ -518,19 +525,21 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       detailText: 'Tổng chi phí + Gốc vay đã thanh toán',
     },
     {
-      id: 'totalValue',
-      title: 'Total Value',
-      sub: 'Tổng giá trị xe & lăn bánh',
-      value: `${fmt(totalValue)} ₫`,
+      id: 'usage',
+      title: 'Usage / Odometer',
+      sub: 'Quãng đường & Tình trạng',
+      value: `${fmt(asset.odometer_km || 0)} km`,
       color: '#10B981',
       bg: 'rgba(16,185,129,0.12)',
       border: 'rgba(16,185,129,0.3)',
-      icon: ShieldCheck,
-      detailText: `Giá xe ${fmt(purchasePrice)}₫ + Phí lăn bánh ${fmt(initialFeesTotal)}₫`,
+      icon: Gauge,
+      detailText: `Trạng thái: ${asset.status === 'ACTIVE' ? 'Hoạt động tốt' : asset.status === 'MAINTENANCE' ? 'Đang bảo dưỡng' : 'Không hoạt động'}`,
+      href: '/fuel',
     },
     {
       id: 'remaining',
       title: 'Remaining (Loan)',
+      href: '/finance',
       sub: 'Dư nợ vay còn lại',
       value: `${fmt(remainingLoan)} ₫`,
       color: '#FB923C',
@@ -542,6 +551,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     {
       id: 'ownership',
       title: 'Ownership Cost',
+      href: '/finance',
       sub: 'Tổng chi phí cam kết & thực tế',
       value: `${fmt(ownershipCost)} ₫`,
       color: '#8B5CF6',
@@ -582,7 +592,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
           return (
             <div
               key={card.id}
-              onClick={() => handleCardClick(card.id)}
+              onClick={() => { if(card.href) router.push(card.href); else handleCardClick(card.id); }}
               className="glass-card p-4 rounded-2xl cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg relative overflow-hidden group"
               style={{ background: 'var(--bg-secondary)', border: `1px solid ${card.border}` }}
             >
