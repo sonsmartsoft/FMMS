@@ -40,6 +40,7 @@ export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
     } catch {}
   }
 
+  let dbExpenses: ExpenseRecord[] = [];
   try {
     const supabase = createClient();
     let query = supabase.from('expenses').select('*').order('date', { ascending: false });
@@ -48,25 +49,35 @@ export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
     }
     const { data, error } = await query;
     if (!error && data && data.length > 0) {
-      const rows = data.map(mapExpenseRow);
-      return rows.map(r => customMap[r.id] ? { ...r, ...customMap[r.id] } : r);
+      dbExpenses = data.map(mapExpenseRow);
     }
   } catch {}
 
-  const mergedMock = MOCK_EXPENSES.map(e => customMap[e.id] ? { ...e, ...customMap[e.id] } : e);
-  return mergedMock.filter(e => 
-    !assetId || 
-    e.asset_id === realId || 
-    e.asset_id === assetId
-  );
+  let allExpenses: ExpenseRecord[] = dbExpenses.length > 0
+    ? dbExpenses
+    : (MOCK_EXPENSES as any[]).filter(e => !assetId || e.asset_id === realId || e.asset_id === assetId);
+
+  // Apply custom edits from localStorage
+  allExpenses = allExpenses.map(item => customMap[item.id] ? { ...item, ...customMap[item.id] } : item);
+
+  // Add any new locally created items not in DB/mock
+  Object.values(customMap).forEach((customItem: any) => {
+    if (!allExpenses.some(e => e.id === customItem.id)) {
+      if (!assetId || customItem.asset_id === realId || customItem.asset_id === assetId) {
+        allExpenses.unshift(customItem);
+      }
+    }
+  });
+
+  return allExpenses;
 }
 
-export async function createExpense(data: ExpenseInput) {
+export async function createExpense(data: ExpenseInput, skipAutoLinks = false): Promise<ExpenseRecord> {
   const realId = resolveAssetId(data.asset_id);
   const supabase = createClient();
   const payload: any = {
     asset_id: realId,
-    date: data.date,
+    date: data.date || new Date().toISOString().slice(0, 10),
     category: data.category,
     subcategory: data.subcategory ?? null,
     sub_category: data.subcategory ?? null,
@@ -77,13 +88,14 @@ export async function createExpense(data: ExpenseInput) {
     description: data.description ?? null,
   };
 
-  const newExpObj = {
+  const newExpObj: ExpenseRecord = {
     id: `EX_${Date.now()}`,
     ...payload,
     currency: payload.currency,
     description: payload.description || '',
-  } as ExpenseRecord;
+  };
 
+  // 1. Save to LocalStorage
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('fmms_custom_expenses');
@@ -93,8 +105,71 @@ export async function createExpense(data: ExpenseInput) {
     } catch {}
   }
 
+  // 2. Mutate in-memory mock data
   (MOCK_EXPENSES as any[]).unshift(newExpObj);
 
+  // 3. Auto cross-module sync if not skipped
+  if (!skipAutoLinks && data.amount > 0) {
+    const isFuel = (data.category === 'Running' || data.category === 'Fuel') &&
+      (data.subcategory === 'Fuel' || (data.description && (data.description.toLowerCase().includes('xăng') || data.description.toLowerCase().includes('đổ xăng'))));
+
+    if (isFuel) {
+      try {
+        const { createFuelLog } = await import('./fuelService');
+        const estLiters = Math.round((data.amount / 24000) * 10) / 10;
+        await createFuelLog({
+          asset_id: realId,
+          timestamp: data.date ? `${data.date}T12:00:00.000Z` : new Date().toISOString(),
+          odometer_km: data.odometer_km || 0,
+          fuel_liters: estLiters,
+          price_per_liter: 24000,
+          total_cost: data.amount,
+          station: data.vendor || 'Cây xăng',
+          tank_full: true,
+          notes: data.description || 'Đổ xăng từ chi phí',
+        }, true); // skipExpenseSync = true
+      } catch (fErr) {
+        console.warn('Auto fuel log sync warning from createExpense:', fErr);
+      }
+    }
+
+    if (data.category === 'Maintenance') {
+      try {
+        const { createMaintenanceRecord } = await import('./maintenanceService');
+        await createMaintenanceRecord({
+          asset_id: realId,
+          maintenance_type: data.subcategory || data.description || 'Bảo dưỡng định kỳ',
+          date: data.date || new Date().toISOString().slice(0, 10),
+          odometer_km: data.odometer_km || 0,
+          cost: data.amount,
+          vendor: data.vendor || undefined,
+          notes: data.description || undefined,
+        }, true); // skipExpenseSync = true
+      } catch (mErr) {
+        console.warn('Auto maintenance sync warning from createExpense:', mErr);
+      }
+    }
+
+    if (data.category === 'Upgrade') {
+      try {
+        const { createPart } = await import('./partService');
+        await createPart({
+          asset_id: realId,
+          part_name: data.description || 'Nâng cấp / Phụ kiện',
+          brand: data.vendor || undefined,
+          supplier: 'Nâng cấp',
+          installation_date: data.date || new Date().toISOString().slice(0, 10),
+          cost: data.amount,
+          installed_odometer_km: data.odometer_km || undefined,
+          notes: `Tự động tạo từ chi phí ${data.subcategory || 'Upgrade'}`,
+        });
+      } catch (pErr) {
+        console.warn('Auto part sync warning from createExpense:', pErr);
+      }
+    }
+  }
+
+  // 4. Save to Supabase
   try {
     let { data: created, error } = await supabase
       .from('expenses')
@@ -121,6 +196,7 @@ export async function createExpense(data: ExpenseInput) {
   } catch (err) {
     console.warn('createExpense Supabase fallback:', err);
   }
+
   return newExpObj;
 }
 

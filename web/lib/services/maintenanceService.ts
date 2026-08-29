@@ -54,6 +54,7 @@ export async function getMaintenanceRecords(assetId?: string): Promise<Maintenan
     } catch {}
   }
 
+  let dbMaint: MaintenanceRecord[] = [];
   try {
     const supabase = createClient();
     let query = supabase.from('maintenance_records').select('*').order('date', { ascending: false });
@@ -62,28 +63,42 @@ export async function getMaintenanceRecords(assetId?: string): Promise<Maintenan
     }
     const { data, error } = await query;
     if (!error && data && data.length > 0) {
-      const rows = data.map(mapMaintenanceRow);
-      return rows.map(r => customMap[r.id] ? { ...r, ...customMap[r.id] } : r);
+      dbMaint = data.map(mapMaintenanceRow);
     }
   } catch {}
 
-  const mergedMock = MOCK_MAINTENANCE_RECORDS.map(m => customMap[m.id] ? { ...m, ...customMap[m.id] } : m);
-  return mergedMock.filter(m => 
-    !assetId || 
-    m.asset_id === realId || 
-    m.asset_id === assetId || 
-    (assetId === 'CAR01' && m.asset_id === '22222222-2222-2222-2222-222222222222') || 
-    (m.asset_id === 'CAR01' && assetId === '22222222-2222-2222-2222-222222222222')
-  );
+  let allMaint: MaintenanceRecord[] = dbMaint.length > 0
+    ? dbMaint
+    : (MOCK_MAINTENANCE_RECORDS as any[]).filter(m => 
+        !assetId || 
+        m.asset_id === realId || 
+        m.asset_id === assetId || 
+        (assetId === 'CAR01' && m.asset_id === '22222222-2222-2222-2222-222222222222') || 
+        (m.asset_id === 'CAR01' && assetId === '22222222-2222-2222-2222-222222222222')
+      );
+
+  // Apply custom edits from localStorage
+  allMaint = allMaint.map(item => customMap[item.id] ? { ...item, ...customMap[item.id] } : item);
+
+  // Add any new locally created items not in DB/mock
+  Object.values(customMap).forEach((customItem: any) => {
+    if (!allMaint.some(m => m.id === customItem.id)) {
+      if (!assetId || customItem.asset_id === realId || customItem.asset_id === assetId) {
+        allMaint.unshift(customItem);
+      }
+    }
+  });
+
+  return allMaint;
 }
 
-export async function createMaintenanceRecord(data: MaintenanceInput) {
+export async function createMaintenanceRecord(data: MaintenanceInput, skipExpenseSync = false): Promise<MaintenanceRecord> {
   const realId = resolveAssetId(data.asset_id);
   const supabase = createClient();
   const payload = {
     asset_id: realId,
     maintenance_type: data.maintenance_type,
-    date: data.date,
+    date: data.date || new Date().toISOString().slice(0, 10),
     odometer_km: data.odometer_km ?? null,
     cost: data.cost ?? 0,
     currency: data.currency ?? 'VND',
@@ -98,7 +113,7 @@ export async function createMaintenanceRecord(data: MaintenanceInput) {
     id: `MT_${Date.now()}`,
     asset_id: realId,
     maintenance_type: data.maintenance_type,
-    date: data.date,
+    date: data.date || new Date().toISOString().slice(0, 10),
     odometer_km: data.odometer_km ?? 0,
     cost: data.cost ?? 0,
     vendor: data.vendor ?? '',
@@ -108,6 +123,7 @@ export async function createMaintenanceRecord(data: MaintenanceInput) {
     status: computeStatus(payload),
   };
 
+  // 1. Save to LocalStorage
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('fmms_custom_maintenance');
@@ -117,8 +133,30 @@ export async function createMaintenanceRecord(data: MaintenanceInput) {
     } catch {}
   }
 
+  // 2. Mutate in-memory mock data
   (MOCK_MAINTENANCE_RECORDS as any[]).unshift(newMaintObj);
 
+  // 3. Auto-sync to Expense Service
+  if (!skipExpenseSync && (data.cost || 0) > 0) {
+    try {
+      const { createExpense } = await import('./expenseService');
+      await createExpense({
+        asset_id: realId,
+        date: data.date || new Date().toISOString().slice(0, 10),
+        category: 'Maintenance',
+        subcategory: 'Maintenance',
+        amount: data.cost || 0,
+        currency: 'VND',
+        vendor: data.vendor || undefined,
+        odometer_km: data.odometer_km || undefined,
+        description: `Bảo dưỡng: ${data.maintenance_type}${data.vendor ? ` tại ${data.vendor}` : ''}${data.notes ? ` (${data.notes})` : ''}`,
+      }, true); // skip auto link back
+    } catch (eErr) {
+      console.warn('Auto expense sync warning from createMaintenanceRecord:', eErr);
+    }
+  }
+
+  // 4. Save to Supabase
   try {
     const { data: created, error } = await supabase
       .from('maintenance_records')
@@ -131,6 +169,7 @@ export async function createMaintenanceRecord(data: MaintenanceInput) {
   } catch (err) {
     console.warn('createMaintenanceRecord Supabase fallback:', err);
   }
+
   return newMaintObj;
 }
 

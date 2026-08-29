@@ -95,7 +95,16 @@ export async function getUserContext(): Promise<{ userId: string | null; fleetId
   return { userId, fleetId: created?.id ?? null };
 }
 
-export async function getAssets() {
+export async function getAssets(): Promise<Asset[]> {
+  let customMap: Record<string, any> = {};
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_assets');
+      if (stored) customMap = JSON.parse(stored);
+    } catch {}
+  }
+
+  let dbAssets: Asset[] = [];
   try {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -103,10 +112,19 @@ export async function getAssets() {
       .select('*, asset_capabilities(*)')
       .order('created_at', { ascending: false });
     if (!error && data && data.length > 0) {
-      return data.map((row: any) => mapAssetRow(row, row.asset_capabilities));
+      dbAssets = data.map((row: any) => mapAssetRow(row, row.asset_capabilities));
     }
   } catch {}
-  return INITIAL_ASSETS;
+
+  let allAssets: Asset[] = dbAssets.length > 0 ? dbAssets : INITIAL_ASSETS;
+
+  // Apply custom edits from localStorage
+  allAssets = allAssets.map(a => {
+    const custom = customMap[a.id] || customMap[resolveAssetId(a.id)];
+    return custom ? { ...a, ...custom } : a;
+  });
+
+  return allAssets;
 }
 
 export function isValidUuid(id?: string): boolean {
@@ -125,8 +143,17 @@ export function resolveAssetId(id?: string): string {
   return id;
 }
 
-export async function getAsset(id: string) {
+export async function getAsset(id: string): Promise<Asset> {
   const realId = resolveAssetId(id);
+  let customMap: Record<string, any> = {};
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_assets');
+      if (stored) customMap = JSON.parse(stored);
+    } catch {}
+  }
+
+  let dbAsset: Asset | null = null;
   try {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -135,10 +162,11 @@ export async function getAsset(id: string) {
       .or(`id.eq.${realId},id.eq.${id}`)
       .maybeSingle();
     if (!error && data) {
-      return mapAssetRow(data, data.asset_capabilities);
+      dbAsset = mapAssetRow(data, data.asset_capabilities);
     }
   } catch {}
-  const found = INITIAL_ASSETS.find(
+
+  let found = dbAsset || INITIAL_ASSETS.find(
     a => a.id === realId || a.id === id ||
     ((id === 'CAR01' || id === '22222222-2222-2222-2222-222222222222') && a.license_plate === '19B-213.87') ||
     (id === 'BIKE01' && a.license_plate === '88C1-210.63') ||
@@ -146,8 +174,10 @@ export async function getAsset(id: string) {
     (id === 'BIKE03' && a.license_plate === 'MTB 26-555') ||
     (id === 'BIKE04' && a.license_plate === 'MTB 20-999') ||
     (id === 'CAR02' && a.license_plate === 'CANIVAL')
-  );
-  return found || INITIAL_ASSETS[0];
+  ) || INITIAL_ASSETS[0];
+
+  const custom = customMap[id] || customMap[realId] || customMap[found.id];
+  return custom ? { ...found, ...custom } : found;
 }
 
 export type AssetInput = {
@@ -241,7 +271,27 @@ export async function createAsset(data: AssetInput) {
   return mapAssetRow(created);
 }
 
-export async function updateAsset(id: string, data: Partial<AssetInput>) {
+export async function updateAsset(id: string, data: Partial<AssetInput>): Promise<Asset> {
+  const realId = resolveAssetId(id);
+
+  // 1. Save to LocalStorage
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('fmms_custom_assets');
+      const customMap: Record<string, any> = stored ? JSON.parse(stored) : {};
+      customMap[id] = { ...(customMap[id] || {}), ...data, id: realId };
+      customMap[realId] = { ...(customMap[realId] || {}), ...data, id: realId };
+      localStorage.setItem('fmms_custom_assets', JSON.stringify(customMap));
+    } catch {}
+  }
+
+  // 2. Mutate in-memory INITIAL_ASSETS
+  const memAsset = INITIAL_ASSETS.find(a => a.id === id || a.id === realId);
+  if (memAsset) {
+    Object.assign(memAsset, data);
+  }
+
+  // 3. Update Supabase
   try {
     const supabase = createClient();
     const payload: Record<string, any> = {};
@@ -273,19 +323,20 @@ export async function updateAsset(id: string, data: Partial<AssetInput>) {
     const { error } = await supabase
       .from('assets')
       .update(payload)
-      .eq('id', id);
+      .or(`id.eq.${realId},id.eq.${id}`);
 
     if (error) {
       if (error.message?.includes('schema cache') || error.message?.includes('column')) {
         delete payload.sales_rep_name;
         delete payload.sales_rep_phone;
         delete payload.brand_hotline;
-        await supabase.from('assets').update(payload).eq('id', id);
+        await supabase.from('assets').update(payload).or(`id.eq.${realId},id.eq.${id}`);
       }
     }
   } catch (err: any) {
     console.warn('updateAsset fallback:', err?.message);
   }
+
   return getAsset(id);
 }
 

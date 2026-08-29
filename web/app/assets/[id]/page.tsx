@@ -1313,6 +1313,8 @@ export default function AssetDetailPage() {
           setAsset(p => p ? { ...p, current_odometer_km: odo } : p);
         }
       }
+      const refreshedExps = await getExpenses(assetId);
+      setExpenses(refreshedExps);
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
@@ -1505,8 +1507,14 @@ export default function AssetDetailPage() {
           }
         }
       }
-      const refreshedExps = await getExpenses(assetId);
+      const [refreshedExps, refreshedFuels, refreshedMaints] = await Promise.all([
+        getExpenses(assetId),
+        getFuelLogs(assetId),
+        getMaintenanceRecords(assetId),
+      ]);
       setExpenses(refreshedExps);
+      setFuelLogs(refreshedFuels);
+      setMaintenance(refreshedMaints);
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }
