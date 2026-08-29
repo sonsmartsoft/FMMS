@@ -13,21 +13,18 @@ export default function DraggableModal({
   onClose?: () => void;
 }) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isMoved, setIsMoved] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
   const modalRef = useRef<HTMLDivElement>(null);
 
+  // Reset state when modal closes/opens
   useEffect(() => {
-    if (isOpen && modalRef.current && position.x === 0 && position.y === 0) {
-      const rect = modalRef.current.getBoundingClientRect();
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      setPosition({
-        x: Math.max(0, (w - rect.width) / 2),
-        y: Math.max(0, (h - rect.height) / 2),
-      });
+    if (!isOpen) {
+      setIsMoved(false);
+      setPosition({ x: 0, y: 0 });
     }
-  }, [isOpen, position.x, position.y]);
+  }, [isOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -49,10 +46,21 @@ export default function DraggableModal({
       return;
     }
     
+    let startX = position.x;
+    let startY = position.y;
+    
+    if (!isMoved && modalRef.current) {
+      const rect = modalRef.current.getBoundingClientRect();
+      startX = rect.left;
+      startY = rect.top;
+      setPosition({ x: startX, y: startY });
+      setIsMoved(true);
+    }
+    
     setIsDragging(true);
     dragStart.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
+      x: e.clientX - startX,
+      y: e.clientY - startY,
     };
     target.setPointerCapture(e.pointerId);
   };
@@ -80,14 +88,14 @@ export default function DraggableModal({
       onPointerCancel={handlePointerUp}
       className={`fixed z-[9999] shadow-2xl ${className}`}
       style={{
-        left: position.x ? `${position.x}px` : '50%',
-        top: position.y ? `${position.y}px` : '50%',
-        transform: position.x ? 'none' : 'translate(-50%, -50%)',
+        left: isMoved ? `${position.x}px` : '50%',
+        top: isMoved ? `${position.y}px` : '50%',
+        transform: isMoved ? 'none' : 'translate(-50%, -50%)',
         touchAction: 'none',
         cursor: isDragging ? 'grabbing' : 'auto',
       }}
     >
-      <div style={{ cursor: 'auto' }} className="w-full h-full">
+      <div style={{ cursor: 'auto' }} className="w-full h-full flex flex-col justify-center items-center">
         {children}
       </div>
     </div>
