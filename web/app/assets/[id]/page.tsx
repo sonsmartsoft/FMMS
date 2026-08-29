@@ -701,6 +701,259 @@ export default function AssetDetailPage() {
     });
   }, [loan, loanPayments, loanSortCol, loanSortDir]);
 
+  const mileageAnalytics = useMemo(() => {
+    type OdoEvent = {
+      date: string;
+      odometer_km: number;
+      type: 'ODO_LOG' | 'FUEL' | 'MAINTENANCE' | 'TRIP';
+      note: string;
+      id: string;
+      raw?: any;
+    };
+
+    const events: OdoEvent[] = [];
+
+    // Odometer logs
+    odometerLogs.forEach(o => {
+      if (o.odometer_km) {
+        events.push({
+          date: o.date ? o.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          odometer_km: o.odometer_km,
+          type: 'ODO_LOG',
+          note: o.note || 'Ghi nhận Odometer',
+          id: o.id,
+          raw: o,
+        });
+      }
+    });
+
+    // Fuel logs
+    fuelLogs.forEach(f => {
+      if (f.odometer_km) {
+        events.push({
+          date: f.date ? f.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          odometer_km: f.odometer_km,
+          type: 'FUEL',
+          note: `Đổ ${f.liters}L xăng${f.station ? ` tại ${f.station}` : ''}${f.notes ? ` (${f.notes})` : ''}`,
+          id: f.id,
+          raw: f,
+        });
+      }
+    });
+
+    // Maintenance records
+    maintenance.forEach(m => {
+      if (m.odometer_km) {
+        events.push({
+          date: m.date ? m.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          odometer_km: m.odometer_km,
+          type: 'MAINTENANCE',
+          note: `Bảo dưỡng: ${m.maintenance_type}${m.vendor ? ` tại ${m.vendor}` : ''}`,
+          id: m.id,
+          raw: m,
+        });
+      }
+    });
+
+    // Trips
+    trips.forEach(t => {
+      const dStr = t.start_time ? t.start_time.slice(0, 10) : new Date().toISOString().slice(0, 10);
+      events.push({
+        date: dStr,
+        odometer_km: 0,
+        type: 'TRIP',
+        note: `Chuyến đi: ${t.start_location || 'Xuất phát'} → ${t.end_location || 'Điểm đến'} (${t.distance_km} km)`,
+        id: t.id,
+        raw: t,
+      });
+    });
+
+    // Sort events by date ascending
+    events.sort((a, b) => {
+      const dCmp = a.date.localeCompare(b.date);
+      if (dCmp !== 0) return dCmp;
+      return a.odometer_km - b.odometer_km;
+    });
+
+    // Group by Day
+    const dailyMap = new Map<string, {
+      date: string;
+      minOdo: number;
+      maxOdo: number;
+      tripDistance: number;
+      notes: { type: string; text: string; id: string; raw?: any }[];
+    }>();
+
+    events.forEach(ev => {
+      if (!dailyMap.has(ev.date)) {
+        dailyMap.set(ev.date, {
+          date: ev.date,
+          minOdo: ev.odometer_km || 0,
+          maxOdo: ev.odometer_km || 0,
+          tripDistance: ev.type === 'TRIP' ? (ev.raw?.distance_km || 0) : 0,
+          notes: [{ type: ev.type, text: ev.note, id: ev.id, raw: ev.raw }],
+        });
+      } else {
+        const cur = dailyMap.get(ev.date)!;
+        if (ev.odometer_km > 0) {
+          if (cur.minOdo === 0 || ev.odometer_km < cur.minOdo) cur.minOdo = ev.odometer_km;
+          if (ev.odometer_km > cur.maxOdo) cur.maxOdo = ev.odometer_km;
+        }
+        if (ev.type === 'TRIP') {
+          cur.tripDistance += (ev.raw?.distance_km || 0);
+        }
+        cur.notes.push({ type: ev.type, text: ev.note, id: ev.id, raw: ev.raw });
+      }
+    });
+
+    const sortedDays = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    let prevOdo = 0;
+
+    const dailyReport = sortedDays.map((day) => {
+      let kmRun = 0;
+      if (day.maxOdo > 0 && prevOdo > 0 && day.maxOdo >= prevOdo) {
+        kmRun = day.maxOdo - prevOdo;
+      } else if (day.tripDistance > 0) {
+        kmRun = day.tripDistance;
+      } else if (day.maxOdo > 0 && day.minOdo > 0 && day.maxOdo > day.minOdo) {
+        kmRun = day.maxOdo - day.minOdo;
+      }
+
+      if (day.maxOdo > 0) {
+        prevOdo = day.maxOdo;
+      }
+
+      const dObj = new Date(day.date);
+      const dayOfWeekNames = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
+      const dayOfWeek = dayOfWeekNames[dObj.getDay()] || '';
+
+      return {
+        ...day,
+        dayOfWeek,
+        kmRun,
+        displayOdo: day.maxOdo || prevOdo,
+      };
+    }).reverse();
+
+    // Group by Month
+    const monthlyMap = new Map<string, {
+      monthKey: string;
+      monthLabel: string;
+      totalKm: number;
+      activeDays: number;
+      fuelCost: number;
+      maintCost: number;
+      otherCost: number;
+      dayList: typeof dailyReport;
+    }>();
+
+    dailyReport.forEach(day => {
+      const mKey = day.date.slice(0, 7);
+      const [year, month] = mKey.split('-');
+      const mLabel = `Tháng ${month}/${year}`;
+
+      if (!monthlyMap.has(mKey)) {
+        monthlyMap.set(mKey, {
+          monthKey: mKey,
+          monthLabel: mLabel,
+          totalKm: 0,
+          activeDays: 0,
+          fuelCost: 0,
+          maintCost: 0,
+          otherCost: 0,
+          dayList: [],
+        });
+      }
+
+      const mData = monthlyMap.get(mKey)!;
+      mData.totalKm += day.kmRun;
+      if (day.kmRun > 0 || day.notes.length > 0) mData.activeDays += 1;
+      mData.dayList.push(day);
+    });
+
+    expenses.forEach(exp => {
+      if (exp.date) {
+        const mKey = exp.date.slice(0, 7);
+        if (monthlyMap.has(mKey)) {
+          const mData = monthlyMap.get(mKey)!;
+          if (exp.category === 'Running' || exp.category === 'Fuel') mData.fuelCost += exp.amount;
+          else if (exp.category === 'Maintenance') mData.maintCost += exp.amount;
+          else mData.otherCost += exp.amount;
+        }
+      }
+    });
+
+    const monthlyReport = Array.from(monthlyMap.values()).map(m => {
+      const totalCost = m.fuelCost + m.maintCost + m.otherCost;
+      const costPerKm = m.totalKm > 0 ? Math.round(totalCost / m.totalKm) : 0;
+      const avgKmPerActiveDay = m.activeDays > 0 ? Math.round(m.totalKm / m.activeDays) : 0;
+      return {
+        ...m,
+        totalCost,
+        costPerKm,
+        avgKmPerActiveDay,
+      };
+    }).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+
+    // Group by Year
+    const yearlyMap = new Map<string, {
+      yearKey: string;
+      totalKm: number;
+      totalCost: number;
+      fuelCost: number;
+      maintCost: number;
+      monthsCount: number;
+      activeDays: number;
+    }>();
+
+    monthlyReport.forEach(m => {
+      const yKey = m.monthKey.slice(0, 4);
+      if (!yearlyMap.has(yKey)) {
+        yearlyMap.set(yKey, {
+          yearKey: yKey,
+          totalKm: 0,
+          totalCost: 0,
+          fuelCost: 0,
+          maintCost: 0,
+          monthsCount: 0,
+          activeDays: 0,
+        });
+      }
+      const yData = yearlyMap.get(yKey)!;
+      yData.totalKm += m.totalKm;
+      yData.totalCost += m.totalCost;
+      yData.fuelCost += m.fuelCost;
+      yData.maintCost += m.maintCost;
+      yData.monthsCount += 1;
+      yData.activeDays += m.activeDays;
+    });
+
+    const yearlyReport = Array.from(yearlyMap.values()).map(y => {
+      const costPerKm = y.totalKm > 0 ? Math.round(y.totalCost / y.totalKm) : 0;
+      const avgKmPerMonth = y.monthsCount > 0 ? Math.round(y.totalKm / y.monthsCount) : 0;
+      const avgKmPerDay = y.activeDays > 0 ? Math.round(y.totalKm / y.activeDays) : 0;
+      return {
+        ...y,
+        costPerKm,
+        avgKmPerMonth,
+        avgKmPerDay,
+      };
+    }).sort((a, b) => b.yearKey.localeCompare(a.yearKey));
+
+    const currentMKey = new Date().toISOString().slice(0, 7);
+    const currentMonthData = monthlyMap.get(currentMKey);
+    const currentMonthKm = currentMonthData?.totalKm || 0;
+
+    return {
+      dailyReport,
+      monthlyReport,
+      yearlyReport,
+      currentMonthKm,
+      totalActiveDays: dailyReport.filter(d => d.kmRun > 0).length,
+    };
+  }, [odometerLogs, fuelLogs, maintenance, trips, expenses]);
+
+
   if (loading) {
     return (
       <div className="py-20 text-center" style={{ color: 'var(--text-muted)' }}>
@@ -1600,257 +1853,6 @@ export default function AssetDetailPage() {
   const paidPrincipal = loan ? loan.principal - loan.current_balance : 0;
   const loanProgress = loan && loan.principal > 0 ? (paidPrincipal / loan.principal) * 100 : 0;
 
-  const mileageAnalytics = useMemo(() => {
-    type OdoEvent = {
-      date: string;
-      odometer_km: number;
-      type: 'ODO_LOG' | 'FUEL' | 'MAINTENANCE' | 'TRIP';
-      note: string;
-      id: string;
-      raw?: any;
-    };
-
-    const events: OdoEvent[] = [];
-
-    // Odometer logs
-    odometerLogs.forEach(o => {
-      if (o.odometer_km) {
-        events.push({
-          date: o.date ? o.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
-          odometer_km: o.odometer_km,
-          type: 'ODO_LOG',
-          note: o.note || 'Ghi nhận Odometer',
-          id: o.id,
-          raw: o,
-        });
-      }
-    });
-
-    // Fuel logs
-    fuelLogs.forEach(f => {
-      if (f.odometer_km) {
-        events.push({
-          date: f.date ? f.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
-          odometer_km: f.odometer_km,
-          type: 'FUEL',
-          note: `Đổ ${f.liters}L xăng${f.station ? ` tại ${f.station}` : ''}${f.notes ? ` (${f.notes})` : ''}`,
-          id: f.id,
-          raw: f,
-        });
-      }
-    });
-
-    // Maintenance records
-    maintenance.forEach(m => {
-      if (m.odometer_km) {
-        events.push({
-          date: m.date ? m.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
-          odometer_km: m.odometer_km,
-          type: 'MAINTENANCE',
-          note: `Bảo dưỡng: ${m.maintenance_type}${m.vendor ? ` tại ${m.vendor}` : ''}`,
-          id: m.id,
-          raw: m,
-        });
-      }
-    });
-
-    // Trips
-    trips.forEach(t => {
-      const dStr = t.start_time ? t.start_time.slice(0, 10) : new Date().toISOString().slice(0, 10);
-      events.push({
-        date: dStr,
-        odometer_km: 0,
-        type: 'TRIP',
-        note: `Chuyến đi: ${t.start_location || 'Xuất phát'} → ${t.end_location || 'Điểm đến'} (${t.distance_km} km)`,
-        id: t.id,
-        raw: t,
-      });
-    });
-
-    // Sort events by date ascending
-    events.sort((a, b) => {
-      const dCmp = a.date.localeCompare(b.date);
-      if (dCmp !== 0) return dCmp;
-      return a.odometer_km - b.odometer_km;
-    });
-
-    // Group by Day
-    const dailyMap = new Map<string, {
-      date: string;
-      minOdo: number;
-      maxOdo: number;
-      tripDistance: number;
-      notes: { type: string; text: string; id: string; raw?: any }[];
-    }>();
-
-    events.forEach(ev => {
-      if (!dailyMap.has(ev.date)) {
-        dailyMap.set(ev.date, {
-          date: ev.date,
-          minOdo: ev.odometer_km || 0,
-          maxOdo: ev.odometer_km || 0,
-          tripDistance: ev.type === 'TRIP' ? (ev.raw?.distance_km || 0) : 0,
-          notes: [{ type: ev.type, text: ev.note, id: ev.id, raw: ev.raw }],
-        });
-      } else {
-        const cur = dailyMap.get(ev.date)!;
-        if (ev.odometer_km > 0) {
-          if (cur.minOdo === 0 || ev.odometer_km < cur.minOdo) cur.minOdo = ev.odometer_km;
-          if (ev.odometer_km > cur.maxOdo) cur.maxOdo = ev.odometer_km;
-        }
-        if (ev.type === 'TRIP') {
-          cur.tripDistance += (ev.raw?.distance_km || 0);
-        }
-        cur.notes.push({ type: ev.type, text: ev.note, id: ev.id, raw: ev.raw });
-      }
-    });
-
-    const sortedDays = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
-    let prevOdo = 0;
-
-    const dailyReport = sortedDays.map((day) => {
-      let kmRun = 0;
-      if (day.maxOdo > 0 && prevOdo > 0 && day.maxOdo >= prevOdo) {
-        kmRun = day.maxOdo - prevOdo;
-      } else if (day.tripDistance > 0) {
-        kmRun = day.tripDistance;
-      } else if (day.maxOdo > 0 && day.minOdo > 0 && day.maxOdo > day.minOdo) {
-        kmRun = day.maxOdo - day.minOdo;
-      }
-
-      if (day.maxOdo > 0) {
-        prevOdo = day.maxOdo;
-      }
-
-      const dObj = new Date(day.date);
-      const dayOfWeekNames = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-      const dayOfWeek = dayOfWeekNames[dObj.getDay()] || '';
-
-      return {
-        ...day,
-        dayOfWeek,
-        kmRun,
-        displayOdo: day.maxOdo || prevOdo,
-      };
-    }).reverse();
-
-    // Group by Month
-    const monthlyMap = new Map<string, {
-      monthKey: string;
-      monthLabel: string;
-      totalKm: number;
-      activeDays: number;
-      fuelCost: number;
-      maintCost: number;
-      otherCost: number;
-      dayList: typeof dailyReport;
-    }>();
-
-    dailyReport.forEach(day => {
-      const mKey = day.date.slice(0, 7);
-      const [year, month] = mKey.split('-');
-      const mLabel = `Tháng ${month}/${year}`;
-
-      if (!monthlyMap.has(mKey)) {
-        monthlyMap.set(mKey, {
-          monthKey: mKey,
-          monthLabel: mLabel,
-          totalKm: 0,
-          activeDays: 0,
-          fuelCost: 0,
-          maintCost: 0,
-          otherCost: 0,
-          dayList: [],
-        });
-      }
-
-      const mData = monthlyMap.get(mKey)!;
-      mData.totalKm += day.kmRun;
-      if (day.kmRun > 0 || day.notes.length > 0) mData.activeDays += 1;
-      mData.dayList.push(day);
-    });
-
-    expenses.forEach(exp => {
-      if (exp.date) {
-        const mKey = exp.date.slice(0, 7);
-        if (monthlyMap.has(mKey)) {
-          const mData = monthlyMap.get(mKey)!;
-          if (exp.category === 'Running' || exp.category === 'Fuel') mData.fuelCost += exp.amount;
-          else if (exp.category === 'Maintenance') mData.maintCost += exp.amount;
-          else mData.otherCost += exp.amount;
-        }
-      }
-    });
-
-    const monthlyReport = Array.from(monthlyMap.values()).map(m => {
-      const totalCost = m.fuelCost + m.maintCost + m.otherCost;
-      const costPerKm = m.totalKm > 0 ? Math.round(totalCost / m.totalKm) : 0;
-      const avgKmPerActiveDay = m.activeDays > 0 ? Math.round(m.totalKm / m.activeDays) : 0;
-      return {
-        ...m,
-        totalCost,
-        costPerKm,
-        avgKmPerActiveDay,
-      };
-    }).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
-
-    // Group by Year
-    const yearlyMap = new Map<string, {
-      yearKey: string;
-      totalKm: number;
-      totalCost: number;
-      fuelCost: number;
-      maintCost: number;
-      monthsCount: number;
-      activeDays: number;
-    }>();
-
-    monthlyReport.forEach(m => {
-      const yKey = m.monthKey.slice(0, 4);
-      if (!yearlyMap.has(yKey)) {
-        yearlyMap.set(yKey, {
-          yearKey: yKey,
-          totalKm: 0,
-          totalCost: 0,
-          fuelCost: 0,
-          maintCost: 0,
-          monthsCount: 0,
-          activeDays: 0,
-        });
-      }
-      const yData = yearlyMap.get(yKey)!;
-      yData.totalKm += m.totalKm;
-      yData.totalCost += m.totalCost;
-      yData.fuelCost += m.fuelCost;
-      yData.maintCost += m.maintCost;
-      yData.monthsCount += 1;
-      yData.activeDays += m.activeDays;
-    });
-
-    const yearlyReport = Array.from(yearlyMap.values()).map(y => {
-      const costPerKm = y.totalKm > 0 ? Math.round(y.totalCost / y.totalKm) : 0;
-      const avgKmPerMonth = y.monthsCount > 0 ? Math.round(y.totalKm / y.monthsCount) : 0;
-      const avgKmPerDay = y.activeDays > 0 ? Math.round(y.totalKm / y.activeDays) : 0;
-      return {
-        ...y,
-        costPerKm,
-        avgKmPerMonth,
-        avgKmPerDay,
-      };
-    }).sort((a, b) => b.yearKey.localeCompare(a.yearKey));
-
-    const currentMKey = new Date().toISOString().slice(0, 7);
-    const currentMonthData = monthlyMap.get(currentMKey);
-    const currentMonthKm = currentMonthData?.totalKm || 0;
-
-    return {
-      dailyReport,
-      monthlyReport,
-      yearlyReport,
-      currentMonthKm,
-      totalActiveDays: dailyReport.filter(d => d.kmRun > 0).length,
-    };
-  }, [odometerLogs, fuelLogs, maintenance, trips, expenses]);
 
   /* ══════════════════════════════════════════════
      RENDER
