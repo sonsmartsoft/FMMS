@@ -2007,11 +2007,40 @@ export default function AssetDetailPage() {
               </button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-              {[
-                { label: 'Giá mua ban đầu', value: `${fmt(asset.purchase_price)} ₫`, sub: `Ngày mua: ${fmtDate(asset.purchase_date || '')}`, color: 'var(--text-primary)' },
-                { label: 'Giá trị ước tính hiện tại', value: `${fmt(asset.current_value)} ₫`, sub: `Khấu hao: ${(((asset.purchase_price - asset.current_value) / asset.purchase_price) * 100).toFixed(1)}%`, color: 'var(--status-green)' },
-                { label: 'Bảo dưỡng tiếp theo', value: asset.next_maintenance_due || 'OK', sub: 'Trạng thái: Bình thường', color: 'var(--status-amber)' },
-              ].map((item, i) => (
+              {(() => {
+                const maintDateStr = asset.next_maintenance_due;
+                let maintValue = 'Chưa lên lịch';
+                let maintSub = 'Chưa có kế hoạch bảo dưỡng';
+                let maintColor = 'var(--text-muted)';
+                if (maintDateStr) {
+                  const maintDate = new Date(maintDateStr);
+                  const today = new Date();
+                  const diffDays = Math.ceil((maintDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                  const fmtMaintDate = maintDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                  maintValue = fmtMaintDate;
+                  if (diffDays < 0) {
+                    maintSub = `⚠️ Đã quá hạn ${Math.abs(diffDays)} ngày!`;
+                    maintColor = 'var(--status-rose)';
+                  } else if (diffDays === 0) {
+                    maintSub = '🔴 Hôm nay là ngày bảo dưỡng!';
+                    maintColor = 'var(--status-rose)';
+                  } else if (diffDays <= 7) {
+                    maintSub = `🟠 Còn ${diffDays} ngày (sắp đến!)`;
+                    maintColor = 'var(--status-amber)';
+                  } else if (diffDays <= 30) {
+                    maintSub = `🟡 Còn ${diffDays} ngày`;
+                    maintColor = 'var(--status-amber)';
+                  } else {
+                    maintSub = `✅ Còn ${diffDays} ngày`;
+                    maintColor = 'var(--status-green)';
+                  }
+                }
+                return [
+                  { label: 'Giá mua ban đầu', value: `${fmt(asset.purchase_price)} ₫`, sub: `Ngày mua: ${fmtDate(asset.purchase_date || '')}`, color: 'var(--text-primary)' },
+                  { label: 'Giá trị ước tính hiện tại', value: `${fmt(asset.current_value)} ₫`, sub: `Khấu hao: ${(((asset.purchase_price - asset.current_value) / asset.purchase_price) * 100).toFixed(1)}%`, color: 'var(--status-green)' },
+                  { label: 'Bảo dưỡng tiếp theo', value: maintValue, sub: maintSub, color: maintColor },
+                ];
+              })().map((item, i) => (
                 <div key={i} className="p-4 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <span style={{ color: 'var(--text-muted)' }}>{item.label}</span>
                   <p className="text-base font-bold mt-1" style={{ color: item.color }}>{item.value}</p>
