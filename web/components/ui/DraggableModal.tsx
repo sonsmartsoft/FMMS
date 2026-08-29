@@ -5,10 +5,12 @@ export default function DraggableModal({
   isOpen,
   children,
   className = '',
+  onClose
 }: {
   isOpen: boolean;
   children: React.ReactNode;
   className?: string;
+  onClose?: () => void;
 }) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -26,6 +28,18 @@ export default function DraggableModal({
       });
     }
   }, [isOpen, position.x, position.y]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && onClose) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
