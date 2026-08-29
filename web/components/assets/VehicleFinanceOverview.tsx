@@ -31,6 +31,50 @@ interface VehicleFinanceOverviewProps {
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
 
+// ─── Module-level expense classifiers (NO hooks — safe to use inside useMemo) ──────
+function isLoanInterest(e: ExpenseRecord): boolean {
+  const c = (e.category || '').toUpperCase();
+  const sc = (e.subcategory || '').toLowerCase();
+  const desc = (e.description || '').toLowerCase();
+  return c === 'LOAN_INTEREST' || (c === 'LOAN' && sc === 'interest') ||
+    desc.includes('tiền lãi') || desc.includes('lãi vay') || desc.includes('thanh toán lãi');
+}
+
+function isLoanPrincipal(e: ExpenseRecord): boolean {
+  const c = (e.category || '').toUpperCase();
+  const sc = (e.subcategory || '').toLowerCase();
+  const desc = (e.description || '').toLowerCase();
+  return c === 'LOAN_PAYMENT' || (c === 'LOAN' && sc === 'monthly payment') ||
+    desc.includes('trả gốc') || desc.includes('thanh toán gốc') || desc.includes('gốc vay');
+}
+
+function isInitialRollout(e: ExpenseRecord): boolean {
+  if (isLoanInterest(e) || isLoanPrincipal(e)) return false;
+  const c = (e.category || '').toUpperCase();
+  const sc = (e.subcategory || '').toLowerCase();
+  const desc = (e.description || '').toLowerCase();
+  return c === 'INITIAL' || c === 'REGISTRATION' ||
+    sc === 'registration' || sc === 'plate' || sc === 'inspection' || sc === 'loan fee' || sc === 'loan insurance' ||
+    desc.includes('trước bạ') || desc.includes('biển số') || desc.includes('lăn bánh');
+}
+
+function isUpgradeExpense(e: ExpenseRecord): boolean {
+  if (isLoanInterest(e) || isLoanPrincipal(e) || isInitialRollout(e)) return false;
+  const c = (e.category || '').toUpperCase();
+  const sc = (e.subcategory || '').toLowerCase();
+  return c === 'UPGRADE' || c === 'PARTS' || c === 'EQUIPMENT' ||
+    sc === 'accessorie' || sc === 'audio' || sc === 'camera' || sc === 'film' || sc === 'upgrade';
+}
+
+function isRunningExpense(e: ExpenseRecord): boolean {
+  if (isLoanInterest(e) || isLoanPrincipal(e) || isInitialRollout(e) || isUpgradeExpense(e)) return false;
+  const c = (e.category || '').toUpperCase();
+  const sc = (e.subcategory || '').toLowerCase();
+  return c === 'RUNNING' || c === 'MAINTENANCE' || c === 'FUEL' || c === 'TOLL' || c === 'PARKING' || c === 'CAR_WASH' ||
+    sc === 'fuel' || sc === 'maintenance' || sc === 'car wash' || sc === 'epass fee' ||
+    sc === 'toll' || sc === 'parking' || sc === 'running fine' || sc === 'oil' || sc === 'tires';
+}
+
 const DEFAULT_BANKS = [
   'Techcombank (TCB)', 'VPBank', 'VIB (Ngân hàng Quốc Tế)', 'TPBank (Tiên Phong)',
   'Shinhan Bank Việt Nam', 'Vietcombank (VCB)', 'BIDV', 'VietinBank',
@@ -140,44 +184,6 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     }
   }, [loan]);
 
-  // Exact Classification Helpers
-  const isLoanInterest = (e: ExpenseRecord) => {
-    const c = (e.category || '').toUpperCase();
-    const sc = (e.subcategory || '').toLowerCase();
-    const desc = (e.description || '').toLowerCase();
-    return c === 'LOAN_INTEREST' || (c === 'LOAN' && sc === 'interest') || desc.includes('tiền lãi') || desc.includes('lãi vay') || desc.includes('thanh toán lãi');
-  };
-
-  const isLoanPrincipal = (e: ExpenseRecord) => {
-    const c = (e.category || '').toUpperCase();
-    const sc = (e.subcategory || '').toLowerCase();
-    const desc = (e.description || '').toLowerCase();
-    return c === 'LOAN_PAYMENT' || (c === 'LOAN' && sc === 'monthly payment') || desc.includes('trả gốc') || desc.includes('thanh toán gốc') || desc.includes('gốc vay');
-  };
-
-  const isInitialRollout = (e: ExpenseRecord) => {
-    if (isLoanInterest(e) || isLoanPrincipal(e)) return false;
-    const c = (e.category || '').toUpperCase();
-    const sc = (e.subcategory || '').toLowerCase();
-    const desc = (e.description || '').toLowerCase();
-    return c === 'INITIAL' || c === 'REGISTRATION' || sc === 'registration' || sc === 'plate' || sc === 'inspection' || sc === 'loan fee' || sc === 'loan insurance' || desc.includes('trước bạ') || desc.includes('biển số') || desc.includes('lăn bánh');
-  };
-
-  const isUpgrade = (e: ExpenseRecord) => {
-    if (isLoanInterest(e) || isLoanPrincipal(e) || isInitialRollout(e)) return false;
-    const c = (e.category || '').toUpperCase();
-    const sc = (e.subcategory || '').toLowerCase();
-    return c === 'UPGRADE' || c === 'PARTS' || c === 'EQUIPMENT' || sc === 'accessorie' || sc === 'audio' || sc === 'camera' || sc === 'film' || sc === 'upgrade';
-  };
-
-  const isRunning = (e: ExpenseRecord) => {
-    if (isLoanInterest(e) || isLoanPrincipal(e) || isInitialRollout(e) || isUpgrade(e)) return false;
-    const c = (e.category || '').toUpperCase();
-    const sc = (e.subcategory || '').toLowerCase();
-    return c === 'RUNNING' || c === 'MAINTENANCE' || c === 'FUEL' || c === 'TOLL' || c === 'PARKING' || c === 'CAR_WASH' ||
-      sc === 'fuel' || sc === 'maintenance' || sc === 'car wash' || sc === 'epass fee' || sc === 'toll' || sc === 'parking' || sc === 'running fine' || sc === 'oil' || sc === 'tires';
-  };
-
   // 1. Mandatory Initial Rollout Fees
   const initialRolloutExpenses = useMemo(() => expenses.filter(isInitialRollout), [expenses]);
   const initialFeesTotal = useMemo(() => initialRolloutExpenses.reduce((s, e) => s + e.amount, 0), [initialRolloutExpenses]);
@@ -190,15 +196,15 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
   const investment = downPayment + initialFeesTotal;
 
   // 4. Upgrades Total
-  const upgradeExpenses = useMemo(() => expenses.filter(isUpgrade), [expenses]);
+  const upgradeExpenses = useMemo(() => expenses.filter(isUpgradeExpense), [expenses]);
   const totalUpgradeCost = useMemo(() => {
     const expCost = upgradeExpenses.reduce((s, e) => s + e.amount, 0);
     if (expCost > 0) return expCost;
     return parts.reduce((s, p) => s + (p.cost || 0), 0);
   }, [upgradeExpenses, parts]);
 
-  // 5. Running Costs Total (Chi phí vận hành: Xăng, Bảo dưỡng, Cầu đường BOT, Gửi xe, Rửa xe - KHÔNG có gốc/lãi vay!)
-  const runningExpenses = useMemo(() => expenses.filter(isRunning), [expenses]);
+  // 5. Running Costs Total (KHÔNG có gốc/lãi vay!)
+  const runningExpenses = useMemo(() => expenses.filter(isRunningExpense), [expenses]);
   const totalRunningCost = useMemo(() => runningExpenses.reduce((s, e) => s + e.amount, 0), [runningExpenses]);
 
   // 6. Loan Schedule & Payments
