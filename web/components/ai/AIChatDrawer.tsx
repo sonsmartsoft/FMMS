@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Send, Sparkles, Bot, User, Mic, CheckCircle2, Settings } from 'lucide-react';
+import { X, Send, Sparkles, Bot, User, CheckCircle2, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { MODERN_AI_PROVIDERS, getActiveAISettings } from '@/lib/services/aiConfig';
+import { MarkdownMessage } from './MarkdownMessage';
 
 interface Message {
   id: string;
@@ -27,7 +28,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
     {
       id: '1',
       sender: 'ai',
-      text: 'Xin chào! Tôi là **FMMS AI Assistant**. Tôi có thể giúp bạn phân tích chi phí, định mức nhiên liệu (L/100km), nhắc lịch bảo dưỡng, hoặc trả lời bất kỳ câu hỏi nào về các phương tiện trong gia đình.',
+      text: 'Xin chào! Tôi là **FMMS AI Assistant**. Tôi có thể giúp bạn phân tích chi phí, định mức nhiên liệu (L/100km), nhắc lịch bảo dưỡng hoặc kiểm tra khoản vay xe.',
     },
   ]);
 
@@ -57,6 +58,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
           prompt: promptText,
           provider: activeProvider,
           model: activeSettings.model,
+          systemPrompt: activeSettings.systemPrompt,
           apiKey: activeSettings.apiKey,
           baseUrl: activeSettings.baseUrl,
           assetId: currentAssetId,
@@ -88,7 +90,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md glass-panel shadow-2xl flex flex-col animate-slideLeft"
+    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg glass-panel shadow-2xl flex flex-col animate-slideLeft"
       style={{ borderLeft: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
 
       {/* Header */}
@@ -121,7 +123,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
             onClick={onClose}
             className="p-1.5 rounded-lg transition hover:bg-white/10"
             style={{ color: 'var(--text-muted)' }}
-            title="Cài đặt API AI"
+            title="Cài đặt API & Vai trò AI"
           >
             <Settings className="w-4 h-4" />
           </Link>
@@ -141,19 +143,17 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
                 : { background: 'linear-gradient(135deg, #0EA5E9, #8B5CF6)', color: 'white' }}>
               {m.sender === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
             </div>
-            <div className="space-y-1 max-w-[85%]">
+            <div className="space-y-1 max-w-[88%]">
               <div
-                className="p-3.5 rounded-2xl text-xs leading-relaxed whitespace-pre-line"
+                className="p-3.5 rounded-2xl text-xs leading-relaxed"
                 style={m.sender === 'user'
                   ? { background: 'var(--accent-cyan)', color: 'white', borderRadius: '1.25rem 0.25rem 1.25rem 1.25rem' }
                   : { background: 'var(--bg-primary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)', borderRadius: '0.25rem 1.25rem 1.25rem 1.25rem' }}
               >
-                {m.text}
+                <MarkdownMessage content={m.text} isUser={m.sender === 'user'} />
               </div>
               {m.providerUsed && (
-                <p className="text-[9px] px-1 font-mono text-right" style={{ color: 'var(--text-faint)' }}>
-                  ⚡ {m.providerUsed}
-                </p>
+                <p className="text-[9px] font-mono text-right pt-0.5 opacity-60">⚡ {m.providerUsed}</p>
               )}
               {m.toolCall && (
                 <div className="p-2 rounded-xl flex items-center space-x-2 text-[10px]"
@@ -168,7 +168,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
         {loading && (
           <div className="flex items-center space-x-2 text-xs p-3 rounded-2xl animate-pulse" style={{ color: 'var(--accent-cyan)', background: 'var(--accent-cyan-bg)' }}>
             <Sparkles className="w-4 h-4 animate-spin" />
-            <span>AI đang truy vấn và phân tích dữ liệu phương tiện...</span>
+            <span>AI đang phân tích và chuẩn bị số liệu chi tiết...</span>
           </div>
         )}
       </div>
@@ -180,7 +180,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Hỏi AI (vd: Tháng này chi phí xe nào nhiều nhất?)..."
+          placeholder="Hỏi về chi phí, định mức xăng/pin, khoản vay ngân hàng..."
           className="theme-input flex-1 text-xs"
         />
         <button

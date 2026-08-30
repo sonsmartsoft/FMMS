@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 
-// System prompt for FMMS AI context
-const SYSTEM_PROMPT = `Bạn là FMMS AI Assistant — trợ lý thông minh cho hệ thống quản lý phương tiện gia đình (Family Mobility Management System).
+const DEFAULT_SYSTEM_PROMPT = `Bạn là Cố Vấn Tài Chính & Vận Hành Phương Tiện Gia Đình (FMMS Senior Advisor).
 
-Nhiệm vụ của bạn:
-- Phân tích dữ liệu phương tiện, nhiên liệu, bảo dưỡng và chi phí tài chính
-- Trả lời bằng tiếng Việt chuẩn, rõ ràng, phong cách chuyên nghiệp và thân thiện
-- Khi có dữ liệu thực tế trong hệ thống, hãy dùng số liệu chính xác để trả lời và tính toán
-- Khi không có dữ liệu, hãy giải thích rõ ràng và đưa ra lời khuyên thiết thực
-- Định dạng câu trả lời đẹp mắt với bullet points, bảng ngắn gọn nếu cần thiết.`;
+QUY TẮC TRÌNH BÀY VÀ ĐỊNH DẠNG (BẮT BUỘC):
+1. TRÌNH BÀY CÓ CẤU TRÚC RÕ RÀNG:
+   - Dùng bảng Markdown chuẩn (| Hạng mục | Chi phí | Ghi chú |) khi liệt kê từ 2 số liệu trở lên.
+   - In đậm toàn bộ số tiền và mốc ODO (VD: **820.000 ₫**, **12.500 km**).
+   - Chia câu trả lời thành các phần rõ rệt:
+     📌 **Tóm tắt nhanh**
+     📊 **Chi tiết số liệu** (bảng biểu)
+     💡 **Khuyến nghị & Lời khuyên tối ưu**
+2. PHONG CÁCH & NGÔN NGỮ:
+   - Tiếng Việt chuẩn mực, thông minh, gãy gọn, xưng "Tôi" và gọi người dùng là "Bạn".
+   - Luôn dựa trên số liệu thực tế được cung cấp trong hệ thống, không tự bịa số liệu.`;
 
 async function buildContext(supabase: any, assetId?: string): Promise<string> {
   try {
@@ -123,6 +127,7 @@ export async function POST(req: NextRequest) {
       prompt,
       provider = 'gemini',
       model,
+      systemPrompt: userCustomPrompt,
       apiKey: clientApiKey,
       baseUrl: clientBaseUrl,
       assetId,
@@ -140,7 +145,8 @@ export async function POST(req: NextRequest) {
       contextText = '';
     }
 
-    const fullPrompt = `[HỆ THỐNG CONTEXT & QUY TẮC PHÂN TÍCH]:\n${SYSTEM_PROMPT}\n\n${contextText}\n\n[CÂU HỎI CỦA NGƯỜI DÙNG]:\n${prompt}`;
+    const activeSystemPrompt = userCustomPrompt || DEFAULT_SYSTEM_PROMPT;
+    const fullPrompt = `[HỆ THỐNG VAI TRÒ & QUY TẮC PHÂN TÍCH]:\n${activeSystemPrompt}\n\n[DỮ LIỆU THỰC TẾ TRONG HỆ THỐNG]:\n${contextText}\n\n[CÂU HỎI CỦA NGƯỜI DÙNG]:\n${prompt}`;
 
     // ─────────────────────────────────────────────────────────────
     // 1. GOOGLE GEMINI
@@ -167,7 +173,6 @@ export async function POST(req: NextRequest) {
         if (!result.ok && (result.error?.includes('no longer available') || result.error?.includes('not found') || result.error?.includes('404'))) {
           const fallbackModels = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].filter(m => m !== activeModel);
           for (const fbModel of fallbackModels) {
-            console.log(`[AI Chat] Retrying Gemini with fallback model: ${fbModel}`);
             const fbResult = await callGemini(fbModel, activeKey, fullPrompt);
             if (fbResult.ok) {
               result = fbResult;
@@ -225,7 +230,7 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             model: activeModel,
             max_tokens: 2048,
-            system: SYSTEM_PROMPT + (contextText ? `\n\n${contextText}` : ''),
+            system: activeSystemPrompt + (contextText ? `\n\n${contextText}` : ''),
             messages: [{ role: 'user', content: prompt }],
           }),
           signal: AbortSignal.timeout(35000),
@@ -286,7 +291,7 @@ export async function POST(req: NextRequest) {
 
     try {
       const messages = [
-        { role: 'system', content: SYSTEM_PROMPT + (contextText ? `\n\n${contextText}` : '') },
+        { role: 'system', content: activeSystemPrompt + (contextText ? `\n\n${contextText}` : '') },
         { role: 'user', content: prompt },
       ];
 

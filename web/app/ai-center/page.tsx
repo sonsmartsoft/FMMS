@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Send, Bot, User, Car, DollarSign, Wrench, BarChart3, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { getActiveAISettings } from '@/lib/services/aiConfig';
+import { MarkdownMessage } from '@/components/ai/MarkdownMessage';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -18,16 +19,15 @@ const QUICK_PROMPTS = [
   { label: 'Dự báo chi phí vận hành tháng tới', icon: BarChart3 },
 ];
 
-const INITIAL_MESSAGE = `Tôi là **FMMS AI Assistant** — trợ lý thông minh cho hệ thống quản lý phương tiện gia đình của bạn.
+const INITIAL_MESSAGE = `Tôi là **FMMS AI Senior Advisor** — cố vấn quản trị chi phí & vận hành phương tiện gia đình của bạn.
 
 Tôi có thể giúp bạn:
-- 📊 Phân tích chi phí và tổng tiền đã chi cho từng xe
-- 🔧 Nhắc nhở và kiểm tra hạn bảo dưỡng xe
-- ⛽ Tính toán tiêu thụ nhiên liệu (L/100km)
-- 💰 Quản lý dư nợ khoản vay mua xe
-- 🗺️ Tổng hợp lộ trình di chuyển
+- 📊 **Phân tích chi phí**: Tổng hợp chi tiết theo từng xe & danh mục
+- ⛽ **Nhiên liệu & Định mức**: Theo dõi L/100km và chi phí xăng/pin
+- 🔧 **Kỹ thuật & Bảo dưỡng**: Nhắc nhở các mốc định kỳ và kiểm tra an toàn
+- 🏦 **Khoản vay ngân hàng**: Dư nợ giảm dần, tính gốc lãi hàng kỳ
 
-Hãy hỏi tôi bất cứ câu hỏi nào về các phương tiện của bạn!`;
+Bạn có thể tùy chỉnh phong cách của tôi (Chuyên gia, Ngắn gọn, Kỹ thuật) tại mục **Cấu hình AI**. Hãy hỏi tôi bất cứ điều gì về các xe của bạn!`;
 
 export default function AiCenterPage() {
   const [messages, setMessages] = useState<Message[]>([
@@ -58,6 +58,7 @@ export default function AiCenterPage() {
           prompt: q,
           provider: active.provider,
           model: active.model,
+          systemPrompt: active.systemPrompt,
           apiKey: active.apiKey,
           baseUrl: active.baseUrl,
         }),
@@ -85,37 +86,6 @@ export default function AiCenterPage() {
     }
   };
 
-  const renderContent = (text: string) => {
-    return text.split('\n').map((line, i) => {
-      if (line.startsWith('**') && line.endsWith('**')) {
-        return <p key={i} className="font-bold my-1" style={{ color: 'var(--text-primary)' }}>{line.slice(2, -2)}</p>;
-      }
-      if (line.startsWith('- ') || line.startsWith('* ') || line.startsWith('+ ')) {
-        return (
-          <li key={i} className="ml-4 list-disc" style={{ color: 'var(--text-secondary)' }}>
-            {line.slice(2).split(/\*\*(.*?)\*\*/).map((part, j) =>
-              j % 2 === 1 ? <strong key={j} style={{ color: 'var(--text-primary)' }}>{part}</strong> : part
-            )}
-          </li>
-        );
-      }
-      if (line.startsWith('### ')) {
-        return <h4 key={i} className="font-extrabold text-xs mt-3 mb-1" style={{ color: 'var(--accent-cyan)' }}>{line.replace(/^###\s/, '')}</h4>;
-      }
-      if (line.startsWith('## ') || line.startsWith('# ')) {
-        return <h3 key={i} className="font-bold text-sm mt-3 mb-1" style={{ color: 'var(--text-primary)' }}>{line.replace(/^#+\s/, '')}</h3>;
-      }
-      if (line.trim() === '') return <div key={i} className="h-1.5" />;
-      return (
-        <p key={i} style={{ color: 'var(--text-secondary)' }}>
-          {line.split(/\*\*(.*?)\*\*/).map((part, j) =>
-            j % 2 === 1 ? <strong key={j} style={{ color: 'var(--text-primary)' }}>{part}</strong> : part
-          )}
-        </p>
-      );
-    });
-  };
-
   return (
     <div className="flex flex-col h-[calc(100vh-130px)] animate-fadeIn">
       {/* Header */}
@@ -133,11 +103,11 @@ export default function AiCenterPage() {
         </div>
         <Link
           href="/settings/ai"
-          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition hover:opacity-80"
+          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition hover:opacity-80 shadow-sm"
           style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
         >
-          <Settings className="w-3.5 h-3.5" />
-          <span>Cấu hình AI</span>
+          <Settings className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Cấu hình AI &amp; Vai trò</span>
         </Link>
       </div>
 
@@ -151,13 +121,13 @@ export default function AiCenterPage() {
                 : { background: 'var(--accent-cyan-bg)', border: '1px solid var(--accent-cyan-border)', color: 'var(--accent-cyan)' }}>
               {msg.role === 'assistant' ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
             </div>
-            <div className={`max-w-[82%] p-3.5 rounded-2xl text-xs leading-relaxed space-y-1.5 ${msg.role === 'user' ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
+            <div className={`max-w-[85%] p-4 rounded-2xl text-xs leading-relaxed ${msg.role === 'user' ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
               style={msg.role === 'user'
                 ? { background: 'var(--accent-cyan)', color: 'white' }
                 : { background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-              {msg.role === 'assistant' ? renderContent(msg.content) : <p className="text-white font-medium">{msg.content}</p>}
+              <MarkdownMessage content={msg.content} isUser={msg.role === 'user'} />
               {msg.providerUsed && (
-                <p className="text-[9px] font-mono text-right pt-1 opacity-60">⚡ {msg.providerUsed}</p>
+                <p className="text-[9px] font-mono text-right pt-2 opacity-50">⚡ {msg.providerUsed}</p>
               )}
             </div>
           </div>
@@ -171,7 +141,7 @@ export default function AiCenterPage() {
             <div className="p-3.5 rounded-2xl rounded-tl-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
               <div className="flex items-center space-x-2 text-xs" style={{ color: 'var(--accent-cyan)' }}>
                 <Sparkles className="w-3.5 h-3.5 animate-spin" />
-                <span>AI đang phân tích số liệu thực tế...</span>
+                <span>AI đang tổng hợp và phân tích dữ liệu phương tiện...</span>
               </div>
             </div>
           </div>

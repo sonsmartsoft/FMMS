@@ -102,6 +102,64 @@ export const MODERN_AI_PROVIDERS: ProviderConfig[] = [
   },
 ];
 
+export interface AIPersona {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  systemPrompt: string;
+}
+
+export const AI_PERSONAS: AIPersona[] = [
+  {
+    id: 'financial_advisor',
+    name: 'Chuyên Gia Quản Trị Chi Phí & Tối Ưu',
+    description: 'Trình bày đẹp mắt, dùng bảng Markdown phân tích rõ ràng, có tóm tắt số liệu & lời khuyên tối ưu chi tiêu.',
+    icon: '💼',
+    systemPrompt: `Bạn là Cố Vấn Tài Chính & Vận Hành Phương Tiện Gia Đình (FMMS Senior Advisor).
+
+QUY TẮC TRÌNH BÀY VÀ ĐỊNH DẠNG (BẮT BUỘC):
+1. TRÌNH BÀY CÓ CẤU TRÚC RÕ RÀNG:
+   - Dùng bảng Markdown chuẩn (| Hạng mục | Chi phí | Ghi chú |) khi liệt kê từ 2 số liệu trở lên.
+   - In đậm toàn bộ số tiền và mốc ODO (VD: **820.000 ₫**, **12.500 km**).
+   - Chia câu trả lời thành các phần rõ rệt:
+     📌 **Tóm tắt nhanh**
+     📊 **Chi tiết số liệu** (bảng biểu)
+     💡 **Khuyến nghị & Đánh giá**
+2. PHONG CÁCH & NGÔN NGỮ:
+   - Tiếng Việt chuẩn mực, thông minh, chuyên nghiệp nhưng thân thiện.
+   - Luôn dựa trên số liệu thực tế được cung cấp, không suy diễn số liệu ảo.`,
+  },
+  {
+    id: 'concise',
+    name: 'Ngắn Gọn & Súc Tích (Tối Giản)',
+    description: 'Chỉ trả lời đúng trọng tâm câu hỏi, đưa ra con số chính xác và kết luận ngắn gọn, không giải thích dài dòng.',
+    icon: '⚡',
+    systemPrompt: `Bạn là trợ lý FMMS chế độ Ngắn Gọn (Ultra Concise).
+Quy tắc:
+- Trả lời thẳng vào câu hỏi trong tối đa 3-5 gạch đầu dòng ngắn gọn.
+- Nêu rõ số tiền / thông số chính xác mà người dùng hỏi.
+- Không chào hỏi dài dòng, không lặp lại câu hỏi.`,
+  },
+  {
+    id: 'mechanic',
+    name: 'Chuyên Viên Kỹ Thuật & Bảo Dưỡng Xe',
+    description: 'Tập trung sâu vào an toàn kỹ thuật xe, nhắc lịch thay dầu, lốp xe, phụ tùng và định mức tiêu hao.',
+    icon: '🔧',
+    systemPrompt: `Bạn là Chuyên Gia Kỹ Thuật Ô Tô & Xe Máy của hệ thống FMMS.
+Quy tắc:
+- Ưu tiên phân tích tình trạng xe, định mức tiêu thụ nhiên liệu (L/100km), các mốc bảo dưỡng định kỳ (5.000km, 10.000km, 20.000km...).
+- Cảnh báo kịp thời các hạng mục bảo dưỡng quá hạn hoặc chi phí sửa chữa bất thường.`,
+  },
+  {
+    id: 'custom',
+    name: 'Tùy Chỉnh Tự Do (Custom)',
+    description: 'Tự nhập vai trò, xưng hô và phong cách trả lời theo ý thích của riêng bạn.',
+    icon: '✍️',
+    systemPrompt: '',
+  },
+];
+
 export interface SavedProviderState {
   baseUrl: string;
   apiKey: string;
@@ -111,6 +169,8 @@ export interface SavedProviderState {
 export interface FMMSAIStorageConfig {
   defaultProvider: string;
   providers: Record<string, SavedProviderState>;
+  personaId?: string;
+  customSystemPrompt?: string;
 }
 
 export const LOCAL_AI_CONFIG_KEY = 'fmms_ai_config';
@@ -120,6 +180,7 @@ export function getClientAIConfig(): FMMSAIStorageConfig {
     return {
       defaultProvider: 'gemini',
       providers: {},
+      personaId: 'financial_advisor',
     };
   }
 
@@ -129,6 +190,7 @@ export function getClientAIConfig(): FMMSAIStorageConfig {
       return {
         defaultProvider: 'gemini',
         providers: {},
+        personaId: 'financial_advisor',
       };
     }
     return JSON.parse(raw);
@@ -136,6 +198,7 @@ export function getClientAIConfig(): FMMSAIStorageConfig {
     return {
       defaultProvider: 'gemini',
       providers: {},
+      personaId: 'financial_advisor',
     };
   }
 }
@@ -152,6 +215,8 @@ export function getActiveAISettings(): {
   baseUrl: string;
   apiKey: string;
   model: string;
+  systemPrompt: string;
+  personaId: string;
 } {
   const config = getClientAIConfig();
   const providerId = config.defaultProvider || 'gemini';
@@ -159,15 +224,22 @@ export function getActiveAISettings(): {
   const meta = MODERN_AI_PROVIDERS.find(p => p.id === providerId) || MODERN_AI_PROVIDERS[0];
 
   let chosenModel = pCfg.model || meta.defaultModel;
-  // If an old obsolete gemini model was stored in localStorage, upgrade it automatically to gemini-3.6-flash
   if (providerId === 'gemini' && (chosenModel === 'gemini-2.0-flash' || chosenModel === 'gemini-1.0-pro' || !chosenModel)) {
     chosenModel = 'gemini-3.6-flash';
   }
+
+  const personaId = config.personaId || 'financial_advisor';
+  const persona = AI_PERSONAS.find(p => p.id === personaId) || AI_PERSONAS[0];
+  const systemPrompt = personaId === 'custom' && config.customSystemPrompt
+    ? config.customSystemPrompt
+    : persona.systemPrompt;
 
   return {
     provider: providerId,
     baseUrl: pCfg.baseUrl || meta.defaultBaseUrl,
     apiKey: pCfg.apiKey || '',
     model: chosenModel,
+    systemPrompt,
+    personaId,
   };
 }
