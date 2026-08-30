@@ -185,7 +185,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
     },
     {
       label: 'Quãng đường tháng này',
-      href: '/fuel',
+      href: '/analytics',
       value: `${totalDistanceThisMonth.toLocaleString('vi-VN')} km`,
       sub: trips.length > 0 ? `${trips.length} chuyến ghi nhận` : 'Chưa có chuyến đi',
       subColor: 'var(--accent-cyan)',
