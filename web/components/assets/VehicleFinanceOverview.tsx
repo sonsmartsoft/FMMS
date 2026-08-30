@@ -479,7 +479,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       bg: 'rgba(167,139,250,0.12)',
       border: 'rgba(167,139,250,0.3)',
       icon: Wrench,
-      detailText: `${parts.length + expenses.filter(e => e.category === 'UPGRADE' || e.category === 'PARTS').length} món độ — Mở tab Phụ tùng`,
+      detailText: `${parts.length + upgradeExpenses.length} món độ — Mở tab Phụ tùng`,
     },
     {
       id: 'running',
