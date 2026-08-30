@@ -16,6 +16,10 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE vehicle_id = :vehicleId ORDER BY start_time DESC")
     fun observeByVehicle(vehicleId: String): Flow<List<TripEntity>>
 
+    @Query("SELECT * FROM trips WHERE vehicle_id = :vehicleId ORDER BY start_time DESC")
+    suspend fun getAllByVehicle(vehicleId: String): List<TripEntity>
+
+
     @Query("SELECT * FROM trips WHERE vehicle_id = :vehicleId AND status = 'ACTIVE' ORDER BY start_time DESC LIMIT 1")
     suspend fun getActiveTrip(vehicleId: String): TripEntity?
 

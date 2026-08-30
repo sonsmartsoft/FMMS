@@ -296,6 +296,17 @@ class TelemetryService : Service() {
                                 AppContainer.syncQueueRepository.markFailed(entry.id, "trips HTTP ${resp?.code}: ${resp?.body?.string()?.take(180)}")
                             }
                         }
+                        // Telemetry mẫu OBD live: đẩy liên tục (thay vì chỉ chờ Worker 15 phút).
+                        val samples = AppContainer.syncQueueRepository.getPendingByType("telemetry_samples", limit = 500)
+                        for (entry in samples) {
+                            val resp = pushUpsert(client, "telemetry_samples", entry.payload)
+                            if (resp != null && resp.isSuccessful) {
+                                AppContainer.syncQueueRepository.markSynced(entry.id)
+                                AppContainer.syncQueueRepository.deleteSynced(0L)
+                            } else {
+                                AppContainer.syncQueueRepository.markFailed(entry.id, "samples HTTP ${resp?.code}: ${resp?.body?.string()?.take(180)}")
+                            }
+                        }
                     }
                 } catch (_: Exception) {
                     // transient network failure — retry next tick

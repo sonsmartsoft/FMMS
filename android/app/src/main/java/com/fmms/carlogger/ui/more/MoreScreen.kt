@@ -355,6 +355,24 @@ private fun CloudScreen(onBack: () -> Unit) {
     }
 }
 
+/** IP mạng LAN đang kết nối của thiết bị (ưu tiên WLAN/ethernet, bỏ usb/loopback). */
+private fun deviceIp(): String {
+    val ifaces = runCatching { java.net.NetworkInterface.getNetworkInterfaces() }.getOrNull() ?: return "-"
+    val addrs = ArrayList<String>()
+    for (nif in ifaces) {
+        if (!nif.isUp || nif.isLoopback) continue
+        val name = nif.name.lowercase()
+        if (name.contains("wlan") || name.contains("eth") || name.contains("rmnet") || name.contains("wifi")) {
+            for (a in nif.inetAddresses) {
+                if (a is java.net.Inet4Address && !a.isLoopbackAddress && !a.isLinkLocalAddress) {
+                    addrs.add(a.hostAddress ?: "")
+                }
+            }
+        }
+    }
+    return addrs.firstOrNull { it.isNotBlank() } ?: "-"
+}
+
 @Composable
 private fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -378,6 +396,38 @@ private fun SettingsScreen(onBack: () -> Unit) {
         BackHeader(strings.settings, onBack)
         Spacer(modifier = Modifier.height(8.dp))
 
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = colors.surface),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("About", color = colors.textPrimary, fontSize = 14.sp)
+                Text(
+                    "v${com.fmms.carlogger.BuildConfig.VERSION_NAME} · rev${com.fmms.carlogger.BuildConfig.REV}",
+                    color = colors.cyan,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("IP", color = colors.textSecondary, fontSize = 13.sp)
+                Text(
+                    deviceIp(),
+                    color = colors.cyan,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
         SettingRow(strings.autoStart, autoStart) { v -> autoStart = v; prefs.setAutoStart(v) }
         SettingRow(strings.diagLogging, diag) { v -> diag = v; prefs.setDiagEnabled(v) }
         SettingRow(strings.syncCloud, sync) { v -> sync = v; prefs.setSyncEnabled(v) }

@@ -61,7 +61,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.MyLocation
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
@@ -187,9 +186,9 @@ fun CarUiScreen(vm: DashboardViewModel, screenVisible: Boolean = true) {
         var mediaMode by rememberSaveable {
             mutableStateOf(AppContainer.prefs.getMediaMode().let { m -> if (m == "map") "tpms" else m })
         }
-        // Không lưu "cam360"/"yt" vào prefs: mở lại app sẽ không tự nảy vào camera/YouTube
+        // Không lưu "cam360" vào prefs: mở lại app sẽ không tự nảy vào camera
         LaunchedEffect(mediaMode) {
-            AppContainer.prefs.setMediaMode(if (mediaMode == "cam360" || mediaMode == "yt") "app" else mediaMode)
+            AppContainer.prefs.setMediaMode(if (mediaMode == "cam360") "app" else mediaMode)
         }
 
         // Web phóng to toàn màn hình (như map trước đây); BACK để thu nhỏ
@@ -204,7 +203,6 @@ fun CarUiScreen(vm: DashboardViewModel, screenVisible: Boolean = true) {
             onDispose {
                 sharedWeb.value?.destroy()
                 sharedWeb.value = null
-                FrontCam.release()
             }
         }
 
@@ -240,18 +238,6 @@ fun CarUiScreen(vm: DashboardViewModel, screenVisible: Boolean = true) {
             else if (webFull) webFull = false
         }
 
-        // YouTube nhúng: WebView riêng, cùng cơ chế lớp nổi như WEB (phóng to bằng nút)
-        var ytFull by rememberSaveable { mutableStateOf(false) }
-        BackHandler(enabled = screenVisible && mediaMode == "yt" && ytFull) { ytFull = false }
-        var ytSlot by remember { mutableStateOf<DpRect?>(null) }
-        var ytEverUsed by remember {
-            mutableStateOf(AppContainer.prefs.getMediaMode() == "yt")
-        }
-        LaunchedEffect(mediaMode) {
-            if (mediaMode == "yt") ytEverUsed = true
-            else if (ytFull) ytFull = false
-        }
-
         if (isWide) {
             // MÀN NGANG (gắn trên xe): trên = cụm đồng hồ trái + khung media phải,
             // dưới = dải gauge full-width. Tốc độ tự co theo chỗ trống để không chèn thẻ khác.
@@ -282,13 +268,6 @@ fun CarUiScreen(vm: DashboardViewModel, screenVisible: Boolean = true) {
                         width = with(density) { r.width.toDp() },
                         height = with(density) { r.height.toDp() },
                     )
-                }, onYtSlotBounds = { r ->
-                    ytSlot = DpRect(
-                        left = with(density) { (r.left - rootOrigin.x).toDp() },
-                        top = with(density) { (r.top - rootOrigin.y).toDp() },
-                        width = with(density) { r.width.toDp() },
-                        height = with(density) { r.height.toDp() },
-                    )
                 })
                     }
                 }
@@ -314,19 +293,13 @@ fun CarUiScreen(vm: DashboardViewModel, screenVisible: Boolean = true) {
                         width = with(density) { r.width.toDp() },
                         height = with(density) { r.height.toDp() },
                     )
-                }, onYtSlotBounds = { r ->
-                    ytSlot = DpRect(
-                        left = with(density) { (r.left - rootOrigin.x).toDp() },
-                        top = with(density) { (r.top - rootOrigin.y).toDp() },
-                        width = with(density) { r.width.toDp() },
-                        height = with(density) { r.height.toDp() },
-                    )
                 })
             }
         }
 
-        // Lớp WebView nổi: WebView chỉ gắn MỘT chỗ duy nhất trong cây View nên
-        // video (YouTube...) không bị tạm dừng khi đổi tab hay phóng to/thu nhỏ.
+        // Lớp WebView nổi: WebView chỉ gắn MỘT chỗ duy nhất trong cây View và LUÔN
+        // giữ kích thước full — khi thu nhỏ chỉ SCALE hiển thị, không đổi kích thước
+        // view nên video (YouTube...) không bao giờ bị dừng khi phóng to/thu nhỏ.
         val webTarget = if (mediaMode == "web" && webFull)
             DpRect(12.dp, 12.dp, maxWidth - 24.dp, maxHeight - 24.dp)
         else webSlot
@@ -339,20 +312,6 @@ fun CarUiScreen(vm: DashboardViewModel, screenVisible: Boolean = true) {
                 onToggleFull = { webFull = !webFull },
                 sharedWeb = sharedWeb,
                 active = mediaMode == "web",
-            )
-        }
-
-        // Lớp nổi cho tab YouTube — player riêng của app (ExoPlayer + Piped)
-        val ytTarget = if (mediaMode == "yt" && ytFull)
-            DpRect(12.dp, 12.dp, maxWidth - 24.dp, maxHeight - 24.dp)
-        else ytSlot
-        if (ytEverUsed && ytTarget != null) {
-            YtOverlayLayer(
-                ytTarget,
-                colors,
-                isFull = ytFull,
-                onToggleFull = { ytFull = !ytFull },
-                active = mediaMode == "yt",
             )
         }
     }
@@ -490,7 +449,6 @@ private fun MediaFrame(
     sharedWeb: androidx.compose.runtime.MutableState<WebView?>,
     /** Báo ra vùng hiển thị web trong layout thường (px, theo gốc Compose). */
     onWebSlotBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
-    onYtSlotBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
 ) {
     val context = LocalContext.current
     var shortcuts by remember { mutableStateOf(AppContainer.prefs.getAppShortcuts()) }
@@ -516,17 +474,13 @@ private fun MediaFrame(
         .background(colors.surface)
 
     Column(frameModifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
-        // Header: ba chip chuyển chế độ
+        // Header: hai chip chuyển chế độ (bỏ 360 — fixture không dùng được)
         Row(verticalAlignment = Alignment.CenterVertically) {
             ModeChip(s.mediaAppTab, mode == "app", colors) { onModeChange("app") }
             Spacer(Modifier.width(8.dp))
             ModeChip(s.mediaWebTab, mode == "web", colors) { onModeChange("web") }
             Spacer(Modifier.width(8.dp))
             ModeChip(s.mediaMapTab, mode == "tpms", colors) { onModeChange("tpms") }
-            Spacer(Modifier.width(8.dp))
-            ModeChip(s.mediaCamTab, mode == "cam360", colors) { onModeChange("cam360") }
-            Spacer(Modifier.width(8.dp))
-            ModeChip(s.mediaYtTab, mode == "yt", colors) { onModeChange("yt") }
         }
         Spacer(Modifier.height(8.dp))
 
@@ -564,9 +518,6 @@ private fun MediaFrame(
                     }
                 }
             }
-        } else if (mode == "cam360") {
-            // Camera trước đọc TRỰC TIẾP bằng Camera2, hiển thị ngay trong khung
-            FrontCamPane(colors, s)
         } else if (mode == "web") {
             // Ô giữ chỗ: lớp WebView nổi sẽ đè đúng vùng này (giữ video không dừng)
             Box(
@@ -574,16 +525,6 @@ private fun MediaFrame(
                     .fillMaxSize()
                     .onGloballyPositioned { coords ->
                         onWebSlotBounds(coords.boundsInRoot())
-                    }
-                    .background(colors.background, RoundedCornerShape(12.dp)),
-            )
-        } else if (mode == "yt") {
-            // Ô giữ chỗ cho YouTube nhúng (lớp WebView nổi đè đúng vùng này)
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .onGloballyPositioned { coords ->
-                        onYtSlotBounds(coords.boundsInRoot())
                     }
                     .background(colors.background, RoundedCornerShape(12.dp)),
             )
@@ -679,9 +620,12 @@ private val WEB_BOOKMARKS = listOf(
 private data class DpRect(val left: Dp, val top: Dp, val width: Dp, val height: Dp)
 
 /**
- * Lớp chứa WebView duy nhất của màn hình: được đặt lại vị trí/kích thước bằng
- * offset+size nên WebView KHÔNG BAO GIỜ bị tháo khỏi cây View — video nền tảng
- * (YouTube) chạy liên tục khi phóng to/thu nhỏ.
+ * Lớp chứa WebView duy nhất của màn hình.
+ *
+ * WebView giữ NGUYÊN kích thước (một khung lớn cố định) trong mọi chế độ; khi thu
+ * về màn nhỏ ta chỉ SCALE ĐỀU hình ảnh bằng graphicsLayer cho vừa ô. Vì WebView
+ * không bao giờ bị resize nên trang web (YouTube) không bao giờ relayout — video
+ * KHÔNG bị dừng khi phóng/thu, và nút play luôn ở đúng vị trí nên bấm play luôn ăn.
  */
 @Composable
 private fun WebOverlayLayer(
@@ -698,6 +642,16 @@ private fun WebOverlayLayer(
     val top by animateDpAsState(target.top, tween(280), label = "webTop")
     val width by animateDpAsState(target.width, tween(280), label = "webWidth")
     val height by animateDpAsState(target.height, tween(280), label = "webHeight")
+    // WebView nội dung luôn giữ MỘT kích thước CỐ ĐỊNH = cỡ fullscreen. Ở fullscreen:
+    // scale=1 (nút play to, bấm ăn). Ở mini: scale xuống vừa ô nhỏ. Vì layout KHÔNG
+    // BAO GIỜ đổi nên YouTube không relayout → video KHÔNG bị dừng khi phóng/thu;
+    // video vẫn tiếp tục phát ở mini (không cần bấm lại), chỉ cần bấm play lần đầu
+    // ở fullscreen khi nút play còn to.
+    val baseW = with(LocalDensity.current) { 2000.dp }
+    val baseH = with(LocalDensity.current) { 1200.dp }
+    val sx by animateFloatAsState(if (isFull) 1f else (width / baseW), tween(280), label = "webScaleX")
+    val sy by animateFloatAsState(if (isFull) 1f else (height / baseH), tween(280), label = "webScaleY")
+
     Box(
         Modifier
             .zIndex(if (active || isFull) 1f else -1f)
@@ -705,7 +659,24 @@ private fun WebOverlayLayer(
             .size(width, height)
             .clip(RoundedCornerShape(if (isFull) 16.dp else 12.dp)),
     ) {
-        WebPaneContent(colors, s, isFull = isFull, onToggleFull = onToggleFull, sharedWeb = sharedWeb)
+        // WebView nội dung: kích thước CỐ ĐỊNH, scale đều để vừa ô.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = sx
+                    scaleY = sy
+                    val extraW = this.size.width * (1f - sx)
+                    val extraH = this.size.height * (1f - sy)
+                    translationX = -extraW / 2f
+                    translationY = -extraH / 2f
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.size(baseW, baseH)) {
+                WebPaneContent(colors, s, isFull = isFull, onToggleFull = onToggleFull, sharedWeb = sharedWeb)
+            }
+        }
     }
 }
 
@@ -745,10 +716,12 @@ private fun WebPaneContent(
     }
 
     fun obtain(ctx: android.content.Context): WebView =
-        sharedWeb.value ?: WebView(ctx).apply {
+        sharedWeb.value ?:         WebView(ctx).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.loadsImagesAutomatically = true
+            // Cho phép video play không cần user gesture → không bị autoplay-block
+            settings.mediaPlaybackRequiresUserGesture = false
             // Co trang theo đúng bề rộng khung + cho phóng to bằng cử chỉ
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = true
@@ -768,7 +741,12 @@ private fun WebPaneContent(
             loadUrl(currentUrl)
         }.also { sharedWeb.value = it }
 
+
+
     Box(Modifier.fillMaxSize()) {
+        // WebView đi theo ô, hiển thị ĐÚNG tỉ lệ trang trong ô nhỏ (nút phóng to nằm
+        // gọn trong ô). Khi phóng to / thu nhỏ, WebView bị resize nên video có thể
+        // tạm ngừng; LaunchedEffect trên sẽ ép phát lại khi thu về màn nhỏ.
         AndroidView(
             factory = { ctx -> android.widget.FrameLayout(ctx) },
             update = { container ->
@@ -1214,317 +1192,3 @@ private fun formatDuration(seconds: Long): String {
     return String.format(Locale.US, "%02d:%02d:%02d", h, m, sec)
 }
 
-// ---------------------------------------------------------------------
-// Camera trước nhúng TRỰC TIẾP bằng Camera2 (không qua app AVM nữa:
-// VirtualDisplay không chạy được trên firmware này, AVM lại giữ camera)
-// ---------------------------------------------------------------------
-
-/** Trạng thái các camera đang mở của pane 360 (4 cam cùng lúc). */
-private object FrontCam {
-    val devices = mutableMapOf<String, android.hardware.camera2.CameraDevice>()
-    val sessions = mutableMapOf<String, android.hardware.camera2.CameraCaptureSession>()
-    var handlerThread: android.os.HandlerThread? = null
-
-    fun handler(): android.os.Handler {
-        val t = handlerThread ?: android.os.HandlerThread("fmms-cam").also { it.start() }
-            .also { handlerThread = it }
-        return android.os.Handler(t.looper)
-    }
-
-    fun release(id: String? = null) {
-        val ids = id?.let { listOf(it) } ?: devices.keys.toList()
-        for (k in ids) {
-            runCatching { sessions.remove(k)?.close() }
-            runCatching { devices.remove(k)?.close() }
-        }
-        if (id == null) {
-            runCatching { handlerThread?.quitSafely() }
-            handlerThread = null
-        }
-    }
-}
-
-/** Thứ tự vị trí hiển thị: (cameraId, nhãn). Map đã đối chiếu thực tế trên xe. */
-private val CAM_GRID = listOf(
-    "4" to "front", // trước
-    "2" to "rear",  // sau
-    "3" to "left",  // trái
-    "5" to "right", // phải
-)
-
-/**
- * Góc xoay học từ app AVM (assets/adjust_displayviews.json có riêng view
- * "Left(Rotate 90°)"/"Right(Rotate 90°)"): cam hai bên gắn xoay ngang nên
- * phải quay 90° mới đứng thẳng; trước/sau để nguyên.
- */
-private val CAM_ROTATION = mapOf(
-    "4" to 0f,
-    "2" to 0f,
-    "3" to 90f,
-    "5" to 90f,
-)
-
-/** ZTTube — NewPipe fork cài sẵn trên đầu xe: YouTube không quảng cáo. */
-private const val YT_PKG = "com.lochv.zestech.ZTTube"
-
-/** Mở MỘT camera theo id và đẩy preview vào surface (dùng cho từng ô trong lưới).
- *  portraitCrop=true: cắt vùng dọc 9:16 ở giữa khung (cho cam xoay 90° — sau khi
- *  quay lại sẽ thành ảnh ngang 16:9 chuẩn, không méo, không thừa viền). */
-private fun openOneCamera(
-    context: Context,
-    camId: String,
-    surface: android.view.Surface,
-    portraitCrop: Boolean = false,
-    onError: (String) -> Unit,
-) {
-    val cm = context.getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
-    val handler = FrontCam.handler()
-
-    val size = runCatching {
-        val map = cm.getCameraCharacteristics(camId)
-            .get(android.hardware.camera2.CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-        map?.getOutputSizes(android.graphics.SurfaceTexture::class.java)?.maxByOrNull { sz ->
-            val sixteenNine = kotlin.math.abs(sz.width * 9 - sz.height * 16) <= sz.height
-            (if (sixteenNine) 100_000_000 else 0) + sz.width * sz.height
-        }
-    }.getOrNull()
-    if (size == null) {
-        onError("camera $camId không tồn tại")
-        return
-    }
-    if (!surface.isValid) {
-        onError("surface chưa sẵn sàng")
-        return
-    }
-    try {
-        cm.openCamera(camId, object : android.hardware.camera2.CameraDevice.StateCallback() {
-            override fun onOpened(camera: android.hardware.camera2.CameraDevice) {
-                FrontCam.devices[camId] = camera
-                try {
-                    camera.createCaptureSession(
-                        listOf(surface),
-                        object : android.hardware.camera2.CameraCaptureSession.StateCallback() {
-                            override fun onConfigured(session: android.hardware.camera2.CameraCaptureSession) {
-                                FrontCam.sessions[camId] = session
-                                try {
-                                    val req = camera.createCaptureRequest(
-                                        android.hardware.camera2.CameraDevice.TEMPLATE_PREVIEW,
-                                    )
-                                    req.addTarget(surface)
-                                    req.set(
-                                        android.hardware.camera2.CaptureRequest.CONTROL_MODE,
-                                        android.hardware.camera2.CaptureRequest.CONTROL_MODE_AUTO,
-                                    )
-                                    if (portraitCrop && size.height > 0) {
-                                        // Vùng dọc 9:16 giữa khung sensor (vd 1280x720 → crop 405x720)
-                                        val cw = size.height * 9 / 16
-                                        val x0 = (size.width - cw) / 2
-                                        req.set(
-                                            android.hardware.camera2.CaptureRequest.SCALER_CROP_REGION,
-                                            android.graphics.Rect(x0, 0, x0 + cw, size.height),
-                                        )
-                                    }
-                                    session.setRepeatingRequest(req.build(), null, handler)
-                                } catch (e: Exception) { onError("preview: ${e.message}") }
-                            }
-
-                            override fun onConfigureFailed(session: android.hardware.camera2.CameraCaptureSession) =
-                                onError("cấu hình camera thất bại")
-                        },
-                        handler,
-                    )
-                } catch (e: Exception) { onError("session: ${e.message}") }
-            }
-
-            override fun onDisconnected(camera: android.hardware.camera2.CameraDevice) {
-                runCatching { camera.close() }
-                FrontCam.devices.remove(camId)
-            }
-
-            override fun onError(camera: android.hardware.camera2.CameraDevice, error: Int) {
-                runCatching { camera.close() }
-                FrontCam.devices.remove(camId)
-                onError("lỗi mở camera $camId ($error)")
-            }
-        }, handler)
-    } catch (e: Exception) {
-        onError("camera $camId bận: ${e.message}")
-    }
-}
-
-@androidx.compose.runtime.Composable
-private fun FrontCamPane(colors: FmmsColors, s: FmmsStrings) {
-    val ctx = LocalContext.current
-    var granted by remember {
-        mutableStateOf(
-            ctx.checkSelfPermission(android.Manifest.permission.CAMERA) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED,
-        )
-    }
-    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-    ) { g -> granted = g }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        if (!granted) launcher.launch(android.Manifest.permission.CAMERA)
-    }
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        onDispose { FrontCam.release() }
-    }
-    if (!granted) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                "Cần cấp quyền Camera",
-                color = colors.textSecondary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-            )
-        }
-        return
-    }
-    // Bấm vào ô nào → phóng to riêng camera đó; mũi tên BACK để trở lại lưới 4 cam
-    var focusCam by rememberSaveable { mutableStateOf<String?>(null) }
-    val focused = CAM_GRID.firstOrNull { it.first == focusCam }
-    if (focused != null) {
-        Box(Modifier.fillMaxSize()) {
-            CamCell(ctx, focused.first, labelOf(s, focused.second), colors) {}
-            // Nút BACK về lưới
-            Box(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .clickable { focusCam = null },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-        }
-        return
-    }
-    // Lưới 2×2: trước | sau / trái | phải
-    Column(
-        Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        val rows = CAM_GRID.chunked(2)
-        rows.forEachIndexed { ri, rowCams ->
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                rowCams.forEach { (camId, key) ->
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        CamCell(ctx, camId, labelOf(s, key), colors) { focusCam = camId }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun labelOf(s: FmmsStrings, key: String): String = when (key) {
-    "front" -> s.camFront
-    "rear" -> s.camRear
-    "left" -> s.camLeft
-    else -> s.camRight
-}
-
-@Composable
-private fun YtOverlayLayer(
-    target: DpRect,
-    colors: FmmsColors,
-    isFull: Boolean,
-    onToggleFull: () -> Unit,
-    active: Boolean,
-) {
-    val left by animateDpAsState(target.left, tween(280), label = "ytLeft")
-    val top by animateDpAsState(target.top, tween(280), label = "ytTop")
-    val width by animateDpAsState(target.width, tween(280), label = "ytWidth")
-    val height by animateDpAsState(target.height, tween(280), label = "ytHeight")
-    Box(
-        Modifier
-            .zIndex(if (active || isFull) 1f else -1f)
-            .offset(x = left, y = top)
-            .size(width, height)
-            .clip(RoundedCornerShape(if (isFull) 16.dp else 12.dp)),
-    ) {
-        // Player riêng của app — KHÔNG dùng WebView (WebView hệ thống quá cũ,
-        // không render được video). Tìm kiếm qua Piped, phát bằng ExoPlayer.
-        YtNativePane(colors)
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun CamCell(
-    ctx: android.content.Context,
-    camId: String,
-    label: String,
-    colors: FmmsColors,
-    onClick: () -> Unit,
-) {
-    var error by remember { mutableStateOf<String?>(null) }
-    // Góc xoay hiệu chỉnh theo từng cam — GIỮ LÂU ô để đổi 0→90→180→270
-    var rot by remember(camId) { mutableStateOf(CAM_ROTATION[camId] ?: 0f) }
-    BoxWithConstraints(
-        Modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color.Black)
-            .combinedClickable(onClick = onClick, onLongClick = { rot = (rot + 90f) % 360f }),
-        contentAlignment = Alignment.Center,
-    ) {
-        val cw = maxWidth
-        val ch = maxHeight
-        // Cam xoay 90° (swap): crop dọc 9:16 từ sensor rồi xuất surface dọc 720x1280 —
-        // sau khi quay View 90° thành ảnh ngang 16:9 phủ kín ô, đúng tỷ lệ.
-        // Cam thường: surface ngang 1280x720, cover như cũ.
-        val swap = rot % 180f != 0f
-        val innerH = maxOf(cw, ch * 16f / 9f) * 9f / 16f
-        val innerW = if (!swap) innerH * 16f / 9f else innerH * 9f / 16f
-        AndroidView(
-            factory = { c ->
-                SurfaceView(c).apply {
-                    setZOrderOnTop(false)
-                    if (swap) holder.setFixedSize(720, 1280) else holder.setFixedSize(1280, 720)
-                    holder.addCallback(object : SurfaceHolder.Callback {
-                        override fun surfaceCreated(h: SurfaceHolder) {
-                            error = null
-                            openOneCamera(c, camId, h.surface, portraitCrop = swap) { e -> error = e }
-                        }
-
-                        override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, ht: Int) {}
-                        override fun surfaceDestroyed(h: SurfaceHolder) { FrontCam.release(camId) }
-                    })
-                }
-            },
-            modifier = Modifier
-                .graphicsLayer { rotationZ = rot }
-                .size(innerW, innerH),
-        )
-        Text(
-            label,
-            color = Color.White.copy(alpha = 0.85f),
-            fontSize = 9.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(4.dp)
-                .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
-                .padding(horizontal = 5.dp, vertical = 1.dp),
-        )
-        if (error != null) {
-            Text(
-                "$label: $error",
-                color = colors.textSecondary,
-                fontSize = 9.sp,
-                maxLines = 2,
-                modifier = Modifier.align(Alignment.Center).padding(6.dp),
-            )
-        }
-    }
-}

@@ -145,21 +145,26 @@ object AppContainer {
         this.fuelEngine = FuelEngine(vehicleRepository, tripRepository, fuelLogRepository)
         this.tripEngine = TripEngine(vehicleRepository, tripRepository, appScope) { prefs.getTripTimeoutMs() }
 
-        // Backfill một lần: các lần đổ xăng trước đây chưa từng có đường đồng bộ
-        // (fuel_logs không được enqueue) -> đẩy bù toàn bộ log của xe hiện tại.
+        // Backfill: các lần đổ xăng & chuyến đi trước đây chưa từng có đường đồng bộ
+        // hoặc lưu local -> đẩy bù toàn bộ log của xe hiện tại lên cloud.
         appScope.launch {
-            if (prefs.getFuelBackfillDone()) return@launch
             try {
                 val vehicle = vehicleRepository.getActive()
                 if (vehicle != null) {
-                    fuelLogRepository.getByVehicle(vehicle.id).forEach {
-                        syncQueueRepository.enqueueFuelLog(it)
+                    if (!prefs.getFuelBackfillDone()) {
+                        fuelLogRepository.getByVehicle(vehicle.id).forEach {
+                            syncQueueRepository.enqueueFuelLog(it)
+                        }
+                        prefs.setFuelBackfillDone(true)
+                        android.util.Log.d("FmmsSync", "fuel-log backfill enqueued")
                     }
+                    // Quét toàn bộ chuyến đi COMPLETED để đảm bảo không sót chuyến cũ
+                    tripRepository.getAllByVehicle(vehicle.id)
+                        .filter { it.status == "COMPLETED" && it.distanceKm > 0.05 }
+                        .forEach { syncQueueRepository.enqueueTrip(it) }
                 }
-                prefs.setFuelBackfillDone(true)
-                android.util.Log.d("FmmsSync", "fuel-log backfill enqueued")
             } catch (e: Exception) {
-                android.util.Log.w("FmmsSync", "fuel backfill failed: ${e.message}")
+                android.util.Log.w("FmmsSync", "Backfill failed: ${e.message}")
             }
         }
     }
@@ -185,10 +190,18 @@ object AppContainer {
         appScope.launch { block() }
     }
 
-    /** Manual "SYNC NOW": purge orphans + repair payloads + push pending to Supabase. */
+    /** Manual "SYNC NOW": backfill local trips + purge orphans + repair payloads + push pending to Supabase. */
     fun syncNow() {
         launch {
             if (!prefs.getSyncEnabled()) return@launch
+            try {
+                val vehicle = vehicleRepository.getActive()
+                if (vehicle != null) {
+                    tripRepository.getAllByVehicle(vehicle.id)
+                        .filter { it.status == "COMPLETED" && it.distanceKm > 0.05 }
+                        .forEach { syncQueueRepository.enqueueTrip(it) }
+                }
+            } catch (_: Exception) {}
             com.fmms.carlogger.data.sync.SyncWorker.pushPendingNow(this@AppContainer)
         }
     }

@@ -320,6 +320,8 @@ class TripRepository(
     private val syncQueueRepository: SyncQueueRepository,
 ) {
     fun observeByVehicle(vehicleId: String): Flow<List<TripEntity>> = tripDao.observeByVehicle(vehicleId)
+    suspend fun getAllByVehicle(vehicleId: String): List<TripEntity> = tripDao.getAllByVehicle(vehicleId)
+
 
     suspend fun getActiveTrip(vehicleId: String): TripEntity? = tripDao.getActiveTrip(vehicleId)
 
