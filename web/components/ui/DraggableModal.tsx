@@ -189,59 +189,10 @@ export default function DraggableModal({
         transition: isMinimized ? 'height 0.18s ease' : undefined,
       }}
     >
-      {/* macOS-style title bar */}
-      <div
-        className="flex items-center gap-1.5 px-3 shrink-0 select-none"
-        style={{
-          height: 40,
-          background: 'var(--bg-secondary)',
-          borderBottom: isMinimized ? 'none' : '1px solid var(--border-default)',
-          cursor: isDragging ? 'grabbing' : 'grab',
-        }}
-      >
-        {/* Traffic light buttons */}
-        <button
-          onClick={e => { e.stopPropagation(); onClose?.(); }}
-          className="no-drag w-3 h-3 rounded-full flex items-center justify-center group transition-opacity hover:opacity-90"
-          style={{ background: '#FF5F57', flexShrink: 0 }}
-          title="Đóng"
-        >
-          <span className="opacity-0 group-hover:opacity-100 text-[8px] font-black leading-none" style={{ color: '#7a0000' }}>✕</span>
-        </button>
-        <button
-          onClick={e => { e.stopPropagation(); handleMinimize(); }}
-          className="no-drag w-3 h-3 rounded-full flex items-center justify-center group transition-opacity hover:opacity-90"
-          style={{ background: '#FEBC2E', flexShrink: 0 }}
-          title={isMinimized ? 'Khôi phục' : 'Thu nhỏ'}
-        >
-          <span className="opacity-0 group-hover:opacity-100 text-[8px] font-black leading-none" style={{ color: '#7a5000' }}>−</span>
-        </button>
-        <button
-          onClick={e => { e.stopPropagation(); handleMaximize(); }}
-          className="no-drag w-3 h-3 rounded-full flex items-center justify-center group transition-opacity hover:opacity-90"
-          style={{ background: '#28C840', flexShrink: 0 }}
-          title={isMaximized ? 'Thu nhỏ lại' : 'Phóng to'}
-        >
-          <span className="opacity-0 group-hover:opacity-100 text-[8px] font-black leading-none" style={{ color: '#004d00' }}>{isMaximized ? '⤡' : '⤢'}</span>
-        </button>
-
-        {/* Title in center of titlebar */}
-        {title && (
-          <span
-            className="flex-1 text-center text-xs font-semibold truncate px-2"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            {title}
-          </span>
-        )}
+      {/* Content */}
+      <div style={{ width: '100%', height: '100%', overflow: 'auto' }} className="flex flex-col">
+        {children}
       </div>
-
-      {/* Content — hidden when minimized */}
-      {!isMinimized && (
-        <div style={{ cursor: 'auto', width: '100%', height: 'calc(100% - 40px)', overflow: 'auto' }} className="flex flex-col">
-          {children}
-        </div>
-      )}
 
       {/* Resize handles */}
       {!isMaximized && !isMinimized && (
