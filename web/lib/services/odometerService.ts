@@ -84,6 +84,12 @@ export async function getOdometerLogs(assetId?: string): Promise<OdometerLogReco
     return oAssetId === realId || o.asset_id === assetId || o.asset_id === realId;
   });
 
+  const localLogs = getLocalOdoLogs().filter(o => {
+    if (!assetId) return true;
+    const oAssetId = resolveAssetId(o.asset_id);
+    return oAssetId === realId || o.asset_id === assetId || o.asset_id === realId;
+  });
+
   // Merge unique logs by id
   const map = new Map<string, OdometerLogRecord>();
   [...supabaseLogs, ...localLogs, ...mockLogs].forEach(item => {
