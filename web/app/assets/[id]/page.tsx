@@ -868,6 +868,8 @@ export default function AssetDetailPage() {
 
       if (day.maxOdo > 0) {
         prevOdo = day.maxOdo;
+      } else if (day.tripDistance > 0 && prevOdo > 0) {
+        prevOdo += day.tripDistance;
       }
 
       const dObj = new Date(day.date);

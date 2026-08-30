@@ -33,6 +33,8 @@ export function mapTripRow(row: any): TripRecord {
   };
 }
 
+import { MOCK_TRIPS } from '@/lib/data/mockData';
+
 const LOCAL_TRIPS_KEY = 'fmms_local_trips';
 
 function getLocalTrips(): TripRecord[] {
@@ -52,8 +54,12 @@ function saveLocalTrips(trips: TripRecord[]) {
   } catch {}
 }
 
+import { resolveAssetId, isValidUuid } from './assetService';
+
 export async function getTrips(assetId?: string): Promise<TripRecord[]> {
+  const realId = assetId ? resolveAssetId(assetId) : undefined;
   let supabaseTrips: TripRecord[] = [];
+  
   try {
     const supabase = createClient();
     let query = supabase
@@ -61,8 +67,9 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
       .select('*')
       .order('start_time', { ascending: false })
       .limit(200);
-    if (assetId) {
-      query = query.eq('asset_id', assetId);
+      
+    if (realId && isValidUuid(realId)) {
+      query = query.eq('asset_id', realId);
     }
     const { data, error } = await query;
     if (!error && data) {
@@ -70,11 +77,21 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
     }
   } catch {}
 
-  const localTrips = getLocalTrips().filter(t => !assetId || t.asset_id === assetId);
+  const localTrips = getLocalTrips().filter(t => {
+    if (!assetId) return true;
+    const tAssetId = t.asset_id ? resolveAssetId(t.asset_id) : undefined;
+    return tAssetId === realId || t.asset_id === assetId;
+  });
+
+  const mockTrips = MOCK_TRIPS.filter(t => {
+    if (!assetId) return true;
+    const tAssetId = t.asset_id ? resolveAssetId(t.asset_id) : undefined;
+    return tAssetId === realId || t.asset_id === assetId;
+  });
 
   // Merge unique trips
   const map = new Map<string, TripRecord>();
-  [...supabaseTrips, ...localTrips].forEach(item => {
+  [...supabaseTrips, ...localTrips, ...mockTrips].forEach(item => {
     if (!map.has(item.id)) {
       map.set(item.id, item);
     }
