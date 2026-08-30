@@ -206,6 +206,11 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     return parts.reduce((s, p) => s + (p.cost || 0), 0);
   }, [upgradeExpenses, parts]);
 
+  const uniqueUpgradeCount = useMemo(() => {
+    if (parts.length > 0) return parts.length;
+    return upgradeExpenses.length;
+  }, [parts, upgradeExpenses]);
+
   // 5. Running Costs Total (KHÔNG có gốc/lãi vay!)
   const runningExpenses = useMemo(() => expenses.filter(isRunningExpense), [expenses]);
   const totalRunningCost = useMemo(() => runningExpenses.reduce((s, e) => s + e.amount, 0), [runningExpenses]);
@@ -479,7 +484,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
       bg: 'rgba(167,139,250,0.12)',
       border: 'rgba(167,139,250,0.3)',
       icon: Wrench,
-      detailText: `${parts.length + upgradeExpenses.length} món độ — Mở tab Phụ tùng`,
+      detailText: `${uniqueUpgradeCount} món độ — Mở tab Phụ tùng`,
     },
     {
       id: 'running',
@@ -758,25 +763,63 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
               <button onClick={handleAddUpgradeItem} className="w-full py-2 rounded-xl bg-purple-500 text-white font-bold text-xs">+ Thêm vào danh sách độ</button>
             </div>
 
-            {/* Tổng hợp từ cả parts[] và upgradeExpenses */}
+            {/* Danh sách hạng mục đồ độ & nâng cấp (Deduplicated) */}
             {(() => {
-              const partsItems = parts.map(p => ({
-                id: p.id || `part_${p.name}`,
-                description: p.name,
-                date: p.install_date || '',
-                vendor: '',
-                amount: p.cost || 0,
-                source: 'parts' as const,
-              }));
-              const expItems = upgradeExpenses.map(e => ({
-                id: e.id,
-                description: e.description || e.subcategory || 'Nâng cấp',
-                date: e.date,
-                vendor: e.vendor || '',
-                amount: e.amount,
-                source: 'expense' as const,
-              }));
-              const allItems = [...partsItems, ...expItems].sort((a, b) => b.date.localeCompare(a.date));
+              const allItems: Array<{
+                id: string;
+                description: string;
+                date: string;
+                vendor: string;
+                amount: number;
+                source: 'parts' | 'expense';
+                expenseId?: string;
+              }> = [];
+
+              if (parts.length > 0) {
+                parts.forEach(p => {
+                  allItems.push({
+                    id: p.id || `part_${p.name}`,
+                    description: p.name,
+                    date: p.install_date || '',
+                    vendor: p.brand || '',
+                    amount: p.cost || 0,
+                    source: 'parts',
+                  });
+                });
+                // Add any upgrade expenses that are not already in parts
+                upgradeExpenses.forEach(e => {
+                  const eDesc = (e.description || '').toLowerCase();
+                  const exists = parts.some(p => {
+                    const pName = p.name.toLowerCase();
+                    return pName.includes(eDesc) || eDesc.includes(pName) || Math.abs(p.cost - e.amount) < 100;
+                  });
+                  if (!exists) {
+                    allItems.push({
+                      id: e.id,
+                      description: e.description || e.subcategory || 'Nâng cấp',
+                      date: e.date,
+                      vendor: e.vendor || '',
+                      amount: e.amount,
+                      source: 'expense',
+                      expenseId: e.id,
+                    });
+                  }
+                });
+              } else {
+                upgradeExpenses.forEach(e => {
+                  allItems.push({
+                    id: e.id,
+                    description: e.description || e.subcategory || 'Nâng cấp',
+                    date: e.date,
+                    vendor: e.vendor || '',
+                    amount: e.amount,
+                    source: 'expense',
+                    expenseId: e.id,
+                  });
+                });
+              }
+
+              allItems.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
               const total = allItems.reduce((s, i) => s + i.amount, 0);
               return (
                 <div className="space-y-2">
@@ -793,13 +836,13 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
                         <div className="flex-1 min-w-0">
                           <p className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{item.description}</p>
                           <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                            {item.date ? fmtDate(item.date) : '—'}{item.vendor ? ` • ${item.vendor}` : ''} • {item.source === 'parts' ? 'Phụ tùng' : 'Chi phí'}
+                            {item.date ? fmtDate(item.date) : '—'}{item.vendor ? ` • ${item.vendor}` : ''}
                           </p>
                         </div>
                         <div className="flex items-center space-x-2 shrink-0 ml-2">
                           <span className="font-mono font-bold text-purple-400">{fmt(item.amount)} ₫</span>
-                          {item.source === 'expense' && (
-                            <button onClick={async () => { await deleteExpense(item.id); onRefresh(); }} className="text-rose-400 hover:opacity-70 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                          {item.source === 'expense' && item.expenseId && (
+                            <button onClick={async () => { await deleteExpense(item.expenseId!); onRefresh(); }} className="text-rose-400 hover:opacity-70 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
                           )}
                         </div>
                       </div>
