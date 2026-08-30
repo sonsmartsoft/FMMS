@@ -103,7 +103,14 @@ export default function FuelPage() {
   }, [filteredLogs, assets, sortCol, sortDir]);
 
   const monthlyFuelData = useMemo(() => {
-    const map = new Map<string, { month: string; liters: number; cost: number; count: number; prices: number[] }>();
+    interface MonthlyFuelAgg {
+      month: string;
+      liters: number;
+      cost: number;
+      count: number;
+      prices: number[];
+    }
+    const map = new Map<string, MonthlyFuelAgg>();
     
     filteredLogs.forEach(l => {
       const d = l.date || l.timestamp || '';
@@ -113,13 +120,14 @@ export default function FuelPage() {
       const price = parseFloat(l.price_per_liter ?? 0) || 0;
       const cost = l.total_cost != null ? Number(l.total_cost) : (liters * price);
 
-      const prev = map.get(mKey) || { month: mKey, liters: 0, cost: 0, count: 0, prices: [] };
+      const prev: MonthlyFuelAgg = map.get(mKey) || { month: mKey, liters: 0, cost: 0, count: 0, prices: [] };
       prev.liters += liters;
       prev.cost += cost;
       prev.count += 1;
       if (price > 0) prev.prices.push(price);
       map.set(mKey, prev);
     });
+
 
     const sortedKeys = Array.from(map.keys()).sort();
     return sortedKeys.map(k => {
