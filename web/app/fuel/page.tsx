@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { getAssets } from '@/lib/services/assetService';
 import { getFuelLogs, createFuelLog, updateFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
 import { Asset } from '@/types/mobility';
+import { useTheme } from '@/lib/theme/ThemeContext';
 import { Fuel, Zap, TrendingDown, Plus, X, Pencil, Trash2, Check, BarChart3 } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
 
@@ -24,10 +25,19 @@ const emptyForm = () => ({
 });
 
 export default function FuelPage() {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const axisColor = isDark ? '#94A3B8' : '#475569';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tooltipBg = isDark ? '#0F172A' : '#FFFFFF';
+  const tooltipBorder = isDark ? '#334155' : '#E2E8F0';
+  const tooltipText = isDark ? '#F8FAFC' : '#0F172A';
+
   const [openModal, setOpenModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [form, setForm] = useState(emptyForm());
+
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [assetFilter, setAssetFilter] = useState<string>('ALL');
@@ -373,20 +383,20 @@ export default function FuelPage() {
             </div>
             <div className="text-right">
               <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Tổng chi kỳ này: </span>
-              <strong className="text-xs text-amber-400 font-mono">{fmt(totalFuel)} ₫</strong>
+              <strong className="text-xs text-amber-500 dark:text-amber-400 font-mono">{fmt(totalFuel)} ₫</strong>
             </div>
           </div>
 
           <div style={{ height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={monthlyFuelData} margin={{ top: 10, right: 20, left: -5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
                 <YAxis
                   yAxisId="cost"
                   tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'}
-                  tick={{ fill: '#94A3B8', fontSize: 10 }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                  tick={{ fill: axisColor, fontSize: 10 }}
+                  axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }}
                   tickLine={false}
                   width={45}
                 />
@@ -394,8 +404,8 @@ export default function FuelPage() {
                   yAxisId="liters"
                   orientation="right"
                   tickFormatter={v => v > 0 ? `${Math.round(v)}L` : '0'}
-                  tick={{ fill: '#94A3B8', fontSize: 10 }}
-                  axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                  tick={{ fill: axisColor, fontSize: 10 }}
+                  axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }}
                   tickLine={false}
                   width={45}
                 />
@@ -406,17 +416,18 @@ export default function FuelPage() {
                     if (name === 'Đơn giá TB') return [`${fmt(v)} ₫/L`, name];
                     return [v, name];
                   }}
-                  contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
+                  contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
                 />
-                <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 11, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                <Bar yAxisId="cost" dataKey="cost" name="Tổng tiền" fill="rgba(245,158,11,0.45)" stroke="#F59E0B" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="liters" dataKey="liters" name="Số lượng (L/kWh)" fill="rgba(56,189,248,0.35)" stroke="#38BDF8" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
-                <Line yAxisId="cost" type="monotone" dataKey="avgPrice" name="Đơn giá TB" stroke="#34D399" strokeWidth={2.5} dot={{ fill: '#34D399', r: 3.5 }} />
-              </ComposedChart>
+                <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
 
+                <Bar yAxisId="cost" dataKey="cost" name="Tổng tiền" fill="rgba(245,158,11,0.45)" stroke="#F59E0B" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="liters" dataKey="liters" name="Số lượng (L/kWh)" fill="rgba(6,182,212,0.35)" stroke="#06B6D4" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                <Line yAxisId="cost" type="monotone" dataKey="avgPrice" name="Đơn giá TB" stroke="#10B981" strokeWidth={2.5} dot={{ fill: '#10B981', r: 3.5 }} />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
+
       )}
 
       {/* Fuel Log Table with Edit & Delete */}

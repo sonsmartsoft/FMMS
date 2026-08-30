@@ -11,6 +11,7 @@ import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/lib/
 import { getLoans, getLoanPayments, createLoan, createLoanPayment, updateLoan, LoanRow, LoanPaymentRow } from '@/lib/services/loanService';
 import { ExpenseRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
+import { useTheme } from '@/lib/theme/ThemeContext';
 import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2, Pencil, BarChart3, PieChart as PieIcon } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
 
@@ -19,19 +20,26 @@ const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
 
 const CAT_LABELS: Record<string, string> = {
-  FUEL: 'Nhiên liệu', MAINTENANCE: 'Bảo dưỡng', INSURANCE: 'Bảo hiểm',
+  FUEL: 'Nhiên liệu & Pin', MAINTENANCE: 'Bảo dưỡng & Phụ tùng', INSURANCE: 'Bảo hiểm',
   REGISTRATION: 'Đăng ký/Lăn bánh', PARKING: 'Đỗ xe', TOLL: 'Cầu đường',
   PARTS: 'Phụ tùng', LABOR: 'Nhân công', INSPECTION: 'Đăng kiểm',
-  LOAN: 'Khoản vay', LOAN_PAYMENT: 'Trả gốc vay', LOAN_INTEREST: 'Trả lãi vay',
-  INITIAL: 'Vốn mua xe', UPGRADE: 'Nâng cấp/Đồ chơi', CAR_WASH: 'Rửa xe', OTHER: 'Khác',
+  LOAN: 'Khoản vay mua xe', LOAN_PAYMENT: 'Trả gốc vay', LOAN_INTEREST: 'Trả lãi vay',
+  INITIAL: 'Chi phí mua xe & lăn bánh', UPGRADE: 'Nâng cấp & Đồ chơi', CAR_WASH: 'Rửa xe', OTHER: 'Khác',
 };
-const CAT_COLORS: Record<string, string> = {
-  FUEL: '#F59E0B', MAINTENANCE: '#38BDF8', INSURANCE: '#A78BFA',
-  REGISTRATION: '#34D399', PARKING: '#94A3B8', TOLL: '#CBD5E1',
-  PARTS: '#FB923C', LABOR: '#60A5FA', INSPECTION: '#4ADE80',
-  LOAN: '#EC4899', LOAN_PAYMENT: '#8B5CF6', LOAN_INTEREST: '#EF4444',
-  INITIAL: '#10B981', UPGRADE: '#6366F1', CAR_WASH: '#06B6D4', OTHER: '#6B7280',
+
+const getCategoryColor = (catName?: string): string => {
+  if (!catName) return '#64748B';
+  const c = catName.toUpperCase();
+  if (c === 'INITIAL' || c.includes('MUA') || c.includes('LĂN BÁNH') || c.includes('PURCHASE')) return '#3B82F6'; // Royal Blue
+  if (c === 'FUEL' || c.includes('XĂNG') || c.includes('PIN') || c.includes('NHIÊN LIỆU') || c.includes('RUNNING')) return '#F59E0B'; // Amber
+  if (c === 'MAINTENANCE' || c.includes('BẢO DƯỠNG') || c === 'PARTS' || c === 'LABOR') return '#06B6D4'; // Cyan
+  if (c === 'UPGRADE' || c.includes('NÂNG CẤP') || c.includes('ĐỒ CHƠI') || c === 'ACCESSORIES') return '#8B5CF6'; // Purple
+  if (c === 'INSURANCE' || c.includes('BẢO HIỂM') || c === 'REGISTRATION' || c === 'INSPECTION') return '#10B981'; // Emerald
+  if (c === 'LOAN' || c === 'LOAN_PAYMENT' || c === 'LOAN_INTEREST' || c.includes('VAY') || c.includes('TRẢ GÓP')) return '#EC4899'; // Pink
+  if (c === 'TOLL' || c === 'PARKING' || c === 'CAR_WASH' || c.includes('RỬA') || c.includes('ĐỖ')) return '#F97316'; // Orange
+  return '#64748B';
 };
+
 
 // Generate loan payment schedule (with custom per-period overrides)
 function generateLoanSchedule(loan: LoanRow, payments: LoanPaymentRow[]) {
@@ -93,10 +101,19 @@ function generateLoanSchedule(loan: LoanRow, payments: LoanPaymentRow[]) {
 }
 
 export default function FinancePage() {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const axisColor = isDark ? '#94A3B8' : '#475569';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tooltipBg = isDark ? '#0F172A' : '#FFFFFF';
+  const tooltipBorder = isDark ? '#334155' : '#E2E8F0';
+  const tooltipText = isDark ? '#F8FAFC' : '#0F172A';
+
   const [assets, setAssets] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [loans, setLoans] = useState<LoanRow[]>([]);
   const [payments, setPayments] = useState<LoanPaymentRow[]>([]);
+
   const [openModal, setOpenModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<'expenses' | 'loans'>('expenses');
@@ -308,9 +325,10 @@ export default function FinancePage() {
     filteredExpenses.forEach(e => {
       const norm = normalizeCategory(e.category, e.subcategory);
       const cat = norm.category;
-      const label = taxMap[cat]?.label ? taxMap[cat].label.replace(/^[^\s]+\s+/, '') : (CAT_LABELS[cat] || cat);
-      const color = CAT_COLORS[cat] || CAT_COLORS[e.category] || '#6B7280';
+      const label = taxMap[cat]?.label ? taxMap[cat].label.replace(/^[^\s]+\s+/, '') : (CAT_LABELS[cat.toUpperCase()] || cat);
+      const color = getCategoryColor(cat) || getCategoryColor(e.category);
       const prev = map.get(cat) || { label, total: 0, color };
+
       prev.total += e.amount;
       map.set(cat, prev);
     });
@@ -1055,70 +1073,100 @@ export default function FinancePage() {
                     </div>
                     <div>
                       <h3 className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
-                        Biến Động Chi Phí Theo Tháng (Cột Chồng)
+                        Biến Động Chi Phí Theo Tháng
                       </h3>
                       <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                        Phân lớp theo các nhóm chi phí chính qua từng tháng
+                        Phân bổ theo các nhóm chi phí chính qua từng tháng
                       </p>
                     </div>
                   </div>
-                  <span className="text-[10px] text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
+                  <span className="text-[10px] font-mono text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
                 </div>
 
-                <div style={{ height: 240 }}>
+                <div style={{ height: 260 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyExpensesData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                      <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
-                      <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={45} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                      <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} />
+                      <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={45} />
                       <ReTooltip
                         formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]}
-                        contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
+                        contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
                       />
-                      <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
-                      <Bar dataKey="fuel" stackId="exp" name="Nhiên liệu" fill="#F59E0B" />
-                      <Bar dataKey="maint" stackId="exp" name="Bảo dưỡng" fill="#38BDF8" />
-                      <Bar dataKey="upgrade" stackId="exp" name="Nâng cấp" fill="#A78BFA" />
-                      <Bar dataKey="ins" stackId="exp" name="Bảo hiểm/Giấy tờ" fill="#34D399" />
-                      <Bar dataKey="loan" stackId="exp" name="Khoản vay" fill="#EC4899" />
-                      <Bar dataKey="other" stackId="exp" name="Khác" fill="#94A3B8" radius={[4, 4, 0, 0]} />
+                      <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
+                      <Bar dataKey="fuel" stackId="exp" name="Nhiên liệu" fill={getCategoryColor('Fuel')} />
+                      <Bar dataKey="maint" stackId="exp" name="Bảo dưỡng" fill={getCategoryColor('Maintenance')} />
+                      <Bar dataKey="upgrade" stackId="exp" name="Nâng cấp" fill={getCategoryColor('Upgrade')} />
+                      <Bar dataKey="ins" stackId="exp" name="Bảo hiểm/Giấy tờ" fill={getCategoryColor('Insurance')} />
+                      <Bar dataKey="loan" stackId="exp" name="Khoản vay" fill={getCategoryColor('Loan')} />
+                      <Bar dataKey="other" stackId="exp" name="Khác" fill={getCategoryColor('Other')} radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              {/* Donut Chart */}
-              <div className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                    <PieIcon className="w-4 h-4" />
+              {/* Donut Chart - Overlap-free design with center stat and clean category list */}
+              <div className="p-5 rounded-2xl space-y-3 flex flex-col justify-between" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                      <PieIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
+                        Tỷ Trọng Danh Mục
+                      </h3>
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        Cơ cấu chi tiêu ({breakdown.length} nhóm)
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
-                      Tỷ Trọng Danh Mục
-                    </h3>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                      Tổng: {fmt(totalExpenses)} ₫
-                    </p>
-                  </div>
+                  <span className="text-xs font-mono font-extrabold text-amber-500 dark:text-amber-400">
+                    {(totalExpenses / 1_000_000).toFixed(1)}M ₫
+                  </span>
                 </div>
 
-                <div style={{ height: 240 }}>
+                {/* Donut chart with centered summary stat */}
+                <div className="relative" style={{ height: 150 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={expensePieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
+                      <Pie data={expensePieData} cx="50%" cy="50%" innerRadius={46} outerRadius={68} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
                         {expensePieData.map((entry, index) => (
                           <Cell key={index} fill={entry.color} />
                         ))}
                       </Pie>
-                      <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
-                      <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} />
+                      <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }} />
                     </PieChart>
                   </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Tổng</span>
+                    <span className="text-xs font-black font-mono text-slate-900 dark:text-white">{(totalExpenses / 1_000_000).toFixed(1)}M</span>
+                  </div>
+                </div>
+
+
+                {/* Clean, Non-overlapping Scrollable Category Legend List */}
+                <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                  {breakdown.map((b) => {
+                    const pct = totalExpenses > 0 ? ((b.total / totalExpenses) * 100).toFixed(1) : '0';
+                    return (
+                      <div key={b.category} className="flex items-center justify-between text-xs px-2.5 py-1.5 rounded-xl transition hover:bg-white/5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: b.color }} />
+                          <span className="truncate text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>{b.label}</span>
+                        </div>
+                        <div className="flex items-center space-x-2 shrink-0 font-mono">
+                          <span className="text-[10px] text-zinc-400">{pct}%</span>
+                          <strong className="text-[11px]" style={{ color: b.color }}>{(b.total / 1_000_000).toFixed(1)}M</strong>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           )}
+
 
 
           <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
@@ -1324,7 +1372,7 @@ export default function FinancePage() {
 
                     {/* Progress Bar Visual */}
                     <div className="space-y-1.5">
-                      <div className="h-4 rounded-full overflow-hidden flex bg-zinc-800 p-0.5 border border-zinc-700/60 shadow-inner">
+                      <div className="h-4 rounded-full overflow-hidden flex bg-slate-100 dark:bg-slate-800/80 p-0.5 border border-slate-200 dark:border-slate-700/60 shadow-inner">
                         <div
                           className="h-full rounded-full transition-all duration-500 flex items-center justify-center text-[9px] font-black text-white shadow-sm"
                           style={{
@@ -1332,22 +1380,22 @@ export default function FinancePage() {
                             background: 'linear-gradient(90deg, #10B981, #059669)',
                           }}
                         >
-                          {Number(progressPct) > 15 ? `${progressPct}%` : ''}
+                          {Number(progressPct) > 12 ? `${progressPct}%` : ''}
                         </div>
                         <div
-                          className="h-full rounded-full transition-all duration-500 opacity-60 ml-0.5"
+                          className="h-full rounded-full transition-all duration-500 opacity-80 ml-0.5"
                           style={{
                             width: `${100 - Number(progressPct)}%`,
-                            background: 'linear-gradient(90deg, #F59E0B, #D97706)',
+                            background: isDark ? 'linear-gradient(90deg, #F59E0B, #D97706)' : 'linear-gradient(90deg, #FDBA74, #FB923C)',
                           }}
                         />
                       </div>
                       <div className="flex items-center justify-between text-[11px] px-1 font-semibold">
-                        <span className="flex items-center gap-1.5 text-emerald-400">
+                        <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
                           <span className="w-2 h-2 rounded-full bg-emerald-500" />
                           Đã trả gốc: <strong>{fmt(paidP)} ₫</strong>
                         </span>
-                        <span className="flex items-center gap-1.5 text-amber-400">
+                        <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
                           <span className="w-2 h-2 rounded-full bg-amber-500" />
                           Dư nợ gốc còn: <strong>{fmt(bal)} ₫</strong>
                         </span>
@@ -1356,21 +1404,21 @@ export default function FinancePage() {
 
                     {/* KPI Cards */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                      <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
-                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Gốc vay ban đầu:</span>
-                        <p className="font-extrabold text-sm mt-0.5 font-mono" style={{ color: 'var(--text-primary)' }}>{fmt(princ)} ₫</p>
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">Gốc vay ban đầu:</span>
+                        <p className="font-extrabold text-sm mt-0.5 font-mono text-slate-900 dark:text-slate-100">{fmt(princ)} ₫</p>
                       </div>
-                      <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
-                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Tổng gốc đã trả:</span>
-                        <p className="font-extrabold text-sm mt-0.5 font-mono text-emerald-400">{fmt(paidP)} ₫</p>
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">Tổng gốc đã trả:</span>
+                        <p className="font-extrabold text-sm mt-0.5 font-mono text-emerald-600 dark:text-emerald-400">{fmt(paidP)} ₫</p>
                       </div>
-                      <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
-                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Tổng tiền lãi đã đóng:</span>
-                        <p className="font-extrabold text-sm mt-0.5 font-mono text-rose-400">{fmt(totalPaidInterest)} ₫</p>
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">Tổng tiền lãi đã đóng:</span>
+                        <p className="font-extrabold text-sm mt-0.5 font-mono text-rose-600 dark:text-rose-400">{fmt(totalPaidInterest)} ₫</p>
                       </div>
-                      <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
-                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Kỳ thanh toán tiếp theo:</span>
-                        <p className="font-extrabold text-xs mt-1 text-cyan-400 truncate">
+                      <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">Kỳ thanh toán tiếp theo:</span>
+                        <p className="font-extrabold text-xs mt-1 text-cyan-600 dark:text-cyan-400 truncate">
                           {nextPendingPeriod ? `Kỳ ${nextPendingPeriod.payment_number} (${fmtDate(nextPendingPeriod.due_date)})` : 'Đã hoàn tất 🎉'}
                         </p>
                       </div>
@@ -1378,6 +1426,7 @@ export default function FinancePage() {
                   </div>
                 );
               })()}
+
 
               {/* 📋 Monthly Repayment Schedule Table */}
               <div className="space-y-3 pt-2">

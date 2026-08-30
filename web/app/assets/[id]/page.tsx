@@ -20,13 +20,17 @@ import { getLoadByAsset } from '@/lib/services/loanService';
 import { createOdometerAdjustment, getOdometerLogs, createOdometerLog, updateOdometerLog, deleteOdometerLog, OdometerLogRecord } from '@/lib/services/odometerService';
 import { getWarranties, createWarranty, updateWarranty, deleteWarranty, createWarrantyClaim } from '@/lib/services/warrantyService';
 import { createClient } from '@/lib/supabase/client';
+import { useTheme } from '@/lib/theme/ThemeContext';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
 import DraggableModal from '@/components/ui/DraggableModal';
+
 import {
   ArrowLeft, Gauge, Fuel, Wrench, DollarSign, FileText, BarChart3,
   Cpu, CheckCircle2, Plus, MapPin, Activity, Layers, Car, X, Pencil,
   Zap, Clock, TrendingDown, Shield, CreditCard, Award, Trash2, Edit2,
+  SlidersHorizontal, Calendar, CalendarDays, CalendarRange,
 } from 'lucide-react';
+
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 const fmt = (n: number) => n.toLocaleString('vi-VN');
@@ -157,7 +161,16 @@ export default function AssetDetailPage() {
   const router = useRouter();
   const assetId = (params?.id as string) ?? '';
 
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const axisColor = isDark ? '#94A3B8' : '#475569';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tooltipBg = isDark ? '#0F172A' : '#FFFFFF';
+  const tooltipBorder = isDark ? '#334155' : '#E2E8F0';
+  const tooltipText = isDark ? '#F8FAFC' : '#0F172A';
+
   const [asset, setAsset] = useState<Asset | null>(null);
+
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -2362,29 +2375,37 @@ export default function AssetDetailPage() {
               </div>
 
               {/* View Switcher: Theo Ngày / Theo Tháng / Theo Năm */}
-              <div className="flex items-center space-x-2 border-b pb-2 text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
-                <span className="font-bold text-[11px] uppercase text-cyan-400">📊 Chế độ xem:</span>
+              <div className="flex items-center flex-wrap gap-2 border-b pb-3 text-xs" style={{ borderColor: 'var(--border-subtle)' }}>
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl font-bold text-[11px] uppercase tracking-wider bg-cyan-500/10 border border-cyan-500/25 text-cyan-600 dark:text-cyan-400">
+                  <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+                  <span>Chế độ xem</span>
+                </div>
                 {[
-                  { id: 'daily', label: '📅 Theo Ngày (Nhật ký hành trình)', count: mileageAnalytics.dailyReport.length },
-                  { id: 'monthly', label: '📆 Theo Tháng (Báo cáo tháng)', count: mileageAnalytics.monthlyReport.length },
-                  { id: 'yearly', label: '🗓️ Theo Năm (Báo cáo năm)', count: mileageAnalytics.yearlyReport.length },
-                ].map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => setOdoViewMode(m.id as any)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 ${
-                      odoViewMode === m.id
-                        ? 'bg-cyan-500 text-white shadow-md'
-                        : 'hover:bg-white/10'
-                    }`}
-                    style={odoViewMode !== m.id ? { background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' } : {}}
-                  >
-                    <span>{m.label}</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${odoViewMode === m.id ? 'bg-white/25 text-white' : 'bg-black/20 text-slate-400'}`}>
-                      {m.count}
-                    </span>
-                  </button>
-                ))}
+                  { id: 'daily', label: 'Theo Ngày', sub: 'Nhật ký hành trình', icon: Calendar, count: mileageAnalytics.dailyReport.length },
+                  { id: 'monthly', label: 'Theo Tháng', sub: 'Báo cáo tháng', icon: CalendarDays, count: mileageAnalytics.monthlyReport.length },
+                  { id: 'yearly', label: 'Theo Năm', sub: 'Báo cáo năm', icon: CalendarRange, count: mileageAnalytics.yearlyReport.length },
+                ].map((m) => {
+                  const Icon = m.icon;
+                  const active = odoViewMode === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => setOdoViewMode(m.id as any)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                        active
+                          ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/20'
+                          : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
+                      }`}
+                      style={!active ? { background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' } : {}}
+                    >
+                      <Icon className={`w-3.5 h-3.5 ${active ? 'text-white' : 'text-cyan-500 dark:text-cyan-400'}`} />
+                      <span>{m.label}</span>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${active ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
+                        {m.count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
 
               {/* 1. THEO NGÀY (DAILY VIEW) */}
@@ -2394,9 +2415,15 @@ export default function AssetDetailPage() {
                   {mileageAnalytics.dailyReport.length > 0 && (
                     <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                       <div className="flex items-center justify-between mb-2">
-                        <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-400">
-                          📊 Biểu đồ Quãng đường Di chuyển Theo Ngày
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
+                            <Activity className="w-3.5 h-3.5" />
+                          </div>
+                          <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                            Biểu đồ Quãng đường Di chuyển Theo Ngày
+                          </p>
+                        </div>
+
                         <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                           Hiển thị {Math.min(20, mileageAnalytics.dailyReport.length)} ngày gần nhất
                         </span>
@@ -2414,13 +2441,13 @@ export default function AssetDetailPage() {
                               }))}
                             margin={{ top: 5, right: 15, left: -10, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                            <XAxis dataKey="date" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                            <XAxis dataKey="date" tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
                             <YAxis
                               yAxisId="km"
                               tickFormatter={v => `${v}km`}
-                              tick={{ fill: '#94A3B8', fontSize: 10 }}
-                              axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                              tick={{ fill: axisColor, fontSize: 10 }}
+                              axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }}
                               tickLine={false}
                               width={45}
                             />
@@ -2429,8 +2456,8 @@ export default function AssetDetailPage() {
                               orientation="right"
                               domain={['auto', 'auto']}
                               tickFormatter={v => `${Math.round(v)}`}
-                              tick={{ fill: '#94A3B8', fontSize: 9 }}
-                              axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
+                              tick={{ fill: axisColor, fontSize: 9 }}
+                              axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }}
                               tickLine={false}
                               width={50}
                             />
@@ -2439,12 +2466,14 @@ export default function AssetDetailPage() {
                                 name === 'Km chạy' ? `+${fmt(v)} km` : `${fmt(v)} km`,
                                 name,
                               ]}
-                              contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
+                              contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
                             />
-                            <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+
+                            <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
                             <Bar yAxisId="km" dataKey="km" name="Km chạy" fill="rgba(56,189,248,0.4)" stroke="#38BDF8" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
-                            <Line yAxisId="odo" type="monotone" dataKey="odo" name="Mốc ODO" stroke="#34D399" strokeWidth={2.5} dot={{ fill: '#34D399', r: 3 }} />
+                            <Line yAxisId="odo" type="monotone" dataKey="odo" name="Mốc ODO" stroke="#10B981" strokeWidth={2.5} dot={{ fill: '#10B981', r: 3 }} />
                           </ComposedChart>
+
                         </ResponsiveContainer>
                       </div>
                     </div>
@@ -2560,7 +2589,13 @@ export default function AssetDetailPage() {
                   {/* Recharts: ComposedChart km + cost per month */}
                   {mileageAnalytics.monthlyReport.length > 0 && (
                     <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                      <p className="text-[11px] font-extrabold uppercase tracking-wider mb-3 text-cyan-400">📊 Biểu đồ Km &amp; Chi phí theo tháng</p>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
+                          <BarChart3 className="w-3.5 h-3.5" />
+                        </div>
+                        <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Biểu đồ Km &amp; Chi phí theo tháng</p>
+                      </div>
+
                       <div style={{ height: 240 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart
@@ -2573,21 +2608,22 @@ export default function AssetDetailPage() {
                             }))}
                             margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                            <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
-                            <YAxis yAxisId="left" tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={46} />
-                            <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${Math.round(v)}km` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={55} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                            <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
+                            <YAxis yAxisId="left" tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={46} />
+                            <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${Math.round(v)}km` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={55} />
                             <ReTooltip
                               formatter={(v: number, name: string) => [
                                 name === 'Km di chuyển' ? `${Math.round(v).toLocaleString('vi-VN')} km` : `${(v / 1_000_000).toFixed(2)}M ₫`,
                                 name,
                               ]}
-                              contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
+                              contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
                             />
-                            <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
+
+                            <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
                             <Area yAxisId="left" type="monotone" dataKey="fuel" stackId="cost" name="Nhiên liệu" fill="#F59E0B40" stroke="#F59E0B" strokeWidth={1.5} />
-                            <Area yAxisId="left" type="monotone" dataKey="maint" stackId="cost" name="Bảo dưỡng" fill="#38BDF840" stroke="#38BDF8" strokeWidth={1.5} />
-                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#34D39940" stroke="#34D399" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                            <Area yAxisId="left" type="monotone" dataKey="maint" stackId="cost" name="Bảo dưỡng" fill="#06B6D440" stroke="#06B6D4" strokeWidth={1.5} />
+                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#10B98135" stroke="#10B981" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
                             <Line yAxisId="left" type="monotone" dataKey="cost" name="Tổng chi phí" stroke="#F87171" strokeWidth={2} dot={{ fill: '#F87171', r: 3 }} strokeDasharray="4 2" />
                           </ComposedChart>
                         </ResponsiveContainer>
@@ -2674,7 +2710,13 @@ export default function AssetDetailPage() {
                   {/* Recharts: Yearly overview bar chart */}
                   {mileageAnalytics.yearlyReport.length > 0 && (
                     <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                      <p className="text-[11px] font-extrabold uppercase tracking-wider mb-3 text-cyan-400">📊 Biểu đồ Km &amp; Chi phí theo năm</p>
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
+                          <BarChart3 className="w-3.5 h-3.5" />
+                        </div>
+                        <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Biểu đồ Km &amp; Chi phí theo năm</p>
+                      </div>
+
                       <div style={{ height: 220 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
@@ -2686,25 +2728,27 @@ export default function AssetDetailPage() {
                             }))}
                             margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                            <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
-                            <YAxis yAxisId="left" tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={42} />
-                            <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${Math.round(v)}km` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={55} />
+                            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                            <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
+                            <YAxis yAxisId="left" tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={42} />
+                            <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${Math.round(v)}km` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={55} />
                             <ReTooltip
                               formatter={(v: number, name: string) => [
                                 name === 'Km di chuyển' ? `${Math.round(v).toLocaleString('vi-VN')} km` : `${(v / 1_000_000).toFixed(1)}M ₫`,
                                 name,
                               ]}
-                              contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
+                              contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
                             />
-                            <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
+
+                            <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
                             <Bar yAxisId="left" dataKey="cost" name="Tổng chi phí" fill="#F59E0B80" stroke="#F59E0B" strokeWidth={1} radius={[4, 4, 0, 0]} />
-                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#34D39940" stroke="#34D399" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#10B98135" stroke="#10B981" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
                   )}
+
 
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
@@ -3332,29 +3376,37 @@ export default function AssetDetailPage() {
               return (
                 <div className="p-4 rounded-2xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-400">
-                      📊 Biểu Đồ Cột Chồng Chi Phí Theo Tháng (Theo Danh Mục Lớn)
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
+                        <BarChart3 className="w-3.5 h-3.5" />
+                      </div>
+                      <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                        Biểu Đồ Cột Chồng Chi Phí Theo Tháng (Theo Danh Mục Lớn)
+                      </p>
+                    </div>
                     <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị: Triệu ₫ (M)</span>
                   </div>
+
                   <div style={{ height: 230 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                        <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
-                        <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={45} />
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                        <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
+                        <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={45} />
                         <ReTooltip
                           formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]}
-                          contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
+                          contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
                         />
-                        <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+
+                        <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
                         <Bar dataKey="fuel" stackId="exp" name="Nhiên liệu" fill="#F59E0B" />
-                        <Bar dataKey="maint" stackId="exp" name="Bảo dưỡng" fill="#38BDF8" />
-                        <Bar dataKey="upgrade" stackId="exp" name="Đồ độ / Nâng cấp" fill="#A78BFA" />
-                        <Bar dataKey="ins" stackId="exp" name="Bảo hiểm / Giấy tờ" fill="#34D399" />
+                        <Bar dataKey="maint" stackId="exp" name="Bảo dưỡng" fill="#06B6D4" />
+                        <Bar dataKey="upgrade" stackId="exp" name="Đồ độ / Nâng cấp" fill="#8B5CF6" />
+                        <Bar dataKey="ins" stackId="exp" name="Bảo hiểm / Giấy tờ" fill="#10B981" />
                         <Bar dataKey="loan" stackId="exp" name="Khoản vay" fill="#EC4899" />
-                        <Bar dataKey="other" stackId="exp" name="Chi phí khác" fill="#94A3B8" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="other" stackId="exp" name="Chi phí khác" fill="#64748B" radius={[4, 4, 0, 0]} />
                       </BarChart>
+
                     </ResponsiveContainer>
                   </div>
 
@@ -3857,57 +3909,90 @@ export default function AssetDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Donut Chart */}
                 <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <p className="text-xs font-bold uppercase tracking-wider text-amber-400">📊 Cơ cấu TCO (Tổng chi phí sở hữu)</p>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                      <PieChart className="w-3.5 h-3.5" />
+                    </div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Cơ cấu TCO (Tổng chi phí sở hữu)</p>
+                  </div>
                   {tcoDonutData.length > 0 ? (
-                    <div style={{ height: 230 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={tcoDonutData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
-                            {tcoDonutData.map((entry, index) => (
-                              <Cell key={index} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
-                          <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} />
-                        </PieChart>
-                      </ResponsiveContainer>
+                    <div>
+                      <div className="relative" style={{ height: 150 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={tcoDonutData} cx="50%" cy="50%" innerRadius={46} outerRadius={68} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
+                              {tcoDonutData.map((entry, index) => (
+                                <Cell key={index} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                          <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Tổng TCO</span>
+                          <span className="text-xs font-black font-mono text-slate-900 dark:text-white">{((depreciation + totalExpenses) / 1_000_000).toFixed(1)}M</span>
+                        </div>
+                      </div>
+                      <div className="mt-3 space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                        {tcoDonutData.map((d, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs px-2.5 py-1.5 rounded-xl transition hover:bg-black/5 dark:hover:bg-white/5" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: d.color }} />
+                              <span className="truncate text-[11px] font-medium text-slate-800 dark:text-slate-200">{d.name}</span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 font-mono">
+                              <span className="text-[10px] text-slate-500 dark:text-zinc-400">{((depreciation + totalExpenses) > 0 ? ((d.value / (depreciation + totalExpenses)) * 100).toFixed(1) : 0)}%</span>
+                              <strong className="text-[11px]" style={{ color: d.color }}>{(d.value / 1_000_000).toFixed(1)}M</strong>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <p className="text-xs text-center py-10" style={{ color: 'var(--text-muted)' }}>Chưa có đủ dữ liệu</p>
                   )}
                 </div>
 
+
                 {/* Horizontal Bar Chart: So sánh Giá trị xe vs Chi phí phát sinh */}
                 <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <p className="text-xs font-bold uppercase tracking-wider text-cyan-400">📊 Giá trị mua xe vs Chi phí đã bỏ ra</p>
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
+                      <BarChart3 className="w-3.5 h-3.5" />
+                    </div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Giá trị mua xe vs Chi phí đã bỏ ra</p>
+                  </div>
+
                   <div style={{ height: 230 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={[
-                          { name: 'Giá mua ban đầu', amount: asset.purchase_price || 0, fill: '#34D399' },
+                          { name: 'Giá mua ban đầu', amount: asset.purchase_price || 0, fill: '#3B82F6' },
                           { name: 'Giá trị ước tính hiện tại', amount: asset.current_value || 0, fill: '#10B981' },
                           { name: 'Khấu hao tích lũy', amount: Math.max(0, depreciation), fill: '#F59E0B' },
-                          { name: 'Tổng chi phí vận hành', amount: totalExpenses, fill: '#EF4444' },
+                          { name: 'Tổng chi phí vận hành', amount: totalExpenses, fill: '#EC4899' },
                         ]}
                         layout="vertical"
                         margin={{ top: 5, right: 15, left: 10, bottom: 5 }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" horizontal={false} />
-                        <XAxis type="number" tickFormatter={v => `${(v / 1_000_000).toFixed(0)}M`} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
-                        <YAxis type="category" dataKey="name" tick={{ fill: '#E2E8F0', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={80} />
-                        <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
+                        <XAxis type="number" tickFormatter={v => `${(v / 1_000_000).toFixed(0)}M`} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
+                        <YAxis type="category" dataKey="name" tick={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 10, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={80} />
+                        <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }} />
+
                         <Bar dataKey="amount" name="Số tiền" radius={[0, 4, 4, 0]}>
                           {[
-                            <Cell key="0" fill="#34D399" />,
-                            <Cell key="1" fill="#0EA5E9" />,
+                            <Cell key="0" fill="#3B82F6" />,
+                            <Cell key="1" fill="#10B981" />,
                             <Cell key="2" fill="#F59E0B" />,
-                            <Cell key="3" fill="#EF4444" />,
+                            <Cell key="3" fill="#EC4899" />,
                           ]}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
+
               </div>
 
 
