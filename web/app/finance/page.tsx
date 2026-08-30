@@ -1249,8 +1249,10 @@ export default function FinancePage() {
                   })}
                 </div>
               </div>
-            );
-          })()}
+            </div>
+          );
+        })()}
+
 
 
 
