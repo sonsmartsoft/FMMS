@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Asset, LoanRecord, ExpenseRecord } from '@/types/mobility';
-import { getLoanPayments, createLoanPayment, updateLoanPayment, updateLoan, createLoan, updateLoanFull, deleteLoan } from '@/lib/services/loanService';
+import { getLoanPayments, createLoanPayment, updateLoanPayment, updateLoan, createLoan, updateLoanFull, deleteLoan, syncLoanPaymentExpense, deleteLoanWithCascade } from '@/lib/services/loanService';
+
 import { updateAsset } from '@/lib/services/assetService';
 import { createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import DraggableModal from '@/components/ui/DraggableModal';
@@ -255,31 +256,68 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
   const toggleSchedulePaymentRow = async (pRow: any) => {
     if (!loan) return;
     try {
+      const periodNum = pRow.payment_number;
+      const princ = pRow.principal_paid || 0;
+      const intr = pRow.interest_paid || 0;
+
       if (pRow.status === 'PAID') {
-        const match = payments.find(x => x.payment_number === pRow.payment_number);
+        const match = payments.find(x => x.payment_number === periodNum);
         if (match) {
           await updateLoanPayment(match.id, { status: 'PENDING', paid_date: undefined });
-          await updateLoan(loan.id, { current_balance: Math.min(loan.principal, loan.current_balance + pRow.principal_paid) });
         }
-      } else {
-        await createLoanPayment({
-          loan_id: loan.id,
-          payment_number: pRow.payment_number,
-          due_date: pRow.due_date,
-          principal_paid: pRow.principal_paid,
-          interest_paid: pRow.interest_paid,
-          total_payment: pRow.total_payment,
-          paid_date: new Date().toISOString().slice(0, 10),
-          status: 'PAID',
-          remaining_balance: Math.max(0, loan.current_balance - pRow.principal_paid),
+        await syncLoanPaymentExpense({
+          loan,
+          paymentNumber: periodNum,
+          status: 'PENDING',
+          principalPaid: 0,
+          interestPaid: 0,
+          paidDate: '',
         });
-        await updateLoan(loan.id, { current_balance: Math.max(0, loan.current_balance - pRow.principal_paid) });
+      } else {
+        const paidDateStr = new Date().toISOString().slice(0, 10);
+        const match = payments.find(x => x.payment_number === periodNum);
+        if (match) {
+          await updateLoanPayment(match.id, {
+            status: 'PAID',
+            paid_date: paidDateStr,
+            principal_paid: princ,
+            interest_paid: intr,
+            total_payment: pRow.total_payment,
+          });
+        } else {
+          await createLoanPayment({
+            loan_id: loan.id,
+            payment_number: periodNum,
+            due_date: pRow.due_date,
+            principal_paid: princ,
+            interest_paid: intr,
+            total_payment: pRow.total_payment,
+            paid_date: paidDateStr,
+            status: 'PAID',
+            remaining_balance: Math.max(0, loan.current_balance - princ),
+          });
+        }
+        await syncLoanPaymentExpense({
+          loan,
+          paymentNumber: periodNum,
+          status: 'PAID',
+          principalPaid: princ,
+          interestPaid: intr,
+          paidDate: paidDateStr,
+        });
       }
+
+      // Recalculate remaining loan balance
+      const updatedPayments = await getLoanPayments(loan.id);
+      const totalPaidPrincipal = updatedPayments.filter(p => p.status === 'PAID').reduce((s, p) => s + (p.principal_paid || 0), 0);
+      await updateLoan(loan.id, { current_balance: Math.max(0, loan.principal - totalPaidPrincipal) });
+
       onRefresh();
     } catch (err: any) {
       alert(`Lỗi khi cập nhật thanh toán: ${err?.message ?? 'Lỗi'}`);
     }
   };
+
 
   // Auto calculate principal from loan ratio %
   const applyLoanRatio = (ratio: number) => {

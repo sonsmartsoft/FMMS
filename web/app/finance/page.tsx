@@ -8,7 +8,8 @@ import {
 } from 'recharts';
 import { getAssets } from '@/lib/services/assetService';
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
-import { getLoans, getLoanPayments, createLoan, createLoanPayment, updateLoan, LoanRow, LoanPaymentRow } from '@/lib/services/loanService';
+import { getLoans, getLoanPayments, createLoan, createLoanPayment, updateLoan, LoanRow, LoanPaymentRow, cleanupDuplicateLoanExpenses } from '@/lib/services/loanService';
+
 import { ExpenseRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
 import { useTheme } from '@/lib/theme/ThemeContext';
@@ -182,8 +183,12 @@ export default function FinancePage() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    (async () => {
+      await cleanupDuplicateLoanExpenses();
+      await loadData();
+    })();
   }, []);
+
 
   useEffect(() => {
     if (selectedLoanId) {
@@ -576,10 +581,10 @@ export default function FinancePage() {
   };
 
   const handleDeleteLoan = async (loanId: string) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa khoản vay này?')) return;
+    if (!confirm('Bạn có chắc chắn muốn xóa khoản vay này? Toàn bộ các kỳ trả nợ và chi phí liên quan đến khoản vay sẽ được dọn dẹp sạch sẽ.')) return;
     try {
-      const { deleteLoan } = await import('@/lib/services/loanService');
-      await deleteLoan(loanId);
+      const { deleteLoanWithCascade } = await import('@/lib/services/loanService');
+      await deleteLoanWithCascade(loanId);
       await loadData();
     } catch (err: any) {
       alert(`Lỗi khi xóa khoản vay: ${err?.message ?? 'Không xóa được'}`);
@@ -594,9 +599,9 @@ export default function FinancePage() {
     const intr = next?.interest_paid ?? 0;
     const paidDate = paymentForm.paid_date || new Date().toISOString().slice(0, 10);
     const periodNum = next?.payment_number ?? (loanSchedule.length + 1);
-    const lenderName = selectedLoan.lender || 'Ngân hàng';
 
     try {
+      const { createLoanPayment, updateLoan, syncLoanPaymentExpense, getLoanPayments } = await import('@/lib/services/loanService');
       await createLoanPayment({
         loan_id: selectedLoan.id,
         payment_number: periodNum,
@@ -608,37 +613,21 @@ export default function FinancePage() {
         status: 'PAID',
         remaining_balance: Math.max(0, selectedLoan.current_balance - princ),
       });
-      await updateLoan(selectedLoan.id, { current_balance: Math.max(0, selectedLoan.current_balance - princ) });
 
-      // Auto-create distinct expense records for Principal and Interest
-      try {
-        if (princ > 0) {
-          await createExpense({
-            asset_id: selectedLoan.asset_id,
-            date: paidDate,
-            category: 'Loan',
-            subcategory: 'Monthly Payment',
-            amount: princ,
-            currency: 'VND',
-            vendor: lenderName,
-            description: `Trả gốc khoản vay kỳ ${periodNum} (${lenderName})`,
-          });
-        }
-        if (intr > 0) {
-          await createExpense({
-            asset_id: selectedLoan.asset_id,
-            date: paidDate,
-            category: 'Loan',
-            subcategory: 'Interest',
-            amount: intr,
-            currency: 'VND',
-            vendor: lenderName,
-            description: `Tiền lãi khoản vay kỳ ${periodNum} (${lenderName})`,
-          });
-        }
-      } catch (eErr) {
-        console.warn('Auto expense sync error:', eErr);
-      }
+      // Synchronize exact expense records (idempotent, no duplicates)
+      await syncLoanPaymentExpense({
+        loan: selectedLoan,
+        paymentNumber: periodNum,
+        status: 'PAID',
+        principalPaid: princ,
+        interestPaid: intr,
+        paidDate,
+      });
+
+      // Recalculate remaining loan balance
+      const updatedPayments = await getLoanPayments(selectedLoan.id);
+      const totalPaidPrincipal = updatedPayments.filter(p => p.status === 'PAID').reduce((s, p) => s + (p.principal_paid || 0), 0);
+      await updateLoan(selectedLoan.id, { current_balance: Math.max(0, selectedLoan.principal - totalPaidPrincipal) });
 
       await loadData();
     } catch (err: any) {
@@ -679,8 +668,10 @@ export default function FinancePage() {
     const princ = parseFloat(periodForm.principal_paid) || 0;
     const intr = parseFloat(periodForm.interest_paid) || 0;
     const tot = parseFloat(periodForm.total_payment) || (princ + intr);
+    const paidDate = periodForm.status === 'PAID' ? (periodForm.paid_date || new Date().toISOString().slice(0, 10)) : '';
+
     try {
-      const { createLoanPayment, updateLoanPayment } = await import('@/lib/services/loanService');
+      const { createLoanPayment, updateLoanPayment, updateLoan, syncLoanPaymentExpense, getLoanPayments } = await import('@/lib/services/loanService');
       const existing = payments.find(pm => pm.payment_number === editingPeriod.payment_number);
       if (existing) {
         await updateLoanPayment(existing.id, {
@@ -688,7 +679,7 @@ export default function FinancePage() {
           principal_paid: princ,
           interest_paid: intr,
           total_payment: tot,
-          paid_date: periodForm.status === 'PAID' ? (periodForm.paid_date || new Date().toISOString().slice(0, 10)) : undefined,
+          paid_date: periodForm.status === 'PAID' ? paidDate : undefined,
           status: periodForm.status,
         });
       } else {
@@ -699,46 +690,26 @@ export default function FinancePage() {
           principal_paid: princ,
           interest_paid: intr,
           total_payment: tot,
-          paid_date: periodForm.status === 'PAID' ? (periodForm.paid_date || new Date().toISOString().slice(0, 10)) : undefined,
+          paid_date: periodForm.status === 'PAID' ? paidDate : undefined,
           status: periodForm.status,
           remaining_balance: editingPeriod.remaining_balance || 0,
         });
       }
 
-      if (periodForm.status === 'PAID') {
-        try {
-          const paidDate = periodForm.paid_date || new Date().toISOString().slice(0, 10);
-          const lenderName = selectedLoan.lender || 'Ngân hàng';
-          const periodNum = editingPeriod.payment_number;
+      // Synchronize exact expense records (idempotent, deletes if unpaid, updates amounts accurately)
+      await syncLoanPaymentExpense({
+        loan: selectedLoan,
+        paymentNumber: editingPeriod.payment_number,
+        status: periodForm.status,
+        principalPaid: princ,
+        interestPaid: intr,
+        paidDate: paidDate || new Date().toISOString().slice(0, 10),
+      });
 
-          if (princ > 0) {
-            await createExpense({
-              asset_id: selectedLoan.asset_id,
-              date: paidDate,
-              category: 'Loan',
-              subcategory: 'Monthly Payment',
-              amount: princ,
-              currency: 'VND',
-              vendor: lenderName,
-              description: `Trả gốc khoản vay kỳ ${periodNum} (${lenderName})`,
-            });
-          }
-          if (intr > 0) {
-            await createExpense({
-              asset_id: selectedLoan.asset_id,
-              date: paidDate,
-              category: 'Loan',
-              subcategory: 'Interest',
-              amount: intr,
-              currency: 'VND',
-              vendor: lenderName,
-              description: `Tiền lãi khoản vay kỳ ${periodNum} (${lenderName})`,
-            });
-          }
-        } catch (eErr) {
-          console.warn('Auto expense sync error:', eErr);
-        }
-      }
+      // Recalculate remaining loan balance
+      const updatedPayments = await getLoanPayments(selectedLoan.id);
+      const totalPaidPrincipal = updatedPayments.filter(p => p.status === 'PAID').reduce((s, p) => s + (p.principal_paid || 0), 0);
+      await updateLoan(selectedLoan.id, { current_balance: Math.max(0, selectedLoan.principal - totalPaidPrincipal) });
 
       await loadData();
       setOpenEditPeriodModal(false);
@@ -751,68 +722,73 @@ export default function FinancePage() {
   const toggleSchedulePayment = async (item: any) => {
     if (!selectedLoan) return;
     try {
+      const { createLoanPayment, updateLoanPayment, updateLoan, syncLoanPaymentExpense, getLoanPayments } = await import('@/lib/services/loanService');
+      const periodNum = item.payment_number;
+      const princ = item.principal_paid || 0;
+      const intr = item.interest_paid || 0;
+
       if (item.status === 'PAID') {
-        const match = payments.find(p => p.payment_number === item.payment_number);
+        // Chuyển từ ĐÃ TRẢ -> CHƯA TRẢ (PENDING)
+        const match = payments.find(p => p.payment_number === periodNum);
         if (match) {
-          const { updateLoanPayment } = await import('@/lib/services/loanService');
           await updateLoanPayment(match.id, { status: 'PENDING', paid_date: undefined });
-          await updateLoan(selectedLoan.id, { current_balance: Math.min(selectedLoan.principal, selectedLoan.current_balance + item.principal_paid) });
         }
-      } else {
-        const paidDateStr = new Date().toISOString().slice(0, 10);
-        const lenderName = selectedLoan.lender || 'Ngân hàng';
-        const periodNum = item.payment_number;
-        const princ = item.principal_paid || 0;
-        const intr = item.interest_paid || 0;
-
-        await createLoanPayment({
-          loan_id: selectedLoan.id,
-          payment_number: periodNum,
-          due_date: item.due_date,
-          principal_paid: princ,
-          interest_paid: intr,
-          total_payment: item.total_payment,
-          paid_date: paidDateStr,
-          status: 'PAID',
-          remaining_balance: Math.max(0, selectedLoan.current_balance - princ),
+        // Dọn sạch chi phí của kỳ này trong bảng expenses
+        await syncLoanPaymentExpense({
+          loan: selectedLoan,
+          paymentNumber: periodNum,
+          status: 'PENDING',
+          principalPaid: 0,
+          interestPaid: 0,
+          paidDate: '',
         });
-        await updateLoan(selectedLoan.id, { current_balance: Math.max(0, selectedLoan.current_balance - princ) });
-
-        // Auto-create distinct expense records for Principal and Interest
-        try {
-          if (princ > 0) {
-            await createExpense({
-              asset_id: selectedLoan.asset_id,
-              date: paidDateStr,
-              category: 'Loan',
-              subcategory: 'Monthly Payment',
-              amount: princ,
-              currency: 'VND',
-              vendor: lenderName,
-              description: `Trả gốc khoản vay kỳ ${periodNum} (${lenderName})`,
-            });
-          }
-          if (intr > 0) {
-            await createExpense({
-              asset_id: selectedLoan.asset_id,
-              date: paidDateStr,
-              category: 'Loan',
-              subcategory: 'Interest',
-              amount: intr,
-              currency: 'VND',
-              vendor: lenderName,
-              description: `Tiền lãi khoản vay kỳ ${periodNum} (${lenderName})`,
-            });
-          }
-        } catch (expErr) {
-          console.warn('Auto expense creation warning:', expErr);
+      } else {
+        // Chuyển từ CHƯA TRẢ -> ĐÃ TRẢ (PAID)
+        const paidDateStr = new Date().toISOString().slice(0, 10);
+        const match = payments.find(p => p.payment_number === periodNum);
+        if (match) {
+          await updateLoanPayment(match.id, {
+            status: 'PAID',
+            paid_date: paidDateStr,
+            principal_paid: princ,
+            interest_paid: intr,
+            total_payment: item.total_payment,
+          });
+        } else {
+          await createLoanPayment({
+            loan_id: selectedLoan.id,
+            payment_number: periodNum,
+            due_date: item.due_date,
+            principal_paid: princ,
+            interest_paid: intr,
+            total_payment: item.total_payment,
+            paid_date: paidDateStr,
+            status: 'PAID',
+            remaining_balance: Math.max(0, selectedLoan.current_balance - princ),
+          });
         }
+        // Đồng bộ chi phí: tạo hoặc cập nhật đúng 1 bản ghi gốc và 1 bản ghi lãi
+        await syncLoanPaymentExpense({
+          loan: selectedLoan,
+          paymentNumber: periodNum,
+          status: 'PAID',
+          principalPaid: princ,
+          interestPaid: intr,
+          paidDate: paidDateStr,
+        });
       }
+
+      // Recalculate remaining loan balance
+      const updatedPayments = await getLoanPayments(selectedLoan.id);
+      const totalPaidPrincipal = updatedPayments.filter(p => p.status === 'PAID').reduce((s, p) => s + (p.principal_paid || 0), 0);
+      await updateLoan(selectedLoan.id, { current_balance: Math.max(0, selectedLoan.principal - totalPaidPrincipal) });
+
       await loadData();
     } catch (err: any) {
       alert(`Lỗi khi cập nhật trạng thái thanh toán: ${err?.message ?? 'Lỗi'}`);
     }
   };
+
 
   const statusBadge = (s: 'PAID' | 'PENDING' | 'OVERDUE') => {
     const map = {
@@ -1213,7 +1189,7 @@ export default function FinancePage() {
                     <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{fmtDate(e.date)}</td>
                     <td className="px-4 py-3 font-semibold" style={{ color: 'var(--text-muted)' }}>{assets.find(a => a.id === e.asset_id)?.name?.split(' ')[0] || '—'}</td>
                     <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: `${CAT_COLORS[e.category] || '#6B7280'}22`, color: CAT_COLORS[e.category] || 'var(--text-muted)' }}>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: `${getCategoryColor(e.category)}22`, color: getCategoryColor(e.category) }}>
                         {CAT_LABELS[e.category] || e.category}
                       </span>
                     </td>
