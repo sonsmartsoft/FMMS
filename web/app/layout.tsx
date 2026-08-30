@@ -1,6 +1,12 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { ClientShell } from '@/components/layout/ClientShell';
+
+const inter = Inter({
+  subsets: ['latin', 'vietnamese'],
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'FMMS — Family Mobility Management System',
@@ -28,8 +34,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="vi" className="dark">
+    <html lang="vi" className={`dark ${inter.className}`}>
       <ClientShell>{children}</ClientShell>
     </html>
   );
 }
+
