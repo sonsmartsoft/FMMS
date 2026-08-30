@@ -199,6 +199,7 @@ export default function FinancePage() {
 
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [expenseSortCol, setExpenseSortCol] = useState<string>('date');
   const [expenseSortDir, setExpenseSortDir] = useState<'asc' | 'desc'>('desc');
   const [loanSortCol, setLoanSortCol] = useState<string>('payment_number');
@@ -215,6 +216,17 @@ export default function FinancePage() {
     if (endDate) {
       list = list.filter(e => e.date && e.date.slice(0, 10) <= endDate);
     }
+    if (selectedCategory && selectedCategory !== 'ALL') {
+      list = list.filter(e => {
+        const cat = (e.category || '').toUpperCase();
+        if (selectedCategory === 'FUEL' || selectedCategory === 'RUNNING') return cat === 'FUEL' || cat === 'RUNNING';
+        if (selectedCategory === 'MAINTENANCE') return cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR';
+        if (selectedCategory === 'UPGRADE') return cat === 'UPGRADE';
+        if (selectedCategory === 'INSURANCE') return cat === 'INSURANCE' || cat === 'INITIAL' || cat === 'REGISTRATION';
+        if (selectedCategory === 'LOAN') return cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST';
+        return cat === selectedCategory;
+      });
+    }
 
     return [...list].sort((a, b) => {
       let valA: any = a[expenseSortCol as keyof ExpenseRecord] ?? '';
@@ -230,7 +242,8 @@ export default function FinancePage() {
         ? String(valA).localeCompare(String(valB), 'vi')
         : String(valB).localeCompare(String(valA), 'vi');
     });
-  }, [expenses, selectedAssetId, startDate, endDate, expenseSortCol, expenseSortDir, assets]);
+  }, [expenses, selectedAssetId, startDate, endDate, selectedCategory, expenseSortCol, expenseSortDir, assets]);
+
 
   const filteredLoans = useMemo(() => {
     if (!selectedAssetId) return loans;
@@ -950,80 +963,113 @@ export default function FinancePage() {
       {/* ─── EXPENSES ─── */}
       {activeSection === 'expenses' && (
         <>
-          {/* 📅 Date Range Filter Toolbar */}
-          <div className="p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-            <div className="flex items-center space-x-2 flex-wrap gap-2">
-              <span className="font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--accent-cyan)' }}>
-                <span>📅 Lọc thời gian:</span>
+          {/* 📅 Date Range & Category Filter Toolbar */}
+          <div className="p-3.5 rounded-2xl space-y-2.5 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+            {/* Category Filter Pills */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-bold text-[10px] uppercase flex items-center gap-1 shrink-0" style={{ color: 'var(--accent-cyan)' }}>
+                <Filter className="w-3 h-3" /> Danh mục:
               </span>
-              <div className="flex items-center space-x-1">
-                {[
-                  { label: 'Tất cả', start: '', end: '' },
-                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
-                  {
-                    label: 'Tháng này',
-                    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
-                    end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10),
-                  },
-                  {
-                    label: 'Tháng trước',
-                    start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10),
-                    end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10),
-                  },
-                  {
-                    label: 'Năm nay',
-                    start: `${new Date().getFullYear()}-01-01`,
-                    end: `${new Date().getFullYear()}-12-31`,
-                  },
-                ].map(preset => {
-                  const isActive = startDate === preset.start && endDate === preset.end;
-                  return (
-                    <button
-                      key={preset.label}
-                      onClick={() => { setStartDate(preset.start); setEndDate(preset.end); }}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition ${
-                        isActive ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-white/10'
-                      }`}
-                      style={!isActive ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-              </div>
+              {[
+                { id: 'ALL', label: 'Tất cả' },
+                { id: 'FUEL', label: '⛽ Nhiên liệu' },
+                { id: 'MAINTENANCE', label: '🔧 Bảo dưỡng' },
+                { id: 'UPGRADE', label: '⚡ Nâng cấp' },
+                { id: 'INSURANCE', label: '🛡️ Bảo hiểm' },
+                { id: 'LOAN', label: '💳 Khoản vay' },
+                { id: 'OTHER', label: '🏷️ Khác' },
+              ].map(c => {
+                const active = selectedCategory === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedCategory(c.id)}
+                    className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold transition ${
+                      active ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300'
+                    }`}
+                    style={!active ? { background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' } : {}}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="flex items-center space-x-2 flex-wrap gap-2">
-              <div className="flex items-center space-x-1.5">
-                <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Từ:</span>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="theme-input text-[11px] py-1 px-2 font-mono"
-                  style={{ width: '130px' }}
-                />
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+              <div className="flex items-center space-x-2 flex-wrap gap-2">
+                <span className="font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 text-amber-500">
+                  <Calendar className="w-3 h-3" /> Thời gian:
+                </span>
+                <div className="flex items-center space-x-1">
+                  {[
+                    { label: 'Tất cả', start: '', end: '' },
+                    { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
+                    {
+                      label: 'Tháng này',
+                      start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
+                      end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10),
+                    },
+                    {
+                      label: 'Tháng trước',
+                      start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10),
+                      end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10),
+                    },
+                    {
+                      label: 'Năm nay',
+                      start: `${new Date().getFullYear()}-01-01`,
+                      end: `${new Date().getFullYear()}-12-31`,
+                    },
+                  ].map(preset => {
+                    const isActive = startDate === preset.start && endDate === preset.end;
+                    return (
+                      <button
+                        key={preset.label}
+                        onClick={() => { setStartDate(preset.start); setEndDate(preset.end); }}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition ${
+                          isActive ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-white/10'
+                        }`}
+                        style={!isActive ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex items-center space-x-1.5">
-                <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Đến:</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={e => setEndDate(e.target.value)}
-                  className="theme-input text-[11px] py-1 px-2 font-mono"
-                  style={{ width: '130px' }}
-                />
+
+              <div className="flex items-center space-x-2 flex-wrap gap-2">
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Từ:</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="theme-input text-[11px] py-0.5 px-2 font-mono rounded-lg"
+                    style={{ width: '120px' }}
+                  />
+                </div>
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Đến:</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="theme-input text-[11px] py-0.5 px-2 font-mono rounded-lg"
+                    style={{ width: '120px' }}
+                  />
+                </div>
+                {(startDate || endDate || selectedCategory !== 'ALL') && (
+                  <button
+                    onClick={() => { setStartDate(''); setEndDate(''); setSelectedCategory('ALL'); }}
+                    className="text-[10px] font-bold text-rose-400 hover:underline px-1.5 py-0.5"
+                  >
+                    ✕ Xóa lọc
+                  </button>
+                )}
               </div>
-              {(startDate || endDate) && (
-                <button
-                  onClick={() => { setStartDate(''); setEndDate(''); }}
-                  className="text-[10px] font-bold text-rose-400 hover:underline px-1.5 py-1"
-                >
-                  ✕ Xóa lọc
-                </button>
-              )}
             </div>
           </div>
+
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {breakdown.map(b => (

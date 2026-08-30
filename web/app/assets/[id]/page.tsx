@@ -29,8 +29,9 @@ import {
   ArrowLeft, Gauge, Fuel, Wrench, DollarSign, FileText, BarChart3,
   Cpu, CheckCircle2, Plus, MapPin, Activity, Layers, Car, X, Pencil,
   Zap, Clock, TrendingDown, Shield, CreditCard, Award, Trash2, Edit2,
-  SlidersHorizontal, Calendar, CalendarDays, CalendarRange,
+  SlidersHorizontal, Calendar, CalendarDays, CalendarRange, Search, Filter,
 } from 'lucide-react';
+
 
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -623,6 +624,8 @@ export default function AssetDetailPage() {
 
   const [tabStartDate, setTabStartDate] = useState<string>('');
   const [tabEndDate, setTabEndDate] = useState<string>('');
+  const [tabExpCategory, setTabExpCategory] = useState<string>('ALL');
+  const [tabExpSearch, setTabExpSearch] = useState<string>('');
   const [expSortCol, setExpSortCol] = useState<string>('date');
   const [expSortDir, setExpSortDir] = useState<'asc' | 'desc'>('desc');
   const [fuelSortCol, setFuelSortCol] = useState<string>('date');
@@ -658,6 +661,25 @@ export default function AssetDetailPage() {
     let list = expenses;
     if (tabStartDate) list = list.filter(e => e.date && e.date.slice(0, 10) >= tabStartDate);
     if (tabEndDate) list = list.filter(e => e.date && e.date.slice(0, 10) <= tabEndDate);
+    if (tabExpCategory && tabExpCategory !== 'ALL') {
+      list = list.filter(e => {
+        const cat = (e.category || '').toUpperCase();
+        if (tabExpCategory === 'FUEL') return cat === 'FUEL' || cat === 'RUNNING';
+        if (tabExpCategory === 'MAINTENANCE') return cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR';
+        if (tabExpCategory === 'UPGRADE') return cat === 'UPGRADE';
+        if (tabExpCategory === 'INSURANCE') return cat === 'INSURANCE' || cat === 'INITIAL' || cat === 'REGISTRATION';
+        if (tabExpCategory === 'LOAN') return cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST';
+        return cat === tabExpCategory;
+      });
+    }
+    if (tabExpSearch.trim()) {
+      const q = tabExpSearch.toLowerCase();
+      list = list.filter(e =>
+        (e.description || '').toLowerCase().includes(q) ||
+        (e.vendor || '').toLowerCase().includes(q) ||
+        (e.subcategory || '').toLowerCase().includes(q)
+      );
+    }
     return [...list].sort((a, b) => {
       let valA: any = a[expSortCol as keyof ExpenseRecord] ?? '';
       let valB: any = b[expSortCol as keyof ExpenseRecord] ?? '';
@@ -668,7 +690,8 @@ export default function AssetDetailPage() {
         ? String(valA).localeCompare(String(valB), 'vi')
         : String(valB).localeCompare(String(valA), 'vi');
     });
-  }, [expenses, tabStartDate, tabEndDate, expSortCol, expSortDir]);
+  }, [expenses, tabStartDate, tabEndDate, tabExpCategory, tabExpSearch, expSortCol, expSortDir]);
+
 
   const displayedFuelLogs = useMemo(() => {
     let list = fuelLogs;
@@ -3223,123 +3246,122 @@ export default function AssetDetailPage() {
                         <span>{col.label}</span>
                         <span className="text-[8px]">{isSorted ? (partSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {displayedParts.length === 0 ? (
-                <div className="p-8 text-center rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <Layers className="w-8 h-8 mx-auto mb-2 opacity-30" style={{ color: 'var(--accent-cyan)' }} />
-                  <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Chưa có phụ tùng hay món độ nào được ghi nhận</p>
-                  <button onClick={() => { setEditingPartItem(null); setOpenModal('part'); }} className="mt-3 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
-                    <Plus className="w-3.5 h-3.5" /><span>Thêm phụ tùng đầu tiên</span>
-                  </button>
-                </div>
-              ) : (
-                displayedParts.map((p) => (
-                  <div key={p.id} className="p-4 rounded-xl flex justify-between items-start" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                    <div>
-                      <p className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
-                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                        {p.brand ? `${p.brand} • ` : ''}{p.category || 'Phụ tùng'} {p.install_date ? `• Lắp: ${fmtDate(p.install_date)}` : ''}
-                      </p>
-                      {p.notes && <p className="text-[10px] mt-1 p-1.5 rounded" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>📝 {p.notes}</p>}
-                    </div>
-                    <div className="flex items-center space-x-2 shrink-0">
-                      <span className="font-bold text-sm text-purple-400">{fmt(p.cost || 0)} ₫</span>
-                      <button onClick={() => handleOpenEditPart(p)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => handleDeletePart(p.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ═══ EXPENSES ═══ */}
-        {activeTab === 'expenses' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Chi phí phát sinh</h3>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Tổng: <strong style={{ color: 'var(--status-red)' }}>{fmt(totalExpenses)} ₫</strong></p>
-              </div>
-              <button onClick={() => { setEditingExp(null); setOpenModal('expense'); }} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
-                <Plus className="w-3.5 h-3.5" /><span>Thêm chi phí</span>
-              </button>
-            </div>
-
-            {/* 📅 Date Filter & Sort */}
-            <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-              <div className="flex items-center space-x-1.5 flex-wrap gap-1">
-                <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
+                                {/* 📅 Bộ lọc Đa Năng: Danh mục, Thời gian, Tìm kiếm & Sắp xếp */}
+            <div className="p-3.5 rounded-2xl space-y-3 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              {/* Category Filter Pills */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold text-[10px] uppercase flex items-center gap-1 shrink-0" style={{ color: 'var(--accent-cyan)' }}>
+                  <Filter className="w-3 h-3" /> Danh mục:
+                </span>
                 {[
-                  { label: 'Tất cả', start: '', end: '' },
-                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
-                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
-                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
-                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
-                ].map(p => (
-                  <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
-                    style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
-                    {p.label}
-                  </button>
-                ))}
+                  { id: 'ALL', label: 'Tất cả danh mục', count: expenses.length },
+                  { id: 'FUEL', label: '⛽ Nhiên liệu & Pin', count: expenses.filter(e => ['FUEL', 'RUNNING'].includes((e.category || '').toUpperCase())).length },
+                  { id: 'MAINTENANCE', label: '🔧 Bảo dưỡng & Phụ tùng', count: expenses.filter(e => ['MAINTENANCE', 'PARTS', 'LABOR'].includes((e.category || '').toUpperCase())).length },
+                  { id: 'UPGRADE', label: '⚡ Đồ độ & Nâng cấp', count: expenses.filter(e => (e.category || '').toUpperCase() === 'UPGRADE').length },
+                  { id: 'INSURANCE', label: '🛡️ Bảo hiểm & Giấy tờ', count: expenses.filter(e => ['INSURANCE', 'INITIAL', 'REGISTRATION'].includes((e.category || '').toUpperCase())).length },
+                  { id: 'LOAN', label: '💳 Khoản vay & Trả góp', count: expenses.filter(e => ['LOAN', 'LOAN_PAYMENT', 'LOAN_INTEREST'].includes((e.category || '').toUpperCase())).length },
+                  { id: 'OTHER', label: '🏷️ Khác', count: expenses.filter(e => !['FUEL', 'RUNNING', 'MAINTENANCE', 'PARTS', 'LABOR', 'UPGRADE', 'INSURANCE', 'INITIAL', 'REGISTRATION', 'LOAN', 'LOAN_PAYMENT', 'LOAN_INTEREST'].includes((e.category || '').toUpperCase())).length },
+                ].filter(c => c.id === 'ALL' || c.count > 0).map(c => {
+                  const active = tabExpCategory === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setTabExpCategory(c.id)}
+                      className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition flex items-center gap-1.5 ${
+                        active ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200'
+                      }`}
+                      style={!active ? { background: 'var(--bg-primary)', border: '1px solid var(--border-default)' } : {}}
+                    >
+                      <span>{c.label}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono ${active ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                        {c.count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
-              <div className="flex items-center space-x-2">
-                <input type="date" value={tabStartDate} onChange={e => setTabStartDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
-                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>-</span>
-                <input type="date" value={tabEndDate} onChange={e => setTabEndDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
-                {(tabStartDate || tabEndDate) && (
-                  <button onClick={() => { setTabStartDate(''); setTabEndDate(''); }} className="text-[10px] font-bold text-rose-400">✕ Xóa</button>
-                )}
-                <div className="flex items-center space-x-1 border-l pl-2 flex-wrap gap-1" style={{ borderColor: 'var(--border-default)' }}>
-                  <span className="font-bold text-[10px] uppercase text-cyan-400">Sắp xếp:</span>
+
+              {/* Date Filter & Search Row */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                  <span className="font-bold text-[10px] uppercase flex items-center gap-1 shrink-0 text-amber-500">
+                    <Calendar className="w-3 h-3" /> Thời gian:
+                  </span>
                   {[
-                    { key: 'date', label: 'Ngày' },
-                    { key: 'amount', label: 'Số tiền' },
-                    { key: 'category', label: 'Danh mục' },
-                    { key: 'description', label: 'Mô tả' },
-                  ].map(col => {
-                    const isSorted = expSortCol === col.key;
-                    return (
-                      <button
-                        key={col.key}
-                        onClick={() => {
-                          if (expSortCol === col.key) {
-                            setExpSortDir(p => p === 'asc' ? 'desc' : 'asc');
-                          } else {
-                            setExpSortCol(col.key);
-                            setExpSortDir(col.key === 'date' || col.key === 'amount' ? 'desc' : 'asc');
-                          }
-                        }}
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition flex items-center space-x-1 ${
-                          isSorted ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm' : 'hover:bg-white/10'
-                        }`}
-                        style={!isSorted ? { background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' } : {}}
-                      >
-                        <span>{col.label}</span>
-                        <span className="text-[8px]">{isSorted ? (expSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
-                      </button>
-                    );
-                  })}
+                    { label: 'Tất cả', start: '', end: '' },
+                    { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
+                    { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
+                    { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
+                    { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
+                  ].map(p => (
+                    <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300'}`}
+                      style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' } : {}}>
+                      {p.label}
+                    </button>
+                  ))}
+                  <div className="flex items-center space-x-1 ml-1">
+                    <input type="date" value={tabStartDate} onChange={e => setTabStartDate(e.target.value)} className="theme-input text-[10px] py-0.5 px-1.5 font-mono rounded-lg" style={{ width: '115px' }} />
+                    <span className="text-[10px] text-slate-400">-</span>
+                    <input type="date" value={tabEndDate} onChange={e => setTabEndDate(e.target.value)} className="theme-input text-[10px] py-0.5 px-1.5 font-mono rounded-lg" style={{ width: '115px' }} />
+                    {(tabStartDate || tabEndDate || tabExpCategory !== 'ALL' || tabExpSearch) && (
+                      <button onClick={() => { setTabStartDate(''); setTabEndDate(''); setTabExpCategory('ALL'); setTabExpSearch(''); }} className="text-[10px] font-bold text-rose-500 hover:underline ml-1">✕ Bỏ lọc</button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Search Input */}
+                  <div className="relative flex items-center">
+                    <Search className="w-3 h-3 absolute left-2 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Tìm mô tả, nơi chi..."
+                      value={tabExpSearch}
+                      onChange={e => setTabExpSearch(e.target.value)}
+                      className="theme-input text-[10px] py-1 pl-7 pr-2 font-medium rounded-lg w-36 sm:w-44"
+                    />
+                  </div>
+
+                  {/* Sắp xếp */}
+                  <div className="flex items-center space-x-1 border-l pl-2 flex-wrap gap-1" style={{ borderColor: 'var(--border-default)' }}>
+                    <span className="font-bold text-[10px] uppercase text-cyan-500">Sắp xếp:</span>
+                    {[
+                      { key: 'date', label: 'Ngày' },
+                      { key: 'amount', label: 'Số tiền' },
+                      { key: 'category', label: 'Danh mục' },
+                    ].map(col => {
+                      const isSorted = expSortCol === col.key;
+                      return (
+                        <button
+                          key={col.key}
+                          onClick={() => {
+                            if (expSortCol === col.key) {
+                              setExpSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setExpSortCol(col.key);
+                              setExpSortDir(col.key === 'date' || col.key === 'amount' ? 'desc' : 'asc');
+                            }
+                          }}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition flex items-center space-x-0.5 ${
+                            isSorted ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300'
+                          }`}
+                          style={!isSorted ? { background: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' } : {}}
+                        >
+                          <span>{col.label}</span>
+                          <span className="text-[8px]">{isSorted ? (expSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* 📊 Stacked Bar Chart Chi Phí Theo Tháng */}
-            {expenses.length > 0 && (() => {
+            {/* 📊 Stacked Area Chart Chi Phí Theo Tháng — Hiển thị chính xác theo dữ liệu đã lọc (displayedExpenses) */}
+            {displayedExpenses.length > 0 ? (() => {
               const map = new Map<string, any>();
-              expenses.forEach(e => {
+              displayedExpenses.forEach(e => {
                 const d = e.date || '';
                 if (!d) return;
                 const mKey = d.slice(0, 7);
@@ -3366,6 +3388,8 @@ export default function AssetDetailPage() {
                 map.set(mKey, prev);
               });
               const chartData = Array.from(map.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+              const filteredSum = displayedExpenses.reduce((s, e) => s + e.amount, 0);
+
               if (chartData.length === 0) return null;
               return (
                 <div className="p-4 rounded-2xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
@@ -3374,9 +3398,14 @@ export default function AssetDetailPage() {
                       <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
                         <Activity className="w-3.5 h-3.5" />
                       </div>
-                      <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
-                        Biểu Đồ Vùng Xếp Chồng Chi Phí Theo Tháng (Theo Danh Mục Lớn)
-                      </p>
+                      <div>
+                        <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                          Biểu Đồ Vùng Xếp Chồng Chi Phí Theo Tháng (Theo Bộ Lọc)
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-zinc-400">
+                          Hiển thị {chartData.length} mốc tháng • Tổng chi: <strong className="text-slate-900 dark:text-white font-mono">{fmt(filteredSum)} ₫</strong> ({displayedExpenses.length} khoản chi)
+                        </p>
+                      </div>
                     </div>
                     <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị: Triệu ₫ (M)</span>
                   </div>
@@ -3430,10 +3459,15 @@ export default function AssetDetailPage() {
                   </div>
                 </div>
               );
-
-            })()}
+            })() : (
+              <div className="p-8 rounded-2xl text-center text-xs space-y-1" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
+                <p className="font-bold text-slate-700 dark:text-slate-300">Không có chi phí nào khớp với bộ lọc hiện tại</p>
+                <p className="text-[11px]">Hãy thử chọn mốc thời gian khác hoặc bấm nút "Bỏ lọc".</p>
+              </div>
+            )}
 
             <div className="space-y-2">
+
 
               {displayedExpenses.map((e) => (
                 <div key={e.id} className="p-3.5 rounded-xl flex items-center justify-between text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
