@@ -53,7 +53,48 @@ export default function FuelPage() {
 
   const fuelAssets = assets.filter(a => a.capabilities?.has_fuel || a.capabilities?.has_battery);
 
+  const [sortCol, setSortCol] = useState<string>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
   const filteredLogs = assetFilter === 'ALL' ? logs : logs.filter(l => l.asset_id === assetFilter || l.vehicle_id === assetFilter);
+
+  const displayedLogs = useMemo(() => {
+    return [...filteredLogs].sort((a, b) => {
+      let valA: any = '';
+      let valB: any = '';
+      if (sortCol === 'date') {
+        valA = a.date ?? a.timestamp ?? '';
+        valB = b.date ?? b.timestamp ?? '';
+      } else if (sortCol === 'asset') {
+        valA = assets.find(x => x.id === (a.asset_id ?? a.vehicle_id))?.name ?? '';
+        valB = assets.find(x => x.id === (b.asset_id ?? b.vehicle_id))?.name ?? '';
+      } else if (sortCol === 'liters') {
+        valA = parseFloat(a.fuel_liters ?? a.liters ?? 0);
+        valB = parseFloat(b.fuel_liters ?? b.liters ?? 0);
+      } else if (sortCol === 'price_per_liter') {
+        valA = parseFloat(a.price_per_liter ?? 0);
+        valB = parseFloat(b.price_per_liter ?? 0);
+      } else if (sortCol === 'total_cost') {
+        valA = a.total_cost ?? (parseFloat(a.fuel_liters ?? a.liters ?? 0) * parseFloat(a.price_per_liter ?? 0));
+        valB = b.total_cost ?? (parseFloat(b.fuel_liters ?? b.liters ?? 0) * parseFloat(b.price_per_liter ?? 0));
+      } else if (sortCol === 'odometer_km') {
+        valA = Number(a.odometer_km) || 0;
+        valB = Number(b.odometer_km) || 0;
+      } else if (sortCol === 'station') {
+        valA = a.station ?? '';
+        valB = b.station ?? '';
+      } else if (sortCol === 'consumption') {
+        valA = Number(a.consumption_l100km) || 0;
+        valB = Number(b.consumption_l100km) || 0;
+      }
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return sortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [filteredLogs, assets, sortCol, sortDir]);
 
   const totalFuel = filteredLogs.reduce((s, f) => s + (f.total_cost || (parseFloat(f.fuel_liters ?? f.liters) * parseFloat(f.price_per_liter))), 0);
   const totalLiters = filteredLogs.reduce((s, f) => s + parseFloat(f.fuel_liters ?? f.liters ?? 0), 0);
@@ -266,9 +307,39 @@ export default function FuelPage() {
         <table className="w-full text-xs">
           <thead>
             <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
-              {['Ngày', 'Phương tiện', 'Số lít', 'Đơn giá', 'Tổng tiền', 'Odometer', 'Cây xăng', 'L/100km', 'Thao tác'].map(h => (
-                <th key={h} className="text-left px-4 py-3 font-semibold uppercase text-[10px] tracking-wide" style={{ color: 'var(--text-muted)' }}>{h}</th>
-              ))}
+              {[
+                { key: 'date', label: 'Ngày' },
+                { key: 'asset', label: 'Phương tiện' },
+                { key: 'liters', label: 'Số lít' },
+                { key: 'price_per_liter', label: 'Đơn giá' },
+                { key: 'total_cost', label: 'Tổng tiền' },
+                { key: 'odometer_km', label: 'Odometer' },
+                { key: 'station', label: 'Cây xăng' },
+                { key: 'consumption', label: 'L/100km' },
+              ].map(col => {
+                const isSorted = sortCol === col.key;
+                return (
+                  <th
+                    key={col.key}
+                    onClick={() => {
+                      if (sortCol === col.key) {
+                        setSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                      } else {
+                        setSortCol(col.key);
+                        setSortDir(col.key === 'date' || col.key === 'total_cost' ? 'desc' : 'asc');
+                      }
+                    }}
+                    className="text-left px-4 py-3 font-semibold uppercase text-[10px] tracking-wide cursor-pointer select-none hover:text-cyan-400 transition"
+                    style={{ color: isSorted ? 'var(--accent-cyan)' : 'var(--text-muted)' }}
+                  >
+                    <div className="flex items-center space-x-1">
+                      <span>{col.label}</span>
+                      <span className="text-[9px]">{isSorted ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                    </div>
+                  </th>
+                );
+              })}
+              <th className="text-left px-4 py-3 font-semibold uppercase text-[10px] tracking-wide" style={{ color: 'var(--text-muted)' }}>Thao tác</th>
             </tr>
           </thead>
           <tbody>
@@ -276,13 +347,13 @@ export default function FuelPage() {
               <tr>
                 <td colSpan={9} className="px-4 py-8 text-center text-xs" style={{ color: 'var(--text-muted)' }}>Đang tải dữ liệu...</td>
               </tr>
-            ) : filteredLogs.length === 0 ? (
+            ) : displayedLogs.length === 0 ? (
               <tr>
                 <td colSpan={9} className="px-4 py-10 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
                   Chưa có bản ghi nhiên liệu nào. Bấm <strong>Ghi nhận đổ xăng</strong> để thêm mới.
                 </td>
               </tr>
-            ) : filteredLogs.map((f, i) => {
+            ) : displayedLogs.map((f, i) => {
               const assetName = assets.find(a => a.id === (f.asset_id ?? f.vehicle_id))?.name ?? '—';
               const liters = parseFloat(f.fuel_liters ?? f.liters ?? 0);
               const price = parseFloat(f.price_per_liter ?? 0);

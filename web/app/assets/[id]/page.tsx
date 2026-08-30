@@ -621,6 +621,26 @@ export default function AssetDetailPage() {
   const [maintSortDir, setMaintSortDir] = useState<'asc' | 'desc'>('desc');
   const [loanSortCol, setLoanSortCol] = useState<string>('payment_number');
   const [loanSortDir, setLoanSortDir] = useState<'asc' | 'desc'>('asc');
+  const [tripSortCol, setTripSortCol] = useState<string>('start_time');
+  const [tripSortDir, setTripSortDir] = useState<'asc' | 'desc'>('desc');
+  const [dailySortCol, setDailySortCol] = useState<string>('date');
+  const [dailySortDir, setDailySortDir] = useState<'asc' | 'desc'>('desc');
+
+  const displayedTrips = useMemo(() => {
+    let list = trips;
+    if (tabStartDate) list = list.filter(t => t.start_time && t.start_time.slice(0, 10) >= tabStartDate);
+    if (tabEndDate) list = list.filter(t => t.start_time && t.start_time.slice(0, 10) <= tabEndDate);
+    return [...list].sort((a: any, b: any) => {
+      let valA = a[tripSortCol] ?? '';
+      let valB = b[tripSortCol] ?? '';
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return tripSortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return tripSortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [trips, tabStartDate, tabEndDate, tripSortCol, tripSortDir]);
 
   const displayedExpenses = useMemo(() => {
     let list = expenses;
@@ -754,6 +774,20 @@ export default function AssetDetailPage() {
       }
     });
 
+    // Expenses with Odometer
+    expenses.forEach(e => {
+      if (e.odometer_km && e.odometer_km > 0) {
+        events.push({
+          date: e.date ? e.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          odometer_km: e.odometer_km,
+          type: 'ODO_LOG',
+          note: `Chi phí: ${e.description || e.category} (${fmt(e.amount)}₫)`,
+          id: `exp_odo_${e.id}`,
+          raw: e,
+        });
+      }
+    });
+
     // Trips
     trips.forEach(t => {
       const dStr = t.start_time ? t.start_time.slice(0, 10) : new Date().toISOString().slice(0, 10);
@@ -766,6 +800,20 @@ export default function AssetDetailPage() {
         raw: t,
       });
     });
+
+    // Check if current asset odometer is higher than highest event ODO
+    const maxEventOdo = events.reduce((max, ev) => Math.max(max, ev.odometer_km || 0), 0);
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (asset && asset.current_odometer_km > maxEventOdo) {
+      events.push({
+        date: todayStr,
+        odometer_km: asset.current_odometer_km,
+        type: 'ODO_LOG',
+        note: `Chỉ số ODO hiện tại xe: ${fmt(asset.current_odometer_km)} km`,
+        id: `current_asset_odo_${todayStr}`,
+        raw: { date: todayStr, odometer_km: asset.current_odometer_km },
+      });
+    }
 
     // Sort events by date ascending
     events.sort((a, b) => {
@@ -950,7 +998,30 @@ export default function AssetDetailPage() {
       currentMonthKm,
       totalActiveDays: dailyReport.filter(d => d.kmRun > 0).length,
     };
-  }, [odometerLogs, fuelLogs, maintenance, trips, expenses]);
+  }, [odometerLogs, fuelLogs, maintenance, trips, expenses, asset]);
+
+  const displayedDailyReport = useMemo(() => {
+    let list = mileageAnalytics.dailyReport;
+    if (tabStartDate) list = list.filter(d => d.date >= tabStartDate);
+    if (tabEndDate) list = list.filter(d => d.date <= tabEndDate);
+    return [...list].sort((a: any, b: any) => {
+      let valA = a[dailySortCol] ?? '';
+      let valB = b[dailySortCol] ?? '';
+      if (dailySortCol === 'kmRun') {
+        valA = a.kmRun || 0;
+        valB = b.kmRun || 0;
+      } else if (dailySortCol === 'displayOdo') {
+        valA = a.displayOdo || 0;
+        valB = b.displayOdo || 0;
+      }
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return dailySortDir === 'asc' ? valA - valB : valB - valA;
+      }
+      return dailySortDir === 'asc'
+        ? String(valA).localeCompare(String(valB), 'vi')
+        : String(valB).localeCompare(String(valA), 'vi');
+    });
+  }, [mileageAnalytics.dailyReport, tabStartDate, tabEndDate, dailySortCol, dailySortDir]);
 
 
   if (loading) {
@@ -1803,6 +1874,24 @@ export default function AssetDetailPage() {
         brand_hotline: editForm.brand_hotline || undefined,
       });
       if (updated) setAsset(updated);
+
+      // Auto-create OdometerLog when Odometer is changed so journey log records the event
+      const newOdoKm = parseFloat(editForm.current_odometer_km) || 0;
+      if (newOdoKm > 0 && newOdoKm !== asset.current_odometer_km) {
+        try {
+          await createOdometerLog({
+            asset_id: asset.id,
+            date: new Date().toISOString().slice(0, 10),
+            odometer_km: newOdoKm,
+            note: 'Cập nhật Odometer định kỳ',
+          });
+          const freshOdoLogs = await getOdometerLogs(asset.id);
+          setOdometerLogs(freshOdoLogs);
+        } catch (odoErr) {
+          console.warn('Auto create odometer log error:', odoErr);
+        }
+      }
+
       setOpenModal(null);
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
@@ -1825,6 +1914,10 @@ export default function AssetDetailPage() {
         reason: odoForm.reason || 'Hiệu chỉnh Odometer',
       });
       setAsset(p => p ? { ...p, current_odometer_km: newKm } : p);
+      try {
+        const freshOdoLogs = await getOdometerLogs(asset.id);
+        setOdometerLogs(freshOdoLogs);
+      } catch {}
       setOpenModal(null);
       alert('Đã lưu hiệu chỉnh Odometer thành công!');
     } catch (e: any) {
@@ -2293,22 +2386,46 @@ export default function AssetDetailPage() {
                     <table className="w-full text-xs">
                       <thead className="sticky top-0 z-10">
                         <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-default)' }}>
-                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Ngày</th>
-                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Km trong ngày</th>
-                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Mốc ODO</th>
-                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Nội dung hành trình / Sự kiện ghi nhận</th>
-                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide">Thao tác</th>
+                          {[
+                            { key: 'date', label: 'Ngày' },
+                            { key: 'kmRun', label: 'Km trong ngày' },
+                            { key: 'displayOdo', label: 'Mốc ODO' },
+                            { key: 'notes', label: 'Nội dung hành trình / Sự kiện ghi nhận' },
+                          ].map(col => {
+                            const isSorted = dailySortCol === col.key;
+                            return (
+                              <th
+                                key={col.key}
+                                onClick={() => {
+                                  if (dailySortCol === col.key) {
+                                    setDailySortDir(p => p === 'asc' ? 'desc' : 'asc');
+                                  } else {
+                                    setDailySortCol(col.key);
+                                    setDailySortDir(col.key === 'date' ? 'desc' : 'asc');
+                                  }
+                                }}
+                                className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide cursor-pointer select-none hover:text-cyan-400 transition"
+                                style={{ color: isSorted ? 'var(--accent-cyan)' : 'var(--text-muted)' }}
+                              >
+                                <div className="flex items-center space-x-1">
+                                  <span>{col.label}</span>
+                                  <span className="text-[9px]">{isSorted ? (dailySortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                                </div>
+                              </th>
+                            );
+                          })}
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide" style={{ color: 'var(--text-muted)' }}>Thao tác</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {mileageAnalytics.dailyReport.length === 0 ? (
+                        {displayedDailyReport.length === 0 ? (
                           <tr>
                             <td colSpan={5} className="py-8 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
                               Chưa có dữ liệu nhật ký di chuyển. Bấm "Ghi nhận mốc Odometer" để bắt đầu theo dõi.
                             </td>
                           </tr>
                         ) : (
-                          mileageAnalytics.dailyReport.map((day, idx) => (
+                          displayedDailyReport.map((day, idx) => (
                             <tr key={day.date} className="transition hover:bg-white/5" style={{ borderBottom: '1px solid var(--border-subtle)', background: idx % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
                               <td className="px-3.5 py-2.5 whitespace-nowrap">
                                 <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{fmtDate(day.date)}</p>
@@ -2487,10 +2604,38 @@ export default function AssetDetailPage() {
               </button>
             </div>
 
+            {/* 📅 Date Filter & Sort Bar */}
+            <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
+                {[
+                  { label: 'Tất cả', start: '', end: '' },
+                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
+                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
+                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
+                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
+                ].map(p => (
+                  <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
+                    style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center space-x-2">
+                <input type="date" value={tabStartDate} onChange={e => setTabStartDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>-</span>
+                <input type="date" value={tabEndDate} onChange={e => setTabEndDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                {(tabStartDate || tabEndDate) && (
+                  <button onClick={() => { setTabStartDate(''); setTabEndDate(''); }} className="text-[10px] font-bold text-rose-400">✕ Xóa</button>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-3 text-xs text-center mb-2">
               {[
-                { label: 'Tổng chuyến', value: trips.length },
-                { label: 'Tổng km tháng này', value: `${fmt(trips.reduce((s,t)=>s+t.distance_km,0).toFixed(0) as any)} km` },
+                { label: 'Tổng chuyến', value: displayedTrips.length },
+                { label: 'Tổng km', value: `${fmt(displayedTrips.reduce((s,t)=>s+(t.distance_km || 0),0).toFixed(0) as any)} km` },
                 { label: 'TB tiêu thụ', value: `${asset.avg_consumption_l100km || '—'} L/100` },
               ].map((s, i) => (
                 <div key={i} className="p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
@@ -2500,23 +2645,78 @@ export default function AssetDetailPage() {
               ))}
             </div>
 
-            <div className="space-y-2">
-              {trips.map((trip) => (
-                <div key={trip.id} className="p-3.5 rounded-xl flex items-center justify-between text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <div>
-                    <p className="font-bold" style={{ color: 'var(--text-primary)' }}>
-                      {trip.start_location} → {trip.end_location}
-                    </p>
-                    <p className="mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {fmtDate(trip.start_time)} • {durFmt(trip.duration_seconds)} • TB {trip.average_speed_kmh} km/h
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold" style={{ color: 'var(--accent-cyan)' }}>{trip.distance_km} km</p>
-                    {trip.fuel_used_liters && <p style={{ color: 'var(--status-amber)' }}>{trip.fuel_used_liters}L xăng</p>}
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--border-default)' }}>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-default)' }}>
+                    {[
+                      { key: 'start_time', label: 'Thời gian' },
+                      { key: 'start_location', label: 'Lộ trình (Đi → Đến)' },
+                      { key: 'distance_km', label: 'Quãng đường' },
+                      { key: 'duration_seconds', label: 'Thời lượng' },
+                      { key: 'average_speed_kmh', label: 'Tốc độ TB' },
+                      { key: 'fuel_used_liters', label: 'Xăng tiêu thụ' },
+                    ].map(col => {
+                      const isSorted = tripSortCol === col.key;
+                      return (
+                        <th
+                          key={col.key}
+                          onClick={() => {
+                            if (tripSortCol === col.key) {
+                              setTripSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setTripSortCol(col.key);
+                              setTripSortDir(col.key === 'start_time' ? 'desc' : 'asc');
+                            }
+                          }}
+                          className="text-left px-3 py-2.5 font-semibold uppercase text-[10px] tracking-wide cursor-pointer select-none hover:text-cyan-400 transition"
+                          style={{ color: isSorted ? 'var(--accent-cyan)' : 'var(--text-muted)' }}
+                        >
+                          <div className="flex items-center space-x-1">
+                            <span>{col.label}</span>
+                            <span className="text-[9px]">{isSorted ? (tripSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedTrips.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center" style={{ color: 'var(--text-muted)' }}>
+                        Chưa có chuyến đi nào được ghi nhận.
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedTrips.map((trip, idx) => (
+                      <tr key={trip.id} className="transition hover:bg-white/5" style={{ borderBottom: '1px solid var(--border-subtle)', background: idx % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{fmtDate(trip.start_time)}</p>
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{trip.start_time ? new Date(trip.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                            {trip.start_location || 'Điểm xuất phát'} → {trip.end_location || 'Điểm đến'}
+                          </p>
+                        </td>
+                        <td className="px-3 py-2.5 font-mono font-bold text-cyan-400 whitespace-nowrap">
+                          {trip.distance_km} km
+                        </td>
+                        <td className="px-3 py-2.5 font-mono whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                          {durFmt(trip.duration_seconds)}
+                        </td>
+                        <td className="px-3 py-2.5 font-mono whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                          {trip.average_speed_kmh ? `${trip.average_speed_kmh} km/h` : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 font-mono whitespace-nowrap">
+                          {trip.fuel_used_liters ? <span className="text-amber-400">{trip.fuel_used_liters} L</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -2677,16 +2877,36 @@ export default function AssetDetailPage() {
                 {(tabStartDate || tabEndDate) && (
                   <button onClick={() => { setTabStartDate(''); setTabEndDate(''); }} className="text-[10px] font-bold text-rose-400">✕ Xóa</button>
                 )}
-                <div className="flex items-center space-x-1 border-l pl-2" style={{ borderColor: 'var(--border-default)' }}>
-                  <select value={maintSortCol} onChange={e => setMaintSortCol(e.target.value)} className="theme-select text-[10px] py-1 px-1.5 font-semibold" style={{ width: 'auto' }}>
-                    <option value="date">Ngày</option>
-                    <option value="cost">Chi phí</option>
-                    <option value="maintenance_type">Hạng mục</option>
-                    <option value="odometer_km">Số Km</option>
-                  </select>
-                  <button onClick={() => setMaintSortDir(p => p === 'asc' ? 'desc' : 'asc')} className="px-1.5 py-1 rounded text-[10px] font-bold border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--accent-cyan)' }}>
-                    {maintSortDir === 'asc' ? '▲' : '▼'}
-                  </button>
+                <div className="flex items-center space-x-1 border-l pl-2 flex-wrap gap-1" style={{ borderColor: 'var(--border-default)' }}>
+                  <span className="font-bold text-[10px] uppercase text-cyan-400">Sắp xếp:</span>
+                  {[
+                    { key: 'date', label: 'Ngày' },
+                    { key: 'cost', label: 'Chi phí' },
+                    { key: 'maintenance_type', label: 'Hạng mục' },
+                    { key: 'odometer_km', label: 'Số Km' },
+                  ].map(col => {
+                    const isSorted = maintSortCol === col.key;
+                    return (
+                      <button
+                        key={col.key}
+                        onClick={() => {
+                          if (maintSortCol === col.key) {
+                            setMaintSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setMaintSortCol(col.key);
+                            setMaintSortDir(col.key === 'date' || col.key === 'cost' ? 'desc' : 'asc');
+                          }
+                        }}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition flex items-center space-x-1 ${
+                          isSorted ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm' : 'hover:bg-white/10'
+                        }`}
+                        style={!isSorted ? { background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' } : {}}
+                      >
+                        <span>{col.label}</span>
+                        <span className="text-[8px]">{isSorted ? (maintSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -2790,16 +3010,36 @@ export default function AssetDetailPage() {
                 {(tabStartDate || tabEndDate) && (
                   <button onClick={() => { setTabStartDate(''); setTabEndDate(''); }} className="text-[10px] font-bold text-rose-400">✕ Xóa</button>
                 )}
-                <div className="flex items-center space-x-1 border-l pl-2" style={{ borderColor: 'var(--border-default)' }}>
-                  <select value={partSortCol} onChange={e => setPartSortCol(e.target.value)} className="theme-select text-[10px] py-1 px-1.5 font-semibold" style={{ width: 'auto' }}>
-                    <option value="install_date">Ngày lắp</option>
-                    <option value="cost">Chi phí</option>
-                    <option value="name">Tên (A-Z)</option>
-                    <option value="brand">Thương hiệu</option>
-                  </select>
-                  <button onClick={() => setPartSortDir(p => p === 'asc' ? 'desc' : 'asc')} className="px-1.5 py-1 rounded text-[10px] font-bold border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--accent-cyan)' }}>
-                    {partSortDir === 'asc' ? '▲' : '▼'}
-                  </button>
+                <div className="flex items-center space-x-1 border-l pl-2 flex-wrap gap-1" style={{ borderColor: 'var(--border-default)' }}>
+                  <span className="font-bold text-[10px] uppercase text-cyan-400">Sắp xếp:</span>
+                  {[
+                    { key: 'install_date', label: 'Ngày lắp' },
+                    { key: 'cost', label: 'Chi phí' },
+                    { key: 'name', label: 'Tên' },
+                    { key: 'brand', label: 'Thương hiệu' },
+                  ].map(col => {
+                    const isSorted = partSortCol === col.key;
+                    return (
+                      <button
+                        key={col.key}
+                        onClick={() => {
+                          if (partSortCol === col.key) {
+                            setPartSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setPartSortCol(col.key);
+                            setPartSortDir(col.key === 'install_date' || col.key === 'cost' ? 'desc' : 'asc');
+                          }
+                        }}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition flex items-center space-x-1 ${
+                          isSorted ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm' : 'hover:bg-white/10'
+                        }`}
+                        style={!isSorted ? { background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' } : {}}
+                      >
+                        <span>{col.label}</span>
+                        <span className="text-[8px]">{isSorted ? (partSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -2819,13 +3059,12 @@ export default function AssetDetailPage() {
                     <div>
                       <p className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
                       <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                        {p.brand} • {p.category} • Lắp: {fmtDate(p.install_date)} • {fmt(p.odometer_km)} km
+                        {p.brand ? `${p.brand} • ` : ''}{p.category || 'Phụ tùng'} {p.install_date ? `• Lắp: ${fmtDate(p.install_date)}` : ''}
                       </p>
-                      {p.warranty_months && <p className="text-[10px] mt-0.5" style={{ color: 'var(--status-green)' }}>Bảo hành: {p.warranty_months} tháng</p>}
-                      {p.notes && <p className="text-[10px] mt-0.5 italic" style={{ color: 'var(--text-faint)' }}>{p.notes}</p>}
+                      {p.notes && <p className="text-[10px] mt-1 p-1.5 rounded" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>📝 {p.notes}</p>}
                     </div>
                     <div className="flex items-center space-x-2 shrink-0">
-                      <span className="font-bold text-sm" style={{ color: 'var(--status-amber)' }}>{fmt(p.cost)} ₫</span>
+                      <span className="font-bold text-sm text-purple-400">{fmt(p.cost || 0)} ₫</span>
                       <button onClick={() => handleOpenEditPart(p)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -2878,16 +3117,36 @@ export default function AssetDetailPage() {
                 {(tabStartDate || tabEndDate) && (
                   <button onClick={() => { setTabStartDate(''); setTabEndDate(''); }} className="text-[10px] font-bold text-rose-400">✕ Xóa</button>
                 )}
-                <div className="flex items-center space-x-1 border-l pl-2" style={{ borderColor: 'var(--border-default)' }}>
-                  <select value={expSortCol} onChange={e => setExpSortCol(e.target.value)} className="theme-select text-[10px] py-1 px-1.5 font-semibold" style={{ width: 'auto' }}>
-                    <option value="date">Ngày</option>
-                    <option value="amount">Số tiền</option>
-                    <option value="category">Danh mục</option>
-                    <option value="description">Mô tả</option>
-                  </select>
-                  <button onClick={() => setExpSortDir(p => p === 'asc' ? 'desc' : 'asc')} className="px-1.5 py-1 rounded text-[10px] font-bold border" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--accent-cyan)' }}>
-                    {expSortDir === 'asc' ? '▲' : '▼'}
-                  </button>
+                <div className="flex items-center space-x-1 border-l pl-2 flex-wrap gap-1" style={{ borderColor: 'var(--border-default)' }}>
+                  <span className="font-bold text-[10px] uppercase text-cyan-400">Sắp xếp:</span>
+                  {[
+                    { key: 'date', label: 'Ngày' },
+                    { key: 'amount', label: 'Số tiền' },
+                    { key: 'category', label: 'Danh mục' },
+                    { key: 'description', label: 'Mô tả' },
+                  ].map(col => {
+                    const isSorted = expSortCol === col.key;
+                    return (
+                      <button
+                        key={col.key}
+                        onClick={() => {
+                          if (expSortCol === col.key) {
+                            setExpSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                          } else {
+                            setExpSortCol(col.key);
+                            setExpSortDir(col.key === 'date' || col.key === 'amount' ? 'desc' : 'asc');
+                          }
+                        }}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border transition flex items-center space-x-1 ${
+                          isSorted ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm' : 'hover:bg-white/10'
+                        }`}
+                        style={!isSorted ? { background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' } : {}}
+                      >
+                        <span>{col.label}</span>
+                        <span className="text-[8px]">{isSorted ? (expSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>

@@ -502,27 +502,36 @@ export default function MaintenancePage() {
             </button>
           )}
           {/* Sorting Controls */}
-          <div className="flex items-center space-x-1 border-l pl-2" style={{ borderColor: 'var(--border-default)' }}>
-            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Sắp xếp:</span>
-            <select
-              value={sortCol}
-              onChange={e => setSortCol(e.target.value)}
-              className="theme-select text-[10px] py-1 px-2 font-semibold"
-              style={{ width: 'auto' }}
-            >
-              <option value="date">Ngày thực hiện</option>
-              <option value="cost">Chi phí</option>
-              <option value="maintenance_type">Hạng mục (A-Z)</option>
-              <option value="odometer_km">Số Km (ODO)</option>
-            </select>
-            <button
-              onClick={() => setSortDir(p => p === 'asc' ? 'desc' : 'asc')}
-              className="px-2 py-1 rounded-lg text-[10px] font-bold border hover:bg-white/10 transition"
-              style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--accent-cyan)' }}
-              title={sortDir === 'asc' ? 'Tăng dần (A→Z)' : 'Giảm dần (Z→A)'}
-            >
-              {sortDir === 'asc' ? '▲ A→Z' : '▼ Z→A'}
-            </button>
+          <div className="flex items-center space-x-1 border-l pl-2 flex-wrap gap-1" style={{ borderColor: 'var(--border-default)' }}>
+            <span className="font-bold text-[10px] uppercase text-cyan-400">Sắp xếp:</span>
+            {[
+              { key: 'date', label: 'Ngày' },
+              { key: 'cost', label: 'Chi phí' },
+              { key: 'maintenance_type', label: 'Hạng mục' },
+              { key: 'odometer_km', label: 'Số Km (ODO)' },
+            ].map(col => {
+              const isSorted = sortCol === col.key;
+              return (
+                <button
+                  key={col.key}
+                  onClick={() => {
+                    if (sortCol === col.key) {
+                      setSortDir(p => p === 'asc' ? 'desc' : 'asc');
+                    } else {
+                      setSortCol(col.key);
+                      setSortDir(col.key === 'date' || col.key === 'cost' ? 'desc' : 'asc');
+                    }
+                  }}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition flex items-center space-x-1 ${
+                    isSorted ? 'bg-cyan-500 text-white border-cyan-500 shadow-sm' : 'hover:bg-white/10'
+                  }`}
+                  style={!isSorted ? { background: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' } : {}}
+                >
+                  <span>{col.label}</span>
+                  <span className="text-[8px]">{isSorted ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

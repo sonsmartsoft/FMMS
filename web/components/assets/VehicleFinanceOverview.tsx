@@ -16,8 +16,11 @@ interface PartItem {
   id?: string;
   name: string;
   category?: string;
+  brand?: string;
   cost: number;
   install_date?: string;
+  odometer_km?: number;
+  warranty_months?: number;
   notes?: string;
 }
 

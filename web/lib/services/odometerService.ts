@@ -78,8 +78,11 @@ export async function getOdometerLogs(assetId?: string): Promise<OdometerLogReco
     } catch {}
   }
 
-  const localLogs = getLocalOdoLogs().filter(o => !assetId || o.asset_id === realId || o.asset_id === assetId);
-  const mockLogs = MOCK_ODOMETER_LOGS.filter(o => !assetId || o.asset_id === realId || o.asset_id === assetId || assetId.includes('19b21387'));
+  const mockLogs = MOCK_ODOMETER_LOGS.filter(o => {
+    if (!assetId) return true;
+    const oAssetId = resolveAssetId(o.asset_id);
+    return oAssetId === realId || o.asset_id === assetId || o.asset_id === realId;
+  });
 
   // Merge unique logs by id
   const map = new Map<string, OdometerLogRecord>();
