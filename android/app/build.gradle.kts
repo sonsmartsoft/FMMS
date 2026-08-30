@@ -29,7 +29,7 @@ android {
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable_AateqAZXqTwmEsSwqweiPA_iGelY6O3\"")
         buildConfigField("String", "MAZDA2_ASSET_ID", "\"22222222-2222-2222-2222-222222222222\"")
         // Số REV hiển thị ở Settings/About — tăng lên sau mỗi bản build.
-        buildConfigField("String", "REV", "\"89\"")
+        buildConfigField("String", "REV", "\"90\"")
     }
 
     signingConfigs {
