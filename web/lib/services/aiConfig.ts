@@ -16,16 +16,15 @@ export const MODERN_AI_PROVIDERS: ProviderConfig[] = [
     id: 'gemini',
     name: 'Google Gemini',
     label: 'Google Gemini (Khuyến nghị - Miễn phí)',
-    description: 'Gemini 2.0 Flash / 1.5 Pro từ Google AI Studio. Tốc độ cực nhanh, có gói miễn phí 15 RPM.',
+    description: 'Gemini 3.6 Flash / 1.5 Pro từ Google AI Studio. Tốc độ cực nhanh, có gói miễn phí.',
     defaultBaseUrl: 'https://generativelanguage.googleapis.com',
-    defaultModel: 'gemini-2.0-flash',
+    defaultModel: 'gemini-3.6-flash',
     modelOptions: [
-      'gemini-2.0-flash',
-      'gemini-2.0-flash-lite',
-      'gemini-2.0-pro-exp-02-05',
+      'gemini-3.6-flash',
+      'gemini-2.5-flash',
       'gemini-1.5-flash',
       'gemini-1.5-pro',
-      'gemini-2.0-flash-thinking-exp',
+      'gemini-1.5-flash-latest',
     ],
     docsUrl: 'https://aistudio.google.com/apikey',
     color: '#4285F4',
@@ -159,10 +158,16 @@ export function getActiveAISettings(): {
   const pCfg = config.providers?.[providerId] || {};
   const meta = MODERN_AI_PROVIDERS.find(p => p.id === providerId) || MODERN_AI_PROVIDERS[0];
 
+  let chosenModel = pCfg.model || meta.defaultModel;
+  // If an old obsolete gemini model was stored in localStorage, upgrade it automatically to gemini-3.6-flash
+  if (providerId === 'gemini' && (chosenModel === 'gemini-2.0-flash' || chosenModel === 'gemini-1.0-pro' || !chosenModel)) {
+    chosenModel = 'gemini-3.6-flash';
+  }
+
   return {
     provider: providerId,
     baseUrl: pCfg.baseUrl || meta.defaultBaseUrl,
     apiKey: pCfg.apiKey || '',
-    model: pCfg.model || meta.defaultModel,
+    model: chosenModel,
   };
 }

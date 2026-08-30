@@ -89,6 +89,32 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
   }
 }
 
+async function callGemini(model: string, apiKey: string, promptText: string): Promise<{ ok: boolean; text?: string; error?: string }> {
+  const contents = [
+    { role: 'user', parts: [{ text: promptText }] },
+  ];
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents }),
+      signal: AbortSignal.timeout(30000),
+    }
+  );
+
+  if (res.ok) {
+    const data = await res.json();
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return { ok: true, text: reply };
+  }
+
+  const errData = await res.json().catch(() => ({}));
+  const errMsg = errData?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+  return { ok: false, error: errMsg };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabase();
@@ -114,15 +140,17 @@ export async function POST(req: NextRequest) {
       contextText = '';
     }
 
-    const systemWithContext = SYSTEM_PROMPT + (contextText ? `\n\n${contextText}` : '');
-    const userPrompt = prompt;
+    const fullPrompt = `[HỆ THỐNG CONTEXT & QUY TẮC PHÂN TÍCH]:\n${SYSTEM_PROMPT}\n\n${contextText}\n\n[CÂU HỎI CỦA NGƯỜI DÙNG]:\n${prompt}`;
 
     // ─────────────────────────────────────────────────────────────
-    // 1. GOOGLE GEMINI (Google AI Studio)
+    // 1. GOOGLE GEMINI
     // ─────────────────────────────────────────────────────────────
     if (provider === 'gemini') {
       const activeKey = clientApiKey || process.env.GEMINI_API_KEY;
-      const activeModel = model || 'gemini-2.0-flash';
+      let activeModel = model || 'gemini-3.6-flash';
+      if (activeModel === 'gemini-2.0-flash') {
+        activeModel = 'gemini-3.6-flash';
+      }
 
       if (!activeKey) {
         return NextResponse.json({
@@ -133,38 +161,35 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const contents = [
-          { role: 'user', parts: [{ text: `[SYSTEM CONTEXT & INSTRUCTIONS]:\n${systemWithContext}\n\n[USER QUESTION]:\n${userPrompt}` }] },
-        ];
+        let result = await callGemini(activeModel, activeKey, fullPrompt);
 
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${activeModel}:generateContent?key=${activeKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents }),
-            signal: AbortSignal.timeout(30000),
+        // Fallback cascade if requested model is deprecated / unavailable
+        if (!result.ok && (result.error?.includes('no longer available') || result.error?.includes('not found') || result.error?.includes('404'))) {
+          const fallbackModels = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].filter(m => m !== activeModel);
+          for (const fbModel of fallbackModels) {
+            console.log(`[AI Chat] Retrying Gemini with fallback model: ${fbModel}`);
+            const fbResult = await callGemini(fbModel, activeKey, fullPrompt);
+            if (fbResult.ok) {
+              result = fbResult;
+              activeModel = fbModel;
+              break;
+            }
           }
-        );
+        }
 
-        if (res.ok) {
-          const data = await res.json();
-          const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Gemini không trả về nội dung.';
+        if (result.ok && result.text) {
           return NextResponse.json({
-            reply,
+            reply: result.text,
             providerUsed: `Google Gemini (${activeModel})`,
             hasRealData: !!contextText,
             timestamp: new Date().toISOString(),
           });
         }
 
-        const errData = await res.json().catch(() => ({}));
-        const errMsg = errData?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-        console.error('[AI Chat] Gemini API error:', errMsg);
         return NextResponse.json({
-          reply: `⚠️ **Lỗi từ Google Gemini (${activeModel}):** ${errMsg}\n\nVui lòng kiểm tra lại API Key hoặc hạn mức trong Cài đặt AI.`,
+          reply: `⚠️ **Lỗi từ Google Gemini (${activeModel}):** ${result.error}\n\nVui lòng kiểm tra lại API Key trong Cài đặt AI.`,
           providerUsed: `Gemini (${activeModel})`,
-          error: errMsg,
+          error: result.error,
         });
       } catch (err: any) {
         return NextResponse.json({
@@ -200,8 +225,8 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             model: activeModel,
             max_tokens: 2048,
-            system: systemWithContext,
-            messages: [{ role: 'user', content: userPrompt }],
+            system: SYSTEM_PROMPT + (contextText ? `\n\n${contextText}` : ''),
+            messages: [{ role: 'user', content: prompt }],
           }),
           signal: AbortSignal.timeout(35000),
         });
@@ -261,8 +286,8 @@ export async function POST(req: NextRequest) {
 
     try {
       const messages = [
-        { role: 'system', content: systemWithContext },
-        { role: 'user', content: userPrompt },
+        { role: 'system', content: SYSTEM_PROMPT + (contextText ? `\n\n${contextText}` : '') },
+        { role: 'user', content: prompt },
       ];
 
       const res = await fetch(`${activeBaseUrl}/v1/chat/completions`, {
