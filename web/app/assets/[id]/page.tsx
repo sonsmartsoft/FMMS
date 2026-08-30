@@ -1,6 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import {
+  ResponsiveContainer, ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip as ReTooltip, Legend, BarChart, AreaChart,
+} from 'recharts';
+
 import { useParams, useRouter } from 'next/navigation';
 import { Asset, ExpenseRecord, MaintenanceRecord, TripRecord, LoanRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
 import { FuelLog, getFuelLogs, createFuelLog, updateFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
@@ -2487,7 +2492,46 @@ export default function AssetDetailPage() {
 
               {/* 2. THEO THÁNG (MONTHLY VIEW) */}
               {odoViewMode === 'monthly' && (
-                <div className="space-y-4">
+                <div className="space-y-5">
+
+                  {/* Recharts: ComposedChart km + cost per month */}
+                  {mileageAnalytics.monthlyReport.length > 0 && (
+                    <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                      <p className="text-[11px] font-extrabold uppercase tracking-wider mb-3 text-cyan-400">📊 Biểu đồ Km &amp; Chi phí theo tháng</p>
+                      <div style={{ height: 240 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart
+                            data={mileageAnalytics.monthlyReport.map(m => ({
+                              label: m.monthLabel.replace('Tháng ', 'T'),
+                              km: m.totalKm,
+                              fuel: m.fuelCost,
+                              maint: m.maintCost,
+                              cost: m.totalCost,
+                            }))}
+                            margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                            <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                            <YAxis yAxisId="left" tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={46} />
+                            <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${Math.round(v)}km` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={55} />
+                            <ReTooltip
+                              formatter={(v: number, name: string) => [
+                                name === 'Km di chuyển' ? `${Math.round(v).toLocaleString('vi-VN')} km` : `${(v / 1_000_000).toFixed(2)}M ₫`,
+                                name,
+                              ]}
+                              contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                            />
+                            <Legend wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
+                            <Area yAxisId="left" type="monotone" dataKey="fuel" stackId="cost" name="Nhiên liệu" fill="#F59E0B40" stroke="#F59E0B" strokeWidth={1.5} />
+                            <Area yAxisId="left" type="monotone" dataKey="maint" stackId="cost" name="Bảo dưỡng" fill="#38BDF840" stroke="#38BDF8" strokeWidth={1.5} />
+                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#34D39930" stroke="#34D399" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                            <Line yAxisId="left" type="monotone" dataKey="cost" name="Tổng chi phí" stroke="#F87171" strokeWidth={2} dot={{ fill: '#F87171', r: 3 }} strokeDasharray="4 2" />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Monthly Summary Cards / Bars */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {mileageAnalytics.monthlyReport.map((m) => {
@@ -2562,7 +2606,43 @@ export default function AssetDetailPage() {
 
               {/* 3. THEO NĂM (YEARLY VIEW) */}
               {odoViewMode === 'yearly' && (
-                <div className="space-y-4">
+                <div className="space-y-5">
+
+                  {/* Recharts: Yearly overview bar chart */}
+                  {mileageAnalytics.yearlyReport.length > 0 && (
+                    <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                      <p className="text-[11px] font-extrabold uppercase tracking-wider mb-3 text-cyan-400">📊 Biểu đồ Km &amp; Chi phí theo năm</p>
+                      <div style={{ height: 220 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={mileageAnalytics.yearlyReport.map(y => ({
+                              label: `${y.yearKey}`,
+                              km: y.totalKm,
+                              cost: y.totalCost,
+                              cpkm: y.costPerKm,
+                            }))}
+                            margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                            <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <YAxis yAxisId="left" tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={42} />
+                            <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${Math.round(v)}km` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={55} />
+                            <ReTooltip
+                              formatter={(v: number, name: string) => [
+                                name === 'Km di chuyển' ? `${Math.round(v).toLocaleString('vi-VN')} km` : `${(v / 1_000_000).toFixed(1)}M ₫`,
+                                name,
+                              ]}
+                              contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                            />
+                            <Legend wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
+                            <Bar yAxisId="left" dataKey="cost" name="Tổng chi phí" fill="#F59E0B80" stroke="#F59E0B" strokeWidth={1} radius={[4, 4, 0, 0]} />
+                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#34D39940" stroke="#34D399" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {mileageAnalytics.yearlyReport.map((y) => (
                       <div key={y.yearKey} className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
@@ -2592,6 +2672,7 @@ export default function AssetDetailPage() {
                   </div>
                 </div>
               )}
+
             </div>
           </div>
         )}
