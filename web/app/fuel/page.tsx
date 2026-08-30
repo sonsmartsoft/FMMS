@@ -1,4 +1,7 @@
+'use client';
+
 import React, { useEffect, useState, useMemo } from 'react';
+
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid,
   Tooltip as ReTooltip, Legend,

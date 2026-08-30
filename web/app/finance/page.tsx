@@ -1,4 +1,7 @@
+'use client';
+
 import React, { useState, useMemo, useEffect } from 'react';
+
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip as ReTooltip, Legend, PieChart, Pie, Cell,
