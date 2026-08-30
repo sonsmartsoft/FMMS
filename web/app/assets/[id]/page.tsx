@@ -3246,13 +3246,68 @@ export default function AssetDetailPage() {
                         <span>{col.label}</span>
                         <span className="text-[8px]">{isSorted ? (partSortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
                       </button>
-                                {/* 📅 Bộ lọc Đa Năng: Danh mục, Thời gian, Tìm kiếm & Sắp xếp */}
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {displayedParts.length === 0 ? (
+                <div className="p-8 text-center rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                  <Layers className="w-8 h-8 mx-auto mb-2 opacity-30" style={{ color: 'var(--accent-cyan)' }} />
+                  <p className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>Chưa có phụ tùng hay món độ nào được ghi nhận</p>
+                  <button onClick={() => { setEditingPartItem(null); setOpenModal('part'); }} className="mt-3 inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
+                    <Plus className="w-3.5 h-3.5" /><span>Thêm phụ tùng đầu tiên</span>
+                  </button>
+                </div>
+              ) : (
+                displayedParts.map((p) => (
+                  <div key={p.id} className="p-4 rounded-xl flex justify-between items-start" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                    <div>
+                      <p className="font-bold text-xs" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
+                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        {p.brand ? `${p.brand} • ` : ''}{p.category || 'Phụ tùng'} {p.install_date ? `• Lắp: ${fmtDate(p.install_date)}` : ''}
+                      </p>
+                      {p.notes && <p className="text-[10px] mt-1 p-1.5 rounded" style={{ background: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>📝 {p.notes}</p>}
+                    </div>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="font-bold text-sm text-purple-400">{fmt(p.cost || 0)} ₫</span>
+                      <button onClick={() => handleOpenEditPart(p)} className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15" title="Sửa">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDeletePart(p.id)} className="p-1 rounded text-rose-400 hover:bg-rose-500/15" title="Xóa">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ EXPENSES ═══ */}
+        {activeTab === 'expenses' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Chi phí phát sinh</h3>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Tổng: <strong style={{ color: 'var(--status-red)' }}>{fmt(totalExpenses)} ₫</strong></p>
+              </div>
+              <button onClick={() => { setEditingExp(null); setOpenModal('expense'); }} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 text-white text-xs font-bold transition hover:opacity-90">
+                <Plus className="w-3.5 h-3.5" /><span>Thêm chi phí</span>
+              </button>
+            </div>
+
+            {/* 📅 Bộ lọc Đa Năng: Danh mục, Thời gian, Tìm kiếm & Sắp xếp */}
             <div className="p-3.5 rounded-2xl space-y-3 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
               {/* Category Filter Pills */}
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-bold text-[10px] uppercase flex items-center gap-1 shrink-0" style={{ color: 'var(--accent-cyan)' }}>
                   <Filter className="w-3 h-3" /> Danh mục:
                 </span>
+
                 {[
                   { id: 'ALL', label: 'Tất cả danh mục', count: expenses.length },
                   { id: 'FUEL', label: '⛽ Nhiên liệu & Pin', count: expenses.filter(e => ['FUEL', 'RUNNING'].includes((e.category || '').toUpperCase())).length },
