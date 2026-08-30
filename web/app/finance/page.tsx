@@ -200,11 +200,17 @@ export default function FinancePage() {
 
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [hiddenFinKeys, setHiddenFinKeys] = useState<string[]>([]);
   const [expenseSortCol, setExpenseSortCol] = useState<string>('date');
   const [expenseSortDir, setExpenseSortDir] = useState<'asc' | 'desc'>('desc');
   const [loanSortCol, setLoanSortCol] = useState<string>('payment_number');
   const [loanSortDir, setLoanSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const toggleFinKey = (key: string) => {
+    setHiddenFinKeys(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
 
   const filteredExpenses = useMemo(() => {
     let list = expenses;
@@ -217,15 +223,16 @@ export default function FinancePage() {
     if (endDate) {
       list = list.filter(e => e.date && e.date.slice(0, 10) <= endDate);
     }
-    if (selectedCategory && selectedCategory !== 'ALL') {
+    if (hiddenFinKeys.length > 0) {
       list = list.filter(e => {
         const cat = (e.category || '').toUpperCase();
-        if (selectedCategory === 'FUEL' || selectedCategory === 'RUNNING') return cat === 'FUEL' || cat === 'RUNNING';
-        if (selectedCategory === 'MAINTENANCE') return cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR';
-        if (selectedCategory === 'UPGRADE') return cat === 'UPGRADE';
-        if (selectedCategory === 'INSURANCE') return cat === 'INSURANCE' || cat === 'INITIAL' || cat === 'REGISTRATION';
-        if (selectedCategory === 'LOAN') return cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST';
-        return cat === selectedCategory;
+        if (hiddenFinKeys.includes('fuel') && (cat === 'FUEL' || cat === 'RUNNING')) return false;
+        if (hiddenFinKeys.includes('maint') && (cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR')) return false;
+        if (hiddenFinKeys.includes('upgrade') && cat === 'UPGRADE') return false;
+        if (hiddenFinKeys.includes('ins') && (cat === 'INSURANCE' || cat === 'INITIAL' || cat === 'REGISTRATION')) return false;
+        if (hiddenFinKeys.includes('loan') && (cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST')) return false;
+        if (hiddenFinKeys.includes('other') && !['FUEL', 'RUNNING', 'MAINTENANCE', 'PARTS', 'LABOR', 'UPGRADE', 'INSURANCE', 'INITIAL', 'REGISTRATION', 'LOAN', 'LOAN_PAYMENT', 'LOAN_INTEREST'].includes(cat)) return false;
+        return true;
       });
     }
 
@@ -243,7 +250,8 @@ export default function FinancePage() {
         ? String(valA).localeCompare(String(valB), 'vi')
         : String(valB).localeCompare(String(valA), 'vi');
     });
-  }, [expenses, selectedAssetId, startDate, endDate, selectedCategory, expenseSortCol, expenseSortDir, assets]);
+  }, [expenses, selectedAssetId, startDate, endDate, hiddenFinKeys, expenseSortCol, expenseSortDir, assets]);
+
 
 
   const filteredLoans = useMemo(() => {
@@ -964,110 +972,78 @@ export default function FinancePage() {
       {/* ─── EXPENSES ─── */}
       {activeSection === 'expenses' && (
         <>
-          {/* 📅 Date Range & Category Filter Toolbar */}
-          <div className="p-3.5 rounded-2xl space-y-2.5 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-            {/* Category Filter Pills */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-bold text-[10px] uppercase flex items-center gap-1 shrink-0" style={{ color: 'var(--accent-cyan)' }}>
-                <Filter className="w-3 h-3" /> Danh mục:
+          {/* 📅 Date Range Filter Toolbar */}
+          <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2.5 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+            <div className="flex items-center space-x-2 flex-wrap gap-2">
+              <span className="font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 text-amber-500">
+                <Calendar className="w-3 h-3" /> Thời gian:
               </span>
-              {[
-                { id: 'ALL', label: 'Tất cả' },
-                { id: 'FUEL', label: '⛽ Nhiên liệu' },
-                { id: 'MAINTENANCE', label: '🔧 Bảo dưỡng' },
-                { id: 'UPGRADE', label: '⚡ Nâng cấp' },
-                { id: 'INSURANCE', label: '🛡️ Bảo hiểm' },
-                { id: 'LOAN', label: '💳 Khoản vay' },
-                { id: 'OTHER', label: '🏷️ Khác' },
-              ].map(c => {
-                const active = selectedCategory === c.id;
-                return (
-                  <button
-                    key={c.id}
-                    onClick={() => setSelectedCategory(c.id)}
-                    className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold transition ${
-                      active ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300'
-                    }`}
-                    style={!active ? { background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' } : {}}
-                  >
-                    {c.label}
-                  </button>
-                );
-              })}
+              <div className="flex items-center space-x-1">
+                {[
+                  { label: 'Tất cả', start: '', end: '' },
+                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
+                  {
+                    label: 'Tháng này',
+                    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
+                    end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10),
+                  },
+                  {
+                    label: 'Tháng trước',
+                    start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10),
+                    end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10),
+                  },
+                  {
+                    label: 'Năm nay',
+                    start: `${new Date().getFullYear()}-01-01`,
+                    end: `${new Date().getFullYear()}-12-31`,
+                  },
+                ].map(preset => {
+                  const isActive = startDate === preset.start && endDate === preset.end;
+                  return (
+                    <button
+                      key={preset.label}
+                      onClick={() => { setStartDate(preset.start); setEndDate(preset.end); }}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition ${
+                        isActive ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300'
+                      }`}
+                      style={!isActive ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center space-x-2 flex-wrap gap-2">
-                <span className="font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 text-amber-500">
-                  <Calendar className="w-3 h-3" /> Thời gian:
-                </span>
-                <div className="flex items-center space-x-1">
-                  {[
-                    { label: 'Tất cả', start: '', end: '' },
-                    { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
-                    {
-                      label: 'Tháng này',
-                      start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
-                      end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10),
-                    },
-                    {
-                      label: 'Tháng trước',
-                      start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10),
-                      end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10),
-                    },
-                    {
-                      label: 'Năm nay',
-                      start: `${new Date().getFullYear()}-01-01`,
-                      end: `${new Date().getFullYear()}-12-31`,
-                    },
-                  ].map(preset => {
-                    const isActive = startDate === preset.start && endDate === preset.end;
-                    return (
-                      <button
-                        key={preset.label}
-                        onClick={() => { setStartDate(preset.start); setEndDate(preset.end); }}
-                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition ${
-                          isActive ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-white/10'
-                        }`}
-                        style={!isActive ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}
-                      >
-                        {preset.label}
-                      </button>
-                    );
-                  })}
-                </div>
+            <div className="flex items-center space-x-2 flex-wrap gap-2">
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Từ:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  className="theme-input text-[11px] py-0.5 px-2 font-mono rounded-lg"
+                  style={{ width: '120px' }}
+                />
               </div>
-
-              <div className="flex items-center space-x-2 flex-wrap gap-2">
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Từ:</span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={e => setStartDate(e.target.value)}
-                    className="theme-input text-[11px] py-0.5 px-2 font-mono rounded-lg"
-                    style={{ width: '120px' }}
-                  />
-                </div>
-                <div className="flex items-center space-x-1.5">
-                  <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Đến:</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={e => setEndDate(e.target.value)}
-                    className="theme-input text-[11px] py-0.5 px-2 font-mono rounded-lg"
-                    style={{ width: '120px' }}
-                  />
-                </div>
-                {(startDate || endDate || selectedCategory !== 'ALL') && (
-                  <button
-                    onClick={() => { setStartDate(''); setEndDate(''); setSelectedCategory('ALL'); }}
-                    className="text-[10px] font-bold text-rose-400 hover:underline px-1.5 py-0.5"
-                  >
-                    ✕ Xóa lọc
-                  </button>
-                )}
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Đến:</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                  className="theme-input text-[11px] py-0.5 px-2 font-mono rounded-lg"
+                  style={{ width: '120px' }}
+                />
               </div>
+              {(startDate || endDate || hiddenFinKeys.length > 0) && (
+                <button
+                  onClick={() => { setStartDate(''); setEndDate(''); setHiddenFinKeys([]); }}
+                  className="text-[10px] font-bold text-rose-400 hover:underline px-1.5 py-0.5"
+                >
+                  ✕ Xóa lọc
+                </button>
+              )}
             </div>
           </div>
 
@@ -1086,74 +1062,132 @@ export default function FinancePage() {
           </div>
 
           {/* 📊 Biểu Đồ Chi Phí Theo Tháng & Cơ Cấu Danh Mục */}
-          {filteredExpenses.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Stacked Bar Chart */}
-              <div className="lg:col-span-2 p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
-                      <BarChart3 className="w-4 h-4" />
+          {filteredExpenses.length > 0 && (() => {
+            const seriesDefs = [
+              { key: 'fuel', name: 'Nhiên liệu & Pin', color: '#F59E0B', grad: 'finFuel' },
+              { key: 'maint', name: 'Bảo dưỡng & Phụ tùng', color: '#06B6D4', grad: 'finMaint' },
+              { key: 'upgrade', name: 'Nâng cấp & Đồ chơi', color: '#8B5CF6', grad: 'finUpgrade' },
+              { key: 'ins', name: 'Bảo hiểm & Giấy tờ', color: '#10B981', grad: 'finIns' },
+              { key: 'loan', name: 'Khoản vay & Lãi', color: '#EC4899', grad: 'finLoan' },
+              { key: 'other', name: 'Khác', color: '#64748B', grad: 'finOther' },
+            ];
+
+            return (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Stacked Area Chart with Clickable Legend */}
+                <div className="lg:col-span-2 p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                        <BarChart3 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-extrabold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                          <span>Biến Động Chi Phí Theo Tháng</span>
+                          <span className="text-[9px] font-normal text-slate-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full lowercase">
+                            (Bấm vào chú thích để bật/tắt danh mục)
+                          </span>
+                        </h3>
+                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          Phân bổ theo các nhóm chi phí chính qua từng tháng
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
-                        Biến Động Chi Phí Theo Tháng
-                      </h3>
-                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                        Phân bổ theo các nhóm chi phí chính qua từng tháng
-                      </p>
-                    </div>
+                    <span className="text-[10px] font-mono text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
                   </div>
-                  <span className="text-[10px] font-mono text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
+
+                  <div style={{ height: 260 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={monthlyExpensesData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                        <defs>
+                          <linearGradient id="finFuel" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="finMaint" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="finUpgrade" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="finIns" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10B981" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#10B981" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="finLoan" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#EC4899" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#EC4899" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="finOther" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#64748B" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#64748B" stopOpacity={0.08}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                        <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} />
+                        <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={45} />
+                        <ReTooltip
+                          formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]}
+                          contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
+                        />
+
+                        {/* Interactive Clickable Legend */}
+                        <Legend
+                          content={() => (
+                            <div className="flex flex-wrap items-center justify-center gap-1.5 pt-3">
+                              {seriesDefs.map(item => {
+                                const isHidden = hiddenFinKeys.includes(item.key);
+                                return (
+                                  <button
+                                    key={item.key}
+                                    type="button"
+                                    onClick={() => toggleFinKey(item.key)}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all cursor-pointer select-none ${
+                                      isHidden
+                                        ? 'opacity-35 line-through bg-slate-100 dark:bg-slate-800 text-slate-400 border border-dashed border-slate-400/40'
+                                        : 'hover:scale-105 bg-slate-100 dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 shadow-sm border'
+                                    }`}
+                                    style={!isHidden ? { borderColor: `${item.color}50` } : {}}
+                                    title={isHidden ? `Bấm để BẬT ${item.name}` : `Bấm để TẮT ${item.name}`}
+                                  >
+                                    <span
+                                      className="w-2.5 h-2.5 rounded-full shrink-0 transition-transform"
+                                      style={{
+                                        backgroundColor: item.color,
+                                        boxShadow: isHidden ? 'none' : `0 0 6px ${item.color}80`,
+                                        opacity: isHidden ? 0.4 : 1,
+                                      }}
+                                    />
+                                    <span>{item.name}</span>
+                                  </button>
+                                );
+                              })}
+                              {hiddenFinKeys.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setHiddenFinKeys([])}
+                                  className="text-[10px] font-bold text-cyan-500 hover:underline px-2 py-1 ml-1"
+                                >
+                                  Bật tất cả
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        />
+
+                        <Area type="monotone" dataKey="fuel" stackId="exp" name="Nhiên liệu & Pin" stroke="#F59E0B" fill="url(#finFuel)" strokeWidth={1.5} hide={hiddenFinKeys.includes('fuel')} />
+                        <Area type="monotone" dataKey="maint" stackId="exp" name="Bảo dưỡng & Phụ tùng" stroke="#06B6D4" fill="url(#finMaint)" strokeWidth={1.5} hide={hiddenFinKeys.includes('maint')} />
+                        <Area type="monotone" dataKey="upgrade" stackId="exp" name="Nâng cấp & Đồ chơi" stroke="#8B5CF6" fill="url(#finUpgrade)" strokeWidth={1.5} hide={hiddenFinKeys.includes('upgrade')} />
+                        <Area type="monotone" dataKey="ins" stackId="exp" name="Bảo hiểm & Giấy tờ" stroke="#10B981" fill="url(#finIns)" strokeWidth={1.5} hide={hiddenFinKeys.includes('ins')} />
+                        <Area type="monotone" dataKey="loan" stackId="exp" name="Khoản vay & Lãi" stroke="#EC4899" fill="url(#finLoan)" strokeWidth={1.5} hide={hiddenFinKeys.includes('loan')} />
+                        <Area type="monotone" dataKey="other" stackId="exp" name="Khác" stroke="#64748B" fill="url(#finOther)" strokeWidth={1.5} hide={hiddenFinKeys.includes('other')} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
 
-                <div style={{ height: 260 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={monthlyExpensesData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
-                      <defs>
-                        <linearGradient id="finFuel" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.75}/>
-                          <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.08}/>
-                        </linearGradient>
-                        <linearGradient id="finMaint" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.75}/>
-                          <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.08}/>
-                        </linearGradient>
-                        <linearGradient id="finUpgrade" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.75}/>
-                          <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.08}/>
-                        </linearGradient>
-                        <linearGradient id="finIns" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.75}/>
-                          <stop offset="95%" stopColor="#10B981" stopOpacity={0.08}/>
-                        </linearGradient>
-                        <linearGradient id="finLoan" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#EC4899" stopOpacity={0.75}/>
-                          <stop offset="95%" stopColor="#EC4899" stopOpacity={0.08}/>
-                        </linearGradient>
-                        <linearGradient id="finOther" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#64748B" stopOpacity={0.75}/>
-                          <stop offset="95%" stopColor="#64748B" stopOpacity={0.08}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                      <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} />
-                      <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={45} />
-                      <ReTooltip
-                        formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]}
-                        contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
-                      />
-                      <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
-                      <Area type="monotone" dataKey="fuel" stackId="exp" name="Nhiên liệu" stroke="#F59E0B" fill="url(#finFuel)" strokeWidth={1.5} />
-                      <Area type="monotone" dataKey="maint" stackId="exp" name="Bảo dưỡng" stroke="#06B6D4" fill="url(#finMaint)" strokeWidth={1.5} />
-                      <Area type="monotone" dataKey="upgrade" stackId="exp" name="Nâng cấp" stroke="#8B5CF6" fill="url(#finUpgrade)" strokeWidth={1.5} />
-                      <Area type="monotone" dataKey="ins" stackId="exp" name="Bảo hiểm/Giấy tờ" stroke="#10B981" fill="url(#finIns)" strokeWidth={1.5} />
-                      <Area type="monotone" dataKey="loan" stackId="exp" name="Khoản vay" stroke="#EC4899" fill="url(#finLoan)" strokeWidth={1.5} />
-                      <Area type="monotone" dataKey="other" stackId="exp" name="Khác" stroke="#64748B" fill="url(#finOther)" strokeWidth={1.5} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
 
 
               {/* Donut Chart - Overlap-free design with center stat and clean category list */}
