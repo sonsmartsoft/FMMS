@@ -1,12 +1,15 @@
-'use client';
-
 import React, { useEffect, useState, useMemo } from 'react';
+import {
+  ResponsiveContainer, ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip as ReTooltip, Legend,
+} from 'recharts';
 import Link from 'next/link';
 import { getAssets } from '@/lib/services/assetService';
 import { getFuelLogs, createFuelLog, updateFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
 import { Asset } from '@/types/mobility';
-import { Fuel, Zap, TrendingDown, Plus, X, Pencil, Trash2, Check } from 'lucide-react';
+import { Fuel, Zap, TrendingDown, Plus, X, Pencil, Trash2, Check, BarChart3 } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
+
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => {
@@ -96,8 +99,46 @@ export default function FuelPage() {
     });
   }, [filteredLogs, assets, sortCol, sortDir]);
 
+  const monthlyFuelData = useMemo(() => {
+    const map = new Map<string, { month: string; liters: number; cost: number; count: number; prices: number[] }>();
+    
+    filteredLogs.forEach(l => {
+      const d = l.date || l.timestamp || '';
+      if (!d) return;
+      const mKey = d.slice(0, 7); // YYYY-MM
+      const liters = parseFloat(l.fuel_liters ?? l.liters ?? 0) || 0;
+      const price = parseFloat(l.price_per_liter ?? 0) || 0;
+      const cost = l.total_cost != null ? Number(l.total_cost) : (liters * price);
+
+      const prev = map.get(mKey) || { month: mKey, liters: 0, cost: 0, count: 0, prices: [] };
+      prev.liters += liters;
+      prev.cost += cost;
+      prev.count += 1;
+      if (price > 0) prev.prices.push(price);
+      map.set(mKey, prev);
+    });
+
+    const sortedKeys = Array.from(map.keys()).sort();
+    return sortedKeys.map(k => {
+      const item = map.get(k)!;
+      const avgPrice = item.liters > 0 
+        ? Math.round(item.cost / item.liters) 
+        : (item.prices.length > 0 ? Math.round(item.prices.reduce((a, b) => a + b, 0) / item.prices.length) : 0);
+      const [y, m] = k.split('-');
+      return {
+        key: k,
+        label: `T${parseInt(m)}/${y.slice(2)}`,
+        liters: Math.round(item.liters * 10) / 10,
+        cost: item.cost,
+        avgPrice: avgPrice,
+        count: item.count,
+      };
+    });
+  }, [filteredLogs]);
+
   const totalFuel = filteredLogs.reduce((s, f) => s + (f.total_cost || (parseFloat(f.fuel_liters ?? f.liters) * parseFloat(f.price_per_liter))), 0);
   const totalLiters = filteredLogs.reduce((s, f) => s + parseFloat(f.fuel_liters ?? f.liters ?? 0), 0);
+
 
   const sorted = [...filteredLogs].sort((x, y) => new Date(x.date ?? x.timestamp).getTime() - new Date(y.date ?? y.timestamp).getTime());
   let accKm = 0, accL = 0;
@@ -299,6 +340,70 @@ export default function FuelPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* 📊 BIỂU ĐỒ THEO DÕI NHIÊN LIỆU THEO THÁNG */}
+      {monthlyFuelData.length > 0 && (
+        <div className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
+                <Fuel className="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
+                  Biểu Đồ Nhiên Liệu &amp; Đơn Giá Trung Bình Theo Tháng
+                </h3>
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Cột: Tổng Lít (hoặc kWh) • Cột: Tổng Tiền (₫) • Đường: Đơn Giá TB (₫/L hoặc ₫/kWh)
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Tổng chi kỳ này: </span>
+              <strong className="text-xs text-amber-400 font-mono">{fmt(totalFuel)} ₫</strong>
+            </div>
+          </div>
+
+          <div style={{ height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={monthlyFuelData} margin={{ top: 10, right: 20, left: -5, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis
+                  yAxisId="cost"
+                  tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={45}
+                />
+                <YAxis
+                  yAxisId="liters"
+                  orientation="right"
+                  tickFormatter={v => v > 0 ? `${Math.round(v)}L` : '0'}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={45}
+                />
+                <ReTooltip
+                  formatter={(v: number, name: string) => {
+                    if (name === 'Tổng tiền') return [`${fmt(v)} ₫`, name];
+                    if (name === 'Số lượng (L/kWh)') return [`${v} L`, name];
+                    if (name === 'Đơn giá TB') return [`${fmt(v)} ₫/L`, name];
+                    return [v, name];
+                  }}
+                  contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                <Bar yAxisId="cost" dataKey="cost" name="Tổng tiền" fill="rgba(245,158,11,0.4)" stroke="#F59E0B" strokeWidth={1} radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="liters" dataKey="liters" name="Số lượng (L/kWh)" fill="rgba(14,165,233,0.3)" stroke="#0EA5E9" strokeWidth={1} radius={[4, 4, 0, 0]} />
+                <Line yAxisId="cost" type="monotone" dataKey="avgPrice" name="Đơn giá TB" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981', r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
 

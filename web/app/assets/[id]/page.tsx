@@ -3,8 +3,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip as ReTooltip, Legend, BarChart, AreaChart,
+  Tooltip as ReTooltip, Legend, BarChart, AreaChart, PieChart, Pie, Cell,
 } from 'recharts';
+
 
 import { useParams, useRouter } from 'next/navigation';
 import { Asset, ExpenseRecord, MaintenanceRecord, TripRecord, LoanRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
@@ -2388,8 +2389,69 @@ export default function AssetDetailPage() {
 
               {/* 1. THEO NGÀY (DAILY VIEW) */}
               {odoViewMode === 'daily' && (
-                <div className="space-y-3">
+                <div className="space-y-4">
+                  {/* Daily Km Recharts */}
+                  {mileageAnalytics.dailyReport.length > 0 && (
+                    <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-400">
+                          📊 Biểu đồ Quãng đường Di chuyển Theo Ngày
+                        </p>
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          Hiển thị {Math.min(20, mileageAnalytics.dailyReport.length)} ngày gần nhất
+                        </span>
+                      </div>
+                      <div style={{ height: 200 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart
+                            data={[...mileageAnalytics.dailyReport]
+                              .slice(0, 20)
+                              .reverse()
+                              .map(d => ({
+                                date: d.date ? `${d.date.slice(8, 10)}/${d.date.slice(5, 7)}` : '',
+                                km: d.kmRun,
+                                odo: d.displayOdo,
+                              }))}
+                            margin={{ top: 5, right: 15, left: -10, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                            <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                            <YAxis
+                              yAxisId="km"
+                              tickFormatter={v => `${v}km`}
+                              tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
+                              axisLine={false}
+                              tickLine={false}
+                              width={45}
+                            />
+                            <YAxis
+                              yAxisId="odo"
+                              orientation="right"
+                              domain={['auto', 'auto']}
+                              tickFormatter={v => `${Math.round(v)}`}
+                              tick={{ fill: 'var(--text-muted)', fontSize: 9 }}
+                              axisLine={false}
+                              tickLine={false}
+                              width={50}
+                            />
+                            <ReTooltip
+                              formatter={(v: number, name: string) => [
+                                name === 'Km chạy' ? `+${fmt(v)} km` : `${fmt(v)} km`,
+                                name,
+                              ]}
+                              contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                            />
+                            <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+                            <Bar yAxisId="km" dataKey="km" name="Km chạy" fill="rgba(14,165,233,0.4)" stroke="#0EA5E9" strokeWidth={1} radius={[4, 4, 0, 0]} />
+                            <Line yAxisId="odo" type="monotone" dataKey="odo" name="Mốc ODO" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981', r: 2.5 }} />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="overflow-x-auto rounded-2xl max-h-[500px] overflow-y-auto" style={{ border: '1px solid var(--border-default)' }}>
+
                     <table className="w-full text-xs">
                       <thead className="sticky top-0 z-10">
                         <tr style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-default)' }}>
@@ -3234,7 +3296,71 @@ export default function AssetDetailPage() {
               </div>
             </div>
 
+            {/* 📊 Stacked Bar Chart Chi Phí Theo Tháng */}
+            {expenses.length > 0 && (() => {
+              const map = new Map<string, any>();
+              expenses.forEach(e => {
+                const d = e.date || '';
+                if (!d) return;
+                const mKey = d.slice(0, 7);
+                const cat = (e.category || 'Other').toUpperCase();
+                const prev = map.get(mKey) || {
+                  monthKey: mKey,
+                  label: `T${parseInt(mKey.slice(5))}/${mKey.slice(2, 4)}`,
+                  fuel: 0,
+                  maint: 0,
+                  upgrade: 0,
+                  ins: 0,
+                  loan: 0,
+                  other: 0,
+                  total: 0,
+                };
+                const amt = e.amount || 0;
+                if (cat === 'FUEL' || cat === 'RUNNING') prev.fuel += amt;
+                else if (cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR') prev.maint += amt;
+                else if (cat === 'UPGRADE') prev.upgrade += amt;
+                else if (cat === 'INSURANCE' || cat === 'INITIAL' || cat === 'REGISTRATION') prev.ins += amt;
+                else if (cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST') prev.loan += amt;
+                else prev.other += amt;
+                prev.total += amt;
+                map.set(mKey, prev);
+              });
+              const chartData = Array.from(map.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+              if (chartData.length === 0) return null;
+              return (
+                <div className="p-4 rounded-2xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-400">
+                      📊 Biểu Đồ Cột Chồng Chi Phí Theo Tháng (Theo Danh Mục Lớn)
+                    </p>
+                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị: Triệu ₫ (M)</span>
+                  </div>
+                  <div style={{ height: 230 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                        <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                        <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={45} />
+                        <ReTooltip
+                          formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]}
+                          contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+                        <Bar dataKey="fuel" stackId="exp" name="Nhiên liệu" fill="#F59E0B" />
+                        <Bar dataKey="maint" stackId="exp" name="Bảo dưỡng" fill="#38BDF8" />
+                        <Bar dataKey="upgrade" stackId="exp" name="Đồ độ / Nâng cấp" fill="#A78BFA" />
+                        <Bar dataKey="ins" stackId="exp" name="Bảo hiểm / Giấy tờ" fill="#34D399" />
+                        <Bar dataKey="loan" stackId="exp" name="Khoản vay" fill="#EC4899" />
+                        <Bar dataKey="other" stackId="exp" name="Chi phí khác" fill="#64748B" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="space-y-2">
+
               {displayedExpenses.map((e) => (
                 <div key={e.id} className="p-3.5 rounded-xl flex items-center justify-between text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <div className="flex items-center space-x-3">
@@ -3684,60 +3810,143 @@ export default function AssetDetailPage() {
           </div>
         )}
 
-        {/* ═══ ANALYTICS ═══ */}
-        {activeTab === 'analytics' && (
-          <div className="space-y-5">
-            <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Phân tích TCO — Total Cost of Ownership</h3>
+        {/* ═══ ANALYTICS (PHÂN TÍCH TCO) ═══ */}
+        {activeTab === 'analytics' && (() => {
+          const upgradeCost = expenses.filter(e => (e.category || '').toUpperCase() === 'UPGRADE' || (e.subcategory || '').toUpperCase().includes('ACCESSORIE')).reduce((s, e) => s + e.amount, 0);
+          const loanCost = expenses.filter(e => (e.category || '').toUpperCase().includes('LOAN')).reduce((s, e) => s + e.amount, 0);
+          const otherCost = Math.max(0, totalExpenses - totalFuelCost - totalMaintCost - totalInsurance - upgradeCost - loanCost);
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-center">
-              {[
-                { label: 'Tổng chi phí vận hành', value: `${(totalExpenses / 1000000).toFixed(1)}M ₫`, color: 'var(--status-red)' },
-                { label: 'Chi phí / km', value: `${costPerKm.toFixed(0)} ₫/km`, color: 'var(--accent-cyan)' },
-                { label: 'Khấu hao', value: `${(depreciation / 1000000).toFixed(1)}M ₫`, color: 'var(--status-amber)' },
-                { label: 'TCO toàn bộ', value: `${(totalTCO / 1000000).toFixed(0)}M ₫`, color: 'var(--status-purple)' },
-              ].map((s, i) => (
-                <div key={i} className="p-4 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <p className="text-base font-extrabold" style={{ color: s.color }}>{s.value}</p>
-                  <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
+          const tcoDonutData = [
+            { name: 'Khấu hao xe', value: Math.max(0, depreciation), color: '#F59E0B' },
+            { name: 'Nhiên liệu', value: totalFuelCost, color: '#EF4444' },
+            { name: 'Bảo dưỡng & PT', value: totalMaintCost, color: '#0EA5E9' },
+            { name: 'Bảo hiểm', value: totalInsurance, color: '#8B5CF6' },
+            { name: 'Nâng cấp / Đồ độ', value: upgradeCost, color: '#A78BFA' },
+            { name: 'Chi phí vay', value: loanCost, color: '#EC4899' },
+            { name: 'Chi phí khác', value: otherCost, color: '#64748B' },
+          ].filter(d => d.value > 0);
+
+          return (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Phân tích TCO — Total Cost of Ownership</h3>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Tổng chi phí sở hữu thực tế (Bao gồm khấu hao xe &amp; toàn bộ chi phí vận hành)</p>
                 </div>
-              ))}
-            </div>
+              </div>
 
-            <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--border-default)' }}>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
-                    {['Hạng mục chi phí', 'Tổng chi tiêu', '% Tổng', 'TB/tháng'].map(h => (
-                      <th key={h} className="text-left px-3 py-2.5 font-semibold uppercase text-[10px] tracking-wide" style={{ color: 'var(--text-muted)' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { name: 'Nhiên liệu (Xăng)', total: totalFuelCost, color: 'var(--status-amber)' },
-                    { name: 'Bảo dưỡng định kỳ', total: totalMaintCost, color: 'var(--accent-cyan)' },
-                    { name: 'Bảo hiểm', total: totalInsurance, color: 'var(--status-purple)' },
-                    { name: 'Chi phí khác', total: totalExpenses - totalFuelCost - totalMaintCost - totalInsurance, color: 'var(--text-muted)' },
-                  ].map((row, i) => {
-                    const pct = totalExpenses > 0 ? ((row.total / totalExpenses) * 100).toFixed(1) : '0';
-                    const months = 7; // approx months since purchase
-                    return (
-                      <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
-                        <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--text-secondary)' }}>
-                          <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ background: row.color }} />
-                          {row.name}
-                        </td>
-                        <td className="px-3 py-2.5 font-bold" style={{ color: row.color }}>{fmt(row.total)} ₫</td>
-                        <td className="px-3 py-2.5" style={{ color: 'var(--text-muted)' }}>{pct}%</td>
-                        <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)' }}>{fmt(Math.round(row.total / months))} ₫</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              {/* KPI Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-center">
+                {[
+                  { label: 'Tổng chi phí vận hành', value: `${(totalExpenses / 1000000).toFixed(1)}M ₫`, color: 'var(--status-red)' },
+                  { label: 'Chi phí / km', value: `${costPerKm.toFixed(0)} ₫/km`, color: 'var(--accent-cyan)' },
+                  { label: 'Khấu hao xe', value: `${(depreciation / 1000000).toFixed(1)}M ₫`, color: 'var(--status-amber)' },
+                  { label: 'TCO toàn bộ', value: `${(totalTCO / 1000000).toFixed(1)}M ₫`, color: 'var(--status-purple)' },
+                ].map((s, i) => (
+                  <div key={i} className="p-4 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                    <p className="text-base font-extrabold" style={{ color: s.color }}>{s.value}</p>
+                    <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* 📊 Biểu Đồ Trực Quan TCO */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Donut Chart */}
+                <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-400">📊 Cơ cấu TCO (Tổng chi phí sở hữu)</p>
+                  {tcoDonutData.length > 0 ? (
+                    <div style={{ height: 230 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={tcoDonutData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
+                            {tcoDonutData.map((entry, index) => (
+                              <Cell key={index} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
+                          <Legend formatter={v => <span style={{ color: 'var(--text-secondary)', fontSize: 10 }}>{v}</span>} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-center py-10" style={{ color: 'var(--text-muted)' }}>Chưa có đủ dữ liệu</p>
+                  )}
+                </div>
+
+                {/* Horizontal Bar Chart: So sánh Giá trị xe vs Chi phí phát sinh */}
+                <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                  <p className="text-xs font-bold uppercase tracking-wider text-cyan-400">📊 Giá trị mua xe vs Chi phí đã bỏ ra</p>
+                  <div style={{ height: 230 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[
+                          { name: 'Giá mua ban đầu', amount: asset.purchase_price || 0, fill: '#34D399' },
+                          { name: 'Giá trị ước tính hiện tại', amount: asset.current_value || 0, fill: '#10B981' },
+                          { name: 'Khấu hao tích lũy', amount: Math.max(0, depreciation), fill: '#F59E0B' },
+                          { name: 'Tổng chi phí vận hành', amount: totalExpenses, fill: '#EF4444' },
+                        ]}
+                        layout="vertical"
+                        margin={{ top: 5, right: 15, left: 10, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                        <XAxis type="number" tickFormatter={v => `${(v / 1_000_000).toFixed(0)}M`} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                        <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
+                        <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
+                        <Bar dataKey="amount" name="Số tiền" radius={[0, 4, 4, 0]}>
+                          {[
+                            <Cell key="0" fill="#34D399" />,
+                            <Cell key="1" fill="#0EA5E9" />,
+                            <Cell key="2" fill="#F59E0B" />,
+                            <Cell key="3" fill="#EF4444" />,
+                          ]}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {/* Chi tiết từng hạng mục */}
+              <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
+                      {['Hạng mục chi phí', 'Tổng chi tiêu', '% Chi phí VH', '% Trên giá xe'].map(h => (
+                        <th key={h} className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { name: 'Nhiên liệu (Xăng / Điện)', total: totalFuelCost, color: '#EF4444' },
+                      { name: 'Bảo dưỡng & Phụ tùng', total: totalMaintCost, color: '#0EA5E9' },
+                      { name: 'Bảo hiểm & Giấy tờ', total: totalInsurance, color: '#8B5CF6' },
+                      { name: 'Nâng cấp / Đồ độ xe', total: upgradeCost, color: '#A78BFA' },
+                      { name: 'Chi phí khoản vay', total: loanCost, color: '#EC4899' },
+                      { name: 'Chi phí khác (Rửa xe, gửi xe, BOT...)', total: otherCost, color: '#64748B' },
+                    ].map((row, i) => {
+                      const pctVH = totalExpenses > 0 ? ((row.total / totalExpenses) * 100).toFixed(1) : '0';
+                      const pctAsset = (asset.purchase_price || 0) > 0 ? ((row.total / asset.purchase_price) * 100).toFixed(1) : '0';
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
+                          <td className="px-3.5 py-2.5 font-medium" style={{ color: 'var(--text-secondary)' }}>
+                            <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ background: row.color }} />
+                            {row.name}
+                          </td>
+                          <td className="px-3.5 py-2.5 font-bold font-mono" style={{ color: row.color }}>{fmt(row.total)} ₫</td>
+                          <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--text-muted)' }}>{pctVH}%</td>
+                          <td className="px-3.5 py-2.5 font-mono font-semibold" style={{ color: 'var(--accent-cyan)' }}>{pctAsset}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
+
       </div>
 
       {/* ═══════════════════════════════════════════

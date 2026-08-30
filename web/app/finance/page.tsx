@@ -1,13 +1,16 @@
-'use client';
-
 import React, { useState, useMemo, useEffect } from 'react';
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip as ReTooltip, Legend, PieChart, Pie, Cell,
+} from 'recharts';
 import { getAssets } from '@/lib/services/assetService';
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import { getLoans, getLoanPayments, createLoan, createLoanPayment, updateLoan, LoanRow, LoanPaymentRow } from '@/lib/services/loanService';
 import { ExpenseRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
-import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2, Pencil } from 'lucide-react';
+import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2, Pencil, BarChart3, PieChart as PieIcon } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
+
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
@@ -313,6 +316,46 @@ export default function FinancePage() {
       .filter(b => b.total > 0)
       .sort((a, b) => b.total - a.total);
   }, [filteredExpenses, taxMap]);
+
+  const monthlyExpensesData = useMemo(() => {
+    const map = new Map<string, any>();
+    filteredExpenses.forEach(e => {
+      const d = e.date || '';
+      if (!d) return;
+      const mKey = d.slice(0, 7);
+      const cat = (e.category || 'Other').toUpperCase();
+      const prev = map.get(mKey) || {
+        monthKey: mKey,
+        label: `T${parseInt(mKey.slice(5))}/${mKey.slice(2, 4)}`,
+        fuel: 0,
+        maint: 0,
+        upgrade: 0,
+        ins: 0,
+        loan: 0,
+        other: 0,
+        total: 0,
+      };
+      const amt = e.amount || 0;
+      if (cat === 'FUEL' || cat === 'RUNNING') prev.fuel += amt;
+      else if (cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR') prev.maint += amt;
+      else if (cat === 'UPGRADE') prev.upgrade += amt;
+      else if (cat === 'INSURANCE' || cat === 'INITIAL' || cat === 'REGISTRATION') prev.ins += amt;
+      else if (cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST') prev.loan += amt;
+      else prev.other += amt;
+      prev.total += amt;
+      map.set(mKey, prev);
+    });
+    return Array.from(map.values()).sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+  }, [filteredExpenses]);
+
+  const expensePieData = useMemo(() => {
+    return breakdown.map(b => ({
+      name: b.label,
+      value: b.total,
+      color: b.color,
+    }));
+  }, [breakdown]);
+
 
   const openEdit = (e: ExpenseRecord) => {
     setEditId(e.id);
@@ -997,7 +1040,85 @@ export default function FinancePage() {
             ))}
           </div>
 
+          {/* 📊 Biểu Đồ Chi Phí Theo Tháng & Cơ Cấu Danh Mục */}
+          {filteredExpenses.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Stacked Bar Chart */}
+              <div className="lg:col-span-2 p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                      <BarChart3 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
+                        Biến Động Chi Phí Theo Tháng (Cột Chồng)
+                      </h3>
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        Phân lớp theo các nhóm chi phí chính qua từng tháng
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
+                </div>
+
+                <div style={{ height: 240 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlyExpensesData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                      <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={45} />
+                      <ReTooltip
+                        formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]}
+                        contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+                      <Bar dataKey="fuel" stackId="exp" name="Nhiên liệu" fill="#F59E0B" />
+                      <Bar dataKey="maint" stackId="exp" name="Bảo dưỡng" fill="#38BDF8" />
+                      <Bar dataKey="upgrade" stackId="exp" name="Nâng cấp" fill="#A78BFA" />
+                      <Bar dataKey="ins" stackId="exp" name="Bảo hiểm/Giấy tờ" fill="#34D399" />
+                      <Bar dataKey="loan" stackId="exp" name="Khoản vay" fill="#EC4899" />
+                      <Bar dataKey="other" stackId="exp" name="Khác" fill="#64748B" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Donut Chart */}
+              <div className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    <PieIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
+                      Tỷ Trọng Danh Mục
+                    </h3>
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      Tổng: {fmt(totalExpenses)} ₫
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{ height: 240 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={expensePieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
+                        {expensePieData.map((entry, index) => (
+                          <Cell key={index} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
+                      <Legend formatter={v => <span style={{ color: 'var(--text-secondary)', fontSize: 10 }}>{v}</span>} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
+
             <table className="w-full text-xs">
               <thead>
                 <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
@@ -1161,8 +1282,102 @@ export default function FinancePage() {
                 );
               })()}
 
+              {/* 📊 THANH TIẾN ĐỘ TRẢ NỢ VÀ DƯ NỢ TỔNG HỢP */}
+              {(() => {
+                const princ = selectedLoan.principal || 0;
+                const bal = selectedLoan.current_balance || 0;
+                const paidP = Math.max(0, princ - bal);
+                const progressPct = princ > 0 ? Math.min(100, Math.max(0, (paidP / princ) * 100)).toFixed(1) : '0';
+                const totalPaidInterest = payments.filter(p => p.status === 'PAID').reduce((s, p) => s + (p.interest_paid || 0), 0);
+                const paidPeriodsCount = loanSchedule.filter(p => p.status === 'PAID').length;
+                const nextPendingPeriod = loanSchedule.find(p => p.status !== 'PAID');
+
+                return (
+                  <div className="p-5 rounded-2xl space-y-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-sm" style={{ color: 'var(--text-primary)' }}>
+                            Tiến Độ Trả Nợ &amp; Dư Nợ Khoản Vay ({selectedLoan.lender})
+                          </h4>
+                          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            Hạn thanh toán ngày {selectedLoan.payment_day || 15} hàng tháng • Lãi suất: {selectedLoan.interest_rate_percent}%/năm
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold px-3 py-1 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          Đã trả {progressPct}% gốc
+                        </span>
+                        <span className="text-xs font-bold px-3 py-1 rounded-xl bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 font-mono">
+                          {paidPeriodsCount}/{selectedLoan.term_months} kỳ
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar Visual */}
+                    <div className="space-y-1.5">
+                      <div className="h-4 rounded-full overflow-hidden flex bg-zinc-800 p-0.5 border border-zinc-700/60 shadow-inner">
+                        <div
+                          className="h-full rounded-full transition-all duration-500 flex items-center justify-center text-[9px] font-black text-white shadow-sm"
+                          style={{
+                            width: `${progressPct}%`,
+                            background: 'linear-gradient(90deg, #10B981, #059669)',
+                          }}
+                        >
+                          {Number(progressPct) > 15 ? `${progressPct}%` : ''}
+                        </div>
+                        <div
+                          className="h-full rounded-full transition-all duration-500 opacity-60 ml-0.5"
+                          style={{
+                            width: `${100 - Number(progressPct)}%`,
+                            background: 'linear-gradient(90deg, #F59E0B, #D97706)',
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] px-1 font-semibold">
+                        <span className="flex items-center gap-1.5 text-emerald-400">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          Đã trả gốc: <strong>{fmt(paidP)} ₫</strong>
+                        </span>
+                        <span className="flex items-center gap-1.5 text-amber-400">
+                          <span className="w-2 h-2 rounded-full bg-amber-500" />
+                          Dư nợ gốc còn: <strong>{fmt(bal)} ₫</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* KPI Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                      <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Gốc vay ban đầu:</span>
+                        <p className="font-extrabold text-sm mt-0.5 font-mono" style={{ color: 'var(--text-primary)' }}>{fmt(princ)} ₫</p>
+                      </div>
+                      <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Tổng gốc đã trả:</span>
+                        <p className="font-extrabold text-sm mt-0.5 font-mono text-emerald-400">{fmt(paidP)} ₫</p>
+                      </div>
+                      <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Tổng tiền lãi đã đóng:</span>
+                        <p className="font-extrabold text-sm mt-0.5 font-mono text-rose-400">{fmt(totalPaidInterest)} ₫</p>
+                      </div>
+                      <div className="p-3.5 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Kỳ thanh toán tiếp theo:</span>
+                        <p className="font-extrabold text-xs mt-1 text-cyan-400 truncate">
+                          {nextPendingPeriod ? `Kỳ ${nextPendingPeriod.payment_number} (${fmtDate(nextPendingPeriod.due_date)})` : 'Đã hoàn tất 🎉'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* 📋 Monthly Repayment Schedule Table */}
               <div className="space-y-3 pt-2">
+
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div>
                     <h4 className="font-bold text-xs uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
