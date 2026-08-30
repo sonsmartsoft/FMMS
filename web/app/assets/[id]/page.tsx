@@ -2016,7 +2016,12 @@ export default function AssetDetailPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
               {(() => {
-                const maintDateStr = asset.next_maintenance_due;
+                // Tính ngày bảo dưỡng tiếp theo từ maintenance records thực tế
+                const futureDates = maintenance
+                  .filter(m => m.next_due_date)
+                  .map(m => m.next_due_date!)
+                  .sort();
+                const maintDateStr = futureDates.length > 0 ? futureDates[0] : (asset.next_maintenance_due || null);
                 let maintValue = 'Chưa lên lịch';
                 let maintSub = 'Chưa có kế hoạch bảo dưỡng';
                 let maintColor = 'var(--text-muted)';

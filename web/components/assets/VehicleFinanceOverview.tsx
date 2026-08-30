@@ -758,20 +758,56 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
               <button onClick={handleAddUpgradeItem} className="w-full py-2 rounded-xl bg-purple-500 text-white font-bold text-xs">+ Thêm vào danh sách độ</button>
             </div>
 
-            <div className="max-h-60 overflow-y-auto space-y-2 text-xs">
-              {expenses.filter(e => e.category === 'UPGRADE' || e.category === 'PARTS').map(item => (
-                <div key={item.id} className="p-3 rounded-xl flex items-center justify-between" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
-                  <div>
-                    <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{item.description}</p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{fmtDate(item.date)} {item.vendor ? `• ${item.vendor}` : ''}</p>
+            {/* Tổng hợp từ cả parts[] và upgradeExpenses */}
+            {(() => {
+              const partsItems = parts.map(p => ({
+                id: p.id || `part_${p.name}`,
+                description: p.name,
+                date: p.install_date || '',
+                vendor: '',
+                amount: p.cost || 0,
+                source: 'parts' as const,
+              }));
+              const expItems = upgradeExpenses.map(e => ({
+                id: e.id,
+                description: e.description || e.subcategory || 'Nâng cấp',
+                date: e.date,
+                vendor: e.vendor || '',
+                amount: e.amount,
+                source: 'expense' as const,
+              }));
+              const allItems = [...partsItems, ...expItems].sort((a, b) => b.date.localeCompare(a.date));
+              const total = allItems.reduce((s, i) => s + i.amount, 0);
+              return (
+                <div className="space-y-2">
+                  {/* Summary row */}
+                  <div className="flex justify-between items-center px-1 pb-1 border-b text-xs font-bold" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
+                    <span>{allItems.length} hạng mục nâng cấp</span>
+                    <span className="text-purple-400 font-mono">{fmt(total)} ₫</span>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-mono font-bold text-purple-400">{fmt(item.amount)} ₫</span>
-                    <button onClick={async () => { await deleteExpense(item.id); onRefresh(); }} className="text-rose-400 hover:opacity-70 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <div className="max-h-80 overflow-y-auto space-y-2 text-xs no-drag">
+                    {allItems.length === 0 ? (
+                      <p className="text-center py-4" style={{ color: 'var(--text-muted)' }}>Chưa có hạng mục nào</p>
+                    ) : allItems.map(item => (
+                      <div key={item.id} className="p-3 rounded-xl flex items-center justify-between" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{item.description}</p>
+                          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            {item.date ? fmtDate(item.date) : '—'}{item.vendor ? ` • ${item.vendor}` : ''} • {item.source === 'parts' ? 'Phụ tùng' : 'Chi phí'}
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-2 shrink-0 ml-2">
+                          <span className="font-mono font-bold text-purple-400">{fmt(item.amount)} ₫</span>
+                          {item.source === 'expense' && (
+                            <button onClick={async () => { await deleteExpense(item.id); onRefresh(); }} className="text-rose-400 hover:opacity-70 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </div>
         </DrillDownModal>
       )}
