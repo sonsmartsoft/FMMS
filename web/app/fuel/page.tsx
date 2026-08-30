@@ -369,13 +369,13 @@ export default function FuelPage() {
           <div style={{ height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={monthlyFuelData} margin={{ top: 10, right: 20, left: -5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
                 <YAxis
                   yAxisId="cost"
                   tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'}
-                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-                  axisLine={false}
+                  tick={{ fill: '#94A3B8', fontSize: 10 }}
+                  axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
                   tickLine={false}
                   width={45}
                 />
@@ -383,8 +383,8 @@ export default function FuelPage() {
                   yAxisId="liters"
                   orientation="right"
                   tickFormatter={v => v > 0 ? `${Math.round(v)}L` : '0'}
-                  tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-                  axisLine={false}
+                  tick={{ fill: '#94A3B8', fontSize: 10 }}
+                  axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
                   tickLine={false}
                   width={45}
                 />
@@ -395,13 +395,14 @@ export default function FuelPage() {
                     if (name === 'Đơn giá TB') return [`${fmt(v)} ₫/L`, name];
                     return [v, name];
                   }}
-                  contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                  contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
                 />
-                <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                <Bar yAxisId="cost" dataKey="cost" name="Tổng tiền" fill="rgba(245,158,11,0.4)" stroke="#F59E0B" strokeWidth={1} radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="liters" dataKey="liters" name="Số lượng (L/kWh)" fill="rgba(14,165,233,0.3)" stroke="#0EA5E9" strokeWidth={1} radius={[4, 4, 0, 0]} />
-                <Line yAxisId="cost" type="monotone" dataKey="avgPrice" name="Đơn giá TB" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981', r: 3 }} />
+                <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 11, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                <Bar yAxisId="cost" dataKey="cost" name="Tổng tiền" fill="rgba(245,158,11,0.45)" stroke="#F59E0B" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="liters" dataKey="liters" name="Số lượng (L/kWh)" fill="rgba(56,189,248,0.35)" stroke="#38BDF8" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                <Line yAxisId="cost" type="monotone" dataKey="avgPrice" name="Đơn giá TB" stroke="#34D399" strokeWidth={2.5} dot={{ fill: '#34D399', r: 3.5 }} />
               </ComposedChart>
+
             </ResponsiveContainer>
           </div>
         </div>

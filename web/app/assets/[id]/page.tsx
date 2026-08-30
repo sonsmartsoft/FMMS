@@ -2414,13 +2414,13 @@ export default function AssetDetailPage() {
                               }))}
                             margin={{ top: 5, right: 15, left: -10, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                            <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                            <XAxis dataKey="date" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
                             <YAxis
                               yAxisId="km"
                               tickFormatter={v => `${v}km`}
-                              tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-                              axisLine={false}
+                              tick={{ fill: '#94A3B8', fontSize: 10 }}
+                              axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
                               tickLine={false}
                               width={45}
                             />
@@ -2429,8 +2429,8 @@ export default function AssetDetailPage() {
                               orientation="right"
                               domain={['auto', 'auto']}
                               tickFormatter={v => `${Math.round(v)}`}
-                              tick={{ fill: 'var(--text-muted)', fontSize: 9 }}
-                              axisLine={false}
+                              tick={{ fill: '#94A3B8', fontSize: 9 }}
+                              axisLine={{ stroke: 'rgba(255,255,255,0.15)' }}
                               tickLine={false}
                               width={50}
                             />
@@ -2439,16 +2439,17 @@ export default function AssetDetailPage() {
                                 name === 'Km chạy' ? `+${fmt(v)} km` : `${fmt(v)} km`,
                                 name,
                               ]}
-                              contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                              contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
                             />
-                            <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
-                            <Bar yAxisId="km" dataKey="km" name="Km chạy" fill="rgba(14,165,233,0.4)" stroke="#0EA5E9" strokeWidth={1} radius={[4, 4, 0, 0]} />
-                            <Line yAxisId="odo" type="monotone" dataKey="odo" name="Mốc ODO" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981', r: 2.5 }} />
+                            <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+                            <Bar yAxisId="km" dataKey="km" name="Km chạy" fill="rgba(56,189,248,0.4)" stroke="#38BDF8" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                            <Line yAxisId="odo" type="monotone" dataKey="odo" name="Mốc ODO" stroke="#34D399" strokeWidth={2.5} dot={{ fill: '#34D399', r: 3 }} />
                           </ComposedChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
                   )}
+
 
                   <div className="overflow-x-auto rounded-2xl max-h-[500px] overflow-y-auto" style={{ border: '1px solid var(--border-default)' }}>
 
@@ -2572,21 +2573,21 @@ export default function AssetDetailPage() {
                             }))}
                             margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                            <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                            <YAxis yAxisId="left" tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={46} />
-                            <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${Math.round(v)}km` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={55} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                            <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                            <YAxis yAxisId="left" tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={46} />
+                            <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${Math.round(v)}km` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={55} />
                             <ReTooltip
                               formatter={(v: number, name: string) => [
                                 name === 'Km di chuyển' ? `${Math.round(v).toLocaleString('vi-VN')} km` : `${(v / 1_000_000).toFixed(2)}M ₫`,
                                 name,
                               ]}
-                              contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                              contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
                             />
-                            <Legend wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
+                            <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
                             <Area yAxisId="left" type="monotone" dataKey="fuel" stackId="cost" name="Nhiên liệu" fill="#F59E0B40" stroke="#F59E0B" strokeWidth={1.5} />
                             <Area yAxisId="left" type="monotone" dataKey="maint" stackId="cost" name="Bảo dưỡng" fill="#38BDF840" stroke="#38BDF8" strokeWidth={1.5} />
-                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#34D39930" stroke="#34D399" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#34D39940" stroke="#34D399" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
                             <Line yAxisId="left" type="monotone" dataKey="cost" name="Tổng chi phí" stroke="#F87171" strokeWidth={2} dot={{ fill: '#F87171', r: 3 }} strokeDasharray="4 2" />
                           </ComposedChart>
                         </ResponsiveContainer>
@@ -2685,18 +2686,18 @@ export default function AssetDetailPage() {
                             }))}
                             margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
                           >
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                            <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                            <YAxis yAxisId="left" tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={42} />
-                            <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${Math.round(v)}km` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={55} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                            <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                            <YAxis yAxisId="left" tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={42} />
+                            <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${Math.round(v)}km` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={55} />
                             <ReTooltip
                               formatter={(v: number, name: string) => [
                                 name === 'Km di chuyển' ? `${Math.round(v).toLocaleString('vi-VN')} km` : `${(v / 1_000_000).toFixed(1)}M ₫`,
                                 name,
                               ]}
-                              contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                              contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
                             />
-                            <Legend wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
+                            <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
                             <Bar yAxisId="left" dataKey="cost" name="Tổng chi phí" fill="#F59E0B80" stroke="#F59E0B" strokeWidth={1} radius={[4, 4, 0, 0]} />
                             <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#34D39940" stroke="#34D399" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
                           </BarChart>
@@ -2704,6 +2705,7 @@ export default function AssetDetailPage() {
                       </div>
                     </div>
                   )}
+
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {mileageAnalytics.yearlyReport.map((y) => (
@@ -3338,23 +3340,24 @@ export default function AssetDetailPage() {
                   <div style={{ height: 230 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                        <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                        <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={45} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                        <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                        <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={45} />
                         <ReTooltip
                           formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]}
-                          contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                          contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
                         />
-                        <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+                        <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
                         <Bar dataKey="fuel" stackId="exp" name="Nhiên liệu" fill="#F59E0B" />
                         <Bar dataKey="maint" stackId="exp" name="Bảo dưỡng" fill="#38BDF8" />
                         <Bar dataKey="upgrade" stackId="exp" name="Đồ độ / Nâng cấp" fill="#A78BFA" />
                         <Bar dataKey="ins" stackId="exp" name="Bảo hiểm / Giấy tờ" fill="#34D399" />
                         <Bar dataKey="loan" stackId="exp" name="Khoản vay" fill="#EC4899" />
-                        <Bar dataKey="other" stackId="exp" name="Chi phí khác" fill="#64748B" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="other" stackId="exp" name="Chi phí khác" fill="#94A3B8" radius={[4, 4, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+
                 </div>
               );
             })()}
@@ -3864,8 +3867,8 @@ export default function AssetDetailPage() {
                               <Cell key={index} fill={entry.color} />
                             ))}
                           </Pie>
-                          <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
-                          <Legend formatter={v => <span style={{ color: 'var(--text-secondary)', fontSize: 10 }}>{v}</span>} />
+                          <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
+                          <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -3889,10 +3892,10 @@ export default function AssetDetailPage() {
                         layout="vertical"
                         margin={{ top: 5, right: 15, left: 10, bottom: 5 }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                        <XAxis type="number" tickFormatter={v => `${(v / 1_000_000).toFixed(0)}M`} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
-                        <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" horizontal={false} />
+                        <XAxis type="number" tickFormatter={v => `${(v / 1_000_000).toFixed(0)}M`} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                        <YAxis type="category" dataKey="name" tick={{ fill: '#E2E8F0', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={80} />
+                        <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
                         <Bar dataKey="amount" name="Số tiền" radius={[0, 4, 4, 0]}>
                           {[
                             <Cell key="0" fill="#34D399" />,
@@ -3906,6 +3909,7 @@ export default function AssetDetailPage() {
                   </div>
                 </div>
               </div>
+
 
               {/* Chi tiết từng hạng mục */}
               <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>

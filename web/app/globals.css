@@ -48,15 +48,16 @@
   --bg-card:      rgba(30, 41, 59, 0.6);
   --bg-panel:     rgba(17, 24, 39, 0.7);
   --bg-input:     #0F172A;
-  --bg-hover:     rgba(255, 255, 255, 0.04);
+  --bg-hover:     rgba(255, 255, 255, 0.05);
 
-  --text-primary:   #F1F5F9;
-  --text-secondary: #CBD5E1;
-  --text-muted:     #64748B;
-  --text-faint:     #475569;
+  --text-primary:   #F8FAFC;
+  --text-secondary: #E2E8F0;
+  --text-muted:     #94A3B8;
+  --text-faint:     #64748B;
 
-  --border-default: rgba(255, 255, 255, 0.1);
-  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-subtle:  rgba(255, 255, 255, 0.08);
+
 
   --accent-cyan:        #38BDF8;
   --accent-cyan-bg:     rgba(56, 189, 248, 0.15);

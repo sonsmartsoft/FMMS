@@ -1065,20 +1065,20 @@ export default function FinancePage() {
                 <div style={{ height: 240 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyExpensesData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                      <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={45} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                      <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                      <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={45} />
                       <ReTooltip
                         formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]}
-                        contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }}
+                        contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }}
                       />
-                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
+                      <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
                       <Bar dataKey="fuel" stackId="exp" name="Nhiên liệu" fill="#F59E0B" />
                       <Bar dataKey="maint" stackId="exp" name="Bảo dưỡng" fill="#38BDF8" />
                       <Bar dataKey="upgrade" stackId="exp" name="Nâng cấp" fill="#A78BFA" />
                       <Bar dataKey="ins" stackId="exp" name="Bảo hiểm/Giấy tờ" fill="#34D399" />
                       <Bar dataKey="loan" stackId="exp" name="Khoản vay" fill="#EC4899" />
-                      <Bar dataKey="other" stackId="exp" name="Khác" fill="#64748B" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="other" stackId="exp" name="Khác" fill="#94A3B8" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -1108,14 +1108,15 @@ export default function FinancePage() {
                           <Cell key={index} fill={entry.color} />
                         ))}
                       </Pie>
-                      <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
-                      <Legend formatter={v => <span style={{ color: 'var(--text-secondary)', fontSize: 10 }}>{v}</span>} />
+                      <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
+                      <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 10, fontWeight: 600 }}>{v}</span>} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
               </div>
             </div>
           )}
+
 
           <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
 

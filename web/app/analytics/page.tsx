@@ -13,7 +13,7 @@ import { getExpenses } from '@/lib/services/expenseService';
 import { getFuelLogs } from '@/lib/services/fuelService';
 import { getMaintenanceRecords } from '@/lib/services/maintenanceService';
 import { getTrips } from '@/lib/services/tripService';
-import { BarChart3, TrendingDown, TrendingUp, Car, DollarSign, Gauge, Fuel, Wrench, Activity } from 'lucide-react';
+import { BarChart3, TrendingDown, TrendingUp, Car, DollarSign, Gauge, Fuel, Wrench, Activity, Sparkles } from 'lucide-react';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
@@ -21,12 +21,12 @@ const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
 const ChartTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="p-3 rounded-xl text-xs shadow-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', minWidth: 140 }}>
-      {label && <p className="font-bold mb-1.5" style={{ color: 'var(--text-primary)' }}>{label}</p>}
+    <div className="p-3 rounded-xl text-xs shadow-2xl" style={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', minWidth: 150, color: '#F8FAFC' }}>
+      {label && <p className="font-bold mb-1.5 text-zinc-100">{label}</p>}
       {payload.map((p: any, i: number) => (
-        <div key={i} className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-            <span className="w-2 h-2 rounded-full inline-block" style={{ background: p.color }} />
+        <div key={i} className="flex items-center justify-between gap-3 py-0.5">
+          <span className="flex items-center gap-1.5 text-zinc-300">
+            <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: p.color }} />
             {p.name}
           </span>
           <span className="font-bold font-mono" style={{ color: p.color }}>
@@ -108,7 +108,7 @@ export default function AnalyticsPage() {
     { name: 'Nhiên liệu', value: totalFuelCost, color: '#F59E0B' },
     { name: 'Bảo dưỡng', value: totalMaintCost, color: '#38BDF8' },
     { name: 'Bảo hiểm', value: totalInsurance, color: '#A78BFA' },
-    { name: 'Khác', value: Math.max(0, totalExpenses - totalFuelCost - totalMaintCost - totalInsurance), color: '#64748B' },
+    { name: 'Khác', value: Math.max(0, totalExpenses - totalFuelCost - totalMaintCost - totalInsurance), color: '#94A3B8' },
   ].filter(d => d.value > 0);
 
   const allYears = Array.from(new Set([
@@ -164,7 +164,7 @@ export default function AnalyticsPage() {
             }
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-xl" style={{ background: 'rgba(14,165,233,0.1)', color: 'var(--accent-cyan)', border: '1px solid rgba(14,165,233,0.25)' }}>
+        <div className="flex items-center gap-2 text-xs font-bold px-3.5 py-1.5 rounded-xl" style={{ background: 'rgba(56,189,248,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(56,189,248,0.25)' }}>
           <BarChart3 className="w-3.5 h-3.5" />
           <span>Năm phân tích: {chartYear}</span>
         </div>
@@ -173,24 +173,24 @@ export default function AnalyticsPage() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Lọc báo cáo theo phương tiện</p>
-          {selectedAssetId && <button onClick={() => setSelectedAssetId(null)} className="text-[11px] font-bold underline" style={{ color: 'var(--accent-cyan)' }}>Xem tất cả</button>}
+          {selectedAssetId && <button onClick={() => setSelectedAssetId(null)} className="text-[11px] font-bold underline cursor-pointer" style={{ color: 'var(--accent-cyan)' }}>Xem tất cả</button>}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          <div onClick={() => setSelectedAssetId(null)} className={`p-3 rounded-2xl cursor-pointer border transition-all flex flex-col justify-between ${selectedAssetId === null ? 'ring-2 ring-cyan-500 shadow-md scale-[1.02]' : 'hover:border-cyan-500/50'}`}
-            style={{ background: selectedAssetId === null ? 'rgba(14,165,233,0.12)' : 'var(--bg-secondary)', borderColor: selectedAssetId === null ? 'var(--accent-cyan)' : 'var(--border-default)' }}>
+          <div onClick={() => setSelectedAssetId(null)} className={`p-3 rounded-2xl cursor-pointer border transition-all flex flex-col justify-between ${selectedAssetId === null ? 'ring-2 ring-cyan-400 shadow-lg scale-[1.02]' : 'hover:border-cyan-500/50'}`}
+            style={{ background: selectedAssetId === null ? 'rgba(56,189,248,0.15)' : 'var(--bg-secondary)', borderColor: selectedAssetId === null ? 'var(--accent-cyan)' : 'var(--border-default)' }}>
             <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0" style={{ background: 'var(--accent-cyan)', color: '#fff' }}>ALL</div>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 shadow-sm" style={{ background: 'var(--accent-cyan)', color: '#0F172A' }}>ALL</div>
               <div><p className="font-extrabold text-xs" style={{ color: 'var(--text-primary)' }}>Tất cả xe</p><p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{assets.length} xe</p></div>
             </div>
-            <p className="text-right text-[11px] font-extrabold mt-2" style={{ color: 'var(--status-red)' }}>{fmtM(expenses.reduce((s, e) => s + e.amount, 0))} ₫</p>
+            <p className="text-right text-[11px] font-extrabold mt-2 text-rose-400 font-mono">{fmtM(expenses.reduce((s, e) => s + e.amount, 0))} ₫</p>
           </div>
           {assets.map((a, ai) => {
             const isSelected = selectedAssetId === a.id;
             const cost = expenses.filter(e => isSameAsset(e.asset_id, a.id)).reduce((s, e) => s + e.amount, 0);
             return (
               <div key={a.id} onClick={() => setSelectedAssetId(isSelected ? null : a.id)}
-                className={`p-3 rounded-2xl cursor-pointer border transition-all flex flex-col justify-between ${isSelected ? 'ring-2 ring-cyan-500 shadow-md scale-[1.02]' : 'hover:border-cyan-500/50 opacity-90 hover:opacity-100'}`}
-                style={{ background: isSelected ? 'rgba(14,165,233,0.12)' : 'var(--bg-secondary)', borderColor: isSelected ? 'var(--accent-cyan)' : 'var(--border-default)' }}>
+                className={`p-3 rounded-2xl cursor-pointer border transition-all flex flex-col justify-between ${isSelected ? 'ring-2 ring-cyan-400 shadow-lg scale-[1.02]' : 'hover:border-cyan-500/50 opacity-90 hover:opacity-100'}`}
+                style={{ background: isSelected ? 'rgba(56,189,248,0.15)' : 'var(--bg-secondary)', borderColor: isSelected ? 'var(--accent-cyan)' : 'var(--border-default)' }}>
                 <div className="flex items-center space-x-2">
                   <div className="w-8 h-8 rounded-xl overflow-hidden shrink-0 border" style={{ borderColor: 'var(--border-default)', background: CHART_COLORS[ai % CHART_COLORS.length] + '22' }}>
                     {a.image_url ? <img src={a.image_url} alt={a.name} className="w-full h-full object-cover" /> :
@@ -201,7 +201,7 @@ export default function AnalyticsPage() {
                     <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>{a.license_plate || a.model}</p>
                   </div>
                 </div>
-                <p className="text-right text-[11px] font-extrabold mt-2" style={{ color: 'var(--status-red)' }}>{fmtM(cost)} ₫</p>
+                <p className="text-right text-[11px] font-extrabold mt-2 text-rose-400 font-mono">{fmtM(cost)} ₫</p>
               </div>
             );
           })}
@@ -212,46 +212,46 @@ export default function AnalyticsPage() {
         {[
           { label: 'Tổng chi phí vận hành', value: `${fmtM(totalExpenses)} ₫`, sub: `${filteredExpenses.length} giao dịch`, color: '#F87171', Icon: DollarSign },
           { label: 'Tổng km đội xe', value: `${fmt(totalKm)} km`, sub: `${filteredAssets.length} phương tiện`, color: '#38BDF8', Icon: Gauge },
-          { label: 'Tổng khấu hao', value: `${fmtM(totalDepreciation)} ₫`, sub: totalPurchase > 0 ? `${((totalDepreciation / totalPurchase) * 100).toFixed(1)}% giá trị ban đầu` : '—', color: '#F59E0B', Icon: TrendingDown },
+          { label: 'Tổng khấu hao', value: `${fmtM(totalDepreciation)} ₫`, sub: totalPurchase > 0 ? `${((totalDepreciation / totalPurchase) * 100).toFixed(1)}% giá trị ban đầu` : '—', color: '#FBBF24', Icon: TrendingDown },
           { label: 'Giá trị đội xe hiện tại', value: `${fmtM(totalFleetValue)} ₫`, sub: 'Ước tính thị trường', color: '#34D399', Icon: TrendingUp },
         ].map((k, i) => (
-          <div key={i} className="p-5 rounded-2xl relative overflow-hidden" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <div key={i} className="p-5 rounded-2xl relative overflow-hidden shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
             <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full opacity-10" style={{ background: k.color }} />
             <div className="flex items-center justify-between mb-3">
               <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: k.color + '20', border: `1px solid ${k.color}40` }}>
                 <k.Icon className="w-4 h-4" style={{ color: k.color }} />
               </div>
             </div>
-            <p className="text-xl font-extrabold" style={{ color: k.color }}>{k.value}</p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{k.label}</p>
-            <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{k.sub}</p>
+            <p className="text-xl font-extrabold font-mono" style={{ color: k.color }}>{k.value}</p>
+            <p className="text-xs mt-1 font-semibold" style={{ color: 'var(--text-secondary)' }}>{k.label}</p>
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{k.sub}</p>
           </div>
         ))}
       </div>
 
-      <div className="p-5 rounded-2xl space-y-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+      <div className="p-5 rounded-2xl space-y-4 shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
         <SectionHeader icon={Activity} title={`Xu hướng chi phí & quãng đường theo tháng — Năm ${chartYear}`} sub="Biểu đồ kết hợp: Cột (Km) + Vùng xếp chồng (Chi phí)" color="#38BDF8" />
         <div style={{ height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={monthlyData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-              <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="left" tickFormatter={v => v > 0 ? fmtM(v) : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={48} />
-              <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${fmt(Math.round(v))}km` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={65} />
+            <ComposedChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+              <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+              <YAxis yAxisId="left" tickFormatter={v => v > 0 ? fmtM(v) : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={48} />
+              <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${fmt(Math.round(v))}km` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={65} />
               <ReTooltip content={<ChartTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 12 }} />
-              <Area yAxisId="left" type="monotone" dataKey="fuel" stackId="cost" name="Nhiên liệu" fill="#F59E0B40" stroke="#F59E0B" strokeWidth={1.5} />
-              <Area yAxisId="left" type="monotone" dataKey="maint" stackId="cost" name="Bảo dưỡng" fill="#38BDF840" stroke="#38BDF8" strokeWidth={1.5} />
-              <Area yAxisId="left" type="monotone" dataKey="ins" stackId="cost" name="Bảo hiểm" fill="#A78BFA40" stroke="#A78BFA" strokeWidth={1.5} />
-              <Area yAxisId="left" type="monotone" dataKey="other" stackId="cost" name="Chi phí khác" fill="#64748B40" stroke="#64748B" strokeWidth={1.5} />
-              <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#34D39930" stroke="#34D399" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+              <Legend formatter={(v) => <span style={{ color: '#E2E8F0', fontSize: 11, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ paddingTop: 10 }} />
+              <Area yAxisId="left" type="monotone" dataKey="fuel" stackId="cost" name="Nhiên liệu" fill="#F59E0B40" stroke="#F59E0B" strokeWidth={2} />
+              <Area yAxisId="left" type="monotone" dataKey="maint" stackId="cost" name="Bảo dưỡng" fill="#38BDF840" stroke="#38BDF8" strokeWidth={2} />
+              <Area yAxisId="left" type="monotone" dataKey="ins" stackId="cost" name="Bảo hiểm" fill="#A78BFA40" stroke="#A78BFA" strokeWidth={2} />
+              <Area yAxisId="left" type="monotone" dataKey="other" stackId="cost" name="Chi phí khác" fill="#94A3B840" stroke="#94A3B8" strokeWidth={2} />
+              <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#34D39940" stroke="#34D399" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="p-5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <SectionHeader icon={DollarSign} title="Phân bổ chi phí theo danh mục" sub="Tỷ trọng chi tiêu toàn bộ danh mục" color="#F59E0B" />
           {pieData.length > 0 ? (
             <div style={{ height: 240 }}>
@@ -260,8 +260,8 @@ export default function AnalyticsPage() {
                   <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={95} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
                     {pieData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
                   </Pie>
-                  <ReTooltip formatter={(v: number, name) => [`${fmtM(v)} ₫`, name]} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
-                  <Legend formatter={v => <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{v}</span>} />
+                  <ReTooltip formatter={(v: number, name) => [`${fmtM(v)} ₫`, name]} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
+                  <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 11, fontWeight: 600 }}>{v}</span>} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -284,17 +284,17 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <SectionHeader icon={TrendingDown} title="Giá trị còn lại & Khấu hao theo xe" sub="So sánh từng phương tiện trong đội" color="#F59E0B" />
           {assetBarData.length > 0 ? (
             <div style={{ height: 290 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={assetBarData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                  <XAxis type="number" tickFormatter={v => fmtM(v)} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-secondary)', fontSize: 10 }} axisLine={false} tickLine={false} width={75} />
-                  <ReTooltip formatter={(v: number, name) => [`${fmtM(v)} ₫`, name]} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" horizontal={false} />
+                  <XAxis type="number" tickFormatter={v => fmtM(v)} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fill: '#E2E8F0', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={75} />
+                  <ReTooltip formatter={(v: number, name) => [`${fmtM(v)} ₫`, name]} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
+                  <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 11, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="Giá trị hiện tại" fill="#34D399" radius={[0, 4, 4, 0]} />
                   <Bar dataKey="Khấu hao" fill="#F59E0B80" stroke="#F59E0B" strokeWidth={1} radius={[0, 4, 4, 0]} />
                 </BarChart>
@@ -307,39 +307,39 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="p-5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <SectionHeader icon={Fuel} title="Chi phí nhiên liệu theo tháng" sub={`Biểu đồ cột — Năm ${chartYear}`} color="#F59E0B" />
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={v => v > 0 ? fmtM(v) : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={40} />
-                <ReTooltip formatter={(v: number) => [`${fmtM(v)} ₫`, 'Chi phí nhiên liệu']} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                <YAxis tickFormatter={v => v > 0 ? fmtM(v) : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={40} />
+                <ReTooltip formatter={(v: number) => [`${fmtM(v)} ₫`, 'Chi phí nhiên liệu']} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
                 <Bar dataKey="fuel" name="Nhiên liệu" radius={[4, 4, 0, 0]}>
-                  {monthlyData.map((_, index) => <Cell key={index} fill={index === new Date().getMonth() ? '#F59E0B' : '#F59E0B55'} />)}
+                  {monthlyData.map((_, index) => <Cell key={index} fill={index === new Date().getMonth() ? '#F59E0B' : '#F59E0B66'} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <SectionHeader icon={Gauge} title="Quãng đường di chuyển theo tháng" sub={`Từ dữ liệu nhật ký chuyến đi — Năm ${chartYear}`} color="#34D399" />
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={monthlyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                 <defs>
                   <linearGradient id="kmGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#34D399" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#34D399" stopOpacity={0.03} />
+                    <stop offset="5%" stopColor="#34D399" stopOpacity="0.45" />
+                    <stop offset="95%" stopColor="#34D399" stopOpacity="0.05" />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={v => v > 0 ? `${fmt(Math.round(v))}` : '0'} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={40} />
-                <ReTooltip formatter={(v: number) => [`${fmt(Math.round(v))} km`, 'Quãng đường']} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
-                <Area type="monotone" dataKey="km" name="Km di chuyển" stroke="#34D399" strokeWidth={2} fill="url(#kmGrad)" dot={{ fill: '#34D399', r: 3 }} activeDot={{ r: 5 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                <XAxis dataKey="label" tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                <YAxis tickFormatter={v => v > 0 ? `${fmt(Math.round(v))}` : '0'} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={40} />
+                <ReTooltip formatter={(v: number) => [`${fmt(Math.round(v))} km`, 'Quãng đường']} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
+                <Area type="monotone" dataKey="km" name="Km di chuyển" stroke="#34D399" strokeWidth={2.5} fill="url(#kmGrad)" dot={{ fill: '#34D399', r: 3 }} activeDot={{ r: 5 }} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -348,25 +348,25 @@ export default function AnalyticsPage() {
 
       {!selectedAssetId && assets.length > 1 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
             <SectionHeader icon={Activity} title="So sánh đa chiều giữa các xe" sub="Radar chart — 5 chỉ số được chuẩn hóa 0–100" color="#A78BFA" />
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart data={radarData}>
-                  <PolarGrid stroke="rgba(255,255,255,0.1)" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} />
+                  <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#CBD5E1', fontSize: 10, fontWeight: 600 }} />
                   <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
                   {assets.slice(0, 5).map((a, i) => (
-                    <Radar key={a.id} name={a.name} dataKey={a.name.split(' ')[0]} stroke={CHART_COLORS[i]} fill={CHART_COLORS[i]} fillOpacity={0.15} strokeWidth={1.5} />
+                    <Radar key={a.id} name={a.name} dataKey={a.name.split(' ')[0]} stroke={CHART_COLORS[i]} fill={CHART_COLORS[i]} fillOpacity={0.2} strokeWidth={2} />
                   ))}
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <ReTooltip contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
+                  <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 11, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 11 }} />
+                  <ReTooltip contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          <div className="p-5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
             <SectionHeader icon={Wrench} title="Chi phí bảo dưỡng & nhiên liệu theo xe" sub="Tổng chi phí phân theo từng phương tiện" color="#38BDF8" />
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -375,11 +375,11 @@ export default function AnalyticsPage() {
                   'Bảo dưỡng': maintRecords.filter(m => isSameAsset(m.asset_id, a.id)).reduce((s, m) => s + m.cost, 0),
                   'Nhiên liệu': fuelLogs.filter(f => isSameAsset(f.asset_id, a.id)).reduce((s, f) => s + f.total_cost, 0),
                 }))} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                  <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={v => fmtM(v)} tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} width={40} />
-                  <ReTooltip formatter={(v: number, name) => [`${fmtM(v)} ₫`, name]} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', borderRadius: 12, fontSize: 11 }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                  <XAxis dataKey="name" tick={{ fill: '#94A3B8', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} />
+                  <YAxis tickFormatter={v => fmtM(v)} tick={{ fill: '#94A3B8', fontSize: 10 }} axisLine={{ stroke: 'rgba(255,255,255,0.15)' }} tickLine={false} width={40} />
+                  <ReTooltip formatter={(v: number, name) => [`${fmtM(v)} ₫`, name]} contentStyle={{ background: '#1E293B', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, fontSize: 11, color: '#F8FAFC' }} />
+                  <Legend formatter={v => <span style={{ color: '#E2E8F0', fontSize: 11, fontWeight: 600 }}>{v}</span>} wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="Bảo dưỡng" fill="#38BDF8" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="Nhiên liệu" fill="#F59E0B" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -389,19 +389,19 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      <div className="p-5 rounded-2xl space-y-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+      <div className="p-5 rounded-2xl space-y-4 shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
         <SectionHeader icon={Car} title="Thống kê chuyến đi" sub="Phân tích hành trình dựa trên dữ liệu ghi nhận thực tế" color="#34D399" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: 'Tổng chuyến đi', value: filteredTrips.length, unit: 'chuyến', color: '#38BDF8' },
             { label: 'Tổng quãng đường', value: fmt(Math.round(totalTripKm)), unit: 'km', color: '#34D399' },
             { label: 'Tốc độ TB', value: avgSpeed > 0 ? avgSpeed.toFixed(1) : '—', unit: 'km/h', color: '#A78BFA' },
-            { label: 'Chi phí / km', value: totalTripKm > 0 ? fmt(Math.round(totalExpenses / totalTripKm)) : '—', unit: '₫/km', color: '#F59E0B' },
+            { label: 'Chi phí / km', value: totalTripKm > 0 ? fmt(Math.round(totalExpenses / totalTripKm)) : '—', unit: '₫/km', color: '#FBBF24' },
           ].map((s, i) => (
-            <div key={i} className="p-4 rounded-2xl text-center" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
-              <p className="text-2xl font-extrabold" style={{ color: s.color }}>{s.value}</p>
-              <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.label}</p>
-              <p className="text-[9px]" style={{ color: 'var(--text-faint)' }}>{s.unit}</p>
+            <div key={i} className="p-4 rounded-2xl text-center shadow-sm" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+              <p className="text-2xl font-extrabold font-mono" style={{ color: s.color }}>{s.value}</p>
+              <p className="text-xs mt-1 font-semibold" style={{ color: 'var(--text-secondary)' }}>{s.label}</p>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{s.unit}</p>
             </div>
           ))}
         </div>
