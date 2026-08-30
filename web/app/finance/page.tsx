@@ -14,7 +14,8 @@ import { getLoans, getLoanPayments, createLoan, createLoanPayment, updateLoan, L
 import { ExpenseRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
 import { useTheme } from '@/lib/theme/ThemeContext';
-import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2, Pencil, BarChart3, PieChart as PieIcon } from 'lucide-react';
+import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2, Pencil, BarChart3, PieChart as PieIcon, Filter, Calendar } from 'lucide-react';
+
 import DraggableModal from '@/components/ui/DraggableModal';
 
 
