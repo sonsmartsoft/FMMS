@@ -2157,9 +2157,10 @@ export default function AssetDetailPage() {
                 }
                 return [
                   { label: 'Giá mua ban đầu', value: `${fmt(asset.purchase_price)} ₫`, sub: `Ngày mua: ${fmtDate(asset.purchase_date || '')}`, color: 'var(--text-primary)' },
-                  { label: 'Giá trị ước tính hiện tại', value: `${fmt(asset.current_value)} ₫`, sub: `Khấu hao: ${(((asset.purchase_price - asset.current_value) / asset.purchase_price) * 100).toFixed(1)}%`, color: 'var(--status-green)' },
+                  { label: 'Tổng chi phí phát sinh', value: `${fmt(totalExpenses)} ₫`, sub: `Chi phí vận hành, bảo dưỡng & nuôi xe`, color: 'var(--status-amber)' },
                   { label: 'Bảo dưỡng tiếp theo', value: maintValue, sub: maintSub, color: maintColor },
                 ];
+
               })().map((item, i) => (
                 <div key={i} className="p-4 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <span style={{ color: 'var(--text-muted)' }}>{item.label}</span>
@@ -3371,10 +3372,10 @@ export default function AssetDetailPage() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
-                        <BarChart3 className="w-3.5 h-3.5" />
+                        <Activity className="w-3.5 h-3.5" />
                       </div>
                       <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
-                        Biểu Đồ Cột Chồng Chi Phí Theo Tháng (Theo Danh Mục Lớn)
+                        Biểu Đồ Vùng Xếp Chồng Chi Phí Theo Tháng (Theo Danh Mục Lớn)
                       </p>
                     </div>
                     <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị: Triệu ₫ (M)</span>
@@ -3382,7 +3383,33 @@ export default function AssetDetailPage() {
 
                   <div style={{ height: 230 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                      <AreaChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                        <defs>
+                          <linearGradient id="astFuel" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="astMaint" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="astUpgrade" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="astIns" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10B981" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#10B981" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="astLoan" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#EC4899" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#EC4899" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="astOther" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#64748B" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#64748B" stopOpacity={0.08}/>
+                          </linearGradient>
+                        </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                         <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
                         <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={45} />
@@ -3392,19 +3419,18 @@ export default function AssetDetailPage() {
                         />
 
                         <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
-                        <Bar dataKey="fuel" stackId="exp" name="Nhiên liệu" fill="#F59E0B" />
-                        <Bar dataKey="maint" stackId="exp" name="Bảo dưỡng" fill="#06B6D4" />
-                        <Bar dataKey="upgrade" stackId="exp" name="Đồ độ / Nâng cấp" fill="#8B5CF6" />
-                        <Bar dataKey="ins" stackId="exp" name="Bảo hiểm / Giấy tờ" fill="#10B981" />
-                        <Bar dataKey="loan" stackId="exp" name="Khoản vay" fill="#EC4899" />
-                        <Bar dataKey="other" stackId="exp" name="Chi phí khác" fill="#64748B" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-
+                        <Area type="monotone" dataKey="fuel" stackId="exp" name="Nhiên liệu" stroke="#F59E0B" fill="url(#astFuel)" strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="maint" stackId="exp" name="Bảo dưỡng" stroke="#06B6D4" fill="url(#astMaint)" strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="upgrade" stackId="exp" name="Đồ độ / Nâng cấp" stroke="#8B5CF6" fill="url(#astUpgrade)" strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="ins" stackId="exp" name="Bảo hiểm / Giấy tờ" stroke="#10B981" fill="url(#astIns)" strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="loan" stackId="exp" name="Khoản vay" stroke="#EC4899" fill="url(#astLoan)" strokeWidth={1.5} />
+                        <Area type="monotone" dataKey="other" stackId="exp" name="Chi phí khác" stroke="#64748B" fill="url(#astOther)" strokeWidth={1.5} />
+                      </AreaChart>
                     </ResponsiveContainer>
                   </div>
-
                 </div>
               );
+
             })()}
 
             <div className="space-y-2">
@@ -3858,38 +3884,40 @@ export default function AssetDetailPage() {
           </div>
         )}
 
-        {/* ═══ ANALYTICS (PHÂN TÍCH TCO) ═══ */}
+        {/* ═══ ANALYTICS (PHÂN TÍCH TCO THỰC TẾ) ═══ */}
         {activeTab === 'analytics' && (() => {
           const upgradeCost = expenses.filter(e => (e.category || '').toUpperCase() === 'UPGRADE' || (e.subcategory || '').toUpperCase().includes('ACCESSORIE')).reduce((s, e) => s + e.amount, 0);
           const loanCost = expenses.filter(e => (e.category || '').toUpperCase().includes('LOAN')).reduce((s, e) => s + e.amount, 0);
           const otherCost = Math.max(0, totalExpenses - totalFuelCost - totalMaintCost - totalInsurance - upgradeCost - loanCost);
+          const purchasePrice = asset.purchase_price || 0;
+          const totalRealSpent = purchasePrice + totalExpenses;
 
           const tcoDonutData = [
-            { name: 'Khấu hao xe', value: Math.max(0, depreciation), color: '#F59E0B' },
-            { name: 'Nhiên liệu', value: totalFuelCost, color: '#EF4444' },
-            { name: 'Bảo dưỡng & PT', value: totalMaintCost, color: '#0EA5E9' },
-            { name: 'Bảo hiểm', value: totalInsurance, color: '#8B5CF6' },
-            { name: 'Nâng cấp / Đồ độ', value: upgradeCost, color: '#A78BFA' },
-            { name: 'Chi phí vay', value: loanCost, color: '#EC4899' },
-            { name: 'Chi phí khác', value: otherCost, color: '#64748B' },
+            { name: 'Giá mua ban đầu', value: purchasePrice, color: '#3B82F6' },
+            { name: 'Nhiên liệu & Pin', value: totalFuelCost, color: '#F59E0B' },
+            { name: 'Bảo dưỡng & Phụ tùng', value: totalMaintCost, color: '#06B6D4' },
+            { name: 'Bảo hiểm & Giấy tờ', value: totalInsurance, color: '#10B981' },
+            { name: 'Nâng cấp / Đồ chơi', value: upgradeCost, color: '#8B5CF6' },
+            { name: 'Khoản vay & Lãi', value: loanCost, color: '#EC4899' },
+            { name: 'Vận hành khác', value: otherCost, color: '#64748B' },
           ].filter(d => d.value > 0);
 
           return (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Phân tích TCO — Total Cost of Ownership</h3>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Tổng chi phí sở hữu thực tế (Bao gồm khấu hao xe &amp; toàn bộ chi phí vận hành)</p>
+                  <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Phân tích Dòng Tiền &amp; Chi Phí Thực Tế (TCO)</h3>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Tổng dòng tiền thực chi cho xe (Giá mua ban đầu + Toàn bộ chi phí phát sinh)</p>
                 </div>
               </div>
 
               {/* KPI Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-center">
                 {[
-                  { label: 'Tổng chi phí vận hành', value: `${(totalExpenses / 1000000).toFixed(1)}M ₫`, color: 'var(--status-red)' },
-                  { label: 'Chi phí / km', value: `${costPerKm.toFixed(0)} ₫/km`, color: 'var(--accent-cyan)' },
-                  { label: 'Khấu hao xe', value: `${(depreciation / 1000000).toFixed(1)}M ₫`, color: 'var(--status-amber)' },
-                  { label: 'TCO toàn bộ', value: `${(totalTCO / 1000000).toFixed(1)}M ₫`, color: 'var(--status-purple)' },
+                  { label: 'Giá mua ban đầu', value: `${(purchasePrice / 1000000).toFixed(1)}M ₫`, color: 'var(--accent-cyan)' },
+                  { label: 'Tổng chi phí nuôi xe', value: `${(totalExpenses / 1000000).toFixed(1)}M ₫`, color: 'var(--status-amber)' },
+                  { label: 'Chi phí / km', value: totalKm > 0 ? `${(totalExpenses / totalKm).toFixed(0)} ₫/km` : '0 ₫/km', color: 'var(--status-green)' },
+                  { label: 'Tổng tiền thực tế đã chi', value: `${(totalRealSpent / 1000000).toFixed(1)}M ₫`, color: 'var(--status-purple)' },
                 ].map((s, i) => (
                   <div key={i} className="p-4 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                     <p className="text-base font-extrabold" style={{ color: s.color }}>{s.value}</p>
@@ -3906,7 +3934,7 @@ export default function AssetDetailPage() {
                     <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-amber-500/15 text-amber-500 border border-amber-500/30">
                       <PieChart className="w-3.5 h-3.5" />
                     </div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Cơ cấu TCO (Tổng chi phí sở hữu)</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Cơ cấu Tổng Chi Phí Thực Tế</p>
                   </div>
                   {tcoDonutData.length > 0 ? (
                     <div>
@@ -3922,8 +3950,8 @@ export default function AssetDetailPage() {
                           </PieChart>
                         </ResponsiveContainer>
                         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Tổng TCO</span>
-                          <span className="text-xs font-black font-mono text-slate-900 dark:text-white">{((depreciation + totalExpenses) / 1_000_000).toFixed(1)}M</span>
+                          <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Tổng thực chi</span>
+                          <span className="text-xs font-black font-mono text-slate-900 dark:text-white">{(totalRealSpent / 1_000_000).toFixed(1)}M</span>
                         </div>
                       </div>
                       <div className="mt-3 space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
@@ -3934,7 +3962,7 @@ export default function AssetDetailPage() {
                               <span className="truncate text-[11px] font-medium text-slate-800 dark:text-slate-200">{d.name}</span>
                             </div>
                             <div className="flex items-center gap-2 shrink-0 font-mono">
-                              <span className="text-[10px] text-slate-500 dark:text-zinc-400">{((depreciation + totalExpenses) > 0 ? ((d.value / (depreciation + totalExpenses)) * 100).toFixed(1) : 0)}%</span>
+                              <span className="text-[10px] text-slate-500 dark:text-zinc-400">{(totalRealSpent > 0 ? ((d.value / totalRealSpent) * 100).toFixed(1) : 0)}%</span>
                               <strong className="text-[11px]" style={{ color: d.color }}>{(d.value / 1_000_000).toFixed(1)}M</strong>
                             </div>
                           </div>
@@ -3953,37 +3981,38 @@ export default function AssetDetailPage() {
                     <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
                       <BarChart3 className="w-3.5 h-3.5" />
                     </div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Giá trị mua xe vs Chi phí đã bỏ ra</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">So sánh Chi Phí Mua Xe &amp; Nuôi Xe</p>
                   </div>
 
                   <div style={{ height: 230 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={[
-                          { name: 'Giá mua ban đầu', amount: asset.purchase_price || 0, fill: '#3B82F6' },
-                          { name: 'Giá trị ước tính hiện tại', amount: asset.current_value || 0, fill: '#10B981' },
-                          { name: 'Khấu hao tích lũy', amount: Math.max(0, depreciation), fill: '#F59E0B' },
-                          { name: 'Tổng chi phí vận hành', amount: totalExpenses, fill: '#EC4899' },
+                          { name: 'Giá mua ban đầu', amount: purchasePrice, fill: '#3B82F6' },
+                          { name: 'Tổng chi nuôi xe', amount: totalExpenses, fill: '#F59E0B' },
+                          { name: 'Dư nợ vay hiện tại', amount: (loan?.current_balance || 0), fill: '#EC4899' },
+                          { name: 'Tổng tiền thực chi', amount: totalRealSpent, fill: '#10B981' },
                         ]}
                         layout="vertical"
                         margin={{ top: 5, right: 15, left: 10, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
                         <XAxis type="number" tickFormatter={v => `${(v / 1_000_000).toFixed(0)}M`} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
-                        <YAxis type="category" dataKey="name" tick={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 10, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={80} />
+                        <YAxis type="category" dataKey="name" tick={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 10, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={85} />
                         <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }} />
 
                         <Bar dataKey="amount" name="Số tiền" radius={[0, 4, 4, 0]}>
                           {[
                             <Cell key="0" fill="#3B82F6" />,
-                            <Cell key="1" fill="#10B981" />,
-                            <Cell key="2" fill="#F59E0B" />,
-                            <Cell key="3" fill="#EC4899" />,
+                            <Cell key="1" fill="#F59E0B" />,
+                            <Cell key="2" fill="#EC4899" />,
+                            <Cell key="3" fill="#10B981" />,
                           ]}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
+
                 </div>
 
               </div>

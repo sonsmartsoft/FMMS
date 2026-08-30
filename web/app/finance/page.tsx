@@ -4,8 +4,9 @@ import React, { useState, useMemo, useEffect } from 'react';
 
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as ReTooltip, Legend, PieChart, Pie, Cell,
+  Tooltip as ReTooltip, Legend, PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts';
+
 import { getAssets } from '@/lib/services/assetService';
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import { getLoans, getLoanPayments, createLoan, createLoanPayment, updateLoan, LoanRow, LoanPaymentRow, cleanupDuplicateLoanExpenses } from '@/lib/services/loanService';
@@ -1061,7 +1062,33 @@ export default function FinancePage() {
 
                 <div style={{ height: 260 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyExpensesData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                    <AreaChart data={monthlyExpensesData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                      <defs>
+                        <linearGradient id="finFuel" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.75}/>
+                          <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.08}/>
+                        </linearGradient>
+                        <linearGradient id="finMaint" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#06B6D4" stopOpacity={0.75}/>
+                          <stop offset="95%" stopColor="#06B6D4" stopOpacity={0.08}/>
+                        </linearGradient>
+                        <linearGradient id="finUpgrade" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.75}/>
+                          <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.08}/>
+                        </linearGradient>
+                        <linearGradient id="finIns" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10B981" stopOpacity={0.75}/>
+                          <stop offset="95%" stopColor="#10B981" stopOpacity={0.08}/>
+                        </linearGradient>
+                        <linearGradient id="finLoan" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#EC4899" stopOpacity={0.75}/>
+                          <stop offset="95%" stopColor="#EC4899" stopOpacity={0.08}/>
+                        </linearGradient>
+                        <linearGradient id="finOther" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#64748B" stopOpacity={0.75}/>
+                          <stop offset="95%" stopColor="#64748B" stopOpacity={0.08}/>
+                        </linearGradient>
+                      </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                       <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} />
                       <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={45} />
@@ -1070,16 +1097,17 @@ export default function FinancePage() {
                         contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
                       />
                       <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 8 }} />
-                      <Bar dataKey="fuel" stackId="exp" name="Nhiên liệu" fill={getCategoryColor('Fuel')} />
-                      <Bar dataKey="maint" stackId="exp" name="Bảo dưỡng" fill={getCategoryColor('Maintenance')} />
-                      <Bar dataKey="upgrade" stackId="exp" name="Nâng cấp" fill={getCategoryColor('Upgrade')} />
-                      <Bar dataKey="ins" stackId="exp" name="Bảo hiểm/Giấy tờ" fill={getCategoryColor('Insurance')} />
-                      <Bar dataKey="loan" stackId="exp" name="Khoản vay" fill={getCategoryColor('Loan')} />
-                      <Bar dataKey="other" stackId="exp" name="Khác" fill={getCategoryColor('Other')} radius={[4, 4, 0, 0]} />
-                    </BarChart>
+                      <Area type="monotone" dataKey="fuel" stackId="exp" name="Nhiên liệu" stroke="#F59E0B" fill="url(#finFuel)" strokeWidth={1.5} />
+                      <Area type="monotone" dataKey="maint" stackId="exp" name="Bảo dưỡng" stroke="#06B6D4" fill="url(#finMaint)" strokeWidth={1.5} />
+                      <Area type="monotone" dataKey="upgrade" stackId="exp" name="Nâng cấp" stroke="#8B5CF6" fill="url(#finUpgrade)" strokeWidth={1.5} />
+                      <Area type="monotone" dataKey="ins" stackId="exp" name="Bảo hiểm/Giấy tờ" stroke="#10B981" fill="url(#finIns)" strokeWidth={1.5} />
+                      <Area type="monotone" dataKey="loan" stackId="exp" name="Khoản vay" stroke="#EC4899" fill="url(#finLoan)" strokeWidth={1.5} />
+                      <Area type="monotone" dataKey="other" stackId="exp" name="Khác" stroke="#64748B" fill="url(#finOther)" strokeWidth={1.5} />
+                    </AreaChart>
                   </ResponsiveContainer>
                 </div>
               </div>
+
 
               {/* Donut Chart - Overlap-free design with center stat and clean category list */}
               <div className="p-5 rounded-2xl space-y-3 flex flex-col justify-between" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>

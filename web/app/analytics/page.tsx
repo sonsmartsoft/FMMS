@@ -167,26 +167,30 @@ export default function AnalyticsPage() {
     return { label, fuel, maint, upgrade, ins, loan, other, km, total: fuel + maint + upgrade + ins + loan + other };
   });
 
-  const assetBarData = filteredAssets.map(a => ({
-    name: `${a.name.split(' ')[0]} ${(a.license_plate || a.model || '').slice(0, 12)}`.slice(0, 18),
-    'Giá trị hiện tại': a.current_value || 0,
-    'Khấu hao': Math.max(0, (a.purchase_price || 0) - (a.current_value || 0)),
-    km: a.current_odometer_km || 0,
-  }));
+  const assetBarData = filteredAssets.map(a => {
+    const totalExp = expenses.filter(e => isSameAsset(e.asset_id, a.id)).reduce((s, e) => s + e.amount, 0);
+    return {
+      name: `${a.name.split(' ')[0]} ${(a.license_plate || a.model || '').slice(0, 12)}`.slice(0, 18),
+      'Giá mua xe': a.purchase_price || 0,
+      'Tổng chi nuôi xe': totalExp,
+      km: a.current_odometer_km || 0,
+    };
+  });
 
   const radarData = assets.length > 0 ? [
     { subject: 'Km đi được', ...Object.fromEntries(filteredAssets.map(a => [a.name.split(' ')[0], Math.min(100, (a.current_odometer_km / 200000) * 100)])) },
-    { subject: 'Chi phí', ...Object.fromEntries(filteredAssets.map(a => {
+    { subject: 'Chi phí phát sinh', ...Object.fromEntries(filteredAssets.map(a => {
       const cost = expenses.filter(e => isSameAsset(e.asset_id, a.id)).reduce((s, e) => s + e.amount, 0);
       return [a.name.split(' ')[0], Math.min(100, (cost / 50_000_000) * 100)];
     })) },
-    { subject: 'Giá trị còn lại', ...Object.fromEntries(filteredAssets.map(a => [a.name.split(' ')[0], a.purchase_price > 0 ? ((a.current_value / a.purchase_price) * 100) : 0])) },
+    { subject: 'Giá mua ban đầu', ...Object.fromEntries(filteredAssets.map(a => [a.name.split(' ')[0], Math.min(100, ((a.purchase_price || 0) / 1_000_000_000) * 100)])) },
     { subject: 'Tuổi xe', ...Object.fromEntries(filteredAssets.map(a => [a.name.split(' ')[0], Math.min(100, ((new Date().getFullYear() - (a.year || 2020)) / 15) * 100)])) },
     { subject: 'Số chuyến đi', ...Object.fromEntries(filteredAssets.map(a => {
       const tc = trips.filter(t => isSameAsset(t.asset_id, a.id)).length;
       return [a.name.split(' ')[0], Math.min(100, (tc / 50) * 100)];
     })) },
   ] : [];
+
 
   const selectedVehicleObj = assets.find(a => a.id === selectedAssetId);
 
@@ -334,10 +338,10 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        {/* Residual Value & Depreciation Horizontal Bar Chart */}
+        {/* Purchase Price vs Total Expenses Comparison Bar Chart */}
         <div className="p-5 rounded-2xl shadow-sm space-y-3 flex flex-col justify-between" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <div>
-            <SectionHeader icon={TrendingDown} title="Giá trị còn lại & Khấu hao theo xe" sub="So sánh từng phương tiện trong đội" color="#F59E0B" />
+            <SectionHeader icon={DollarSign} title="So sánh Chi phí Mua & Nuôi từng xe" sub="So sánh chi tiêu thực tế từng phương tiện trong đội" color="#3B82F6" />
             {assetBarData.length > 0 ? (
               <div style={{ height: 280 }}>
                 <ResponsiveContainer width="100%" height="100%">
@@ -347,11 +351,12 @@ export default function AnalyticsPage() {
                     <YAxis type="category" dataKey="name" tick={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={85} />
                     <ReTooltip formatter={(v: number, name) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0,0,0,0.6)' : '0 10px 25px -5px rgba(0,0,0,0.1)' }} />
                     <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Giá trị hiện tại" fill="#10B981" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="Khấu hao" fill="#F59E0B80" stroke="#F59E0B" strokeWidth={1} radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="Giá mua xe" fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="Tổng chi nuôi xe" fill="#F59E0B" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+
             ) : (
               <div className="h-48 flex items-center justify-center text-xs" style={{ color: 'var(--text-muted)' }}>Chưa có dữ liệu</div>
             )}
