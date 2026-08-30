@@ -1366,6 +1366,10 @@ export default function AssetDetailPage() {
         if (odo > (asset.current_odometer_km || 0)) {
           setAsset(p => p ? { ...p, current_odometer_km: odo } : p);
         }
+        // Auto-update next_maintenance_due on the asset
+        if (maintForm.next_due_date) {
+          setAsset(p => p ? { ...p, next_maintenance_due: maintForm.next_due_date } : p);
+        }
       } else {
         const created = await createMaintenanceRecord({
           asset_id: asset.id,
@@ -1382,6 +1386,10 @@ export default function AssetDetailPage() {
         const odo = parseFloat(maintForm.odometer_km) || 0;
         if (odo > (asset.current_odometer_km || 0)) {
           setAsset(p => p ? { ...p, current_odometer_km: odo } : p);
+        }
+        // Auto-update next_maintenance_due on the asset
+        if (maintForm.next_due_date) {
+          setAsset(p => p ? { ...p, next_maintenance_due: maintForm.next_due_date } : p);
         }
 
         // Auto-create expense record if totalCost > 0
@@ -3592,6 +3600,23 @@ export default function AssetDetailPage() {
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Kỳ tiếp theo (km)</label>
                 <input type="number" className="theme-input" placeholder="17846" value={maintForm.next_due_km} onChange={e => setMaintForm(p => ({ ...p, next_due_km: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>📅 Ngày bảo dưỡng tiếp theo</label>
+                <input type="date" className="theme-input" value={maintForm.next_due_date} onChange={e => setMaintForm(p => ({ ...p, next_due_date: e.target.value }))} />
+              </div>
+              <div className="space-y-1 flex flex-col justify-end">
+                {maintForm.next_due_date && (() => {
+                  const d = new Date(maintForm.next_due_date);
+                  const today = new Date();
+                  const diff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                  const color = diff < 0 ? 'var(--status-rose)' : diff <= 7 ? 'var(--status-amber)' : 'var(--status-green)';
+                  const text = diff < 0 ? `⚠️ Quá hạn ${Math.abs(diff)} ngày` : diff === 0 ? '🔴 Hôm nay!' : diff <= 7 ? `🟠 Còn ${diff} ngày` : `✅ Còn ${diff} ngày`;
+                  return <p className="text-xs font-bold mt-1" style={{ color }}>{text}</p>;
+                })()}
               </div>
             </div>
 
