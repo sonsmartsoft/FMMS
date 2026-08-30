@@ -18,6 +18,7 @@ export interface PartInput {
 export function mapPartRow(row: any): PartRecord {
   return {
     id: row.id,
+    asset_id: row.asset_id ?? undefined,
     name: row.part_name,
     brand: row.brand ?? '',
     category: row.supplier || 'Khác',
@@ -53,7 +54,11 @@ export async function getParts(assetId?: string): Promise<PartRecord[]> {
 
   let allParts: PartRecord[] = dbParts.length > 0
     ? dbParts
-    : (MOCK_PARTS as any[]).filter(p => !assetId || (p as any).asset_id === realId || (p as any).asset_id === assetId || !assetId);
+    : (MOCK_PARTS as any[]).filter(p => {
+        if (!assetId) return true;
+        const pAssetId = (p as any).asset_id ? resolveAssetId((p as any).asset_id) : '20260308-0001-4222-8888-19b213872026';
+        return pAssetId === realId || (p as any).asset_id === assetId || (p as any).asset_id === realId;
+      });
 
   // Apply custom edits from localStorage
   allParts = allParts.map(p => customMap[p.id] ? { ...p, ...customMap[p.id] } : p);
@@ -61,7 +66,8 @@ export async function getParts(assetId?: string): Promise<PartRecord[]> {
   // Add any locally created parts
   Object.values(customMap).forEach((customPart: any) => {
     if (!allParts.some(p => p.id === customPart.id)) {
-      if (!assetId || customPart.asset_id === realId || customPart.asset_id === assetId) {
+      const cAssetId = customPart.asset_id ? resolveAssetId(customPart.asset_id) : undefined;
+      if (!assetId || cAssetId === realId || customPart.asset_id === assetId || customPart.asset_id === realId) {
         allParts.unshift(customPart);
       }
     }

@@ -340,6 +340,7 @@ export const MOCK_LOAN: LoanRecord = {
 // ── Real Parts & Upgrades (CAR01) ──────────────────────────
 export interface PartRecord {
   id: string;
+  asset_id?: string;
   name: string;
   brand: string;
   category: string;
@@ -351,12 +352,25 @@ export interface PartRecord {
 }
 
 export const MOCK_PARTS: PartRecord[] = [
-  { id: 'p1', name: 'Màn hình ZX ADAS Limited', brand: 'Zestech Auto', category: 'Màn hình & ADAS', install_date: '2026-05-09', cost: 17000000, odometer_km: 593, warranty_months: 24, notes: 'Màn hình thông minh tích hợp camera ADAS' },
-  { id: 'p2', name: 'Gập gương điện', brand: 'Gập Gương Auto', category: 'Ngoại thất', install_date: '2026-04-09', cost: 1800000, odometer_km: 20, warranty_months: 12, notes: 'Tự động gập gương khi khóa cửa' },
-  { id: 'p3', name: 'Phím media vô năng', brand: 'OEM Mazda', category: 'Nội thất', install_date: '2026-04-12', cost: 2000000, odometer_km: 24, warranty_months: 12, notes: 'Phím điều khiển âm thanh trên vô năng' },
-  { id: 'p4', name: 'Cảm biến áp suất lốp Zestech (TPMS)', brand: 'Zestech', category: 'An toàn & Lốp', install_date: '2026-04-12', cost: 1500000, odometer_km: 24, warranty_months: 24, notes: 'TPMS hiển thị áp suất lốp trực tiếp' },
-  { id: 'p5', name: 'Máy rửa xe gia đình', brand: 'Bosch', category: 'Thiết bị chăm sóc xe', install_date: '2026-04-19', cost: 2200000, odometer_km: 235, warranty_months: 6, notes: 'Máy rửa xe cao áp gia đình' },
-  { id: 'p6', name: 'Bơm lốp Toyota điện tử', brand: 'Toyota', category: 'Thiết bị lốp', install_date: '2026-04-21', cost: 389000, odometer_km: 235, warranty_months: 12, notes: 'Bơm lốp điện tử cắm tẩu 12V' },
+  // CAR01 (Mazda 2AT 2026) - 11 Upgrades & Accessories
+  { id: 'p1', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Màn hình ZX ADAS Limited', brand: 'Zestech Auto', category: 'Màn hình & ADAS', install_date: '2026-05-09', cost: 17000000, odometer_km: 593, warranty_months: 24, notes: 'Màn hình thông minh tích hợp camera ADAS' },
+  { id: 'p2', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Gập gương điện', brand: 'Gập Gương Auto', category: 'Ngoại thất', install_date: '2026-04-09', cost: 1800000, odometer_km: 20, warranty_months: 12, notes: 'Tự động gập gương khi khóa cửa' },
+  { id: 'p3', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Phím media vô năng', brand: 'OEM Mazda', category: 'Nội thất', install_date: '2026-04-12', cost: 2000000, odometer_km: 24, warranty_months: 12, notes: 'Phím điều khiển âm thanh trên vô năng' },
+  { id: 'p4', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Cảm biến áp suất lốp Zestech (TPMS)', brand: 'Zestech', category: 'An toàn & Lốp', install_date: '2026-04-12', cost: 1500000, odometer_km: 24, warranty_months: 24, notes: 'TPMS hiển thị áp suất lốp trực tiếp' },
+  { id: 'p5', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Bao chìa khoá da', brand: 'OEM', category: 'Nội thất', install_date: '2026-04-12', cost: 93000, odometer_km: 24, warranty_months: 0, notes: 'Bao chìa khoá da sang trọng' },
+  { id: 'p6', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Biển tên số điện thoại taplo', brand: 'OEM', category: 'Nội thất', install_date: '2026-04-14', cost: 70000, odometer_km: 108, warranty_months: 0, notes: 'Biển tên số điện thoại để taplo' },
+  { id: 'p7', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Củ sạc nhanh trên xe', brand: 'Baseus', category: 'Điện tử', install_date: '2026-04-19', cost: 100000, odometer_km: 230, warranty_months: 6, notes: 'Củ sạc nhanh cắm tẩu 12V' },
+  { id: 'p8', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Thùng rác mini ô tô', brand: 'OEM', category: 'Nội thất', install_date: '2026-04-19', cost: 52000, odometer_km: 230, warranty_months: 0, notes: 'Thùng rác mini gắn cửa xe' },
+  { id: 'p9', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Bộ thảm lót sàn da 5D', brand: '5D Auto', category: 'Nội thất', install_date: '2026-04-19', cost: 864000, odometer_km: 230, warranty_months: 12, notes: 'Bộ thảm lót sàn da 5D may chuẩn form' },
+  { id: 'p10', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Máy rửa xe cao áp gia đình', brand: 'Bosch', category: 'Thiết bị chăm sóc xe', install_date: '2026-04-19', cost: 2200000, odometer_km: 235, warranty_months: 6, notes: 'Máy rửa xe cao áp gia đình' },
+  { id: 'p11', asset_id: REAL_ASSET_IDS.MAZDA2_2026, name: 'Bơm lốp Toyota điện tử', brand: 'Toyota', category: 'Thiết bị lốp', install_date: '2026-04-21', cost: 389000, odometer_km: 235, warranty_months: 12, notes: 'Bơm lốp điện tử cắm tẩu 12V' },
+  // BIKE03 (Thống Nhất MTB 26-05)
+  { id: 'p12', asset_id: REAL_ASSET_IDS.MTB_26_05, name: 'Gác chân xe đạp', brand: 'Thống Nhất', category: 'Phụ kiện', install_date: '2025-02-21', cost: 35000, odometer_km: 0, warranty_months: 0, notes: 'Gác chân sau' },
+  { id: 'p13', asset_id: REAL_ASSET_IDS.MTB_26_05, name: 'Ghế ngồi trước cho bé', brand: 'Thống Nhất', category: 'Phụ kiện', install_date: '2025-04-21', cost: 390000, odometer_km: 0, warranty_months: 0, notes: 'Ghế em bé an toàn' },
+  { id: 'p14', asset_id: REAL_ASSET_IDS.MTB_26_05, name: 'Đèn trước xe đạp', brand: 'OEM', category: 'Điện tử', install_date: '2025-04-21', cost: 64900, odometer_km: 0, warranty_months: 6, notes: 'Đèn LED siêu sáng' },
+  { id: 'p15', asset_id: REAL_ASSET_IDS.MTB_26_05, name: 'Mũ thể thao', brand: 'OEM', category: 'Phụ kiện', install_date: '2025-04-21', cost: 36000, odometer_km: 0, warranty_months: 0, notes: 'Mũ bảo hiểm xe đạp' },
+  { id: 'p16', asset_id: REAL_ASSET_IDS.MTB_26_05, name: 'Đèn hậu xe đạp', brand: 'OEM', category: 'Điện tử', install_date: '2025-04-21', cost: 67500, odometer_km: 0, warranty_months: 6, notes: 'Đèn LED cảnh báo sau' },
+  { id: 'p17', asset_id: REAL_ASSET_IDS.MTB_26_05, name: 'Giá bình nước', brand: 'OEM', category: 'Phụ kiện', install_date: '2025-04-21', cost: 24650, odometer_km: 0, warranty_months: 0, notes: 'Gọng kẹp bình nước' },
 ];
 
 export interface OdometerLogRecord {
