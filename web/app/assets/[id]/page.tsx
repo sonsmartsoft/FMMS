@@ -952,6 +952,32 @@ export default function AssetDetailPage() {
       }
     });
 
+    // Fill in missing days so the calendar/log is continuous and not skipping rest days
+    if (events.length > 0) {
+      const dates = Array.from(dailyMap.keys()).sort();
+      const minDateStr = dates[0];
+      const maxDateStr = todayStr > dates[dates.length - 1] ? todayStr : dates[dates.length - 1];
+      
+      const startD = new Date(minDateStr);
+      const endD = new Date(maxDateStr);
+      
+      const diffDays = Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays <= 90) {
+        for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+          const dStr = toLocalDateString(d.toISOString());
+          if (!dailyMap.has(dStr)) {
+            dailyMap.set(dStr, {
+              date: dStr,
+              minOdo: 0,
+              maxOdo: 0,
+              tripDistance: 0,
+              notes: [{ type: 'REST', text: 'Xe nghỉ / Không phát sinh di chuyển', id: `rest_${dStr}` }],
+            });
+          }
+        }
+      }
+    }
+
     const sortedDays = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
     let prevOdo = 0;
 
