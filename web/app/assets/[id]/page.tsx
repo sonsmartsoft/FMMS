@@ -2496,6 +2496,28 @@ export default function AssetDetailPage() {
               {/* 1. THEO NGÀY (DAILY VIEW) */}
               {odoViewMode === 'daily' && (
                 <div className="space-y-4">
+                  {/* 📅 Date Filter & Presets */}
+                  <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                    <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                      <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc thời gian:</span>
+                      {dateFilterPresets.map(p => (
+                        <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
+                          style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input type="date" value={tabStartDate} onChange={e => setTabStartDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>-</span>
+                      <input type="date" value={tabEndDate} onChange={e => setTabEndDate(e.target.value)} className="theme-input text-[10px] py-1 px-1.5 font-mono" style={{ width: '120px' }} />
+                      {(tabStartDate || tabEndDate) && (
+                        <button onClick={() => { setTabStartDate(''); setTabEndDate(''); }} className="text-[10px] font-bold text-rose-400">✕ Xóa lọc</button>
+                      )}
+                    </div>
+                  </div>
+
                   {/* Daily Km Recharts */}
                   {mileageAnalytics.dailyReport.length > 0 && (
                     <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
