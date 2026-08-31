@@ -7,36 +7,38 @@ import {
   LayoutDashboard, Car, Fuel, Wrench, DollarSign,
   FileText, BarChart3, Settings, Activity, Sparkles, Award, MapPin, Radio,
 } from 'lucide-react';
-
-
-const NAV_SECTIONS = [
-  {
-    title: 'Quản lý Mobility',
-    items: [
-      { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-      { name: 'Bản đồ GPS', href: '/map', icon: MapPin },
-      { name: 'Phương tiện', href: '/assets', icon: Car },
-      { name: 'Nhiên liệu & Pin', href: '/fuel', icon: Fuel },
-      { name: 'Bảo dưỡng & Phụ tùng', href: '/maintenance', icon: Wrench },
-      { name: 'Chi phí & Khoản vay', href: '/finance', icon: DollarSign },
-      { name: 'Giấy tờ & Bảo hiểm', href: '/documents', icon: FileText },
-      { name: 'Sổ Bảo hành & Claim', href: '/warranties', icon: Award },
-      { name: 'Báo cáo & Phân tích', href: '/analytics', icon: BarChart3 },
-    ],
-  },
-  {
-    title: 'Hệ thống & AI',
-    items: [
-      { name: 'AI Center', href: '/ai-center', icon: Sparkles },
-      { name: 'Thiết bị Tracker', href: '/settings/devices', icon: Radio },
-      { name: 'Cài đặt hệ thống', href: '/settings', icon: Settings },
-      { name: 'System Health', href: '/settings/health', icon: Activity },
-    ],
-  },
-];
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
+  const { language } = useLanguage();
+  const isEn = language === 'en';
+
+  const NAV_SECTIONS = [
+    {
+      title: isEn ? 'Mobility Management' : 'Quản lý Mobility',
+      items: [
+        { name: isEn ? 'Dashboard' : 'Dashboard', href: '/', icon: LayoutDashboard },
+        { name: isEn ? 'GPS Map' : 'Bản đồ GPS', href: '/map', icon: MapPin },
+        { name: isEn ? 'Vehicles' : 'Phương tiện', href: '/assets', icon: Car },
+        { name: isEn ? 'Fuel & Battery' : 'Nhiên liệu & Pin', href: '/fuel', icon: Fuel },
+        { name: isEn ? 'Maintenance & Parts' : 'Bảo dưỡng & Phụ tùng', href: '/maintenance', icon: Wrench },
+        { name: isEn ? 'Finance & Loans' : 'Chi phí & Khoản vay', href: '/finance', icon: DollarSign },
+        { name: isEn ? 'Docs & Insurance' : 'Giấy tờ & Bảo hiểm', href: '/documents', icon: FileText },
+        { name: isEn ? 'Warranty & Claims' : 'Sổ Bảo hành & Claim', href: '/warranties', icon: Award },
+        { name: isEn ? 'Reports & Analytics' : 'Báo cáo & Phân tích', href: '/analytics', icon: BarChart3 },
+      ],
+    },
+    {
+      title: isEn ? 'System & AI' : 'Hệ thống & AI',
+      items: [
+        { name: 'AI Center', href: '/ai-center', icon: Sparkles },
+        { name: isEn ? 'OBD Devices' : 'Thiết bị Tracker', href: '/settings/devices', icon: Radio },
+        { name: isEn ? 'System Settings' : 'Cài đặt hệ thống', href: '/settings', icon: Settings },
+        { name: 'System Health', href: '/settings/health', icon: Activity },
+      ],
+    },
+  ];
 
   return (
     <aside
@@ -60,7 +62,6 @@ export const Sidebar: React.FC = () => {
             <nav className="space-y-0.5">
               {section.items.map((item) => {
                 const Icon = item.icon;
-                // Match exact or sub-path
                 const isActive = item.href === '/'
                   ? pathname === '/'
                   : pathname.startsWith(item.href);

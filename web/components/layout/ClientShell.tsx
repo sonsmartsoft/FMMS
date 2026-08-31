@@ -10,6 +10,7 @@ import { DisplaySettingsModal } from '@/components/dashboard/DisplaySettingsModa
 import { DEFAULT_CARD_SETTINGS } from '@/lib/data/mockData';
 import { CardDisplaySettings } from '@/types/mobility';
 import { ThemeProvider } from '@/lib/theme/ThemeContext';
+import { LanguageProvider } from '@/lib/i18n/LanguageContext';
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -55,7 +56,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
 export function ClientShell({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
-      <AppShell>{children}</AppShell>
+      <LanguageProvider>
+        <AppShell>{children}</AppShell>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

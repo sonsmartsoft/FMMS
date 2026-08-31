@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Sliders, Sun, Moon, Laptop, DollarSign, Gauge, Eye, Check, Sparkles, LayoutDashboard } from 'lucide-react';
+import { Sliders, Sun, Moon, Laptop, DollarSign, Gauge, Eye, Check, Sparkles, LayoutDashboard, Languages, Globe } from 'lucide-react';
+import { useTheme, ThemeMode } from '@/lib/theme/ThemeContext';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { Language } from '@/lib/i18n/translations';
 
 interface DisplayPreferences {
-  theme: 'system' | 'dark' | 'light';
   currency: 'VND' | 'USD';
   distanceUnit: 'km' | 'mi';
   fuelUnit: 'L' | 'gal';
@@ -17,7 +19,6 @@ interface DisplayPreferences {
 }
 
 const DEFAULT_PREFS: DisplayPreferences = {
-  theme: 'system',
   currency: 'VND',
   distanceUnit: 'km',
   fuelUnit: 'L',
@@ -30,6 +31,8 @@ const DEFAULT_PREFS: DisplayPreferences = {
 };
 
 export default function DisplaySettingsPage() {
+  const { themeMode, setThemeMode } = useTheme();
+  const { language, setLanguage, t } = useLanguage();
   const [prefs, setPrefs] = useState<DisplayPreferences>(DEFAULT_PREFS);
   const [saved, setSaved] = useState(false);
 
@@ -42,8 +45,16 @@ export default function DisplaySettingsPage() {
     } catch {}
   }, []);
 
-  const update = <K extends keyof DisplayPreferences>(key: K, value: DisplayPreferences[K]) => {
+  const updatePref = <K extends keyof DisplayPreferences>(key: K, value: DisplayPreferences[K]) => {
     setPrefs(p => ({ ...p, [key]: value }));
+  };
+
+  const handleSelectTheme = (mode: ThemeMode) => {
+    setThemeMode(mode);
+  };
+
+  const handleSelectLanguage = (lang: Language) => {
+    setLanguage(lang);
   };
 
   const handleSave = () => {
@@ -60,31 +71,73 @@ export default function DisplaySettingsPage() {
       <div>
         <h1 className="text-2xl font-extrabold flex items-center space-x-2" style={{ color: 'var(--text-primary)' }}>
           <Sliders className="w-6 h-6 text-cyan-400" />
-          <span>Tùy Chỉnh Dashboard &amp; Giao Diện</span>
+          <span>{t('display.title')}</span>
         </h1>
         <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-          Cấu hình hiển thị bảng điều khiển, đơn vị đo lường, tiền tệ và các thẻ thông tin
+          {t('display.subtitle')}
         </p>
       </div>
 
-      {/* Theme Selection */}
+      {/* 🌐 1. Ngôn Ngữ Hệ Thống (Language Selection) */}
+      <div className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+          <Globe className="w-4 h-4" />
+          <span>{t('display.langTitle')}</span>
+        </h3>
+        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+          Chọn ngôn ngữ hiển thị trên toàn bộ menu, bảng điều khiển và thông báo của hệ thống
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          {[
+            { id: 'vi', label: 'Tiếng Việt', sub: 'Giao diện & báo cáo tiếng Việt (Mặc định)', flag: '🇻🇳' },
+            { id: 'en', label: 'English (US)', sub: 'Full English dashboard & analytics', flag: '🇺🇸' },
+          ].map(l => {
+            const isSelected = language === l.id;
+            return (
+              <div
+                key={l.id}
+                onClick={() => handleSelectLanguage(l.id as any)}
+                className={`p-4 rounded-2xl cursor-pointer border transition-all flex items-center justify-between ${
+                  isSelected ? 'ring-2 ring-cyan-500 shadow-md scale-[1.01]' : 'hover:border-cyan-500/50'
+                }`}
+                style={{
+                  background: isSelected ? 'rgba(14, 165, 233, 0.12)' : 'var(--bg-primary)',
+                  borderColor: isSelected ? 'var(--accent-cyan)' : 'var(--border-subtle)',
+                }}
+              >
+                <div className="flex items-center space-x-3">
+                  <span className="text-2xl">{l.flag}</span>
+                  <div>
+                    <p className="text-xs font-extrabold" style={{ color: 'var(--text-primary)' }}>{l.label}</p>
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{l.sub}</p>
+                  </div>
+                </div>
+                {isSelected && <Check className="w-4 h-4 text-cyan-400 shrink-0" />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 🌓 2. Theme Selection (Real-time Preview) */}
       <div className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
         <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
           <Sun className="w-4 h-4" />
-          <span>Chế Độ Giao Diện (Theme)</span>
+          <span>{t('display.themeTitle')}</span>
         </h3>
         <div className="grid grid-cols-3 gap-3 pt-1">
           {[
-            { id: 'system', label: 'Tự động (Hệ điều hành)', icon: Laptop },
-            { id: 'light', label: 'Giao diện Sáng (Light)', icon: Sun },
-            { id: 'dark', label: 'Giao diện Tối (Dark)', icon: Moon },
-          ].map(t => {
-            const Icon = t.icon;
-            const isSelected = prefs.theme === t.id;
+            { id: 'system', label: t('display.themeSystem'), icon: Laptop },
+            { id: 'light', label: t('display.themeLight'), icon: Sun },
+            { id: 'dark', label: t('display.themeDark'), icon: Moon },
+          ].map(tItem => {
+            const Icon = tItem.icon;
+            const isSelected = themeMode === tItem.id;
             return (
               <div
-                key={t.id}
-                onClick={() => update('theme', t.id as any)}
+                key={tItem.id}
+                onClick={() => handleSelectTheme(tItem.id as any)}
                 className={`p-4 rounded-2xl cursor-pointer border text-center transition-all flex flex-col items-center justify-center gap-2 ${
                   isSelected ? 'ring-2 ring-cyan-500 shadow-md scale-[1.01]' : 'hover:border-cyan-500/50'
                 }`}
@@ -94,28 +147,28 @@ export default function DisplaySettingsPage() {
                 }}
               >
                 <Icon className="w-5 h-5 text-cyan-400" />
-                <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{t.label}</span>
+                <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{tItem.label}</span>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Units & Formatting */}
+      {/* 💵 3. Units & Formatting */}
       <div className="p-5 rounded-2xl space-y-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
         <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
           <Gauge className="w-4 h-4" />
-          <span>Đơn Vị Đo Lường &amp; Tiền Tệ</span>
+          <span>{t('display.unitsTitle')}</span>
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-              Đơn vị tiền tệ
+              {t('display.currency')}
             </label>
             <select
               value={prefs.currency}
-              onChange={e => update('currency', e.target.value as any)}
+              onChange={e => updatePref('currency', e.target.value as any)}
               className="theme-select text-xs font-bold"
             >
               <option value="VND">VND (₫ - Đồng Việt Nam)</option>
@@ -125,11 +178,11 @@ export default function DisplaySettingsPage() {
 
           <div>
             <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-              Đơn vị quãng đường
+              {t('display.distanceUnit')}
             </label>
             <select
               value={prefs.distanceUnit}
-              onChange={e => update('distanceUnit', e.target.value as any)}
+              onChange={e => updatePref('distanceUnit', e.target.value as any)}
               className="theme-select text-xs font-bold"
             >
               <option value="km">Kilômét (km)</option>
@@ -139,11 +192,11 @@ export default function DisplaySettingsPage() {
 
           <div>
             <label className="text-xs font-bold block mb-1.5" style={{ color: 'var(--text-secondary)' }}>
-              Định mức tiêu thụ nhiên liệu
+              {t('display.fuelUnit')}
             </label>
             <select
               value={prefs.consumptionFormat}
-              onChange={e => update('consumptionFormat', e.target.value as any)}
+              onChange={e => updatePref('consumptionFormat', e.target.value as any)}
               className="theme-select text-xs font-bold"
             >
               <option value="L/100km">Lít / 100km (L/100km)</option>
@@ -154,11 +207,11 @@ export default function DisplaySettingsPage() {
         </div>
       </div>
 
-      {/* Dashboard Widgets Visibility */}
+      {/* 🎛️ 4. Dashboard Widgets Visibility */}
       <div className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
         <h3 className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
           <LayoutDashboard className="w-4 h-4" />
-          <span>Hiển Thị Thẻ Trên Bảng Điều Khiển (Dashboard Widgets)</span>
+          <span>{t('display.widgetsTitle')}</span>
         </h3>
 
         <div className="space-y-2.5 pt-1">
@@ -186,7 +239,7 @@ export default function DisplaySettingsPage() {
                 <input
                   type="checkbox"
                   checked={isChecked}
-                  onChange={e => update(w.key as any, e.target.checked)}
+                  onChange={e => updatePref(w.key as any, e.target.checked)}
                   className="mt-1 rounded accent-cyan-500 w-4 h-4"
                 />
               </label>
@@ -203,9 +256,9 @@ export default function DisplaySettingsPage() {
           style={{ background: saved ? 'var(--status-green)' : 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
         >
           {saved ? (
-            <><Check className="w-4 h-4" /><span>Đã lưu tùy chỉnh thành công!</span></>
+            <><Check className="w-4 h-4" /><span>{t('action.saved')}</span></>
           ) : (
-            <><Sparkles className="w-4 h-4" /><span>Lưu Tùy Chỉnh Dashboard</span></>
+            <><Sparkles className="w-4 h-4" /><span>{t('display.saveBtn')}</span></>
           )}
         </button>
       </div>

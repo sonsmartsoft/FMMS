@@ -152,10 +152,11 @@ export default function SystemHealthPage() {
             : <XCircle className="w-5 h-5 shrink-0 text-amber-400" />}
           <p className="text-xs font-bold" style={{ color: overallOk ? 'var(--status-green)' : hasError ? 'var(--status-red)' : 'var(--status-amber)' }}>
             {overallOk
-              ? '✅ Tất cả các dịch vụ (Database, Auth, AI) hoạt động hoàn hảo'
+              ? 'Tất cả các dịch vụ (Database, Auth, AI) hoạt động hoàn hảo'
               : hasError
-                ? '❌ Có lỗi phát sinh — Vui lòng kiểm tra chi tiết từng dịch vụ bên dưới'
-                : '⚠️ Một số dịch vụ chưa cấu hình (ví dụ: API Key AI trong Cài đặt)'}
+                ? 'Có lỗi phát sinh — Vui lòng kiểm tra chi tiết từng dịch vụ bên dưới'
+                : 'Một số dịch vụ chưa cấu hình (ví dụ: API Key AI trong Cài đặt)'}
+
           </p>
         </div>
       )}

@@ -1,0 +1,86 @@
+export type Language = 'vi' | 'en';
+
+export const TRANSLATIONS = {
+  vi: {
+    // Navigation
+    'nav.dashboard': 'Tổng Quan',
+    'nav.assets': 'Phương Tiện',
+    'nav.finance': 'Tài Chính & Vay',
+    'nav.trips': 'Chuyến Đi',
+    'nav.maintenance': 'Bảo Dưỡng',
+    'nav.fuel': 'Nhiên Liệu',
+    'nav.analytics': 'Phân Tích',
+    'nav.settings': 'Cài Đặt',
+    'nav.aiCenter': 'AI Center',
+
+    // Common Actions
+    'action.save': 'Lưu Cấu Hình',
+    'action.saved': 'Đã Lưu Thành Công!',
+    'action.cancel': 'Hủy Bỏ',
+    'action.edit': 'Chỉnh Sửa',
+    'action.delete': 'Xóa',
+    'action.refresh': 'Làm Mới',
+    'action.search': 'Tìm Kiếm...',
+    'action.filter': 'Lọc Dữ Liệu',
+    'action.all': 'Tất Cả',
+    'action.close': 'Đóng',
+
+    // Display Settings
+    'display.title': 'Tùy Chỉnh Dashboard & Giao Diện',
+    'display.subtitle': 'Cấu hình ngôn ngữ hệ thống, chế độ sáng/tối, tiền tệ & hiển thị các thẻ thông tin',
+    'display.themeTitle': 'Chế Độ Giao Diện (Theme)',
+    'display.themeSystem': 'Tự động (Theo máy)',
+    'display.themeLight': 'Giao diện Sáng (Light)',
+    'display.themeDark': 'Giao diện Tối (Dark)',
+    'display.langTitle': 'Ngôn Ngữ Hệ Thống (Language)',
+    'display.langVi': 'Tiếng Việt (Vietnamese)',
+    'display.langEn': 'English (Tiếng Anh)',
+    'display.unitsTitle': 'Đơn Vị Đo Lường & Tiền Tệ',
+    'display.currency': 'Đơn vị tiền tệ',
+    'display.distanceUnit': 'Đơn vị quãng đường',
+    'display.fuelUnit': 'Định mức tiêu hao nhiên liệu',
+    'display.widgetsTitle': 'Hiển Thị Thẻ Trên Dashboard (Widgets)',
+    'display.saveBtn': 'Lưu Tùy Chỉnh Giao Diện',
+  },
+  en: {
+    // Navigation
+    'nav.dashboard': 'Dashboard',
+    'nav.assets': 'Vehicles',
+    'nav.finance': 'Finance & Loans',
+    'nav.trips': 'Trip Logs',
+    'nav.maintenance': 'Maintenance',
+    'nav.fuel': 'Fuel Logs',
+    'nav.analytics': 'Analytics',
+    'nav.settings': 'Settings',
+    'nav.aiCenter': 'AI Center',
+
+    // Common Actions
+    'action.save': 'Save Settings',
+    'action.saved': 'Saved Successfully!',
+    'action.cancel': 'Cancel',
+    'action.edit': 'Edit',
+    'action.delete': 'Delete',
+    'action.refresh': 'Refresh',
+    'action.search': 'Search...',
+    'action.filter': 'Filter',
+    'action.all': 'All',
+    'action.close': 'Close',
+
+    // Display Settings
+    'display.title': 'Dashboard & Display Preferences',
+    'display.subtitle': 'Configure system language, light/dark theme, currency & dashboard widget visibility',
+    'display.themeTitle': 'Interface Theme',
+    'display.themeSystem': 'System Default',
+    'display.themeLight': 'Light Mode',
+    'display.themeDark': 'Dark Mode',
+    'display.langTitle': 'System Language',
+    'display.langVi': 'Tiếng Việt (Vietnamese)',
+    'display.langEn': 'English (US/UK)',
+    'display.unitsTitle': 'Units & Currency',
+    'display.currency': 'Currency unit',
+    'display.distanceUnit': 'Distance unit',
+    'display.fuelUnit': 'Fuel consumption format',
+    'display.widgetsTitle': 'Dashboard Widgets Visibility',
+    'display.saveBtn': 'Save Display Preferences',
+  },
+} as const;
