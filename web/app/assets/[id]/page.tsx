@@ -936,7 +936,7 @@ export default function AssetDetailPage() {
           date: ev.date,
           minOdo: ev.odometer_km || 0,
           maxOdo: ev.odometer_km || 0,
-          tripDistance: ev.type === 'TRIP' ? (ev.raw?.distance_km || 0) : 0,
+          tripDistance: ev.type === 'TRIP' ? (Number(ev.raw?.distance_km) || 0) : 0,
           notes: [{ type: ev.type, text: ev.note, id: ev.id, raw: ev.raw }],
         });
       } else {
@@ -946,7 +946,7 @@ export default function AssetDetailPage() {
           if (ev.odometer_km > cur.maxOdo) cur.maxOdo = ev.odometer_km;
         }
         if (ev.type === 'TRIP') {
-          cur.tripDistance += (ev.raw?.distance_km || 0);
+          cur.tripDistance += (Number(ev.raw?.distance_km) || 0);
         }
         cur.notes.push({ type: ev.type, text: ev.note, id: ev.id, raw: ev.raw });
       }
