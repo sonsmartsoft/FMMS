@@ -28,8 +28,8 @@ export function mapTripRow(row: any): TripRecord {
       row.average_consumption_l100km != null ? Number(row.average_consumption_l100km) : undefined,
     average_speed_kmh: Number(row.average_speed_kmh) || 0,
     max_speed_kmh: Number(row.max_speed_kmh) || 0,
-    start_location: row.notes ? row.notes.split('|')[0] : undefined,
-    end_location: row.notes ? row.notes.split('|')[1] : undefined,
+    start_location: row.notes ? row.notes.split('|')[0] : (row.start_latitude ? `${row.start_latitude.toFixed(4)}, ${row.start_longitude?.toFixed(4)}` : undefined),
+    end_location: row.notes ? row.notes.split('|')[1] : (row.end_latitude ? `${row.end_latitude.toFixed(4)}, ${row.end_longitude?.toFixed(4)}` : undefined),
   };
 }
 
@@ -66,7 +66,7 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
       .from('trips')
       .select('*')
       .order('start_time', { ascending: false })
-      .limit(200);
+      .limit(500);
       
     if (realId && isValidUuid(realId)) {
       query = query.eq('asset_id', realId);
@@ -75,7 +75,9 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
     if (!error && data) {
       supabaseTrips = data.map(mapTripRow);
     }
-  } catch {}
+  } catch (err) {
+    console.warn('getTrips fetch error:', err);
+  }
 
   const localTrips = getLocalTrips().filter(t => {
     if (!assetId) return true;
@@ -83,15 +85,17 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
     return tAssetId === realId || t.asset_id === assetId;
   });
 
-  const mockTrips = MOCK_TRIPS.filter(t => {
-    if (!assetId) return true;
-    const tAssetId = t.asset_id ? resolveAssetId(t.asset_id) : undefined;
-    return tAssetId === realId || t.asset_id === assetId;
-  });
+  // If real database has trips, prioritize real trips 100% and don't mix mock data
+  const baseTrips = (supabaseTrips.length > 0 || localTrips.length > 0)
+    ? [...supabaseTrips, ...localTrips]
+    : MOCK_TRIPS.filter(t => {
+        if (!assetId) return true;
+        const tAssetId = t.asset_id ? resolveAssetId(t.asset_id) : undefined;
+        return tAssetId === realId || t.asset_id === assetId;
+      });
 
-  // Merge unique trips
   const map = new Map<string, TripRecord>();
-  [...supabaseTrips, ...localTrips, ...mockTrips].forEach(item => {
+  baseTrips.forEach(item => {
     if (!map.has(item.id)) {
       map.set(item.id, item);
     }

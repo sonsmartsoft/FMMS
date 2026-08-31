@@ -647,10 +647,25 @@ export default function AssetDetailPage() {
     );
   };
 
+  const toLocalDateString = (isoOrDateStr?: string) => {
+
+    if (!isoOrDateStr) return new Date().toISOString().slice(0, 10);
+    try {
+      const d = new Date(isoOrDateStr);
+      if (isNaN(d.getTime())) return isoOrDateStr.slice(0, 10);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    } catch {
+      return isoOrDateStr.slice(0, 10);
+    }
+  };
+
   const displayedTrips = useMemo(() => {
     let list = trips;
-    if (tabStartDate) list = list.filter(t => t.start_time && t.start_time.slice(0, 10) >= tabStartDate);
-    if (tabEndDate) list = list.filter(t => t.start_time && t.start_time.slice(0, 10) <= tabEndDate);
+    if (tabStartDate) list = list.filter(t => t.start_time && toLocalDateString(t.start_time) >= tabStartDate);
+    if (tabEndDate) list = list.filter(t => t.start_time && toLocalDateString(t.start_time) <= tabEndDate);
     return [...list].sort((a: any, b: any) => {
       let valA = a[tripSortCol] ?? '';
       let valB = b[tripSortCol] ?? '';
@@ -662,6 +677,7 @@ export default function AssetDetailPage() {
         : String(valB).localeCompare(String(valA), 'vi');
     });
   }, [trips, tabStartDate, tabEndDate, tripSortCol, tripSortDir]);
+
 
   const displayedExpenses = useMemo(() => {
     let list = expenses;
@@ -793,7 +809,7 @@ export default function AssetDetailPage() {
     fuelLogs.forEach(f => {
       if (f.odometer_km) {
         events.push({
-          date: f.date ? f.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          date: toLocalDateString(f.date),
           odometer_km: f.odometer_km,
           type: 'FUEL',
           note: `Đổ ${f.liters}L xăng${f.station ? ` tại ${f.station}` : ''}${f.notes ? ` (${f.notes})` : ''}`,
@@ -803,19 +819,6 @@ export default function AssetDetailPage() {
       }
     });
 
-    const toLocalDateString = (isoOrDateStr?: string) => {
-      if (!isoOrDateStr) return new Date().toISOString().slice(0, 10);
-      try {
-        const d = new Date(isoOrDateStr);
-        if (isNaN(d.getTime())) return isoOrDateStr.slice(0, 10);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${day}`;
-      } catch {
-        return isoOrDateStr.slice(0, 10);
-      }
-    };
 
     // Maintenance records
     maintenance.forEach(m => {
