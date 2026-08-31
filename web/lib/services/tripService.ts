@@ -65,8 +65,12 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
       .order('start_time', { ascending: false })
       .limit(500);
       
-    if (realId && isValidUuid(realId)) {
-      query = query.eq('asset_id', realId);
+    if (assetId) {
+      if (realId && isValidUuid(realId)) {
+        query = query.or(`asset_id.eq.${realId},asset_id.eq.${assetId},asset_id.eq.CAR01,asset_id.eq.22222222-2222-2222-2222-222222222222`);
+      } else {
+        query = query.or(`asset_id.eq.${assetId},asset_id.eq.CAR01`);
+      }
     }
     const { data, error } = await query;
     if (!error && data) {

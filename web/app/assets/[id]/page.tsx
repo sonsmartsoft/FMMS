@@ -19,7 +19,9 @@ import { getInsurancePolicies, createInsurancePolicy, updateInsurancePolicy, del
 import { getLoadByAsset, cleanupDuplicateLoanExpenses } from '@/lib/services/loanService';
 
 import { createOdometerAdjustment, getOdometerLogs, createOdometerLog, updateOdometerLog, deleteOdometerLog, OdometerLogRecord } from '@/lib/services/odometerService';
+import { getDailySummaries, DailySummary } from '@/lib/services/analyticsService';
 import { getWarranties, createWarranty, updateWarranty, deleteWarranty, createWarrantyClaim } from '@/lib/services/warrantyService';
+
 import { createClient } from '@/lib/supabase/client';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
@@ -182,6 +184,7 @@ export default function AssetDetailPage() {
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [trips, setTrips] = useState<TripRecord[]>([]);
+  const [dailySummaries, setDailySummaries] = useState<any[]>([]);
   const [parts, setParts] = useState<any[]>([]);
   const [loan, setLoan] = useState<LoanRecord | null>(null);
   const [insurances, setInsurances] = useState<any[]>([]);
@@ -234,8 +237,7 @@ export default function AssetDetailPage() {
         });
 
         await cleanupDuplicateLoanExpenses();
-        const [f, m, e, t, p, i, l, odo, w] = await Promise.all([
-
+        const [f, m, e, t, p, i, l, odo, w, ds] = await Promise.all([
           getFuelLogs(assetId),
           getMaintenanceRecords(assetId),
           getExpenses(assetId),
@@ -245,12 +247,14 @@ export default function AssetDetailPage() {
           getLoadByAsset(assetId),
           getOdometerLogs(assetId),
           getWarranties(assetId),
+          getDailySummaries(assetId).catch(() => ({ data: [] })),
         ]);
         if (cancelled) return;
         setFuelLogs(f);
         setMaintenance(m);
         setExpenses(e);
         setTrips(t);
+        if (ds?.data) setDailySummaries(ds.data);
         setParts(p);
         setOdometerLogs(odo);
         if (w?.data) setWarranties(w.data);
@@ -880,6 +884,22 @@ export default function AssetDetailPage() {
       });
     });
 
+    // Daily Summaries
+    dailySummaries.forEach(ds => {
+      const dStr = toLocalDateString(ds.date);
+      if (Number(ds.distance_km) > 0) {
+        events.push({
+          date: dStr,
+          odometer_km: 0,
+          type: 'TRIP',
+          note: `Tổng kết ngày: ${ds.distance_km} km`,
+          id: `ds_${ds.id || dStr}`,
+          raw: { distance_km: Number(ds.distance_km) },
+        });
+      }
+    });
+
+
     // Check if current asset odometer is higher than highest event ODO
     const maxEventOdo = events.reduce((max, ev) => Math.max(max, ev.odometer_km || 0), 0);
     const todayStr = toLocalDateString(new Date().toISOString());
@@ -1082,7 +1102,7 @@ export default function AssetDetailPage() {
       currentMonthKm,
       totalActiveDays: dailyReport.filter(d => d.kmRun > 0).length,
     };
-  }, [odometerLogs, fuelLogs, maintenance, trips, expenses, asset]);
+  }, [odometerLogs, fuelLogs, maintenance, trips, dailySummaries, expenses, asset]);
 
   const displayedDailyReport = useMemo(() => {
     let list = mileageAnalytics.dailyReport;
