@@ -284,11 +284,6 @@ export async function updateAsset(id: string, data: Partial<AssetInput>): Promis
     } catch {}
   }
 
-  // 2. Mutate in-memory INITIAL_ASSETS
-  const memAsset = INITIAL_ASSETS.find(a => a.id === id || a.id === realId);
-  if (memAsset) {
-    Object.assign(memAsset, data);
-  }
 
   // 3. Update Supabase
   try {
