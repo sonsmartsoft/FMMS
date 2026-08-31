@@ -177,7 +177,7 @@ fun FuelScreen(vm: FuelViewModel = viewModel()) {
 private fun FuelRing(levelPercent: Double?, liters: Double?, modifier: Modifier = Modifier) {
     val colors = LocalFmmsColors.current
     val pct = when {
-        levelPercent != null -> levelPercent
+        levelPercent != null -> levelPercent / 100.0
         liters != null -> (liters / CAPACITY_LITERS).coerceIn(0.0, 1.0)
         else -> 0.0
     }.coerceIn(0.0, 1.0)

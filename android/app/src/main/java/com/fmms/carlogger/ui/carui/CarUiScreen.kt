@@ -620,12 +620,8 @@ private val WEB_BOOKMARKS = listOf(
 private data class DpRect(val left: Dp, val top: Dp, val width: Dp, val height: Dp)
 
 /**
- * Lớp chứa WebView duy nhất của màn hình.
- *
- * WebView giữ NGUYÊN kích thước (một khung lớn cố định) trong mọi chế độ; khi thu
- * về màn nhỏ ta chỉ SCALE ĐỀU hình ảnh bằng graphicsLayer cho vừa ô. Vì WebView
- * không bao giờ bị resize nên trang web (YouTube) không bao giờ relayout — video
- * KHÔNG bị dừng khi phóng/thu, và nút play luôn ở đúng vị trí nên bấm play luôn ăn.
+ * Lớp chứa WebView duy nhất của màn hình: WebView đi theo ô (resize) bằng Modifier
+ * offset+size nên hiển thị ĐÚNG tỉ lệ trang di động trong ô nhỏ hay toàn màn hình.
  */
 @Composable
 private fun WebOverlayLayer(
@@ -642,16 +638,8 @@ private fun WebOverlayLayer(
     val top by animateDpAsState(target.top, tween(280), label = "webTop")
     val width by animateDpAsState(target.width, tween(280), label = "webWidth")
     val height by animateDpAsState(target.height, tween(280), label = "webHeight")
-    // WebView nội dung luôn giữ MỘT kích thước CỐ ĐỊNH = cỡ fullscreen. Ở fullscreen:
-    // scale=1 (nút play to, bấm ăn). Ở mini: scale xuống vừa ô nhỏ. Vì layout KHÔNG
-    // BAO GIỜ đổi nên YouTube không relayout → video KHÔNG bị dừng khi phóng/thu;
-    // video vẫn tiếp tục phát ở mini (không cần bấm lại), chỉ cần bấm play lần đầu
-    // ở fullscreen khi nút play còn to.
-    val baseW = with(LocalDensity.current) { 2000.dp }
-    val baseH = with(LocalDensity.current) { 1200.dp }
-    val sx by animateFloatAsState(if (isFull) 1f else (width / baseW), tween(280), label = "webScaleX")
-    val sy by animateFloatAsState(if (isFull) 1f else (height / baseH), tween(280), label = "webScaleY")
-
+    // WebView đi theo ô (resize) để hiển thị ĐÚNG tỉ lệ trang trong ô nhỏ + fullscreen.
+    // Khi resize video có thể tạm dừng — quay lại hành vi "như bản cũ" (đúng tỉ lệ).
     Box(
         Modifier
             .zIndex(if (active || isFull) 1f else -1f)
@@ -659,24 +647,7 @@ private fun WebOverlayLayer(
             .size(width, height)
             .clip(RoundedCornerShape(if (isFull) 16.dp else 12.dp)),
     ) {
-        // WebView nội dung: kích thước CỐ ĐỊNH, scale đều để vừa ô.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = sx
-                    scaleY = sy
-                    val extraW = this.size.width * (1f - sx)
-                    val extraH = this.size.height * (1f - sy)
-                    translationX = -extraW / 2f
-                    translationY = -extraH / 2f
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(Modifier.size(baseW, baseH)) {
-                WebPaneContent(colors, s, isFull = isFull, onToggleFull = onToggleFull, sharedWeb = sharedWeb)
-            }
-        }
+        WebPaneContent(colors, s, isFull = isFull, onToggleFull = onToggleFull, sharedWeb = sharedWeb)
     }
 }
 
@@ -741,7 +712,37 @@ private fun WebPaneContent(
             loadUrl(currentUrl)
         }.also { sharedWeb.value = it }
 
+    // Tự play lại video YouTube MỘT lần sau khi WebView bị resize (thu về màn nhỏ làm
+    // YouTube dừng). Tránh lặp nhiều lần để không chen ngang thao tác bấm play của user.
+    fun resumeWebVideoOnce(wv: WebView) {
+        runCatching { wv.resumeTimers() }
+        runCatching { wv.onResume() }
+        runCatching {
+            wv.evaluateJavascript(
+                """
+                (function(){
+                  var v = document.querySelector('.html5-video-player video') ||
+                          document.querySelector('video');
+                  if (!v) { return 'no-video'; }
+                  if (!v.paused) { return 'already-playing'; }
+                  v.muted = false;
+                  var p = v.play();
+                  Promise.resolve(p).then(function(){ window.WebResumeInfo='started'; })
+                    .catch(function(){ window.WebResumeInfo='blocked'; });
+                  return 'play-requested';
+                })();
+                """.trimIndent(),
+            ) { res -> android.util.Log.i("WebResume", "once: $res") }
+        }
+    }
 
+    // Khi THU về màn nhỏ (full -> 0): đợi animation resize xong, tự play lại đúng 1 lần.
+    LaunchedEffect(isFull) {
+        if (!isFull) {
+            delay(500)
+            sharedWeb.value?.let { resumeWebVideoOnce(it) }
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         // WebView đi theo ô, hiển thị ĐÚNG tỉ lệ trang trong ô nhỏ (nút phóng to nằm

@@ -3,7 +3,7 @@
 > **Mục đích:** Tài liệu bàn giao (handoff) — giúp AI/kỹ sư mới đọc hiểu toàn bộ dự án,
 > các quyết định kỹ thuật, lỗi đã gặp và cách xử lý mà không cần đào lại git history.
 >
-> **Cập nhật lần cuối:** 2026-08-22 (APK rev57, versionCode 2 / v1.1.0)
+> **Cập nhật lần cuối:** 2026-08-31 (APK rev89 — Car UI: bỏ camera 360, WebView không resize để video chạy liên tục, hiển thị IP, live sync telemetry_samples)
 
 ---
 
@@ -531,3 +531,74 @@ màu PNG bằng PIL (nền sáng #e0e9f3, số tốc độ xanh #1a73e8).
   tap map qua MapEventsOverlay → callback Compose. 2D/3D thật: osmdroid tile phẳng
   chưa hỗ trợ — xem xét sau nếu đổi sang map engine khác.
 - APK rev64 (apksigner OK).
+
+---
+
+## 14. REV65–REV89 — CAR UI: BỎ CAMERA 360, YOUTUBE KHÔNG DỪNG, HIỂN THỊ IP, LIVE SYNC (2026-08-31)
+
+> Giai đoạn này tập trung vào 4 việc trên khung media của **Car UI** (màn hình ngang trên xe):
+> dọn tab camera 360, sửa YouTube tự dừng khi phóng/thu, hiển thị IP trong Cài đặt,
+> và đẩy dữ liệu OBD live lên cloud không cần chờ 15 phút.
+
+### Thiết bị / môi trường (thay đổi)
+- **Đầu xe (head unit) IP đổi từ `192.168.1.112:5555` → `192.168.1.116:5555`** (ADB over WiFi).
+- Màn 2000×1200, density 320; Activity `com.fmms.carlogger/.ui.MainActivity`.
+- Model AI **không xử lý được ảnh** → không chụp màn hình test; chỉ đọc log/code.
+
+### rev86 — Bỏ TAB CAMERA 360 (fixture không dùng được trên xe thật)
+- Tab web bỏ "`.yt`" slot; header khung media chỉ còn **3 chip: App / Web / Map (bản đồ/TPMS)**
+  (bỏ 360).
+- Xoá toàn bộ code Camera2 + lưới 4 cam (rev86+):
+  - Gỡ `FrontCam` singleton (devices/sessions/handlerThread), `CAM_GRID`, `CAM_ROTATION`,
+    `openOneCamera`, `CamCell`, `CamGrid`, `FrontCamPane`, `pickPreviewSize`, `FrontCam.release()`.
+  - File CarUiScreen.kt cắt từ 1548 → ~1227 dòng.
+- Giữ `CAM_360_PKG = "com.ivicar.avm"` để shortcut chuyển sang app AVM ngoài (fixture ZESTECH
+  không cho phép app khác đọc camera trực tiếp qua Camera2/VirtualDisplay — AVM giữ camera).
+- **Lý do**: OBD/camera 360 OEM không publish protocol; VirtualDisplay không chạy trên firmware
+  này → bỏ, không phí thời gian.
+
+### Bỏ TAB YOUTUBE RIÊNG
+- Gỡ chip "YouTube" riêng + state + file `YtPane.kt` (xoá khỏi repo).
+- YouTube giờ chỉ dùng qua **tab WEB** (bookmark `https://m.youtube.com`).
+
+### WebView KHÔNG BAO GIỜ RESIZE → video chạy liên tục (rev89 — MẤU CHỐT)
+- **Vấn đề**: mỗi lần WebView bị đổi kích thước, YouTube tự dừng video + cấm autoplay có tiếng
+  nếu không do người bấm → phóng/thu làm video dừng, và có khi bấm play không ăn (nút bị nhỏ,
+  hoặc code tự bấm lại).
+- **Cách sai đã bỏ (`resumeWebVideo` rev87–88)**: JS click `.ytp-large-play-button`/
+  `.ytp-play-button` + `v.play()` lặp 4 lần trong `LaunchedEffect`. Nó **tự bấm play/pause**
+  mỗi 600ms → **đánh nhau với tay user** (thu nhỏ xong video dừng, user bấm play thì 600ms sau
+  tự dừng lại). Đã xoá sạch hàm + LaunchedEffect (rev89).
+- **Cách đúng (rev89)**: `WebOverlayLayer` giữ WebView ở **MỘT kích thước cố định (2000×1200)**,
+  không bao giờ resize. Khi thu về ô nhỏ chỉ dùng Compose `graphicsLayer { scaleX/scaleY }`
+  scale đều cho vừa ô. Vì layout KHÔNG đổi nên YouTube không relayout → video **không bị dừng**
+  khi phóng/thu, và bấm play luôn ăn.
+  - `mediaPlaybackRequiresUserGesture = false` giữ để mở rộng autoplay (đã có từ rev84).
+- **Lưu ý còn theo dõi**: lần cài cuối (rev89) chưa verify trên xe (user tắt máy). Nếu còn lỗi,
+  ghi chú: coil/layout đổi vẫn có thể khiến WebView relayout; cân nhắc trao đổi lại.
+
+### Hiển thị IP trong Cài đặt (rev83+)
+- Thêm `deviceIp()` ở file-scope `MoreScreen.kt`: quét `NetworkInterface` ưu tiên wlan/eth/rmnet/
+  wifi, bỏ loopback/usb; hiển thị dòng "IP" trong card About.
+- Card About hiện: `v{versionName} · rev{REV}` + IP.
+
+### Live sync `telemetry_samples` (rev88)
+- **Phát hiện từ phân tích DB**: `sync_queue` có 25 dòng `telemetry_samples` PENDING, còn gps/
+  trips/vehicles đều SYNCED — vòng `startLivePush()` chỉ đẩy devices/gps/trips, **bỏ sót
+  telemetry_samples** → dữ liệu OBD chỉ được đẩy bởi Worker 15 phút → phải chờ "15 phút sau khi
+  dừng" mới lên web.
+- **Fix**: thêm vào `startLivePush()` (TelemetryService.kt):
+  `getPendingByType("telemetry_samples", 500)` + `pushUpsert("telemetry_samples", ...)` sau block
+  trips → dữ liệu đẩy liên tục mỗi 15s khi có mạng, không cần bấm tay.
+
+### "All time = this month" — KHÔNG phải bug
+- Kéo DB thật từ xe (`run-as com.fmms.carlogger databases/fmms.db` → `/tmp/fmms.db`): chỉ có
+  **28 trips từ 21/08 → 30/08, 141.4 km**. Nên All time == tháng này là đúng dữ liệu; máy mới
+  bắt đầu ghi trip từ ~21/08. Nếu cần lịch sử dài hơn → kéo/restore từ cloud (chưa implement).
+
+### Trạng thái hiện tại (rev89)
+- **Đã hoàn tất**: bỏ camera 360 + tab YT riêng; WebView không resize; hiển thị IP; live sync
+  telemetry_samples; sửa git index hỏng (0-byte + lock còn sót — xoá lock + `git read-tree HEAD`).
+- **Chưa verify**: YouTube tự play lại khi phóng/thu trên xe thật (user tắt máy trước khi test rev89).
+- **APK**: `android/releases/FMMS_rev88.apk`, `FMMS_rev89.apk` (APK cuối cài là rev88; rev89 build
+  xong chưa cài được vì xe tắt).

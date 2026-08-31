@@ -18,6 +18,9 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
     suspend fun getPending(limit: Int): List<SyncQueueEntity> = syncQueueDao.getPending(limit)
     suspend fun getPendingByType(type: String, limit: Int): List<SyncQueueEntity> =
         syncQueueDao.getPendingByType(type, limit)
+    /** Còn dòng PENDING (chưa đẩy lên cloud) cho entity này không — để backfill không nạp trùng. */
+    suspend fun hasPendingForEntity(type: String, entityId: String): Boolean =
+        syncQueueDao.pendingForEntity(type, entityId) > 0
 
     private fun iso(millis: Long?): Any {
         if (millis == null) return JSONObject.NULL

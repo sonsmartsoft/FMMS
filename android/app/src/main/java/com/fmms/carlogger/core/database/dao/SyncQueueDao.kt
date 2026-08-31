@@ -22,6 +22,9 @@ interface SyncQueueDao {
     @Query("SELECT COUNT(*) FROM sync_queue WHERE status = 'PENDING'")
     suspend fun pendingCount(): Int
 
+    @Query("SELECT COUNT(*) FROM sync_queue WHERE entity_type = :type AND entity_id = :entityId AND status = 'PENDING'")
+    suspend fun pendingForEntity(type: String, entityId: String): Int
+
     @Query("SELECT COUNT(*) FROM sync_queue WHERE status = 'PENDING'")
     fun observePendingCountFlow(): Flow<Int>
 

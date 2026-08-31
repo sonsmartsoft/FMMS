@@ -149,6 +149,7 @@ object AppContainer {
         // hoặc lưu local -> đẩy bù toàn bộ log của xe hiện tại lên cloud.
         appScope.launch {
             try {
+                if (!prefs.getSyncEnabled()) return@launch
                 val vehicle = vehicleRepository.getActive()
                 if (vehicle != null) {
                     if (!prefs.getFuelBackfillDone()) {
@@ -159,10 +160,18 @@ object AppContainer {
                         android.util.Log.d("FmmsSync", "fuel-log backfill enqueued")
                     }
                     // Quét toàn bộ chuyến đi COMPLETED để đảm bảo không sót chuyến cũ
+                    // (kể cả chuyến đang PENDING chưa kịp đẩy khi trước tắt máy mất mạng).
+                    // Chỉ nạp vào queue nếu chưa có dòng PENDING cho trip đó (tránh trùng).
                     tripRepository.getAllByVehicle(vehicle.id)
-                        .filter { it.status == "COMPLETED" && it.distanceKm > 0.05 }
+                        .filter {
+                            it.status == "COMPLETED" && it.distanceKm > 0.05 &&
+                                !syncQueueRepository.hasPendingForEntity("trips", it.id)
+                        }
                         .forEach { syncQueueRepository.enqueueTrip(it) }
                 }
+                // Đẩy bù NGAY khi khởi động (có mạng) thay vì chờ Worker 15 phút —
+                // tránh rời app trước khi Worker chạy làm data không kịp lên web.
+                com.fmms.carlogger.data.sync.SyncWorker.pushPendingNow(this@AppContainer)
             } catch (e: Exception) {
                 android.util.Log.w("FmmsSync", "Backfill failed: ${e.message}")
             }
@@ -198,7 +207,10 @@ object AppContainer {
                 val vehicle = vehicleRepository.getActive()
                 if (vehicle != null) {
                     tripRepository.getAllByVehicle(vehicle.id)
-                        .filter { it.status == "COMPLETED" && it.distanceKm > 0.05 }
+                        .filter {
+                            it.status == "COMPLETED" && it.distanceKm > 0.05 &&
+                                !syncQueueRepository.hasPendingForEntity("trips", it.id)
+                        }
                         .forEach { syncQueueRepository.enqueueTrip(it) }
                 }
             } catch (_: Exception) {}
