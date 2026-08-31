@@ -1437,8 +1437,8 @@ export default function AssetDetailPage() {
     try {
       if (editingFuel) {
         const updated = await updateFuelLog(editingFuel.id, {
-          timestamp: new Date(fuelForm.date || Date.now()).toISOString(),
-          fuel_liters: l,
+          date: fuelForm.date || new Date().toISOString().slice(0, 10),
+          liters: l,
           price_per_liter: p,
           total_cost: l * p,
           odometer_km: parseFloat(fuelForm.odometer_km) || 0,
@@ -1453,13 +1453,13 @@ export default function AssetDetailPage() {
       } else {
         const created = await createFuelLog({
           asset_id: asset.id,
-          timestamp: new Date(fuelForm.date || Date.now()).toISOString(),
+          date: fuelForm.date || new Date().toISOString().slice(0, 10),
           odometer_km: parseFloat(fuelForm.odometer_km) || 0,
-          fuel_liters: l,
+          liters: l,
           price_per_liter: p,
+          total_cost: l * p,
           station: fuelForm.station || undefined,
           notes: fuelForm.notes || undefined,
-          tank_full: true,
         });
         setFuelLogs([created, ...fuelLogs]);
         const odo = parseFloat(fuelForm.odometer_km) || 0;
@@ -1467,6 +1467,7 @@ export default function AssetDetailPage() {
           setAsset(p => p ? { ...p, current_odometer_km: odo } : p);
         }
       }
+
       const refreshedExps = await getExpenses(assetId);
       setExpenses(refreshedExps);
     } catch (err: any) {
