@@ -62,21 +62,28 @@ class FuelEngine(
     }
 
     private suspend fun estimateConsumption(vehicleId: String): Double? {
-        // Last completed trips with odometer data; exclude degenerate rows
-        // (distance ~0 nhưng vẫn tích xăng khi để máy nổ) otherwise the
-        // average explodes (L/100km in the thousands).
-        val trips = tripRepository.getWithOdometer()
-        val withOdo = trips.filter {
+        // Last completed trips with odometer data. Chỉ giữ các chuyến có nghĩa
+        // (distance > 1km, loại chuyến để máy nổ ~0km) và loại outlier per-trip:
+        // chuyến có consumption ngoài khoảng hợp lý (0.5..40 L/100km) là dữ liệu
+        // OBD bẩn (VD giai đoạn đầu trả fuel_used lên tới hàng trăm L) — nếu để
+        // nguyên sẽ đẩy average nổ ra ngoài sanity → fallback về nhà sản xuất.
+        val trips = tripRepository.getWithOdometer() // sắp xếp end_time DESC (mới nhất đầu)
+        val clean = trips.filter {
             it.endOdometer != null && it.startOdometer != null &&
-                it.fuelUsedLiters != null && it.distanceKm > 0.2
+                it.fuelUsedLiters != null && it.distanceKm > 1
+        }.filter {
+            val c = it.fuelUsedLiters!! / it.distanceKm * 100
+            c in 0.5..40.0 // bỏ outlier per-trip
         }
-        if (withOdo.size >= 3) {
-            val lastTrips = withOdo.takeLast(10)
-            val dist = lastTrips.sumOf { it.distanceKm }
-            val fuel = lastTrips.sumOf { it.fuelUsedLiters ?: 0.0 }
-            if (fuel > 0 && dist > 0) {
-                val c = fuel / dist * 100
-                return if (c in 0.5..40.0) c else null // sanity: xe con hợp lý 4-15
+        if (clean.size >= 3) {
+            val lastTrips = clean.take(10) // 10 chuyến sạch gần nhất (list đã DESC)
+            if (lastTrips.size >= 3) {
+                val dist = lastTrips.sumOf { it.distanceKm }
+                val fuel = lastTrips.sumOf { it.fuelUsedLiters ?: 0.0 }
+                if (fuel > 0 && dist > 0) {
+                    val c = fuel / dist * 100
+                    return if (c in 0.5..40.0) c else null // sanity tổng: xe con hợp lý 4-15
+                }
             }
         }
         return null

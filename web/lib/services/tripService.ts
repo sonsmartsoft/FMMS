@@ -17,8 +17,20 @@ export interface TripInput {
 }
 
 export function mapTripRow(row: any): TripRecord {
+  const parseCoord = (v: any) => {
+    if (v == null || v === '') return undefined;
+    const num = typeof v === 'number' ? v : parseFloat(v);
+    return isNaN(num) ? undefined : num.toFixed(4);
+  };
+  const startLat = parseCoord(row.start_latitude);
+  const startLng = parseCoord(row.start_longitude);
+  const endLat = parseCoord(row.end_latitude);
+  const endLng = parseCoord(row.end_longitude);
+  const startCoord = startLat && startLng ? `${startLat}, ${startLng}` : undefined;
+  const endCoord = endLat && endLng ? `${endLat}, ${endLng}` : undefined;
+
   return {
-    id: row.id,
+    id: String(row.id),
     asset_id: row.asset_id,
     start_time: row.start_time,
     end_time: row.end_time ?? row.start_time,
@@ -29,8 +41,8 @@ export function mapTripRow(row: any): TripRecord {
       row.average_consumption_l100km != null ? Number(row.average_consumption_l100km) : undefined,
     average_speed_kmh: Number(row.average_speed_kmh) || 0,
     max_speed_kmh: Number(row.max_speed_kmh) || 0,
-    start_location: row.notes ? row.notes.split('|')[0] : (row.start_latitude ? `${row.start_latitude.toFixed(4)}, ${row.start_longitude?.toFixed(4)}` : undefined),
-    end_location: row.notes ? row.notes.split('|')[1] : (row.end_latitude ? `${row.end_latitude.toFixed(4)}, ${row.end_longitude?.toFixed(4)}` : undefined),
+    start_location: row.notes ? row.notes.split('|')[0] : (row.start_address || startCoord || 'Điểm xuất phát'),
+    end_location: row.notes ? row.notes.split('|')[1] : (row.end_address || endCoord || 'Điểm đến'),
   };
 }
 
@@ -65,16 +77,20 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
       .order('start_time', { ascending: false })
       .limit(500);
       
-    if (assetId) {
-      if (realId && isValidUuid(realId)) {
-        query = query.or(`asset_id.eq.${realId},asset_id.eq.${assetId},asset_id.eq.CAR01,asset_id.eq.22222222-2222-2222-2222-222222222222`);
-      } else {
-        query = query.or(`asset_id.eq.${assetId},asset_id.eq.CAR01`);
-      }
+    if (realId && isValidUuid(realId)) {
+      query = query.eq('asset_id', realId);
+    } else if (assetId && isValidUuid(assetId)) {
+      query = query.eq('asset_id', assetId);
     }
     const { data, error } = await query;
-    if (!error && data) {
+    if (!error && data && data.length > 0) {
       supabaseTrips = data.map(mapTripRow);
+    } else {
+      // Fallback: fetch all trips if filtered query returned empty
+      const { data: allData } = await supabase.from('trips').select('*').order('start_time', { ascending: false }).limit(1000);
+      if (allData && allData.length > 0) {
+        supabaseTrips = allData.map(mapTripRow);
+      }
     }
   } catch (err) {
     console.warn('getTrips fetch error:', err);

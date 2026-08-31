@@ -2532,14 +2532,14 @@ export default function AssetDetailPage() {
                         </div>
 
                         <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                          Hiển thị {Math.min(20, mileageAnalytics.dailyReport.length)} ngày gần nhất
+                          Hiển thị {displayedDailyReport.length} ngày
                         </span>
                       </div>
                       <div style={{ height: 200 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart
-                            data={[...mileageAnalytics.dailyReport]
-                              .slice(0, 20)
+                            data={[...displayedDailyReport]
+                              .slice(0, 31)
                               .reverse()
                               .map(d => ({
                                 date: d.date ? `${d.date.slice(8, 10)}/${d.date.slice(5, 7)}` : '',
