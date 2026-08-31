@@ -66,6 +66,8 @@ function isInitialRollout(e: ExpenseRecord): boolean {
 
 function isUpgradeExpense(e: ExpenseRecord): boolean {
   if (isLoanInterest(e) || isLoanPrincipal(e) || isInitialRollout(e)) return false;
+  const desc = (e.description || '').toLowerCase();
+  if (desc.includes('máy rửa xe') || desc.includes('rửa xe')) return false;
   const c = (e.category || '').toUpperCase();
   const sc = (e.subcategory || '').toLowerCase();
   return c === 'UPGRADE' || c === 'PARTS' || c === 'EQUIPMENT' ||
@@ -204,16 +206,17 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
 
   // 4. Upgrades Total
   const upgradeExpenses = useMemo(() => expenses.filter(isUpgradeExpense), [expenses]);
+  const validParts = useMemo(() => parts.filter(p => !((p.name || '') + (p.category || '')).toLowerCase().includes('máy rửa xe')), [parts]);
+  const partsCost = useMemo(() => validParts.reduce((s, p) => s + (p.cost || 0), 0), [validParts]);
   const totalUpgradeCost = useMemo(() => {
-    const expCost = upgradeExpenses.reduce((s, e) => s + e.amount, 0);
-    if (expCost > 0) return expCost;
-    return parts.reduce((s, p) => s + (p.cost || 0), 0);
-  }, [upgradeExpenses, parts]);
+    if (partsCost > 0) return partsCost;
+    return upgradeExpenses.reduce((s, e) => s + e.amount, 0);
+  }, [partsCost, upgradeExpenses]);
 
   const uniqueUpgradeCount = useMemo(() => {
-    if (parts.length > 0) return parts.length;
+    if (validParts.length > 0) return validParts.length;
     return upgradeExpenses.length;
-  }, [parts, upgradeExpenses]);
+  }, [validParts, upgradeExpenses]);
 
   // 5. Running Costs Total (KHÔNG có gốc/lãi vay!)
   const runningExpenses = useMemo(() => expenses.filter(isRunningExpense), [expenses]);
