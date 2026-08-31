@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Database, ExternalLink, RefreshCw, ShieldCheck, HardDrive, CheckCircle2, AlertCircle, Layers, Server } from 'lucide-react';
+import { Database, ExternalLink, RefreshCw, ShieldCheck, CheckCircle2, AlertCircle, Layers, Server, Navigation, Calendar } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 interface TableStats {
@@ -20,14 +20,15 @@ const TABLES: { name: string; label: string }[] = [
   { name: 'loans', label: 'Hợp đồng vay mua xe (Loans)' },
   { name: 'loan_payments', label: 'Lịch trả nợ vay (Loan Payments)' },
   { name: 'trips', label: 'Nhật ký chuyến đi (Trips)' },
+  { name: 'gps_track_points', label: 'Tọa độ GPS (GPS Track Points)' },
   { name: 'devices', label: 'Thiết bị OBD/Android (Devices)' },
-  { name: 'profiles', label: 'Tài khoản người dùng (Profiles)' },
 ];
 
 export default function DatabaseSettingsPage() {
   const [stats, setStats] = useState<TableStats[]>(
     TABLES.map(t => ({ ...t, count: null, status: 'LOADING' }))
   );
+  const [syncedTrips, setSyncedTrips] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState('');
 
@@ -67,6 +68,17 @@ export default function DatabaseSettingsPage() {
     );
 
     setStats(updated);
+
+    // Fetch top 15 latest trips from Cloud DB
+    try {
+      const { data: tripsData } = await sb
+        .from('trips')
+        .select('*')
+        .order('start_time', { ascending: false })
+        .limit(15);
+      setSyncedTrips(tripsData || []);
+    } catch {}
+
     setLoading(false);
     setLastRefreshed(new Date().toLocaleTimeString('vi-VN'));
   };
@@ -88,7 +100,7 @@ export default function DatabaseSettingsPage() {
             <span>Supabase Cloud Database</span>
           </h1>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-            Quản lý cấu trúc bảng, Row Level Security (RLS) &amp; Trạng thái kết nối Cloud Database
+            Quản lý cấu trúc bảng, Row Level Security (RLS) &amp; Trạng thái dữ liệu thời gian thực
           </p>
         </div>
 
@@ -154,6 +166,66 @@ export default function DatabaseSettingsPage() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* 🚀 LIVE SYNCED TRIPS INSPECTOR */}
+      <div className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-extrabold flex items-center space-x-2" style={{ color: 'var(--text-primary)' }}>
+            <Navigation className="w-4 h-4 text-cyan-400" />
+            <span>Danh Sách Chuyến Đi Đã Lên Supabase (Trips on Cloud)</span>
+          </h3>
+          <span className="text-[11px] font-mono text-cyan-400 font-bold">
+            {syncedTrips.length} chuyến gần nhất
+          </span>
+        </div>
+
+        {syncedTrips.length === 0 ? (
+          <div className="p-4 rounded-xl text-center text-xs" style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)' }}>
+            ⚠️ Chưa có bản ghi nào trong bảng <code className="font-mono text-cyan-400">trips</code> trên Supabase Cloud.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--border-subtle)' }}>
+            <table className="w-full text-xs text-left">
+              <thead>
+                <tr style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <th className="px-3 py-2">Thời gian (start_time)</th>
+                  <th className="px-3 py-2">Quãng đường</th>
+                  <th className="px-3 py-2">Thời lượng</th>
+                  <th className="px-3 py-2">Tốc độ TB</th>
+                  <th className="px-3 py-2">Xăng (L)</th>
+                  <th className="px-3 py-2">Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {syncedTrips.map((t, idx) => (
+                  <tr key={t.id || idx} className="border-b hover:bg-black/5 dark:hover:bg-white/5" style={{ borderColor: 'var(--border-subtle)' }}>
+                    <td className="px-3 py-2 font-mono" style={{ color: 'var(--text-primary)' }}>
+                      {t.start_time ? new Date(t.start_time).toLocaleString('vi-VN') : '—'}
+                    </td>
+                    <td className="px-3 py-2 font-mono font-bold text-cyan-400">
+                      {t.distance_km != null ? `${Number(t.distance_km).toFixed(1)} km` : '—'}
+                    </td>
+                    <td className="px-3 py-2 font-mono" style={{ color: 'var(--text-secondary)' }}>
+                      {t.duration_seconds ? `${Math.round(t.duration_seconds / 60)} phút` : '—'}
+                    </td>
+                    <td className="px-3 py-2 font-mono" style={{ color: 'var(--text-secondary)' }}>
+                      {t.average_speed_kmh ? `${Number(t.average_speed_kmh).toFixed(0)} km/h` : '—'}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-amber-400">
+                      {t.fuel_used_liters ? `${Number(t.fuel_used_liters).toFixed(2)} L` : '—'}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-400">
+                        {t.status || 'SYNCED'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Tables Status List */}

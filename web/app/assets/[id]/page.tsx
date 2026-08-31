@@ -803,11 +803,25 @@ export default function AssetDetailPage() {
       }
     });
 
+    const toLocalDateString = (isoOrDateStr?: string) => {
+      if (!isoOrDateStr) return new Date().toISOString().slice(0, 10);
+      try {
+        const d = new Date(isoOrDateStr);
+        if (isNaN(d.getTime())) return isoOrDateStr.slice(0, 10);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      } catch {
+        return isoOrDateStr.slice(0, 10);
+      }
+    };
+
     // Maintenance records
     maintenance.forEach(m => {
       if (m.odometer_km) {
         events.push({
-          date: m.date ? m.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          date: toLocalDateString(m.date),
           odometer_km: m.odometer_km,
           type: 'MAINTENANCE',
           note: `Bảo dưỡng: ${m.maintenance_type}${m.vendor ? ` tại ${m.vendor}` : ''}`,
@@ -821,7 +835,7 @@ export default function AssetDetailPage() {
     expenses.forEach(e => {
       if (e.odometer_km && e.odometer_km > 0) {
         events.push({
-          date: e.date ? e.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          date: toLocalDateString(e.date),
           odometer_km: e.odometer_km,
           type: 'ODO_LOG',
           note: `Chi phí: ${e.description || e.category} (${fmt(e.amount)}₫)`,
@@ -833,7 +847,7 @@ export default function AssetDetailPage() {
 
     // Trips
     trips.forEach(t => {
-      const dStr = t.start_time ? t.start_time.slice(0, 10) : new Date().toISOString().slice(0, 10);
+      const dStr = toLocalDateString(t.start_time);
       events.push({
         date: dStr,
         odometer_km: 0,
@@ -846,7 +860,7 @@ export default function AssetDetailPage() {
 
     // Check if current asset odometer is higher than highest event ODO
     const maxEventOdo = events.reduce((max, ev) => Math.max(max, ev.odometer_km || 0), 0);
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = toLocalDateString(new Date().toISOString());
     if (asset && asset.current_odometer_km > maxEventOdo) {
       events.push({
         date: todayStr,
@@ -901,10 +915,11 @@ export default function AssetDetailPage() {
 
     const dailyReport = sortedDays.map((day) => {
       let kmRun = 0;
-      if (day.maxOdo > 0 && prevOdo > 0 && day.maxOdo >= prevOdo) {
-        kmRun = day.maxOdo - prevOdo;
-      } else if (day.tripDistance > 0) {
+      // Prioritize actual trip distance
+      if (day.tripDistance > 0) {
         kmRun = day.tripDistance;
+      } else if (day.maxOdo > 0 && prevOdo > 0 && day.maxOdo >= prevOdo) {
+        kmRun = day.maxOdo - prevOdo;
       } else if (day.maxOdo > 0 && day.minOdo > 0 && day.maxOdo > day.minOdo) {
         kmRun = day.maxOdo - day.minOdo;
       }
@@ -922,10 +937,12 @@ export default function AssetDetailPage() {
       return {
         ...day,
         dayOfWeek,
-        kmRun,
+        kmRun: Number(kmRun.toFixed(2)),
         displayOdo: day.maxOdo || prevOdo,
       };
     }).reverse();
+
+
 
     // Group by Month
     const monthlyMap = new Map<string, {
