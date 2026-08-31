@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import React, { useEffect, useState } from 'react';
 import { CardDisplaySettings, AssetType, Asset, TripRecord, ExpenseRecord, DEFAULT_CARD_SETTINGS } from '@/types/mobility';
+import { AssetCard } from '@/components/dashboard/AssetCard';
+
 
 import { getAssets, createAsset } from '@/lib/services/assetService';
 import { getTrips } from '@/lib/services/tripService';
