@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { TripRecord } from '@/types/mobility';
+import { resolveAssetId, isValidUuid } from './assetService';
 
 export interface TripInput {
   asset_id: string;
@@ -33,8 +34,6 @@ export function mapTripRow(row: any): TripRecord {
   };
 }
 
-import { MOCK_TRIPS } from '@/lib/data/mockData';
-
 const LOCAL_TRIPS_KEY = 'fmms_local_trips';
 
 function getLocalTrips(): TripRecord[] {
@@ -53,8 +52,6 @@ function saveLocalTrips(trips: TripRecord[]) {
     localStorage.setItem(LOCAL_TRIPS_KEY, JSON.stringify(trips));
   } catch {}
 }
-
-import { resolveAssetId, isValidUuid } from './assetService';
 
 export async function getTrips(assetId?: string): Promise<TripRecord[]> {
   const realId = assetId ? resolveAssetId(assetId) : undefined;
@@ -85,14 +82,8 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
     return tAssetId === realId || t.asset_id === assetId;
   });
 
-  // If real database has trips, prioritize real trips 100% and don't mix mock data
-  const baseTrips = (supabaseTrips.length > 0 || localTrips.length > 0)
-    ? [...supabaseTrips, ...localTrips]
-    : MOCK_TRIPS.filter(t => {
-        if (!assetId) return true;
-        const tAssetId = t.asset_id ? resolveAssetId(t.asset_id) : undefined;
-        return tAssetId === realId || t.asset_id === assetId;
-      });
+  // Production: Only real Supabase trips + local user entries
+  const baseTrips = [...supabaseTrips, ...localTrips];
 
   const map = new Map<string, TripRecord>();
   baseTrips.forEach(item => {

@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
 import { Asset, AssetCapabilities, AssetType } from '@/types/mobility';
-import { INITIAL_ASSETS } from '@/lib/data/mockData';
 
 export type AssetCapabilitiesRow = AssetCapabilities;
 
@@ -116,7 +115,7 @@ export async function getAssets(): Promise<Asset[]> {
     }
   } catch {}
 
-  let allAssets: Asset[] = dbAssets.length > 0 ? dbAssets : INITIAL_ASSETS;
+  let allAssets: Asset[] = [...dbAssets];
 
   // Apply custom edits from localStorage
   allAssets = allAssets.map(a => {
@@ -166,15 +165,15 @@ export async function getAsset(id: string): Promise<Asset> {
     }
   } catch {}
 
-  let found = dbAsset || INITIAL_ASSETS.find(
-    a => a.id === realId || a.id === id ||
-    ((id === 'CAR01' || id === '22222222-2222-2222-2222-222222222222') && a.license_plate === '19B-213.87') ||
-    (id === 'BIKE01' && a.license_plate === '88C1-210.63') ||
-    (id === 'BIKE02' && a.license_plate === '88L1-604.36') ||
-    (id === 'BIKE03' && a.license_plate === 'MTB 26-555') ||
-    (id === 'BIKE04' && a.license_plate === 'MTB 20-999') ||
-    (id === 'CAR02' && a.license_plate === 'CANIVAL')
-  ) || INITIAL_ASSETS[0];
+  let found = dbAsset;
+  if (!found) {
+    const all = await getAssets();
+    found = all.find(a => a.id === realId || a.id === id) || null;
+  }
+
+  if (!found) {
+    throw new Error('Không tìm thấy thông tin phương tiện');
+  }
 
   const custom = customMap[id] || customMap[realId] || customMap[found.id];
   return custom ? { ...found, ...custom } : found;

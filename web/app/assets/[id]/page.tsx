@@ -662,6 +662,25 @@ export default function AssetDetailPage() {
     }
   };
 
+  const nowD = new Date();
+  const todayLocalDate = toLocalDateString(nowD.toISOString());
+  const currentMonthStart = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, '0')}-01`;
+  const currentMonthEnd = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, '0')}-${String(new Date(nowD.getFullYear(), nowD.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+  const prevMonthDate = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
+  const prevMonthStart = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+  const prevMonthEnd = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-${String(new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+  const thisYearStart = `${nowD.getFullYear()}-01-01`;
+  const thisYearEnd = `${nowD.getFullYear()}-12-31`;
+
+  const dateFilterPresets = [
+    { label: 'Tất cả', start: '', end: '' },
+    { label: 'Hôm nay', start: todayLocalDate, end: todayLocalDate },
+    { label: 'Tháng này', start: currentMonthStart, end: currentMonthEnd },
+    { label: 'Tháng trước', start: prevMonthStart, end: prevMonthEnd },
+    { label: 'Năm nay', start: thisYearStart, end: thisYearEnd },
+  ];
+
+
   const displayedTrips = useMemo(() => {
     let list = trips;
     if (tabStartDate) list = list.filter(t => t.start_time && toLocalDateString(t.start_time) >= tabStartDate);
@@ -2844,13 +2863,7 @@ export default function AssetDetailPage() {
             <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
               <div className="flex items-center space-x-1.5 flex-wrap gap-1">
                 <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
-                {[
-                  { label: 'Tất cả', start: '', end: '' },
-                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
-                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
-                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
-                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
-                ].map(p => (
+                {dateFilterPresets.map(p => (
                   <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
                     className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
                     style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
@@ -2973,13 +2986,7 @@ export default function AssetDetailPage() {
             <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
               <div className="flex items-center space-x-1.5 flex-wrap gap-1">
                 <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
-                {[
-                  { label: 'Tất cả', start: '', end: '' },
-                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
-                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
-                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
-                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
-                ].map(p => (
+                {dateFilterPresets.map(p => (
                   <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
                     className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
                     style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
@@ -3092,13 +3099,7 @@ export default function AssetDetailPage() {
             <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                           <div className="flex items-center space-x-1.5 flex-wrap gap-1">
                 <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
-                {[
-                  { label: 'Tất cả', start: '', end: '' },
-                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
-                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
-                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
-                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
-                ].map(p => (
+                {dateFilterPresets.map(p => (
                   <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
                     className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
                     style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
@@ -3225,13 +3226,7 @@ export default function AssetDetailPage() {
             <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
               <div className="flex items-center space-x-1.5 flex-wrap gap-1">
                 <span className="font-bold text-[10px] uppercase" style={{ color: 'var(--accent-cyan)' }}>📅 Lọc ngày:</span>
-                {[
-                  { label: 'Tất cả', start: '', end: '' },
-                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
-                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
-                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
-                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
-                ].map(p => (
+                {dateFilterPresets.map(p => (
                   <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
                     className={`px-2 py-0.5 rounded text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white' : 'hover:bg-white/10'}`}
                     style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', color: 'var(--text-secondary)' } : {}}>
@@ -3334,13 +3329,7 @@ export default function AssetDetailPage() {
                 <span className="font-bold text-[10px] uppercase flex items-center gap-1 shrink-0 text-amber-500">
                   <Calendar className="w-3 h-3" /> Thời gian:
                 </span>
-                {[
-                  { label: 'Tất cả', start: '', end: '' },
-                  { label: 'Hôm nay', start: new Date().toISOString().slice(0, 10), end: new Date().toISOString().slice(0, 10) },
-                  { label: 'Tháng này', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10) },
-                  { label: 'Tháng trước', start: new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toISOString().slice(0, 10), end: new Date(new Date().getFullYear(), new Date().getMonth(), 0).toISOString().slice(0, 10) },
-                  { label: 'Năm nay', start: `${new Date().getFullYear()}-01-01`, end: `${new Date().getFullYear()}-12-31` },
-                ].map(p => (
+                {dateFilterPresets.map(p => (
                   <button key={p.label} onClick={() => { setTabStartDate(p.start); setTabEndDate(p.end); }}
                     className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${tabStartDate === p.start && tabEndDate === p.end ? 'bg-cyan-500 text-white shadow-sm' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-600 dark:text-slate-300'}`}
                     style={!(tabStartDate === p.start && tabEndDate === p.end) ? { background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' } : {}}>

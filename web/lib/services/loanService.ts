@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/client';
-import { MOCK_LOAN } from '@/lib/data/mockData';
 
 export interface LoanRow {
   id: string;
@@ -180,11 +179,8 @@ export async function getLoans(assetId?: string): Promise<LoanRow[]> {
     }
   } catch {}
 
-  let allLoans: LoanRow[] = dbLoans.length > 0
-    ? dbLoans
-    : (assetId && (assetId === 'CAR01' || assetId === '22222222-2222-2222-2222-222222222222' || realId === '20260308-0001-4222-8888-19b213872026')
-        ? [MOCK_LOAN as LoanRow]
-        : (!assetId ? [MOCK_LOAN as LoanRow] : []));
+  let allLoans: LoanRow[] = [...dbLoans];
+
 
   // Apply custom edits from localStorage
   allLoans = allLoans.map(l => {

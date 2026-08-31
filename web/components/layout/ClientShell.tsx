@@ -7,8 +7,8 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { AIFloatingButton } from '@/components/ai/AIFloatingButton';
 import { AIChatDrawer } from '@/components/ai/AIChatDrawer';
 import { DisplaySettingsModal } from '@/components/dashboard/DisplaySettingsModal';
-import { DEFAULT_CARD_SETTINGS } from '@/lib/data/mockData';
-import { CardDisplaySettings } from '@/types/mobility';
+import { CardDisplaySettings, DEFAULT_CARD_SETTINGS } from '@/types/mobility';
+
 import { ThemeProvider } from '@/lib/theme/ThemeContext';
 import { LanguageProvider } from '@/lib/i18n/LanguageContext';
 

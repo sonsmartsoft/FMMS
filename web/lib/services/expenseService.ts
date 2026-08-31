@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
 import { ExpenseRecord } from '@/types/mobility';
-import { MOCK_EXPENSES } from '@/lib/data/mockData';
 import { resolveAssetId, isValidUuid } from './assetService';
 
 export interface ExpenseInput {
@@ -53,14 +52,12 @@ export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
     }
   } catch {}
 
-  let allExpenses: ExpenseRecord[] = dbExpenses.length > 0
-    ? dbExpenses
-    : (MOCK_EXPENSES as any[]).filter(e => !assetId || e.asset_id === realId || e.asset_id === assetId);
+  let allExpenses: ExpenseRecord[] = [...dbExpenses];
 
   // Apply custom edits from localStorage
   allExpenses = allExpenses.map(item => customMap[item.id] ? { ...item, ...customMap[item.id] } : item);
 
-  // Add any new locally created items not in DB/mock
+  // Add any new locally created items not in DB
   Object.values(customMap).forEach((customItem: any) => {
     if (!allExpenses.some(e => e.id === customItem.id)) {
       if (!assetId || customItem.asset_id === realId || customItem.asset_id === assetId) {
@@ -69,7 +66,7 @@ export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
     }
   });
 
-  return allExpenses;
+  return allExpenses.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
 export async function createExpense(data: ExpenseInput, skipAutoLinks = false): Promise<ExpenseRecord> {
@@ -88,217 +85,114 @@ export async function createExpense(data: ExpenseInput, skipAutoLinks = false): 
     description: data.description ?? null,
   };
 
+  let newId = `EX_${Date.now()}`;
+
+  // 1. Save to LocalStorage
   const newExpObj: ExpenseRecord = {
-    id: `EX_${Date.now()}`,
+    id: newId,
     ...payload,
     currency: payload.currency,
     description: payload.description || '',
   };
 
-  // 1. Save to LocalStorage
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('fmms_custom_expenses');
-      const customMap: Record<string, any> = stored ? JSON.parse(stored) : {};
-      customMap[newExpObj.id] = newExpObj;
+      const customMap = stored ? JSON.parse(stored) : {};
+      customMap[newId] = newExpObj;
       localStorage.setItem('fmms_custom_expenses', JSON.stringify(customMap));
     } catch {}
   }
 
-  // 2. Mutate in-memory mock data
-  (MOCK_EXPENSES as any[]).unshift(newExpObj);
+  // 2. Insert to Supabase DB
+  try {
+    const { data: dbData, error } = await supabase.from('expenses').insert(payload).select().single();
+    if (!error && dbData) {
+      newExpObj.id = dbData.id;
+    }
+  } catch {}
 
-  // 3. Auto cross-module sync if not skipped
-  if (!skipAutoLinks && data.amount > 0) {
-    const isFuel = (data.category === 'Running' || data.category === 'Fuel') &&
-      (data.subcategory === 'Fuel' || (data.description && (data.description.toLowerCase().includes('xăng') || data.description.toLowerCase().includes('đổ xăng'))));
-
-    if (isFuel) {
+  // 3. Auto-link to related services if requested
+  if (!skipAutoLinks) {
+    if (data.category === 'FUEL') {
       try {
         const { createFuelLog } = await import('./fuelService');
-        const estLiters = Math.round((data.amount / 24000) * 10) / 10;
         await createFuelLog({
           asset_id: realId,
-          timestamp: data.date ? `${data.date}T12:00:00.000Z` : new Date().toISOString(),
-          odometer_km: data.odometer_km || 0,
-          fuel_liters: estLiters,
-          price_per_liter: 24000,
+          date: data.date,
+          liters: 0,
+          price_per_liter: 0,
           total_cost: data.amount,
-          station: data.vendor || 'Cây xăng',
-          tank_full: true,
-          notes: data.description || 'Đổ xăng từ chi phí',
-        }, true); // skipExpenseSync = true
-      } catch (fErr) {
-        console.warn('Auto fuel log sync warning from createExpense:', fErr);
-      }
-    }
-
-    if (data.category === 'Maintenance') {
+          odometer_km: data.odometer_km,
+          notes: data.description,
+        });
+      } catch {}
+    } else if (data.category === 'MAINTENANCE' || data.category === 'PARTS' || data.category === 'LABOR') {
       try {
         const { createMaintenanceRecord } = await import('./maintenanceService');
         await createMaintenanceRecord({
           asset_id: realId,
-          maintenance_type: data.subcategory || data.description || 'Bảo dưỡng định kỳ',
-          date: data.date || new Date().toISOString().slice(0, 10),
-          odometer_km: data.odometer_km || 0,
+          date: data.date,
+          maintenance_type: data.subcategory || data.description || 'Bảo dưỡng',
           cost: data.amount,
-          vendor: data.vendor || undefined,
-          notes: data.description || undefined,
-        }, true); // skipExpenseSync = true
-      } catch (mErr) {
-        console.warn('Auto maintenance sync warning from createExpense:', mErr);
-      }
-    }
-
-    if (data.category === 'Upgrade') {
-      try {
-        const { createPart } = await import('./partService');
-        await createPart({
-          asset_id: realId,
-          part_name: data.description || 'Nâng cấp / Phụ kiện',
-          brand: data.vendor || undefined,
-          supplier: 'Nâng cấp',
-          installation_date: data.date || new Date().toISOString().slice(0, 10),
-          cost: data.amount,
-          installed_odometer_km: data.odometer_km || undefined,
-          notes: `Tự động tạo từ chi phí ${data.subcategory || 'Upgrade'}`,
+          odometer_km: data.odometer_km,
+          vendor: data.vendor,
+          notes: data.description,
         });
-      } catch (pErr) {
-        console.warn('Auto part sync warning from createExpense:', pErr);
-      }
+      } catch {}
     }
-  }
-
-  // 4. Save to Supabase
-  try {
-    let { data: created, error } = await supabase
-      .from('expenses')
-      .insert(payload)
-      .select()
-      .maybeSingle();
-
-    if (error && error.message?.includes('subcategory')) {
-      delete payload.subcategory;
-      const res2 = await supabase
-        .from('expenses')
-        .insert(payload)
-        .select()
-        .maybeSingle();
-      created = res2.data;
-      error = res2.error;
-    }
-
-    if (error) {
-      console.warn('Supabase createExpense warning:', error.message);
-    } else if (created) {
-      return mapExpenseRow(created);
-    }
-  } catch (err) {
-    console.warn('createExpense Supabase fallback:', err);
   }
 
   return newExpObj;
 }
 
-export async function updateExpense(id: string, data: Partial<ExpenseInput>) {
+export async function updateExpense(id: string, data: Partial<ExpenseInput>): Promise<ExpenseRecord> {
   const realAssetId = data.asset_id ? resolveAssetId(data.asset_id) : undefined;
-  
-  const existingIdx = (MOCK_EXPENSES as any[]).findIndex((e: any) => e.id === id);
-  if (existingIdx >= 0) {
-    const target = (MOCK_EXPENSES as any[])[existingIdx];
-    if (data.date != null) target.date = data.date;
-    if (data.category != null) target.category = data.category;
-    if (data.subcategory != null) target.subcategory = data.subcategory;
-    if (data.amount != null) target.amount = data.amount;
-    if (data.vendor != null) target.vendor = data.vendor;
-    if (data.odometer_km != null) target.odometer_km = data.odometer_km;
-    if (data.description != null) target.description = data.description;
-    if (realAssetId != null) target.asset_id = realAssetId;
+  const supabase = createClient();
+
+  const updatePayload: any = {};
+  if (data.date) updatePayload.date = data.date;
+  if (data.category) updatePayload.category = data.category;
+  if (data.subcategory !== undefined) {
+    updatePayload.subcategory = data.subcategory;
+    updatePayload.sub_category = data.subcategory;
   }
+  if (data.amount !== undefined) updatePayload.amount = data.amount;
+  if (data.currency) updatePayload.currency = data.currency;
+  if (data.vendor !== undefined) updatePayload.vendor = data.vendor;
+  if (data.odometer_km !== undefined) updatePayload.odometer_km = data.odometer_km;
+  if (data.description !== undefined) updatePayload.description = data.description;
+  if (realAssetId) updatePayload.asset_id = realAssetId;
+
+  try {
+    if (Object.keys(updatePayload).length > 0) {
+      await supabase.from('expenses').update(updatePayload).eq('id', id);
+    }
+  } catch {}
 
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('fmms_custom_expenses');
-      const customMap: Record<string, any> = stored ? JSON.parse(stored) : {};
+      const customMap = stored ? JSON.parse(stored) : {};
+      const existing = customMap[id] || {};
       customMap[id] = {
+        ...existing,
+        ...data,
         id,
-        asset_id: realAssetId || (existingIdx >= 0 ? (MOCK_EXPENSES as any[])[existingIdx].asset_id : '22222222-2222-2222-2222-222222222222'),
-        date: data.date,
-        category: data.category,
-        subcategory: data.subcategory,
-        amount: data.amount,
-        vendor: data.vendor,
-        odometer_km: data.odometer_km,
-        description: data.description,
+        ...(realAssetId ? { asset_id: realAssetId } : {}),
       };
       localStorage.setItem('fmms_custom_expenses', JSON.stringify(customMap));
     } catch {}
   }
 
-  if (isValidUuid(id)) {
-    try {
-      const supabase = createClient();
-      const updatePayload: any = {
-        ...(data.date ? { date: data.date } : {}),
-        ...(data.category ? { category: data.category } : {}),
-        ...(data.amount != null ? { amount: data.amount } : {}),
-        ...(data.vendor !== undefined ? { vendor: data.vendor } : {}),
-        ...(data.odometer_km !== undefined ? { odometer_km: data.odometer_km } : {}),
-        ...(data.description !== undefined ? { description: data.description } : {}),
-        ...(realAssetId ? { asset_id: realAssetId } : {}),
-      };
-
-      if (data.subcategory !== undefined) {
-        updatePayload.subcategory = data.subcategory;
-        updatePayload.sub_category = data.subcategory;
-      }
-
-      let { data: updated, error } = await supabase
-        .from('expenses')
-        .update(updatePayload)
-        .eq('id', id)
-        .select()
-        .maybeSingle();
-
-      if (error && error.message?.includes('subcategory')) {
-        delete updatePayload.subcategory;
-        const res2 = await supabase
-          .from('expenses')
-          .update(updatePayload)
-          .eq('id', id)
-          .select()
-          .maybeSingle();
-        updated = res2.data;
-        error = res2.error;
-      }
-
-      if (error) {
-        console.warn('Supabase updateExpense warning:', error.message);
-      } else if (updated) {
-        return mapExpenseRow(updated);
-      }
-    } catch (err) {
-      console.warn('updateExpense Supabase fallback:', err);
-    }
-  }
-
-  return mapExpenseRow({
-    id,
-    asset_id: realAssetId || '22222222-2222-2222-2222-222222222222',
-    date: data.date || new Date().toISOString().slice(0, 10),
-    category: data.category || 'Running',
-    subcategory: data.subcategory,
-    amount: data.amount || 0,
-    currency: data.currency || 'VND',
-    vendor: data.vendor,
-    odometer_km: data.odometer_km,
-    description: data.description || '',
-  });
+  return { id, ...data } as ExpenseRecord;
 }
 
-export async function deleteExpense(id: string) {
-  const delIdx = (MOCK_EXPENSES as any[]).findIndex((e: any) => e.id === id);
-  if (delIdx >= 0) (MOCK_EXPENSES as any[]).splice(delIdx, 1);
+export async function deleteExpense(id: string): Promise<boolean> {
+  try {
+    const supabase = createClient();
+    await supabase.from('expenses').delete().eq('id', id);
+  } catch {}
 
   if (typeof window !== 'undefined') {
     try {
@@ -311,12 +205,5 @@ export async function deleteExpense(id: string) {
     } catch {}
   }
 
-  if (isValidUuid(id)) {
-    try {
-      const supabase = createClient();
-      await supabase.from('expenses').delete().eq('id', id);
-    } catch (err) {
-      console.warn('deleteExpense Supabase fallback:', err);
-    }
-  }
+  return true;
 }

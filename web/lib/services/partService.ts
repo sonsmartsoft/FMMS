@@ -1,6 +1,18 @@
 import { createClient } from '@/lib/supabase/client';
-import { PartRecord, MOCK_PARTS } from '@/lib/data/mockData';
 import { resolveAssetId, isValidUuid } from './assetService';
+
+export interface PartRecord {
+  id: string;
+  asset_id?: string;
+  name: string;
+  brand: string;
+  category: string;
+  install_date: string;
+  cost: number;
+  odometer_km: number;
+  warranty_months?: number;
+  notes?: string;
+}
 
 export interface PartInput {
   asset_id: string;
@@ -52,13 +64,7 @@ export async function getParts(assetId?: string): Promise<PartRecord[]> {
     }
   } catch {}
 
-  let allParts: PartRecord[] = dbParts.length > 0
-    ? dbParts
-    : (MOCK_PARTS as any[]).filter(p => {
-        if (!assetId) return true;
-        const pAssetId = (p as any).asset_id ? resolveAssetId((p as any).asset_id) : '20260308-0001-4222-8888-19b213872026';
-        return pAssetId === realId || (p as any).asset_id === assetId || (p as any).asset_id === realId;
-      });
+  let allParts: PartRecord[] = [...dbParts];
 
   // Apply custom edits from localStorage
   allParts = allParts.map(p => customMap[p.id] ? { ...p, ...customMap[p.id] } : p);
@@ -73,7 +79,7 @@ export async function getParts(assetId?: string): Promise<PartRecord[]> {
     }
   });
 
-  return allParts;
+  return allParts.sort((a, b) => (b.install_date || '').localeCompare(a.install_date || ''));
 }
 
 export async function createPart(input: PartInput): Promise<PartRecord> {
@@ -99,117 +105,100 @@ export async function createPart(input: PartInput): Promise<PartRecord> {
     brand: input.brand || '',
     category: input.supplier || 'Khác',
     install_date: payload.installation_date,
-    cost: payload.cost,
-    odometer_km: payload.installed_odometer_km || 0,
+    cost: Number(input.cost) || 0,
+    odometer_km: Number(input.installed_odometer_km) || 0,
     notes: input.notes,
+    asset_id: realId,
   };
 
-  // 1. Save to LocalStorage
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('fmms_custom_parts');
-      const customMap: Record<string, any> = stored ? JSON.parse(stored) : {};
-      customMap[newPartObj.id] = { ...newPartObj, asset_id: realId };
+      const customMap = stored ? JSON.parse(stored) : {};
+      customMap[newPartObj.id] = newPartObj;
       localStorage.setItem('fmms_custom_parts', JSON.stringify(customMap));
     } catch {}
   }
 
-  // 2. Mutate in-memory
-  (MOCK_PARTS as any[]).unshift(newPartObj);
-
-  // 3. Save to Supabase
   try {
-    const { data, error } = await supabase
-      .from('parts')
-      .insert(payload)
-      .select()
-      .maybeSingle();
-    if (!error && data) return mapPartRow(data);
-  } catch (err) {
-    console.warn('createPart Supabase fallback:', err);
-  }
+    const { data, error } = await supabase.from('parts').insert(payload).select().single();
+    if (!error && data) {
+      newPartObj.id = data.id;
+    }
+  } catch {}
 
   return newPartObj;
 }
 
 export async function updatePart(id: string, input: Partial<PartInput>): Promise<PartRecord> {
-  const existingIdx = (MOCK_PARTS as any[]).findIndex((p: any) => p.id === id);
-  const updatedPart: PartRecord = {
-    id,
-    name: input.part_name || (existingIdx >= 0 ? (MOCK_PARTS as any[])[existingIdx].name : 'Phụ tùng'),
-    brand: input.brand || (existingIdx >= 0 ? (MOCK_PARTS as any[])[existingIdx].brand : ''),
-    category: input.supplier || (existingIdx >= 0 ? (MOCK_PARTS as any[])[existingIdx].category : 'Khác'),
-    install_date: input.installation_date || (existingIdx >= 0 ? (MOCK_PARTS as any[])[existingIdx].install_date : new Date().toISOString().slice(0, 10)),
-    cost: input.cost ?? (existingIdx >= 0 ? (MOCK_PARTS as any[])[existingIdx].cost : 0),
-    odometer_km: input.installed_odometer_km ?? (existingIdx >= 0 ? (MOCK_PARTS as any[])[existingIdx].odometer_km : 0),
-    notes: input.notes ?? (existingIdx >= 0 ? (MOCK_PARTS as any[])[existingIdx].notes : undefined),
-  };
+  const realAssetId = input.asset_id ? resolveAssetId(input.asset_id) : undefined;
+  const supabase = createClient();
 
-  // 1. Save to LocalStorage
+  const updatePayload: any = {};
+  if (input.part_name) updatePayload.part_name = input.part_name;
+  if (input.brand !== undefined) updatePayload.brand = input.brand;
+  if (input.supplier !== undefined) updatePayload.supplier = input.supplier;
+  if (input.installation_date) updatePayload.installation_date = input.installation_date;
+  if (input.cost !== undefined) updatePayload.cost = input.cost;
+  if (input.installed_odometer_km !== undefined) updatePayload.installed_odometer_km = input.installed_odometer_km;
+  if (input.notes !== undefined) updatePayload.notes = input.notes;
+  if (realAssetId) updatePayload.asset_id = realAssetId;
+
+  try {
+    if (Object.keys(updatePayload).length > 0) {
+      await supabase.from('parts').update(updatePayload).eq('id', id);
+    }
+  } catch {}
+
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('fmms_custom_parts');
-      const customMap: Record<string, any> = stored ? JSON.parse(stored) : {};
-      customMap[id] = { ...(customMap[id] || {}), ...updatedPart };
+      const customMap = stored ? JSON.parse(stored) : {};
+      const existing = customMap[id] || {};
+      customMap[id] = {
+        ...existing,
+        ...input,
+        id,
+        name: input.part_name || existing.name,
+        category: input.supplier || existing.category,
+        install_date: input.installation_date || existing.install_date,
+        cost: input.cost !== undefined ? Number(input.cost) : existing.cost,
+        odometer_km: input.installed_odometer_km !== undefined ? Number(input.installed_odometer_km) : existing.odometer_km,
+        ...(realAssetId ? { asset_id: realAssetId } : {}),
+      };
       localStorage.setItem('fmms_custom_parts', JSON.stringify(customMap));
     } catch {}
   }
 
-  // 2. Mutate in-memory
-  if (existingIdx >= 0) {
-    (MOCK_PARTS as any[])[existingIdx] = updatedPart;
-  }
-
-  // 3. Update Supabase
-  if (isValidUuid(id)) {
-    try {
-      const supabase = createClient();
-      const payload: Record<string, any> = {};
-      if (input.part_name != null) payload.part_name = input.part_name;
-      if (input.brand != null) payload.brand = input.brand;
-      if (input.supplier != null) payload.supplier = input.supplier;
-      if (input.installation_date != null) payload.installation_date = input.installation_date;
-      if (input.cost != null) payload.cost = input.cost;
-      if (input.installed_odometer_km != null) payload.installed_odometer_km = input.installed_odometer_km;
-      if (input.notes != null) payload.notes = input.notes;
-
-      const { data, error } = await supabase.from('parts').update(payload).eq('id', id).select().maybeSingle();
-      if (!error && data) return mapPartRow(data);
-    } catch (err) {
-      console.warn('updatePart Supabase fallback:', err);
-    }
-  }
-
-  return updatedPart;
+  return {
+    id,
+    name: input.part_name || '',
+    brand: input.brand || '',
+    category: input.supplier || 'Khác',
+    install_date: input.installation_date || '',
+    cost: Number(input.cost) || 0,
+    odometer_km: Number(input.installed_odometer_km) || 0,
+    notes: input.notes,
+    asset_id: realAssetId,
+  };
 }
 
-export async function deletePart(id: string) {
-  // 1. Delete from LocalStorage
+export async function deletePart(id: string): Promise<boolean> {
+  try {
+    const supabase = createClient();
+    await supabase.from('parts').delete().eq('id', id);
+  } catch {}
+
   if (typeof window !== 'undefined') {
     try {
       const stored = localStorage.getItem('fmms_custom_parts');
       if (stored) {
-        const customMap: Record<string, any> = JSON.parse(stored);
+        const customMap = JSON.parse(stored);
         delete customMap[id];
         localStorage.setItem('fmms_custom_parts', JSON.stringify(customMap));
       }
     } catch {}
   }
 
-  // 2. Mutate in-memory
-  const existingIdx = (MOCK_PARTS as any[]).findIndex((p: any) => p.id === id);
-  if (existingIdx >= 0) {
-    (MOCK_PARTS as any[]).splice(existingIdx, 1);
-  }
-
-  // 3. Delete from Supabase
-  if (isValidUuid(id)) {
-    try {
-      const supabase = createClient();
-      await supabase.from('parts').delete().eq('id', id);
-    } catch (err) {
-      console.warn('deletePart Supabase fallback:', err);
-    }
-  }
   return true;
 }

@@ -2,9 +2,8 @@
 
 import Link from 'next/link';
 import React, { useEffect, useState } from 'react';
-import { DEFAULT_CARD_SETTINGS } from '@/lib/data/mockData';
-import { AssetCard } from '@/components/dashboard/AssetCard';
-import { CardDisplaySettings, AssetType, Asset, TripRecord, ExpenseRecord } from '@/types/mobility';
+import { CardDisplaySettings, AssetType, Asset, TripRecord, ExpenseRecord, DEFAULT_CARD_SETTINGS } from '@/types/mobility';
+
 import { getAssets, createAsset } from '@/lib/services/assetService';
 import { getTrips } from '@/lib/services/tripService';
 import { getFuelLogs } from '@/lib/services/fuelService';

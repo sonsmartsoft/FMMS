@@ -74,6 +74,14 @@ export interface CardDisplaySettings {
   cardStyle: 'grid' | 'compact' | 'list';
 }
 
+export const DEFAULT_CARD_SETTINGS: CardDisplaySettings = {
+  showPhoto: true, showName: true, showType: true, showPrice: true,
+  showLicensePlate: true, showOdometer: true, showFuelLevel: true,
+  showConsumption: true, showRange: true, showLoan: true,
+  showNextMaintenance: true, cardStyle: 'grid',
+};
+
+
 export const TAXONOMY: Record<string, { label: string; subcategories: Record<string, string> }> = {
   Initial: {
     label: '🚗 Chi phí mua xe & lăn bánh ban đầu (Initial)',
