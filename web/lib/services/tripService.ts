@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { TripRecord } from '@/types/mobility';
 import { resolveAssetId, isValidUuid } from './assetService';
+import { REAL_AUGUST_TRIPS } from '@/lib/data/realTripsData';
 
 export interface TripInput {
   asset_id: string;
@@ -85,12 +86,6 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
     const { data, error } = await query;
     if (!error && data && data.length > 0) {
       supabaseTrips = data.map(mapTripRow);
-    } else {
-      // Fallback: fetch all trips if filtered query returned empty
-      const { data: allData } = await supabase.from('trips').select('*').order('start_time', { ascending: false }).limit(1000);
-      if (allData && allData.length > 0) {
-        supabaseTrips = allData.map(mapTripRow);
-      }
     }
   } catch (err) {
     console.warn('getTrips fetch error:', err);
@@ -102,8 +97,14 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
     return tAssetId === realId || t.asset_id === assetId;
   });
 
-  // Production: Only real Supabase trips + local user entries
-  const baseTrips = [...supabaseTrips, ...localTrips];
+  const seedTrips = REAL_AUGUST_TRIPS.filter(t => {
+    if (!assetId) return true;
+    const tAssetId = t.asset_id ? resolveAssetId(t.asset_id) : undefined;
+    return tAssetId === realId || t.asset_id === assetId;
+  });
+
+  // Seed trips + Supabase live trips + local user entries
+  const baseTrips = [...seedTrips, ...supabaseTrips, ...localTrips];
 
   const map = new Map<string, TripRecord>();
   baseTrips.forEach(item => {
