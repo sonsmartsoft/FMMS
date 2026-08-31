@@ -1,18 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { X, Send, Sparkles, Bot, User, CheckCircle2, Settings } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Send, Sparkles, Bot, User, CheckCircle2, Settings, Trash2, Maximize2 } from 'lucide-react';
 import Link from 'next/link';
 import { MODERN_AI_PROVIDERS, getActiveAISettings } from '@/lib/services/aiConfig';
+import { useAIChat } from '@/lib/hooks/useAIChat';
 import { MarkdownMessage } from './MarkdownMessage';
-
-interface Message {
-  id: string;
-  sender: 'ai' | 'user';
-  text: string;
-  providerUsed?: string;
-  toolCall?: { name: string; status: 'EXECUTED' | 'CONFIRMED'; result?: string };
-}
 
 interface AIChatDrawerProps {
   isOpen: boolean;
@@ -23,14 +16,8 @@ interface AIChatDrawerProps {
 export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, currentAssetId }) => {
   const [input, setInput] = useState('');
   const [activeProvider, setActiveProvider] = useState('gemini');
-  const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      sender: 'ai',
-      text: 'Xin chào! Tôi là **FMMS AI Assistant**. Tôi có thể giúp bạn phân tích chi phí, định mức nhiên liệu (L/100km), nhắc lịch bảo dưỡng hoặc kiểm tra khoản vay xe.',
-    },
-  ]);
+  const { messages, loading, sendMessage, clearHistory } = useAIChat();
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -39,53 +26,24 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isOpen]);
+
   if (!isOpen) return null;
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!input.trim() || loading) return;
-    const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: input };
-    setMessages((prev) => [...prev, userMsg]);
-    const promptText = input;
+    const text = input;
     setInput('');
-    setLoading(true);
+    sendMessage(text, currentAssetId, activeProvider);
+  };
 
-    try {
-      const activeSettings = getActiveAISettings();
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: promptText,
-          provider: activeProvider,
-          model: activeSettings.model,
-          systemPrompt: activeSettings.systemPrompt,
-          apiKey: activeSettings.apiKey,
-          baseUrl: activeSettings.baseUrl,
-          assetId: currentAssetId,
-        }),
-      });
-      const data = await res.json();
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          sender: 'ai',
-          text: data.reply || 'Đã nhận câu hỏi của bạn.',
-          providerUsed: data.providerUsed,
-          toolCall: data.toolCall,
-        },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          sender: 'ai',
-          text: '⚠️ Không thể kết nối với server AI. Vui lòng kiểm tra lại kết nối mạng.',
-        },
-      ]);
-    } finally {
-      setLoading(false);
+  const handleClear = () => {
+    if (window.confirm('Bạn có chắc muốn xóa lịch sử cuộc trò chuyện này không?')) {
+      clearHistory();
     }
   };
 
@@ -100,8 +58,13 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>FMMS AI Assistant</h3>
-            <div className="flex items-center space-x-1.5 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            <div className="flex items-center space-x-2">
+              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>FMMS AI Assistant</h3>
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-400 font-bold uppercase">
+                Synced
+              </span>
+            </div>
+            <div className="flex items-center space-x-1.5 text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>Model:</span>
               <select
@@ -117,7 +80,23 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
             </div>
           </div>
         </div>
+
         <div className="flex items-center space-x-1">
+          <button
+            onClick={handleClear}
+            className="p-1.5 rounded-lg transition hover:bg-white/10 text-slate-400 hover:text-rose-400 cursor-pointer"
+            title="Xóa lịch sử trò chuyện"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+          <Link
+            href="/ai-center"
+            onClick={onClose}
+            className="p-1.5 rounded-lg transition hover:bg-white/10 text-slate-400 hover:text-cyan-400"
+            title="Mở toàn màn hình tại AI Center"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </Link>
           <Link
             href="/settings/ai"
             onClick={onClose}
@@ -171,6 +150,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
             <span>AI đang phân tích và chuẩn bị số liệu chi tiết...</span>
           </div>
         )}
+        <div ref={bottomRef} />
       </div>
 
       {/* Input Box */}
