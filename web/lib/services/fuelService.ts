@@ -17,9 +17,11 @@ export interface FuelLogRow {
 
 export interface FuelLogInput {
   asset_id: string;
-  timestamp: string;
-  odometer_km: number;
-  fuel_liters: number;
+  timestamp?: string;
+  date?: string;
+  odometer_km?: number;
+  fuel_liters?: number;
+  liters?: number;
   price_per_liter: number;
   total_cost?: number;
   station?: string;
@@ -42,11 +44,12 @@ export type FuelLog = {
 
 /** Map DB row -> shape used by the UI tables */
 export function mapFuelRow(row: any): FuelLog {
-  const liters = Number(row.fuel_liters) || 0;
+  const liters = Number(row.fuel_liters ?? row.liters) || 0;
+  const dateStr = (row.timestamp ?? row.date ?? '').slice(0, 10);
   return {
     id: row.id,
     asset_id: row.asset_id,
-    date: (row.timestamp ?? '').slice(0, 10),
+    date: dateStr,
     liters,
     price_per_liter: Number(row.price_per_liter) || 0,
     total_cost: Number(row.total_cost) || 0,
@@ -102,18 +105,22 @@ export async function getFuelLogs(assetId?: string): Promise<FuelLog[]> {
 
 export async function createFuelLog(input: {
   asset_id: string;
-  date: string;
-  liters: number;
+  date?: string;
+  timestamp?: string;
+  liters?: number;
+  fuel_liters?: number;
   price_per_liter: number;
   total_cost?: number;
   odometer_km?: number;
   station?: string;
+  tank_full?: boolean;
   notes?: string;
 }) {
-  const liters = Number(input.liters) || 0;
+  const liters = Number(input.liters ?? input.fuel_liters) || 0;
   const price = Number(input.price_per_liter) || 0;
   const cost = input.total_cost != null && Number(input.total_cost) > 0 ? Number(input.total_cost) : Math.round(liters * price);
   const realAssetId = resolveAssetId(input.asset_id);
+  const logDate = input.date || (input.timestamp ? input.timestamp.slice(0, 10) : new Date().toISOString().slice(0, 10));
 
   let newId = `fuel_${Date.now()}`;
   let dbSuccess = false;
@@ -124,14 +131,14 @@ export async function createFuelLog(input: {
       .from('fuel_logs')
       .insert({
         asset_id: realAssetId,
-        timestamp: input.date ? `${input.date}T00:00:00Z` : new Date().toISOString(),
+        timestamp: input.timestamp || (input.date ? `${input.date}T00:00:00Z` : new Date().toISOString()),
         odometer_km: input.odometer_km || 0,
         fuel_liters: liters,
         price_per_liter: price,
         total_cost: cost,
         currency: 'VND',
         station: input.station || null,
-        tank_full: true,
+        tank_full: input.tank_full ?? true,
         notes: input.notes || null,
       })
       .select()
@@ -146,7 +153,7 @@ export async function createFuelLog(input: {
   const newLogObj: FuelLog = {
     id: newId,
     asset_id: realAssetId,
-    date: input.date || new Date().toISOString().slice(0, 10),
+    date: logDate,
     liters,
     price_per_liter: price,
     total_cost: cost,
@@ -167,27 +174,44 @@ export async function createFuelLog(input: {
   return newLogObj;
 }
 
-export async function updateFuelLog(id: string, input: Partial<FuelLog>) {
+export async function updateFuelLog(id: string, input: {
+  asset_id?: string;
+  date?: string;
+  timestamp?: string;
+  liters?: number;
+  fuel_liters?: number;
+  price_per_liter?: number;
+  total_cost?: number;
+  odometer_km?: number;
+  station?: string;
+  tank_full?: boolean;
+  notes?: string;
+  consumption_l100km?: number;
+}) {
   const realAssetId = input.asset_id ? resolveAssetId(input.asset_id) : undefined;
-  const liters = input.liters != null ? Number(input.liters) : undefined;
+  const liters = input.liters != null ? Number(input.liters) : (input.fuel_liters != null ? Number(input.fuel_liters) : undefined);
   const price = input.price_per_liter != null ? Number(input.price_per_liter) : undefined;
   const cost = input.total_cost != null ? Number(input.total_cost) : undefined;
 
   try {
     const supabase = createClient();
     const updatePayload: any = {};
-    if (input.date) updatePayload.timestamp = `${input.date}T00:00:00Z`;
+    if (input.timestamp) updatePayload.timestamp = input.timestamp;
+    else if (input.date) updatePayload.timestamp = `${input.date}T00:00:00Z`;
     if (liters != null) updatePayload.fuel_liters = liters;
     if (price != null) updatePayload.price_per_liter = price;
     if (cost != null) updatePayload.total_cost = cost;
     if (input.odometer_km != null) updatePayload.odometer_km = input.odometer_km;
     if (input.station != null) updatePayload.station = input.station;
+    if (input.tank_full != null) updatePayload.tank_full = input.tank_full;
     if (input.notes != null) updatePayload.notes = input.notes;
 
     if (Object.keys(updatePayload).length > 0) {
       await supabase.from('fuel_logs').update(updatePayload).eq('id', id);
     }
   } catch {}
+
+  const logDate = input.date || (input.timestamp ? input.timestamp.slice(0, 10) : undefined);
 
   if (typeof window !== 'undefined') {
     try {
@@ -198,13 +222,24 @@ export async function updateFuelLog(id: string, input: Partial<FuelLog>) {
         ...existing,
         ...input,
         id,
+        ...(logDate ? { date: logDate } : {}),
+        ...(liters != null ? { liters } : {}),
         ...(realAssetId ? { asset_id: realAssetId } : {}),
       };
       localStorage.setItem('fmms_custom_fuel_logs', JSON.stringify(customMap));
     } catch {}
   }
 
-  return { id, ...input } as FuelLog;
+  return {
+    id,
+    ...input,
+    date: logDate || '',
+    liters: liters || 0,
+    price_per_liter: price || 0,
+    total_cost: cost || 0,
+    odometer_km: input.odometer_km || 0,
+    station: input.station || '',
+  } as FuelLog;
 }
 
 export async function deleteFuelLog(id: string) {
