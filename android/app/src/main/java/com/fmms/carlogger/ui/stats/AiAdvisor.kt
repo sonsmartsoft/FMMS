@@ -1,9 +1,11 @@
 package com.fmms.carlogger.ui.stats
 
+import android.speech.tts.TextToSpeech
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.BuildConfig
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,17 +40,79 @@ class AiAdvisorViewModel : ViewModel() {
     private val _state = MutableStateFlow<AiUiState>(AiUiState.Idle)
     val state: StateFlow<AiUiState> = _state
 
+    /** Máy TTS (đọc tiếng Việt) đã sẵn sàng chưa — true khi thiết bị có giọng đọc tiếng Việt. */
+    private val _ttsReady = MutableStateFlow(false)
+    val ttsReady: StateFlow<Boolean> = _ttsReady
+
+    private var tts: TextToSpeech? = null
+    private var ttsInitOk = false
+    private var ttsVi = false
+
     fun ask(userPrompt: String? = null) {
         if (_state.value is AiUiState.Loading) return
         _state.value = AiUiState.Loading
         viewModelScope.launch {
             _state.value = try {
                 val insights = callAiAdvisor(userPrompt)
+                // Tự động đọc kết quả thành tiếng nếu user bật (mặc định bật).
+                if (c.prefs.getAiReadAloud()) readAloud(insights)
                 AiUiState.Success(insights)
             } catch (e: Exception) {
                 AiUiState.Error(e.message ?: "AI error")
             }
         }
+    }
+
+    /** Đọc toàn bộ kết quả phân tích bằng giọng nói (tiếng Việt nếu có). */
+    fun readAloud(insights: AiInsights? = null) {
+        ensureTts()
+        val engine = tts ?: return
+        if (!ttsInitOk) return
+        val text = spokenText(insights ?: (state.value as? AiUiState.Success)?.insights)
+        if (text.isBlank()) return
+        engine.stop()
+        engine.setSpeechRate(1.0f)
+        engine.speak(text, TextToSpeech.QUEUE_ADD, null, "fmms_ai_advisor")
+    }
+
+    fun stopSpeaking() {
+        tts?.stop()
+    }
+
+    fun setReadAloud(enabled: Boolean) {
+        c.prefs.setAiReadAloud(enabled)
+        if (!enabled) stopSpeaking()
+    }
+
+    private fun spokenText(insights: AiInsights?): String {
+        if (insights == null) return ""
+        return buildString {
+            append(insights.summary)
+            insights.maintenancePrediction?.takeIf { it.isNotBlank() }?.let { append(" ").append(it) }
+            insights.costAlert?.takeIf { it.isNotBlank() }?.let { append(" ").append(it) }
+            insights.fuelEfficiencyTip?.takeIf { it.isNotBlank() }?.let { append(" ").append(it) }
+        }
+    }
+
+    private fun ensureTts() {
+        if (tts != null) return
+        tts = TextToSpeech(c.context) { status ->
+            ttsInitOk = status == TextToSpeech.SUCCESS
+            if (ttsInitOk) {
+                val result = tts?.setLanguage(Locale("vi", "VN"))
+                ttsVi = result != TextToSpeech.LANG_MISSING_DATA &&
+                    result != TextToSpeech.LANG_NOT_SUPPORTED
+                if (!ttsVi) tts?.setLanguage(Locale.getDefault())
+                _ttsReady.value = ttsVi
+            }
+        }
+    }
+
+    override fun onCleared() {
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
+        super.onCleared()
     }
 
     private suspend fun callAiAdvisor(userPrompt: String?): AiInsights = withContext(Dispatchers.IO) {

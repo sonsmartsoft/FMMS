@@ -12,11 +12,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.data.repository.TripAggregate
 import com.fmms.carlogger.ui.i18n.FmmsStrings
 import com.fmms.carlogger.ui.i18n.LocalStrings
@@ -679,8 +681,38 @@ fun AiAdvisorPanel(
                     s.insights.costAlert?.let { AiInsightBlock("Chi phí", it, colors.amber) }
                     s.insights.fuelEfficiencyTip?.let { AiInsightBlock("Tiết kiệm", it, colors.cyan) }
                     Spacer(modifier = Modifier.height(6.dp))
-                    TextButton(onClick = { vm.ask() }) {
-                        Text("Làm mới", color = colors.purple, fontSize = 12.sp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        if (vm.ttsReady.collectAsState().value) {
+                            TextButton(onClick = {
+                                vm.readAloud()
+                            }, contentPadding = PaddingValues(horizontal = 6.dp)) {
+                                Text("🔊 Nghe lại", color = colors.purple, fontSize = 12.sp)
+                            }
+                        }
+                        var readAloud by remember {
+                            mutableStateOf(AppContainer.prefs.getAiReadAloud())
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Tự đọc",
+                                color = colors.textSecondary, fontSize = 11.sp,
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Switch(
+                                checked = readAloud,
+                                onCheckedChange = { on ->
+                                    readAloud = on
+                                    vm.setReadAloud(on)
+                                },
+                                modifier = Modifier.scale(0.65f),
+                            )
+                        }
+                        TextButton(onClick = { vm.ask() }, contentPadding = PaddingValues(horizontal = 6.dp)) {
+                            Text("Làm mới", color = colors.purple, fontSize = 12.sp)
+                        }
                     }
                 }
                 is AiUiState.Error -> {

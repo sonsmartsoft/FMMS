@@ -372,6 +372,10 @@ class PrefsStore(context: Context) {
 
     fun getLanguage(): String = prefs.getString("language", "en") ?: "en"
     fun setLanguage(v: String) { prefs.edit().putString("language", v).apply() }
+
+    /** AI Advisor: tự động đọc kết quả phân tích thành tiếng (TTS) sau khi xong. */
+    fun getAiReadAloud(): Boolean = prefs.getBoolean("ai_read_aloud", true)
+    fun setAiReadAloud(v: Boolean) { prefs.edit().putBoolean("ai_read_aloud", v).apply() }
 }
 
 /** Represents a raw OBD diagnostic log line (spec §15). */

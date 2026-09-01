@@ -10,10 +10,10 @@ export function getAllowedEmails(): string[] {
   if (typeof window === 'undefined') return DEFAULT_ALLOWED_EMAILS;
   try {
     const custom = localStorage.getItem('fmms_allowed_emails');
-    if (custom) {
+    if (custom !== null) {
       const parsed = JSON.parse(custom);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return Array.from(new Set([...DEFAULT_ALLOWED_EMAILS, ...parsed.map((e: string) => e.trim().toLowerCase())]));
+      if (Array.isArray(parsed)) {
+        return parsed.map((e: string) => e.trim().toLowerCase()).filter(Boolean);
       }
     }
   } catch {}
@@ -25,6 +25,7 @@ export function saveAllowedEmails(emails: string[]): void {
   try {
     const cleaned = Array.from(new Set(emails.map(e => e.trim().toLowerCase()).filter(Boolean)));
     localStorage.setItem('fmms_allowed_emails', JSON.stringify(cleaned));
+    window.dispatchEvent(new Event('fmms_allowed_emails_updated'));
   } catch {}
 }
 

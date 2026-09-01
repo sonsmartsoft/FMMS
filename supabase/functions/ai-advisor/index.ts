@@ -183,9 +183,9 @@ function buildContext(req: AdvisorRequest, db: Record<string, unknown> | null): 
   return ctx;
 }
 
-async function callGemini(model: string, apiKey: string, prompt: string): Promise<{ ok: boolean; text?: string; error?: string }> {
+async function callGemini(model: string, apiKey: string, prompt: string, maxTokens: number): Promise<{ ok: boolean; text?: string; error?: string }> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45000);
+  const timer = setTimeout(() => controller.abort(), 30000);
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -196,7 +196,7 @@ async function callGemini(model: string, apiKey: string, prompt: string): Promis
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 8000,
+            maxOutputTokens: maxTokens,
           },
         }),
         signal: controller.signal,
@@ -298,11 +298,18 @@ serve(async (req: Request) => {
     }
 
     const prompt = `[HỆ THỐNG & NGỮ CẢNH]:\n${SYSTEM_PROMPT}\n\n[DỮ LIỆU HIỆN TẠI]:\n${buildContext(body, dbContext)}`;
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    // Ưu tiên model nhanh, KHÔNG thinking (2.0-flash, 1.5-flash) để giảm độ trễ.
+    // gemini-2.5-flash để CHẬM NHẤT làm fallback vì có chế độ "suy nghĩ" (reasoning) sinh
+    // rất nhiều token phụ -> làm tăng độ trễ rõ rệt. Nó chỉ cần ngân sách token lớn riêng.
+    const models: Array<[string, number]> = [
+      ['gemini-2.0-flash', 2048],
+      ['gemini-1.5-flash', 2048],
+      ['gemini-2.5-flash', 8192],
+    ];
     let result = { ok: false, error: 'No model available' as string | undefined };
 
-    for (const model of models) {
-      const r = await callGemini(model, apiKey, prompt);
+    for (const [model, maxTokens] of models) {
+      const r = await callGemini(model, apiKey, prompt, maxTokens);
       if (r.ok && r.text) {
         result = { ok: true, text: r.text };
         break;
