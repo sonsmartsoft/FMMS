@@ -17,6 +17,7 @@ import { useTheme } from '@/lib/theme/ThemeContext';
 import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2, Pencil, BarChart3, PieChart as PieIcon, Filter, Calendar } from 'lucide-react';
 
 import DraggableModal from '@/components/ui/DraggableModal';
+import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
@@ -205,6 +206,7 @@ export default function FinancePage() {
   const [expenseSortDir, setExpenseSortDir] = useState<'asc' | 'desc'>('desc');
   const [loanSortCol, setLoanSortCol] = useState<string>('payment_number');
   const [loanSortDir, setLoanSortDir] = useState<'asc' | 'desc'>('asc');
+  const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; title?: string; description?: string; actionName?: string; onConfirm?: () => void }>({ isOpen: false });
 
   const toggleFinKey = (key: string) => {
     setHiddenFinKeys(prev =>
@@ -517,14 +519,21 @@ export default function FinancePage() {
     setForm({ asset_id: assets[0]?.id || '', date: '', category: 'Running', subcategory: 'Fuel', amount: '', discount: '', vendor: '', odometer_km: '', description: '' });
   };
 
-  const deleteExpenseHandler = async (id: string) => {
-    if (!confirm('Xóa chi phí này?')) return;
-    try {
-      await deleteExpense(id);
-      setExpenses(prev => prev.filter(e => e.id !== id));
-    } catch (err: any) {
-      alert(`Lỗi khi xóa: ${err?.message ?? 'Không xóa được'}`);
-    }
+  const deleteExpenseHandler = (id: string) => {
+    setSecurityModal({
+      isOpen: true,
+      title: 'Xác thực Xóa Khoản Chi Phí (Admin PIN)',
+      description: 'Hành động này sẽ xóa vĩnh viễn bản ghi chi phí đã chọn khỏi hệ thống sổ sách gia đình. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      actionName: 'Xác nhận xóa chi phí',
+      onConfirm: async () => {
+        try {
+          await deleteExpense(id);
+          setExpenses(prev => prev.filter(e => e.id !== id));
+        } catch (err: any) {
+          alert(`Lỗi khi xóa: ${err?.message ?? 'Không xóa được'}`);
+        }
+      },
+    });
   };
 
   const openAddLoan = () => {
@@ -604,15 +613,22 @@ export default function FinancePage() {
     }
   };
 
-  const handleDeleteLoan = async (loanId: string) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa khoản vay này? Toàn bộ các kỳ trả nợ và chi phí liên quan đến khoản vay sẽ được dọn dẹp sạch sẽ.')) return;
-    try {
-      const { deleteLoanWithCascade } = await import('@/lib/services/loanService');
-      await deleteLoanWithCascade(loanId);
-      await loadData();
-    } catch (err: any) {
-      alert(`Lỗi khi xóa khoản vay: ${err?.message ?? 'Không xóa được'}`);
-    }
+  const handleDeleteLoan = (loanId: string) => {
+    setSecurityModal({
+      isOpen: true,
+      title: 'Xác thực Xóa Khoản Vay (Admin PIN)',
+      description: 'CẢNH BÁO: Hành động này sẽ xóa vĩnh viễn cấu hình khoản vay, bảng phân bổ 60 kỳ và các chi phí liên quan. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      actionName: 'Xóa vĩnh viễn khoản vay',
+      onConfirm: async () => {
+        try {
+          const { deleteLoanWithCascade } = await import('@/lib/services/loanService');
+          await deleteLoanWithCascade(loanId);
+          await loadData();
+        } catch (err: any) {
+          alert(`Lỗi khi xóa khoản vay: ${err?.message ?? 'Không xóa được'}`);
+        }
+      },
+    });
   };
 
   const confirmPayment = async () => {
@@ -2000,8 +2016,19 @@ export default function FinancePage() {
             
 </div>
 </DraggableModal>
-
       )}
+
+      {/* 🔒 Master Admin Security PIN Confirmation Modal */}
+      <AdminSecurityPinModal
+        isOpen={securityModal.isOpen}
+        title={securityModal.title}
+        description={securityModal.description}
+        actionName={securityModal.actionName}
+        onClose={() => setSecurityModal(p => ({ ...p, isOpen: false }))}
+        onSuccess={() => {
+          if (securityModal.onConfirm) securityModal.onConfirm();
+        }}
+      />
     </div>
   );
 }

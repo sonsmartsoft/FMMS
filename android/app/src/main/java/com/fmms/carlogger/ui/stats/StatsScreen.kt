@@ -352,6 +352,14 @@ private fun MonthlyMode(
     if (expenseBreakdown.isNotEmpty()) {
         ExpenseDonutCard("Chi phí · ${MONTH_NAMES[month - 1]} ${year ?: ""}", expenseBreakdown, colors, border, strings)
         Spacer(modifier = Modifier.height(12.dp))
+    } else {
+        GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+            Text(
+                "Chưa có chi phí cho ${MONTH_NAMES[month - 1]} ${year ?: ""}",
+                color = colors.textSecondary, fontSize = 12.sp,
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
     }
 
     GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
@@ -429,6 +437,13 @@ private fun YearlyMode(
 
     if (expenseBreakdown.isNotEmpty()) {
         ExpenseDonutCard("Chi phí năm ${selected.label}", expenseBreakdown, colors, border, strings)
+    } else {
+        GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+            Text(
+                "Chưa có chi phí cho năm ${selected.label}",
+                color = colors.textSecondary, fontSize = 12.sp,
+            )
+        }
     }
 }
 

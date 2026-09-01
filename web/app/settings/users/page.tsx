@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { getAssets } from '@/lib/services/assetService';
 import { getAllowedEmails, saveAllowedEmails } from '@/lib/services/authWhitelistService';
 import DraggableModal from '@/components/ui/DraggableModal';
+import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 
 interface UserMember {
   id: string;
@@ -60,11 +61,13 @@ export default function UsersManagementPage() {
 
   // Form states
   const [newUser, setNewUser] = useState({ name: '', email: '', phone: '', role: 'MEMBER' as 'ADMIN' | 'MEMBER', assigned_asset_ids: [] as string[] });
+  const [editUserForm, setEditUserForm] = useState({ name: '', phone: '', email: '', role: 'MEMBER' as 'ADMIN' | 'MEMBER' });
   const [myPasswordForm, setMyPasswordForm] = useState({ newPassword: '', confirmPassword: '' });
   const [resetMemberForm, setResetMemberForm] = useState({ newPassword: '', sendEmail: true });
   const [allowedEmailsList, setAllowedEmailsList] = useState<string[]>([]);
   const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; title?: string; description?: string; actionName?: string; onConfirm?: () => void }>({ isOpen: false });
 
   const supabase = createClient();
 
@@ -95,6 +98,43 @@ export default function UsersManagementPage() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleOpenEditUser = (u: UserMember) => {
+    setSelectedUser(u);
+    setEditUserForm({
+      name: u.name,
+      phone: u.phone === 'Chưa cập nhật' || u.phone === 'Chưa có' ? '' : (u.phone || ''),
+      email: u.email,
+      role: u.role,
+    });
+    setOpenModal('edit_user');
+  };
+
+  const handleSaveEditUser = () => {
+    if (!selectedUser) return;
+    if (!editUserForm.name.trim()) {
+      alert('Vui lòng nhập họ và tên thành viên');
+      return;
+    }
+    const cleanEmail = editUserForm.email.trim().toLowerCase();
+    setUsers(prev => prev.map(u => u.id === selectedUser.id ? {
+      ...u,
+      name: editUserForm.name.trim(),
+      phone: editUserForm.phone.trim() || 'Chưa cập nhật',
+      email: cleanEmail || u.email,
+      role: editUserForm.role,
+    } : u));
+
+    // Update whitelist if email is changed
+    if (cleanEmail && cleanEmail !== selectedUser.email) {
+      const updatedWhitelist = Array.from(new Set([...allowedEmailsList.filter(e => e !== selectedUser.email), cleanEmail]));
+      setAllowedEmailsList(updatedWhitelist);
+      saveAllowedEmails(updatedWhitelist);
+    }
+
+    setOpenModal(null);
+    showToast(`✅ Đã cập nhật thông tin thành viên "${editUserForm.name}" thành công!`);
   };
 
   const handleCreateUser = () => {
@@ -190,12 +230,18 @@ export default function UsersManagementPage() {
   };
 
   const handleRemoveWhitelistEmail = (emailToRemove: string) => {
-    if (confirm(`Bạn có chắc muốn xóa quyền đăng nhập của email ${emailToRemove}?`)) {
-      const updated = allowedEmailsList.filter(e => e !== emailToRemove);
-      setAllowedEmailsList(updated);
-      saveAllowedEmails(updated);
-      showToast(`Đã xóa ${emailToRemove} khỏi danh sách được phép đăng nhập.`);
-    }
+    setSecurityModal({
+      isOpen: true,
+      title: 'Xác thực Thu Hồi Quyền Đăng Nhập (Admin PIN)',
+      description: `CẢNH BÁO: Xác nhận thu hồi quyền đăng nhập của Email "${emailToRemove}". Vui lòng nhập mã PIN Quản trị viên (0075) để tiếp tục.`,
+      actionName: 'Thu hồi quyền truy cập',
+      onConfirm: () => {
+        const updated = allowedEmailsList.filter(e => e !== emailToRemove);
+        setAllowedEmailsList(updated);
+        saveAllowedEmails(updated);
+        showToast(`✅ Đã xóa ${emailToRemove} khỏi danh sách được phép đăng nhập.`);
+      },
+    });
   };
 
   const handleToggleRole = (user: UserMember) => {
@@ -211,10 +257,19 @@ export default function UsersManagementPage() {
   };
 
   const handleDeleteUser = (user: UserMember) => {
-    if (confirm(`Bạn có chắc chắn muốn xóa người dùng ${user.name}?`)) {
-      setUsers(prev => prev.filter(u => u.id !== user.id));
-      showToast(`Đã xóa người dùng ${user.name}`);
-    }
+    setSecurityModal({
+      isOpen: true,
+      title: 'Xác thực Xóa Thành Viên (Admin PIN)',
+      description: `CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn thành viên "${user.name}" (${user.email}) và thu hồi toàn bộ phân quyền quản lý xe. Vui lòng nhập mã PIN Admin (0075) để xác nhận.`,
+      actionName: 'Xác nhận xóa thành viên',
+      onConfirm: () => {
+        setUsers(prev => prev.filter(u => u.id !== user.id));
+        const updatedWhitelist = allowedEmailsList.filter(e => e !== user.email);
+        setAllowedEmailsList(updatedWhitelist);
+        saveAllowedEmails(updatedWhitelist);
+        showToast(`✅ Đã xóa thành viên ${user.name} và thu hồi quyền đăng nhập.`);
+      },
+    });
   };
 
   const handleSaveAssignedAssets = () => {
@@ -387,6 +442,16 @@ export default function UsersManagementPage() {
 
                     <td className="px-4 py-3.5 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
+                        {/* Edit User Info */}
+                        <button
+                          onClick={() => handleOpenEditUser(u)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold hover:bg-cyan-500/10 transition inline-flex items-center gap-1"
+                          style={{ color: 'var(--accent-cyan)', border: '1px solid rgba(6,182,212,0.3)' }}
+                          title="Chỉnh sửa họ tên, số điện thoại, email"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" /> Sửa
+                        </button>
+
                         {/* Assign Assets */}
                         {u.role !== 'ADMIN' && (
                           <button
@@ -498,6 +563,71 @@ export default function UsersManagementPage() {
           ))}
         </div>
       </div>
+
+      {/* Edit User Modal */}
+      {openModal === 'edit_user' && selectedUser && (
+        <DraggableModal isOpen={true} onClose={() => setOpenModal(null)}>
+          <div className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[500px] max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Edit3 className="w-4 h-4 text-cyan-400" />
+                Chỉnh sửa thông tin thành viên
+              </h3>
+              <button onClick={() => setOpenModal(null)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-3.5 text-xs">
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Họ và tên *</label>
+                <input
+                  type="text"
+                  className="theme-input font-medium"
+                  placeholder="VD: Nguyễn Văn A"
+                  value={editUserForm.name}
+                  onChange={e => setEditUserForm(p => ({ ...p, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Số điện thoại</label>
+                <input
+                  type="text"
+                  className="theme-input font-medium"
+                  placeholder="VD: 0901234567"
+                  value={editUserForm.phone}
+                  onChange={e => setEditUserForm(p => ({ ...p, phone: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Email đăng nhập</label>
+                <input
+                  type="email"
+                  className="theme-input font-medium font-mono"
+                  placeholder="user@gmail.com"
+                  value={editUserForm.email}
+                  onChange={e => setEditUserForm(p => ({ ...p, email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Vai trò</label>
+                <select
+                  className="theme-select"
+                  value={editUserForm.role}
+                  onChange={e => setEditUserForm(p => ({ ...p, role: e.target.value as any }))}
+                >
+                  <option value="MEMBER">Thành viên (Member — Xem xe được chỉ định)</option>
+                  <option value="ADMIN">Quản trị viên (Admin — Toàn quyền hệ thống)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                <button onClick={() => setOpenModal(null)} className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-white/10" style={{ color: 'var(--text-muted)' }}>Hủy</button>
+                <button onClick={handleSaveEditUser} className="px-5 py-2 rounded-xl text-white font-bold text-xs" style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
+                  Lưu thay đổi
+                </button>
+              </div>
+            </div>
+          </div>
+        </DraggableModal>
+      )}
 
       {/* Change My Password Modal */}
       {openModal === 'change_my_password' && (
@@ -709,6 +839,18 @@ export default function UsersManagementPage() {
           </div>
         </DraggableModal>
       )}
+
+      {/* 🔒 Master Admin Security PIN Confirmation Modal */}
+      <AdminSecurityPinModal
+        isOpen={securityModal.isOpen}
+        title={securityModal.title}
+        description={securityModal.description}
+        actionName={securityModal.actionName}
+        onClose={() => setSecurityModal(p => ({ ...p, isOpen: false }))}
+        onSuccess={() => {
+          if (securityModal.onConfirm) securityModal.onConfirm();
+        }}
+      />
     </div>
   );
 }

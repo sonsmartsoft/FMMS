@@ -8,6 +8,7 @@ import { getLoanPayments, createLoanPayment, updateLoanPayment, updateLoan, crea
 import { updateAsset } from '@/lib/services/assetService';
 import { createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import DraggableModal from '@/components/ui/DraggableModal';
+import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 import {
   DollarSign, TrendingUp, TrendingDown, Wrench, Fuel, ShieldCheck,
   CreditCard, Landmark, PieChart, Plus, X, Edit2, Trash2, CheckCircle2, AlertCircle, ChevronRight, Sliders
@@ -177,6 +178,24 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
   const [upgradeForm, setUpgradeForm] = useState({ description: '', amount: '', vendor: '', date: new Date().toISOString().slice(0, 10) });
   const [runningForm, setRunningForm] = useState({ category: 'FUEL', description: '', amount: '', vendor: '', date: new Date().toISOString().slice(0, 10) });
   const [initialForm, setInitialForm] = useState({ category: 'Lệ phí trước bạ', description: '', amount: '', vendor: '' });
+  const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; title?: string; description?: string; actionName?: string; onConfirm?: () => void }>({ isOpen: false });
+
+  const handleDeleteExpenseSecure = (id: string) => {
+    setSecurityModal({
+      isOpen: true,
+      title: 'Xác thực Xóa Khoản Chi Phí (Admin PIN)',
+      description: 'Hành động này sẽ xóa vĩnh viễn khoản chi phí đã chọn khỏi hệ thống sổ sách của xe. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      actionName: 'Xác nhận xóa chi phí',
+      onConfirm: async () => {
+        try {
+          await deleteExpense(id);
+          onRefresh();
+        } catch (err: any) {
+          alert(`Lỗi khi xóa chi phí: ${err?.message}`);
+        }
+      },
+    });
+  };
 
   useEffect(() => {
     // Load Master Banks
@@ -796,7 +815,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="font-mono font-bold text-purple-400">{fmt(item.amount)} ₫</span>
-                      <button onClick={async () => { await deleteExpense(item.id); onRefresh(); }} className="text-rose-400 hover:opacity-70 p-1">
+                      <button onClick={() => handleDeleteExpenseSecure(item.id)} className="text-rose-400 hover:opacity-70 p-1" title="Xóa chi phí (Cần mã PIN 0075)">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -904,7 +923,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
                         <div className="flex items-center space-x-2 shrink-0 ml-2">
                           <span className="font-mono font-bold text-purple-400">{fmt(item.amount)} ₫</span>
                           {item.source === 'expense' && item.expenseId && (
-                            <button onClick={async () => { await deleteExpense(item.expenseId!); onRefresh(); }} className="text-rose-400 hover:opacity-70 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleDeleteExpenseSecure(item.expenseId!)} className="text-rose-400 hover:opacity-70 p-1" title="Xóa chi phí (Cần mã PIN 0075)"><Trash2 className="w-3.5 h-3.5" /></button>
                           )}
                         </div>
                       </div>
@@ -951,7 +970,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className="font-mono font-bold text-amber-400">{fmt(item.amount)} ₫</span>
-                      <button onClick={async () => { await deleteExpense(item.id); onRefresh(); }} className="text-rose-400 hover:opacity-70 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => handleDeleteExpenseSecure(item.id)} className="text-rose-400 hover:opacity-70 p-1" title="Xóa chi phí (Cần mã PIN 0075)"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
                 ))
@@ -1300,6 +1319,18 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
           </div>
         </DrillDownModal>
       )}
+
+      {/* 🔒 Master Admin Security PIN Confirmation Modal */}
+      <AdminSecurityPinModal
+        isOpen={securityModal.isOpen}
+        title={securityModal.title}
+        description={securityModal.description}
+        actionName={securityModal.actionName}
+        onClose={() => setSecurityModal(p => ({ ...p, isOpen: false }))}
+        onSuccess={() => {
+          if (securityModal.onConfirm) securityModal.onConfirm();
+        }}
+      />
     </div>
   );
 }

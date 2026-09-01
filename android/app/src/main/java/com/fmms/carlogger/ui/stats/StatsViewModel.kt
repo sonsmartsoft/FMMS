@@ -6,9 +6,11 @@ import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.core.database.entity.FuelLogEntity
 import com.fmms.carlogger.core.database.entity.TripEntity
 import com.fmms.carlogger.data.repository.TripAggregate
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.text.SimpleDateFormat
@@ -222,7 +224,7 @@ class StatsViewModel : ViewModel() {
     /** Tải phân bổ chi phí theo danh mục từ DB cho kỳ đang chọn. */
     fun loadExpenseForCurrentSelection(mode: AnalyticsMode) {
         viewModelScope.launch {
-            val assetId = c.vehicleRepository.getAssignedVehicleId()
+            val assetId = c.prefs.getAssignedVehicleId()
                 ?: c.vehicleRepository.getActive()?.id
                 ?: return@launch
             val year = _selectedYear.value ?: Calendar.getInstance().get(Calendar.YEAR)
@@ -248,7 +250,7 @@ class StatsViewModel : ViewModel() {
                     f to t
                 }
             }
-            _expenseBreakdown.value = fetchExpenseBreakdown(assetId, from, to)
+            _expenseBreakdown.value = withContext(Dispatchers.IO) { fetchExpenseBreakdown(assetId, from, to) }
             android.util.Log.d("StatsVM", "expense breakdown [$mode] asset=$assetId n=${_expenseBreakdown.value.size}")
         }
     }
@@ -256,11 +258,12 @@ class StatsViewModel : ViewModel() {
     /** Gọi RPC fmms_get_expense_breakdown để lấy chi phí theo danh mục từ DB. */
     private suspend fun fetchExpenseBreakdown(assetId: String, from: Long, to: Long): List<ExpenseSlice> {
         return try {
+            val fmt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
             val body = org.json.JSONObject().apply {
                 put("p_device_id", c.prefs.getDeviceId())
                 put("p_asset_id", assetId)
-                put("p_from", from)
-                put("p_to", to)
+                put("p_from", fmt.format(Date(from)))
+                put("p_to", fmt.format(Date(to)))
             }
             val request = okhttp3.Request.Builder()
                 .url("${com.fmms.carlogger.BuildConfig.SUPABASE_URL}/rest/v1/rpc/fmms_get_expense_breakdown")
@@ -270,8 +273,12 @@ class StatsViewModel : ViewModel() {
                 .post(body.toString().toRequestBody("application/json".toMediaType()))
                 .build()
             val resp = okhttp3.OkHttpClient().newCall(request).execute()
-            if (!resp.isSuccessful) return emptyList()
+            if (!resp.isSuccessful) {
+                android.util.Log.d("StatsVM", "expense RPC http=${resp.code} body=${resp.peekBody(400).string()}")
+                return emptyList()
+            }
             val text = resp.body?.string() ?: return emptyList()
+            android.util.Log.d("StatsVM", "expense raw = $text")
             val arr = try { org.json.JSONArray(text) } catch (e: Exception) { return emptyList() }
             (0 until arr.length()).mapNotNull { i ->
                 val o = arr.optJSONObject(i) ?: return@mapNotNull null
@@ -283,6 +290,7 @@ class StatsViewModel : ViewModel() {
                 )
             }.filter { it.amount > 0 }
         } catch (e: Exception) {
+            android.util.Log.d("StatsVM", "expense EXC", e)
             emptyList()
         }
     }

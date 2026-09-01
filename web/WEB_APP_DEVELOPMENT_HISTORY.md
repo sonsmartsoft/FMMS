@@ -286,6 +286,21 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
   - **Đổi Mật Khẩu Cá Nhân:** Người dùng đang đăng nhập có thể chủ động đổi mật khẩu tài khoản của mình qua `supabase.auth.updateUser`.
   - **Admin Reset Mật Khẩu Trực Tiếp:** Quản trị viên có thể đặt mật khẩu mới tùy ý cho thành viên, tạo mật khẩu ngẫu nhiên an toàn 6 số (`FMMS@XXXXXX`) và sao chép 1-click gửi cho thành viên.
   - **Quản Lý Danh Sách Email Whitelist:** Bổ sung giao diện trực quan cho phép Admin thêm/xóa quyền đăng nhập của từng email gia đình.
+  - **Nút "✏️ Sửa Thông Tin Thành Viên":** Cho phép Quản trị viên chỉnh sửa họ tên, số điện thoại, email và vai trò phân quyền.
+
+---
+
+### Đợt 12 (01/09/2026): Khóa Bảo Mật Cấp Cao Toàn Diện Bằng Mã PIN Quản Trị Viên Duy Nhất (`0075`)
+- **Tạo Hợp Phần Xác Thực Mã PIN Quản Trị Viên (`AdminSecurityPinModal`):**
+  - Cấu hình mã PIN bảo mật Master Admin duy nhất: `0075`.
+  - Giao diện Modal Glassmorphism phát sáng cảnh báo đỏ/hồng (`Rose neon glow`), tích hợp biểu tượng khiên bảo vệ `ShieldAlert`.
+  - Hỗ trợ ô nhập mã PIN 4 số tự động bắt tiêu điểm (auto-focus), nhập bàn phím số, phím `Enter` và cơ chế chống gõ nhầm/chặn hành vi trái phép.
+- **Khóa & Bảo Vệ Toàn Bộ Các Tác Vụ Nhạy Cảm & Phá Hủy Dữ Liệu:**
+  - 🚗 **Xóa Phương Tiện / Xe:** Khóa nút xóa xe ở cả màn hình Danh sách xe (`/assets`) và màn hình Chi tiết phương tiện (`/assets/[id]`). Yêu cầu nhập đúng mã PIN `0075` mới thực hiện xóa.
+  - 💰 **Xóa Khoản Vay & Chi Phí Tài Chính:** Khóa hành động xóa cấu hình khoản vay, xóa các kỳ trả nợ và xóa chi phí lăn bánh / nâng cấp / vận hành (`/finance` & `VehicleFinanceOverview`).
+  - 👤 **Xóa & Thu Hồi Quyền Thành Viên:** Khóa chức năng xóa tài khoản thành viên và thu hồi quyền truy cập Email Whitelist (`/settings/users`).
+  - 🔧 **Xóa Lịch Sử Vận Hành:** Khóa xóa hồ sơ bảo dưỡng, nhật ký đổ xăng, phụ tùng nâng cấp, bảo hiểm, sổ bảo hành và mốc Odometer (`/assets/[id]`).
+  - ⚙️ **Xóa Dữ Liệu Danh Mục Master Data:** Khóa xóa danh mục chính, danh mục con, nhà cung cấp và ngân hàng đối tác (`/settings/master-data`).
 
 ---
 

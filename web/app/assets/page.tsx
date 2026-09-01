@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getAssets, createAsset } from '@/lib/services/assetService';
+import { getAssets, createAsset, deleteAsset } from '@/lib/services/assetService';
 import { Asset, AssetType } from '@/types/mobility';
-import { Car, Bike, Zap, Plus, Search, Filter, ChevronRight, X } from 'lucide-react';
+import { Car, Bike, Zap, Plus, Search, Filter, ChevronRight, X, Trash2 } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
+import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 
 const TYPE_LABELS: Record<string, string> = {
   ALL: 'Tất cả', CAR: 'Ô Tô', MOTORCYCLE: 'Mô Tô', BICYCLE: 'Xe Đạp', E_BIKE: 'Xe Điện',
@@ -28,6 +29,7 @@ export default function AssetsPage() {
   const [error, setError] = useState<string | null>(null);
   const [openAddModal, setOpenAddModal] = useState(false);
   const [savingAsset, setSavingAsset] = useState(false);
+  const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; title?: string; description?: string; actionName?: string; onConfirm?: () => void }>({ isOpen: false });
 
   const initialFormState = {
     name: '',
@@ -107,6 +109,24 @@ export default function AssetsPage() {
       cancelled = true;
     };
   }, []);
+
+  const handleDeleteAsset = (a: Asset) => {
+    setSecurityModal({
+      isOpen: true,
+      title: `Xác thực XÓA PHƯƠNG TIỆN "${a.name}" (Admin PIN)`,
+      description: `CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn xe "${a.name}" (${a.license_plate || a.brand}) cùng toàn bộ dữ liệu lịch sử vận hành, bảo dưỡng, chi phí, khoản vay. Hành động này KHÔNG THỂ HOÀN TÁC. Vui lòng nhập mã PIN Admin (0075) để xác nhận.`,
+      actionName: 'Xóa vĩnh viễn xe',
+      onConfirm: async () => {
+        try {
+          await deleteAsset(a.id);
+          setAssets(prev => prev.filter(x => x.id !== a.id));
+          alert(`Đã xóa vĩnh viễn phương tiện ${a.name}`);
+        } catch (err: any) {
+          alert(`Lỗi khi xóa: ${err?.message}`);
+        }
+      },
+    });
+  };
 
   const filtered = assets.filter((a) => {
     const matchType = filter === 'ALL' || a.asset_type === filter;
@@ -218,11 +238,20 @@ export default function AssetsPage() {
                   <td className="px-4 py-3" style={{ color: 'var(--status-amber)' }}>
                     {asset.next_maintenance_due || '—'}
                   </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/assets/${asset.id}`} className="flex items-center space-x-1 text-[11px] font-bold transition hover:opacity-70" style={{ color: 'var(--accent-cyan)' }}>
-                      <span>Chi tiết</span>
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </Link>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end space-x-2">
+                      <Link href={`/assets/${asset.id}`} className="flex items-center space-x-1 text-[11px] font-bold transition hover:opacity-70" style={{ color: 'var(--accent-cyan)' }}>
+                        <span>Chi tiết</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </Link>
+                      <button
+                        onClick={() => handleDeleteAsset(asset)}
+                        className="p-1 rounded-lg text-rose-400 hover:bg-rose-500/15 transition border border-rose-500/20"
+                        title="Xóa phương tiện (Yêu cầu mã PIN 0075)"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -510,8 +539,19 @@ export default function AssetsPage() {
             
 </div>
 </DraggableModal>
-
       )}
+
+      {/* 🔒 Master Admin Security PIN Confirmation Modal */}
+      <AdminSecurityPinModal
+        isOpen={securityModal.isOpen}
+        title={securityModal.title}
+        description={securityModal.description}
+        actionName={securityModal.actionName}
+        onClose={() => setSecurityModal(p => ({ ...p, isOpen: false }))}
+        onSuccess={() => {
+          if (securityModal.onConfirm) securityModal.onConfirm();
+        }}
+      />
     </div>
   );
 }
