@@ -2454,20 +2454,171 @@ export default function AssetDetailPage() {
               }
             </div>
 
-            {/* OBD Gauges — realtime từ Android app via Supabase Realtime */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-              {[
-                { label: 'Tốc độ', value: live.speed != null ? `${Math.round(live.speed)}` : 'N/A', unit: 'km/h', color: live.speed != null ? 'var(--accent-cyan)' : 'var(--text-muted)' },
-                { label: 'Vòng tua RPM', value: live.rpm != null ? `${Math.round(live.rpm)}` : 'N/A', unit: 'rpm', color: live.rpm != null ? 'var(--accent-cyan)' : 'var(--text-muted)' },
-                { label: 'Nhiệt độ nước', value: live.coolant != null ? `${Math.round(live.coolant)}` : 'N/A', unit: '°C', color: live.coolant != null ? 'var(--accent-cyan)' : 'var(--text-muted)' },
-                { label: 'Điện áp bình', value: live.voltage != null ? live.voltage.toFixed(1) : 'N/A', unit: 'V', color: live.voltage != null ? 'var(--accent-cyan)' : 'var(--text-muted)' },
-              ].map((g, i) => (
-                <div key={i} className="p-5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <span className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>{g.label}</span>
-                  <p className="text-2xl font-black mt-2" style={{ color: g.color }}>{g.value}</p>
-                  <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{g.unit}</span>
-                </div>
-              ))}
+            {/* OBD Modern Radial Gauge Meters — Realtime từ Android CarLogger */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {(() => {
+                const gauges = [
+                  {
+                    label: 'Tốc độ xe',
+                    icon: '⚡',
+                    value: live.speed,
+                    displayValue: live.speed != null ? `${Math.round(live.speed)}` : '0',
+                    unit: 'km/h',
+                    min: 0,
+                    max: 160,
+                    color: 'var(--accent-cyan)',
+                    bgColor: 'rgba(6,182,212,0.12)',
+                    borderColor: 'rgba(6,182,212,0.25)',
+                    gradId: 'grad-speed',
+                    gradColors: ['#06B6D4', '#10B981'] as [string, string],
+                    subLabel: live.speed == null ? 'Chờ tín hiệu OBD...' : live.speed === 0 ? 'Xe dừng / Nổ máy tại chỗ' : live.speed < 40 ? 'Đang chạy trong phố' : live.speed < 80 ? 'Tốc độ đường trường' : 'Đang chạy cao tốc',
+                  },
+                  {
+                    label: 'Vòng tua máy RPM',
+                    icon: '🔄',
+                    value: live.rpm,
+                    displayValue: live.rpm != null ? `${Math.round(live.rpm)}` : '0',
+                    unit: 'rpm',
+                    min: 0,
+                    max: 6000,
+                    color: live.rpm != null && live.rpm > 3500 ? 'var(--status-rose)' : 'var(--status-amber)',
+                    bgColor: 'rgba(245,158,11,0.12)',
+                    borderColor: 'rgba(245,158,11,0.25)',
+                    gradId: 'grad-rpm',
+                    gradColors: live.rpm != null && live.rpm > 3500 ? ['#F59E0B', '#EF4444'] as [string, string] : ['#F59E0B', '#F97316'] as [string, string],
+                    subLabel: live.rpm == null ? 'Chờ tín hiệu OBD...' : live.rpm === 0 ? 'Động cơ đang tắt' : live.rpm < 950 ? 'Garanti / Không tải chuẩn' : live.rpm < 2500 ? 'Vùng tiết kiệm nhiên liệu' : live.rpm < 4000 ? 'Vòng tua cao' : '⚠️ Vùng đỏ Redline',
+                  },
+                  {
+                    label: 'Nhiệt độ nước làm mát',
+                    icon: '🌡️',
+                    value: live.coolant,
+                    displayValue: live.coolant != null ? `${Math.round(live.coolant)}` : '0',
+                    unit: '°C',
+                    min: 0,
+                    max: 120,
+                    color: live.coolant != null && live.coolant > 100 ? 'var(--status-rose)' : live.coolant != null && live.coolant < 60 ? 'var(--accent-cyan)' : 'var(--status-green)',
+                    bgColor: 'rgba(16,185,129,0.12)',
+                    borderColor: 'rgba(16,185,129,0.25)',
+                    gradId: 'grad-coolant',
+                    gradColors: live.coolant != null && live.coolant > 100 ? ['#F59E0B', '#EF4444'] as [string, string] : ['#10B981', '#06B6D4'] as [string, string],
+                    subLabel: live.coolant == null ? 'Chờ tín hiệu OBD...' : live.coolant < 60 ? '🔵 Đang làm nóng máy' : live.coolant <= 95 ? '✅ Nhiệt độ tối ưu' : live.coolant <= 105 ? '🟠 Quạt gió làm việc' : '🔴 Cảnh báo quá nhiệt!',
+                  },
+                  {
+                    label: 'Điện áp bình ắc quy',
+                    icon: '🔋',
+                    value: live.voltage,
+                    displayValue: live.voltage != null ? live.voltage.toFixed(1) : '0.0',
+                    unit: 'V',
+                    min: 10,
+                    max: 16,
+                    color: live.voltage != null && live.voltage < 11.8 ? 'var(--status-rose)' : 'var(--status-purple)',
+                    bgColor: 'rgba(168,85,247,0.12)',
+                    borderColor: 'rgba(168,85,247,0.25)',
+                    gradId: 'grad-voltage',
+                    gradColors: ['#A855F7', '#6366F1'] as [string, string],
+                    subLabel: live.voltage == null ? 'Chờ tín hiệu OBD...' : live.voltage < 11.8 ? '🔴 Bình yếu, cần sạc' : live.voltage <= 12.8 ? '🟡 Điện áp bình tốt' : live.voltage <= 14.8 ? '⚡ Máy phát đang sạc tốt' : '⚠️ Quá áp máy phát',
+                  },
+                ];
+
+                return gauges.map((g, idx) => {
+                  const numVal = g.value != null ? Math.max(g.min, Math.min(g.max, g.value)) : g.min;
+                  const pct = Math.max(0, Math.min(100, ((numVal - g.min) / (g.max - g.min)) * 100));
+                  const radius = 36;
+                  const strokeWidth = 7;
+                  const circumference = 2 * Math.PI * radius; // ~226.19
+                  const arcLength = circumference * 0.72; // 260-degree arc ~162.8
+                  const strokeDashoffset = arcLength - (arcLength * pct) / 100;
+
+                  return (
+                    <div
+                      key={idx}
+                      className="relative p-5 rounded-2xl flex flex-col items-center justify-between transition-all duration-300 hover:scale-[1.02] shadow-lg overflow-hidden group"
+                      style={{
+                        background: 'var(--bg-secondary)',
+                        border: `1px solid ${g.borderColor}`,
+                        boxShadow: `0 10px 30px -10px ${g.color}25`,
+                      }}
+                    >
+                      {/* Ambient light glow */}
+                      <div
+                        className="absolute -top-10 -right-10 w-28 h-28 rounded-full blur-2xl opacity-15 pointer-events-none transition-all group-hover:opacity-30"
+                        style={{ background: g.color }}
+                      />
+
+                      {/* Header */}
+                      <div className="w-full flex items-center justify-between mb-1 z-10">
+                        <span className="text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                          <span>{g.icon}</span>
+                          <span>{g.label}</span>
+                        </span>
+                        <span
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                          style={{ background: g.bgColor, color: g.color }}
+                        >
+                          {g.unit}
+                        </span>
+                      </div>
+
+                      {/* Radial Gauge SVG */}
+                      <div className="relative w-36 h-36 flex items-center justify-center my-2">
+                        <svg className="w-full h-full -rotate-[125deg]" viewBox="0 0 100 100">
+                          <defs>
+                            <linearGradient id={g.gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+                              <stop offset="0%" stopColor={g.gradColors[0]} />
+                              <stop offset="100%" stopColor={g.gradColors[1]} />
+                            </linearGradient>
+                          </defs>
+                          {/* Background Track */}
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r={radius}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={strokeWidth}
+                            strokeDasharray={`${arcLength} ${circumference}`}
+                            strokeLinecap="round"
+                            className="text-slate-200 dark:text-slate-800/80"
+                          />
+                          {/* Active Value Arc */}
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r={radius}
+                            fill="none"
+                            stroke={`url(#${g.gradId})`}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray={`${arcLength} ${circumference}`}
+                            strokeDashoffset={g.value != null ? strokeDashoffset : arcLength}
+                            strokeLinecap="round"
+                            className="transition-all duration-700 ease-out"
+                          />
+                        </svg>
+
+                        {/* Center Value */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                          <span
+                            className="text-3xl sm:text-4xl font-black tracking-tight drop-shadow-sm transition-all"
+                            style={{ color: g.value != null ? g.color : 'var(--text-muted)' }}
+                          >
+                            {g.displayValue}
+                          </span>
+                          <span className="text-[10px] font-bold uppercase mt-0.5 tracking-wider" style={{ color: 'var(--text-faint)' }}>
+                            {g.unit}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Smart Status Badge */}
+                      <div className="w-full mt-1 pt-2.5 border-t text-center z-10" style={{ borderColor: 'var(--border-default)' }}>
+                        <p className="text-[11px] font-semibold truncate" style={{ color: g.value != null ? 'var(--text-primary)' : 'var(--text-faint)' }}>
+                          {g.subLabel}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
 
             {hasLive ? (
