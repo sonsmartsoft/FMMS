@@ -47,6 +47,12 @@ export function useAIChat() {
       const activeSettings = getActiveAISettings();
       const providerToUse = overrideProvider || activeSettings.provider;
 
+      // Pass the last 6 messages as conversation memory context
+      const historyContext = messages.slice(-6).map(m => ({
+        role: m.sender === 'user' ? 'user' : 'model',
+        text: m.text,
+      }));
+
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -58,6 +64,7 @@ export function useAIChat() {
           apiKey: activeSettings.apiKey,
           baseUrl: activeSettings.baseUrl,
           assetId: currentAssetId,
+          history: historyContext,
         }),
       });
 

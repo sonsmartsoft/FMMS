@@ -1,27 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
+import { REAL_AUGUST_TRIPS } from '@/lib/data/realTripsData';
 
-const DEFAULT_SYSTEM_PROMPT = `Bạn là Cố Vấn Tài Chính & Vận Hành Phương Tiện Gia Đình (FMMS Senior Advisor).
+const DEFAULT_SYSTEM_PROMPT = `Bạn là Cố Vấn Tài Chính & Vận Hành Phương Tiện Gia Đình (FMMS Senior AI Advisor).
 
 QUY TẮC TRÌNH BÀY VÀ ĐỊNH DẠNG (BẮT BUỘC):
 1. TRÌNH BÀY CÓ CẤU TRÚC RÕ RÀNG:
-   - Dùng bảng Markdown chuẩn (| Hạng mục | Chi phí | Ghi chú |) khi liệt kê từ 2 số liệu trở lên.
-   - In đậm toàn bộ số tiền và mốc ODO (VD: **820.000 ₫**, **12.500 km**).
+   - Dùng bảng Markdown chuẩn (| Hạng mục | Số liệu | Chi tiết |) khi liệt kê từ 2 số liệu trở lên.
+   - In đậm toàn bộ số tiền và mốc ODO (VD: **820.000 ₫**, **2.858,2 km**, **400.000.000 ₫**).
+   - Trả lời cụ thể, chính xác từng kỳ vay, từng lần đổ xăng, từng chuyến đi theo dữ liệu thực tế được cung cấp.
    - Chia câu trả lời thành các phần rõ rệt:
      📌 **Tóm tắt nhanh**
-     📊 **Chi tiết số liệu** (bảng biểu)
-     💡 **Khuyến nghị & Lời khuyên tối ưu**
+     📊 **Chi tiết số liệu thực tế** (bảng biểu chi tiết)
+     💡 **Khuyến nghị & Lời khuyên tối ưu tài chính / vận hành**
 2. PHONG CÁCH & NGÔN NGỮ:
-   - Tiếng Việt chuẩn mực, thông minh, gãy gọn, xưng "Tôi" và gọi người dùng là "Bạn".
-   - Luôn dựa trên số liệu thực tế được cung cấp trong hệ thống, không tự bịa số liệu.`;
+   - Tiếng Việt chuẩn mực, thông minh, ân cần, xưng "Tôi" và gọi người dùng là "Bạn".
+   - Luôn dựa trên số liệu thực tế được cung cấp trong hệ thống, không tự bịa số liệu. Nếu có câu hỏi về kỳ vay, bảo dưỡng, chi phí, hãy tra cứu trực tiếp trong dữ liệu hệ thống bên dưới để giải đáp chi tiết nhất.`;
 
 async function buildContext(supabase: any, assetId?: string): Promise<string> {
   try {
-    let assetQuery = supabase.from('assets').select('id, name, brand, model, year, license_plate, current_odometer_km, status, fuel_type, purchase_price, current_value, next_maintenance_due');
-    let fuelQuery = supabase.from('fuel_logs').select('asset_id, timestamp, fuel_liters, total_cost, odometer_km, fuel_type, price_per_liter').order('timestamp', { ascending: false }).limit(25);
-    let maintQuery = supabase.from('maintenance_records').select('asset_id, maintenance_type, date, cost, odometer_km, next_due_km, description').order('date', { ascending: false }).limit(15);
-    let expenseQuery = supabase.from('expenses').select('asset_id, date, category, amount, description').order('date', { ascending: false }).limit(30);
-    let loanQuery = supabase.from('loans').select('id, asset_id, lender, principal, current_balance, interest_rate_percent, term_months, start_date');
+    let assetQuery = supabase.from('assets').select('*');
+    let fuelQuery = supabase.from('fuel_logs').select('*').order('date', { ascending: false }).limit(30);
+    let maintQuery = supabase.from('maintenance_records').select('*').order('date', { ascending: false }).limit(20);
+    let expenseQuery = supabase.from('expenses').select('*').order('date', { ascending: false }).limit(50);
+    let loanQuery = supabase.from('loans').select('*');
+    let loanPaymentsQuery = supabase.from('loan_payments').select('*').order('payment_number', { ascending: true });
+    let partsQuery = supabase.from('parts').select('*').order('installation_date', { ascending: false }).limit(30);
+    let insuranceQuery = supabase.from('insurance_policies').select('*').limit(10);
+    let tripsQuery = supabase.from('trips').select('*').order('start_time', { ascending: false }).limit(30);
 
     if (assetId) {
       assetQuery = assetQuery.eq('id', assetId);
@@ -29,66 +35,164 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
       maintQuery = maintQuery.eq('asset_id', assetId);
       expenseQuery = expenseQuery.eq('asset_id', assetId);
       loanQuery = loanQuery.eq('asset_id', assetId);
+      partsQuery = partsQuery.eq('asset_id', assetId);
+      insuranceQuery = insuranceQuery.eq('asset_id', assetId);
+      tripsQuery = tripsQuery.eq('asset_id', assetId);
     }
 
-    const [assetsRes, fuelRes, maintRes, expenseRes, loanRes] = await Promise.all([
+    const [assetsRes, fuelRes, maintRes, expenseRes, loanRes, loanPayRes, partsRes, insRes, tripsRes] = await Promise.all([
       assetQuery.limit(10),
       fuelQuery,
       maintQuery,
       expenseQuery,
       loanQuery.limit(5),
+      loanPaymentsQuery,
+      partsQuery,
+      insuranceQuery,
+      tripsQuery,
     ]);
 
-    let context = '📊 DỮ LIỆU HIỆN TẠI TRONG HỆ THỐNG FMMS:\n\n';
+    let context = '📊 TOÀN BỘ CƠ SỞ DỮ LIỆU THỰC TẾ TRONG HỆ THỐNG FMMS:\n\n';
 
+    // 1. Vehicles
     if (assetsRes.data?.length) {
-      context += `🚘 PHƯƠNG TIỆN (${assetsRes.data.length} xe):\n`;
+      context += `🚘 DANH SÁCH PHƯƠNG TIỆN (${assetsRes.data.length} xe):\n`;
       assetsRes.data.forEach((a: any) => {
-        const odo = a.current_odometer_km ? `${a.current_odometer_km.toLocaleString('vi-VN')} km` : 'Chưa có ODO';
-        context += `- ${a.name} (Biển: ${a.license_plate || '—'}, Đời: ${a.year || '—'}, ODO: ${odo}, Nhiên liệu: ${a.fuel_type || 'Xăng'}, Giá mua: ${a.purchase_price ? `${(a.purchase_price / 1_000_000).toFixed(0)}M` : '—'}, Bảo dưỡng tiếp theo: ${a.next_maintenance_due || 'OK'})\n`;
+        const odo = a.current_odometer_km ? `${Number(a.current_odometer_km).toLocaleString('vi-VN')} km` : 'Chưa có ODO';
+        context += `- **${a.name}** | ID: \`${a.id}\` | Biển số: **${a.license_plate || '—'}** | Đời: ${a.year || '—'} | Màu: ${a.color || '—'} | Động cơ: ${a.engine || '—'} | ODO Hiện Tại: **${odo}** | Giá mua: **${Number(a.purchase_price || 0).toLocaleString('vi-VN')} ₫** | Ngày mua: ${a.purchase_date || '—'} | Giá trị hiện tại: **${Number(a.current_value || 0).toLocaleString('vi-VN')} ₫** | Lịch bảo dưỡng tiếp theo: **${a.next_maintenance_due || 'Chưa lên lịch'}**\n`;
       });
       context += '\n';
     }
 
-    if (fuelRes.data?.length) {
-      const totalFuelCost = fuelRes.data.reduce((s: number, f: any) => s + (f.total_cost || 0), 0);
-      const totalLiters = fuelRes.data.reduce((s: number, f: any) => s + (f.fuel_liters || 0), 0);
-      context += `⛽ NHIÊN LIỆU (${fuelRes.data.length} lần gần nhất): Tổng ${totalLiters.toFixed(1)}L, Tổng tiền: ${totalFuelCost.toLocaleString('vi-VN')}₫\n`;
-      fuelRes.data.slice(0, 5).forEach((f: any) => {
-        context += `  + ${f.timestamp?.slice(0, 10)}: ${f.fuel_liters}L, ${f.total_cost?.toLocaleString('vi-VN')}₫ (ODO: ${f.odometer_km?.toLocaleString('vi-VN') || '—'})\n`;
+    // 2. Loans & Full 60-Month Amortization Schedule
+    const loans = loanRes.data || [];
+    const loanPayments = loanPayRes.data || [];
+    if (loans.length > 0) {
+      context += `🏦 THÔNG TIN KHOẢN VAY VÀ LỊCH THANH TOÁN 60 KỲ:\n`;
+      loans.forEach((l: any) => {
+        const principal = Number(l.principal) || 0;
+        const downPayment = Number(l.down_payment) || 0;
+        const rateYear = Number(l.interest_rate_percent) || 0;
+        const termMonths = Number(l.term_months) || 60;
+        const monthlyPay = Number(l.monthly_payment) || 0;
+        const startDate = l.start_date || '2026-08-01';
+        const paymentDay = l.payment_day || 15;
+
+        context += `### Hợp đồng vay: ${l.lender || 'Ngân hàng'}\n`;
+        context += `- Gốc vay: **${principal.toLocaleString('vi-VN')} ₫** | Trả trước: **${downPayment.toLocaleString('vi-VN')} ₫** | Lãi suất: **${rateYear}%/năm** | Thời hạn: **${termMonths} tháng** | Ngày bắt đầu: ${startDate} | Ngày đóng tiền hàng tháng: Ngày ${paymentDay} | Số tiền trả định kỳ: **${monthlyPay.toLocaleString('vi-VN')} ₫/tháng**\n\n`;
+
+        // Generate full schedule for AI
+        const rateMonth = rateYear / 100 / 12;
+        let balance = principal;
+        const payMap = new Map<number, any>();
+        loanPayments.filter((p: any) => p.loan_id === l.id).forEach((p: any) => payMap.set(p.payment_number, p));
+
+        context += `| Kỳ | Ngày đến hạn | Tiền Gốc (₫) | Tiền Lãi (₫) | Tổng trả (₫) | Dư nợ còn lại (₫) | Trạng thái |\n`;
+        context += `| :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n`;
+
+        for (let i = 1; i <= Math.min(termMonths, 60); i++) {
+          const custom = payMap.get(i);
+          let interest = Math.round(balance * rateMonth);
+          let pPaid = Math.round(monthlyPay - interest);
+          let total = monthlyPay;
+          let dueStr = '';
+          let status = 'Chưa thanh toán (PENDING)';
+
+          if (custom) {
+            dueStr = custom.due_date ? custom.due_date.slice(0, 10) : '';
+            pPaid = Number(custom.principal_paid) || pPaid;
+            interest = Number(custom.interest_paid) || interest;
+            total = Number(custom.total_payment) || (pPaid + interest);
+            status = custom.status === 'PAID' ? `Đã thanh toán (${custom.paid_date || '✓'})` : custom.status;
+          }
+
+          if (!dueStr) {
+            const due = new Date(startDate);
+            due.setMonth(due.getMonth() + i - 1);
+            due.setDate(paymentDay);
+            dueStr = due.toISOString().split('T')[0];
+          }
+
+          balance = Math.max(0, balance - pPaid);
+
+          // Only list all paid + next 12 pending or full
+          context += `| Kỳ ${i} | ${dueStr} | ${pPaid.toLocaleString('vi-VN')} | ${interest.toLocaleString('vi-VN')} | **${total.toLocaleString('vi-VN')}** | ${balance.toLocaleString('vi-VN')} | ${status} |\n`;
+        }
+        context += '\n';
+      });
+    }
+
+    // 3. Fuel Logs
+    const fuelLogs = fuelRes.data || [];
+    if (fuelLogs.length > 0) {
+      const totalFuelCost = fuelLogs.reduce((s: number, f: any) => s + (Number(f.total_cost) || 0), 0);
+      const totalLiters = fuelLogs.reduce((s: number, f: any) => s + (Number(f.liters) || 0), 0);
+      context += `⛽ LỊCH SỬ ĐỔ NHIÊN LIỆU (${fuelLogs.length} lần gần nhất | Tổng ${totalLiters.toFixed(1)}L | Tổng chi: **${totalFuelCost.toLocaleString('vi-VN')} ₫**):\n`;
+      fuelLogs.slice(0, 15).forEach((f: any) => {
+        context += `- Ngày ${f.date}: Đổ **${f.liters} L** xăng | Đơn giá: ${Number(f.price_per_liter || 0).toLocaleString('vi-VN')} ₫/L | Tổng tiền: **${Number(f.total_cost || 0).toLocaleString('vi-VN')} ₫** | ODO lúc đổ: **${Number(f.odometer_km || 0).toLocaleString('vi-VN')} km** | Cây xăng: ${f.station || '—'} ${f.notes ? `(${f.notes})` : ''}\n`;
       });
       context += '\n';
     }
 
-    if (maintRes.data?.length) {
-      const totalMaint = maintRes.data.reduce((s: number, m: any) => s + (m.cost || 0), 0);
-      context += `🔧 BẢO DƯỠNG (${maintRes.data.length} lần gần nhất - Tổng ${totalMaint.toLocaleString('vi-VN')}₫):\n`;
-      maintRes.data.slice(0, 5).forEach((m: any) => {
-        context += `  + ${m.date}: ${m.maintenance_type} (${m.cost?.toLocaleString('vi-VN')}₫) - ODO: ${m.odometer_km || '—'}, Dự kiến tiếp theo: ${m.next_due_km || '—'}\n`;
+    // 4. Maintenance Records
+    const maints = maintRes.data || [];
+    if (maints.length > 0) {
+      const totalMaint = maints.reduce((s: number, m: any) => s + (Number(m.cost) || 0), 0);
+      context += `🔧 LỊCH SỬ BẢO DƯỠNG & SỬA CHỮA (${maints.length} lần | Tổng chi: **${totalMaint.toLocaleString('vi-VN')} ₫**):\n`;
+      maints.forEach((m: any) => {
+        context += `- Ngày ${m.date}: **${m.maintenance_type}** | Chi phí: **${Number(m.cost || 0).toLocaleString('vi-VN')} ₫** | ODO: **${Number(m.odometer_km || 0).toLocaleString('vi-VN')} km** | Gara/Đơn vị: ${m.vendor || '—'} | Mốc bảo dưỡng tiếp theo: ${m.next_due_km ? `${m.next_due_km} km` : ''} ${m.next_due_date ? `(Ngày: ${m.next_due_date})` : ''} | Chi tiết: ${m.notes || m.description || '—'}\n`;
       });
       context += '\n';
     }
 
-    if (expenseRes.data?.length) {
-      const totalExp = expenseRes.data.reduce((s: number, e: any) => s + (e.amount || 0), 0);
-      context += `💳 CHI PHÍ PHÁT SINH (${expenseRes.data.length} giao dịch - Tổng ${totalExp.toLocaleString('vi-VN')}₫):\n`;
-      expenseRes.data.slice(0, 5).forEach((e: any) => {
-        context += `  + ${e.date}: ${e.category} - ${e.description || ''} (${e.amount?.toLocaleString('vi-VN')}₫)\n`;
+    // 5. Parts & Upgrades
+    const parts = partsRes.data || [];
+    if (parts.length > 0) {
+      const totalParts = parts.reduce((s: number, p: any) => s + (Number(p.cost) || 0), 0);
+      context += `🧰 DANH MỤC PHỤ TÙNG & ĐỒ CHƠI NÂNG CẤP XE (${parts.length} món | Tổng giá trị: **${totalParts.toLocaleString('vi-VN')} ₫**):\n`;
+      parts.forEach((p: any) => {
+        context += `- **${p.part_name}** | Hạng mục: ${p.category || p.supplier || 'Nâng cấp'} | Giá tiền: **${Number(p.cost || 0).toLocaleString('vi-VN')} ₫** | Ngày lắp: ${p.installation_date || '—'} | ODO lúc lắp: ${p.installed_odometer_km ? `${p.installed_odometer_km} km` : '—'} | Thương hiệu: ${p.brand || '—'} | Bảo hành: ${p.warranty_months ? `${p.warranty_months} tháng` : '—'} ${p.notes ? `(${p.notes})` : ''}\n`;
       });
       context += '\n';
     }
 
-    if (loanRes.data?.length) {
-      context += `🏦 KHOẢN VAY MUA XE (${loanRes.data.length} hợp đồng):\n`;
-      loanRes.data.forEach((l: any) => {
-        context += `  + Ngân hàng: ${l.lender}, Gốc: ${l.principal?.toLocaleString('vi-VN')}₫, Dư nợ còn: ${l.current_balance?.toLocaleString('vi-VN')}₫, Lãi suất: ${l.interest_rate_percent}%/năm\n`;
+    // 6. Expenses
+    const expenses = expenseRes.data || [];
+    if (expenses.length > 0) {
+      const totalExp = expenses.reduce((s: number, e: any) => s + (Number(e.amount) || 0), 0);
+      context += `💳 SỔ CÁI CHI PHÍ VẬN HÀNH PHÁT SINH (${expenses.length} giao dịch | Tổng: **${totalExp.toLocaleString('vi-VN')} ₫**):\n`;
+      expenses.slice(0, 25).forEach((e: any) => {
+        context += `- Ngày ${e.date}: [${e.category}${e.subcategory ? ` / ${e.subcategory}` : ''}] **${e.description || e.category}** - Số tiền: **${Number(e.amount || 0).toLocaleString('vi-VN')} ₫** | Đơn vị: ${e.vendor || '—'}\n`;
+      });
+      context += '\n';
+    }
+
+    // 7. Insurance Policies
+    const insurances = insRes.data || [];
+    if (insurances.length > 0) {
+      context += `🛡️ BẢO HIỂM & GIẤY TỜ PHÁP LÝ XE:\n`;
+      insurances.forEach((ins: any) => {
+        context += `- **${ins.policy_type || 'Bảo hiểm'}** | Nhà bảo hiểm: **${ins.provider || '—'}** | Số HĐ: \`${ins.policy_number || '—'}\` | Hiệu lực: ${ins.start_date || '—'} đến **${ins.expiry_date || '—'}** | Phí bảo hiểm: **${Number(ins.premium_amount || 0).toLocaleString('vi-VN')} ₫** | Mức bồi thường tối đa: ${Number(ins.coverage_amount || 0).toLocaleString('vi-VN')} ₫ | ☎️ Hotline cứu hộ 24/7: **${ins.provider_hotline || '—'}**\n`;
+      });
+      context += '\n';
+    }
+
+    // 8. Trips (Combine Supabase + Real August Trips)
+    const dbTrips = tripsRes.data || [];
+    const allTrips = dbTrips.length > 0 ? dbTrips : REAL_AUGUST_TRIPS;
+    if (allTrips.length > 0) {
+      const totalTripKm = allTrips.reduce((s: number, t: any) => s + (Number(t.distance_km) || 0), 0);
+      context += `📍 NHẬT KÝ CÁC CHUYẾN ĐI (${allTrips.length} chuyến gần nhất | Tổng quãng đường: **${totalTripKm.toFixed(1)} km**):\n`;
+      allTrips.slice(0, 15).forEach((t: any) => {
+        const start = t.start_time ? t.start_time.replace('T', ' ').slice(0, 16) : '—';
+        context += `- ${start}: **${t.distance_km} km** (${t.start_location || 'Điểm đi'} → ${t.end_location || 'Điểm đến'}) | Tốc độ TB: ${t.avg_speed_kmh || '—'} km/h | Tiêu hao: ${t.fuel_consumed_liters ? `${t.fuel_consumed_liters}L` : '—'}\n`;
       });
       context += '\n';
     }
 
     return context;
   } catch (err) {
-    console.error('[AI Chat] Error building context:', err);
+    console.error('[AI Chat] Error building rich context:', err);
     return 'Không thể tải dữ liệu tự động từ Supabase.';
   }
 }
@@ -183,6 +287,7 @@ export async function POST(req: NextRequest) {
       apiKey: clientApiKey,
       baseUrl: clientBaseUrl,
       assetId,
+      history = [],
     } = body;
 
     if (!prompt) {
@@ -197,8 +302,14 @@ export async function POST(req: NextRequest) {
       contextText = '';
     }
 
+    // Build conversational memory history
+    let historyText = '';
+    if (Array.isArray(history) && history.length > 0) {
+      historyText = `\n[LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]:\n` + history.map((h: any) => `${h.role === 'user' ? 'Người dùng' : 'AI Cố vấn'}: ${h.text}`).join('\n\n') + '\n\n';
+    }
+
     const activeSystemPrompt = userCustomPrompt || DEFAULT_SYSTEM_PROMPT;
-    const fullPrompt = `[HỆ THỐNG VAI TRÒ & QUY TẮC PHÂN TÍCH]:\n${activeSystemPrompt}\n\n[DỮ LIỆU THỰC TẾ TRONG HỆ THỐNG]:\n${contextText}\n\n[CÂU HỎI CỦA NGƯỜI DÙNG]:\n${prompt}`;
+    const fullPrompt = `[HỆ THỐNG VAI TRÒ & QUY TẮC PHÂN TÍCH]:\n${activeSystemPrompt}\n\n${contextText}\n${historyText}[CÂU HỎI HIỆN TẠI CỦA NGƯỜI DÙNG]:\n${prompt}`;
 
     // ─────────────────────────────────────────────────────────────
     // 1. GOOGLE GEMINI

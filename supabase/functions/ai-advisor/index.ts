@@ -1,10 +1,15 @@
 // ============================================================
 // Supabase Edge Function: POST /ai-advisor
 // Build "AI Advisor" for the STATS/ANALYSIS tab in the Android app.
-// The app sends recent_trips + fuel_logs from the device; we verify the
-// asset exists, call Gemini, and return a VehicleAiResponse structure
-// (summary, maintenance_prediction, fuel_efficiency_tip, cost_alert).
 //
+// The function pulls REAL data from the production database via the
+// SECURITY DEFINER RPC fmms_get_vehicle_context (which verifies the
+// calling device is bound to the asset). It supplements with any data
+// the app sends, then asks Gemini (in Vietnamese) and returns a
+// VehicleAiResponse structure (summary, maintenance_prediction,
+// fuel_efficiency_tip, cost_alert).
+//
+// Returns 403 if the device is not authorized for the asset.
 // Deploy: supabase functions deploy ai-advisor
 // Required secret: GEMINI_API_KEY
 // ============================================================
@@ -48,58 +53,131 @@ interface AdvisorRequest {
   user_prompt?: string | null;
 }
 
-// Prompt template and language for the AI — Romanian, consistent with the app.
-const SYSTEM_PROMPT = `Esti Senior Advisor de Gestionare a Masinii si Combustibilului (FMMS Senior Advisor).
+// SYSTEM_PROMPT luôn yêu cầu trả lời BẰNG TIẾNG VIỆT.
+const SYSTEM_PROMPT = `Bạn là Cố vấn cấp cao về quản lý xe và nhiên liệu (FMMS Senior Advisor).
 
-RASPUNSUL TAU: UN OBIECT JSON valid si doar acela (fara text in afara JSON-ului), cu exact 4 campuri:
+YÊU CẦU TRẢ LỜI: Một đối tượng JSON hợp lệ và chỉ duy nhất đó (không có văn bản nào ngoài JSON), có đúng 4 trường:
 {
-  "summary": "titlu rezumatului calitativ in maxim 3-4 randuri, in romana naturala, bazandu-se pe date reale (distanta, combustibil, trend)",
-  "maintenance_prediction": "predictie de intretinere/consumabile care se apropie bazat pe distanta parcursa",
-  "fuel_efficiency_tip": "sfat concret pentru reducerea consumului de combustibil",
-  "cost_alert": "avertizare de cost bazat pe pretul combustibilului/cost per km"
+  "summary": "tóm tắt định tính trong 3-4 dòng, BẰNG TIẾNG VIỆT tự nhiên, dựa trên dữ liệu thực (quãng đường, nhiên liệu, xu hướng)",
+  "maintenance_prediction": "dự đoán bảo dưỡng/vật tư sắp cần dựa trên quãng đường đã đi",
+  "fuel_efficiency_tip": "mẹo cụ thể để giảm tiêu hao nhiên liệu",
+  "cost_alert": "cảnh báo chi phí dựa trên giá nhiên liệu / chi phí mỗi km"
 }
 
-REGLI:
-- Limba: romana standard, consecventa, profesionala.
-- Nu inventa cifre — foloseste doar datele furnizate.
-- Daca nu exista suficiente date pentru un camp, seteaza-l null.
-- Nu include marcatori de markup (markdown), bannere, sau text in afara obiectului JSON.`;
+QUY TẮC:
+- NGÔN NGỮ: LUÔN trả lời tiếng Việt chuẩn, nhất quán, chuyên nghiệp.
+- Không bịa số liệu — chỉ dùng dữ liệu được cung cấp.
+- Nếu không đủ dữ liệu cho một trường, đặt null.
+- Không thêm markdown, tiêu đề, hoặc văn bản ngoài đối tượng JSON.`;
 
 function fmtNum(n: number | null | undefined): string {
   if (typeof n !== 'number' || !isFinite(n)) return '—';
-  return n.toLocaleString('ro-RO');
+  return n.toLocaleString('vi-VN');
 }
 
-function buildContext(req: AdvisorRequest): string {
-  const t = req.recent_trips ?? [];
-  const f = req.fuel_logs ?? [];
-  let ctx = `DATE DE PE VEHICUL (asset_id: ${req.asset_id ?? '—'}):\n`;
-  ctx += `- ODO actual: ${fmtNum(req.current_odo)} km\n\n`;
+// Chuẩn hóa 1 chuyến từ DB (chuỗi thời gian) hoặc từ app (epoch ms).
+function tripToLine(t: Record<string, unknown>): string {
+  const dist = typeof t.distance_km === 'number' ? t.distance_km : Number(t.distance_km ?? 0);
+  const fuel = typeof t.fuel_used_liters === 'number' ? t.fuel_used_liters : Number(t.fuel_used_liters ?? 0);
+  const cons = typeof t.average_consumption_l100km === 'number' ? t.average_consumption_l100km : (t.average_consumption_l100km != null ? Number(t.average_consumption_l100km) : null);
+  const avg = typeof t.average_speed_kmh === 'number' ? t.average_speed_kmh : (t.average_speed_kmh != null ? Number(t.average_speed_kmh) : null);
+  const max = typeof t.max_speed_kmh === 'number' ? t.max_speed_kmh : (t.max_speed_kmh != null ? Number(t.max_speed_kmh) : null);
+  const odo = typeof t.end_odometer === 'number' ? t.end_odometer : (t.end_odometer != null ? Number(t.end_odometer) : null);
+  const day = t.start_time ? String(t.start_time).slice(0, 10) : '—';
+  return `  + ${day}: ${fmtNum(dist)} km, ${fmtNum(fuel)} L (${fmtNum(cons ?? 0)} L/100km), TB ${fmtNum(avg ?? 0)} km/h, max ${fmtNum(max ?? 0)} km/h${odo != null ? `, ODO ${fmtNum(odo)}` : ''}`;
+}
 
-  if (t.length) {
-    const dist = t.reduce((s: number, x: TripSummary) => s + (x.distance_km || 0), 0);
-    const fuel = t.reduce((s: number, x: TripSummary) => s + (x.fuel_used_liters || 0), 0);
-    ctx += `CALATORII RECENTE (${t.length} — total ${fmtNum(dist)} km, ${fmtNum(fuel)} L):\n`;
-    t.slice(0, 10).forEach((x: TripSummary) => {
-      const cons = x.average_consumption_l100km ??
-        (x.fuel_used_liters && x.distance_km ? (x.fuel_used_liters / x.distance_km * 100) : null);
-      ctx += `  + ${new Date(x.start_time ?? 0).toISOString().slice(0, 10)}: ${fmtNum(x.distance_km)} km, ${fmtNum(x.fuel_used_liters)} L (${fmtNum(cons)} L/100km), vit. medie ${fmtNum(x.average_speed_kmh)} km/h, max ${fmtNum(x.max_speed_kmh)} km/h\n`;
+function fuelToLine(f: Record<string, unknown>): string {
+  const liters = typeof f.fuel_liters === 'number' ? f.fuel_liters : Number(f.fuel_liters ?? 0);
+  const cost = typeof f.total_cost === 'number' ? f.total_cost : Number(f.total_cost ?? 0);
+  const price = typeof f.price_per_liter === 'number' ? f.price_per_liter : (f.price_per_liter != null ? Number(f.price_per_liter) : null);
+  const odo = typeof f.odometer_km === 'number' ? f.odometer_km : (f.odometer_km != null ? Number(f.odometer_km) : null);
+  const day = (f.timestamp && String(f.timestamp).slice(0, 10) !== '') ? String(f.timestamp).slice(0, 10) : (f.date ? String(f.date).slice(0, 10) : '—');
+  return `  + ${day}: ${fmtNum(liters)} L, ${fmtNum(cost)} ₫ (${fmtNum(price ?? 0)} ₫/L${odo != null ? `, ODO ${fmtNum(odo)}` : ''})`;
+}
+
+// Xây context từ DB (ưu tiên) và dữ liệu app (bổ sung).
+function buildContext(req: AdvisorRequest, db: Record<string, unknown> | null): string {
+  const appTrips = req.recent_trips ?? [];
+  const appFuel = req.fuel_logs ?? [];
+
+  let ctx = `DỮ LIỆU XE (asset_id: ${req.asset_id ?? '—'}):\n`;
+
+  // 1. Thông tin xe từ DB
+  const asset = db?.asset ? (db.asset as Record<string, unknown>) : null;
+  if (asset) {
+    ctx += `- Xe: ${asset.name ?? ''} (${asset.brand ?? ''} ${asset.model ?? ''})\n`;
+    const odo = asset.current_odometer_km;
+    if (odo != null && Number(odo) > 0) ctx += `- ODO hiện tại (DB): ${fmtNum(Number(odo))} km\n`;
+  } else if (req.current_odo != null && req.current_odo > 0) {
+    ctx += `- ODO hiện tại: ${fmtNum(req.current_odo)} km\n`;
+  }
+  ctx += '\n';
+
+  // 2. Chuyến đi từ DB (nếu có)
+  const dbTrips = Array.isArray(db?.recent_trips) ? (db.recent_trips as Record<string, unknown>[]) : [];
+  if (dbTrips.length) {
+    const dist = dbTrips.reduce((s: number, x: Record<string, unknown>) => s + Number(x.distance_km ?? 0), 0);
+    const fuel = dbTrips.reduce((s: number, x: Record<string, unknown>) => s + Number(x.fuel_used_liters ?? 0), 0);
+    ctx += `CHUYẾN ĐI DB (${dbTrips.length} — tổng ${fmtNum(dist)} km, ${fmtNum(fuel)} L):\n`;
+    dbTrips.slice(0, 10).forEach((x) => { ctx += tripToLine(x) + '\n'; });
+    ctx += '\n';
+  }
+
+  // 3. Đổ xăng từ DB (nếu có)
+  const dbFuel = Array.isArray(db?.recent_fuel_logs) ? (db.recent_fuel_logs as Record<string, unknown>[]) : [];
+  if (dbFuel.length) {
+    const totLiter = dbFuel.reduce((s: number, x: Record<string, unknown>) => s + Number(x.fuel_liters ?? 0), 0);
+    const totCost = dbFuel.reduce((s: number, x: Record<string, unknown>) => s + Number(x.total_cost ?? 0), 0);
+    ctx += `ĐỔ XĂNG DB (${dbFuel.length} — tổng ${fmtNum(totLiter)} L, ${fmtNum(totCost)} ₫):\n`;
+    dbFuel.slice(0, 5).forEach((x) => { ctx += fuelToLine(x) + '\n'; });
+    ctx += '\n';
+  }
+
+  // 4. Bảo dưỡng từ DB (nếu có)
+  const dbMaint = Array.isArray(db?.maintenance) ? (db.maintenance as Record<string, unknown>[]) : [];
+  if (dbMaint.length) {
+    ctx += 'BẢO DƯỠNG GẦN ĐÂY (DB):\n';
+    dbMaint.slice(0, 5).forEach((m: Record<string, unknown>) => {
+      const d = String(m.date ?? '').slice(0, 10) || '—';
+      ctx += `  + ${d}: ${m.maintenance_type ?? ''} (ODO ${fmtNum(m.odometer_km != null ? Number(m.odometer_km) : 0) || '—'} km), ${fmtNum(m.cost != null ? Number(m.cost) : 0)} ${m.currency ?? '₫'}${m.next_due_km != null ? `, mốc kế: ${fmtNum(Number(m.next_due_km))} km` : ''}\n`;
     });
     ctx += '\n';
   }
 
-  if (f.length) {
-    const totLiter = f.reduce((s: number, x: FuelSummary) => s + (x.fuel_liters || 0), 0);
-    const totCost = f.reduce((s: number, x: FuelSummary) => s + (x.total_cost || 0), 0);
-    ctx += `APROVIZIONARI COMBUSTIBIL (${f.length} — total ${fmtNum(totLiter)} L, ${fmtNum(totCost)} lei):\n`;
-    f.slice(0, 5).forEach((x: FuelSummary) => {
-      ctx += `  + ${new Date(x.date ?? 0).toISOString().slice(0, 10)}: ${fmtNum(x.fuel_liters)} L, ${fmtNum(x.total_cost)} lei (${fmtNum(x.price_per_liter)} lei/L, ODO ${fmtNum(x.odometer_km)})\n`;
+  // 5. Chi phí từ DB (nếu có)
+  const exp = db?.expense_summary ? (db.expense_summary as Record<string, unknown>) : null;
+  if (exp) {
+    ctx += 'CHI PHÍ (DB):\n';
+    ctx += `  + Tổng nhiên liệu: ${fmtNum(exp.total_fuel != null ? Number(exp.total_fuel) : 0)} ${exp.currency ?? '₫'}\n`;
+    ctx += `  + Tổng bảo dưỡng: ${fmtNum(exp.total_maintenance != null ? Number(exp.total_maintenance) : 0)} ${exp.currency ?? '₫'}\n`;
+    ctx += `  + Tổng chi phí: ${fmtNum(exp.total_overall != null ? Number(exp.total_overall) : 0)} ${exp.currency ?? '₫'}\n`;
+    ctx += '\n';
+  }
+
+  // 6. Bổ sung dữ liệu gần đây từ app nếu DB chưa có (fallback)
+  if (!dbTrips.length && appTrips.length) {
+    const dist = appTrips.reduce((s: number, x: TripSummary) => s + (x.distance_km || 0), 0);
+    const fuel = appTrips.reduce((s: number, x: TripSummary) => s + (x.fuel_used_liters || 0), 0);
+    ctx += `CHUYẾN ĐI RECENT (app — ${appTrips.length}, tổng ${fmtNum(dist)} km, ${fmtNum(fuel)} L):\n`;
+    appTrips.slice(0, 10).forEach((x: TripSummary) => {
+      const cons = x.average_consumption_l100km ?? (x.fuel_used_liters && x.distance_km ? x.fuel_used_liters / x.distance_km * 100 : null);
+      ctx += `  + ${new Date(x.start_time ?? 0).toISOString().slice(0, 10)}: ${fmtNum(x.distance_km)} km, ${fmtNum(x.fuel_used_liters)} L (${fmtNum(cons ?? 0)} L/100km), vit. medie ${fmtNum(x.average_speed_kmh)} km/h, max ${fmtNum(x.max_speed_kmh)} km/h\n`;
+    });
+    ctx += '\n';
+  }
+  if (!dbFuel.length && appFuel.length) {
+    const totLiter = appFuel.reduce((s: number, x: FuelSummary) => s + (x.fuel_liters || 0), 0);
+    const totCost = appFuel.reduce((s: number, x: FuelSummary) => s + (x.total_cost || 0), 0);
+    ctx += `ĐỔ XĂNG RECENT (app — ${appFuel.length}, tổng ${fmtNum(totLiter)} L, ${fmtNum(totCost)} ₫):\n`;
+    appFuel.slice(0, 5).forEach((x: FuelSummary) => {
+      ctx += `  + ${new Date(x.date ?? 0).toISOString().slice(0, 10)}: ${fmtNum(x.fuel_liters)} L, ${fmtNum(x.total_cost)} ₫ (${fmtNum(x.price_per_liter)} ₫/L, ODO ${fmtNum(x.odometer_km)})\n`;
     });
     ctx += '\n';
   }
 
   if (req.user_prompt) {
-    ctx += `INTREBARE ADDITIONALA DE LA UTILIZATOR: ${req.user_prompt}\n\n`;
+    ctx += `CÂU HỎI THÊM TỪ NGƯỜI DÙNG: ${req.user_prompt}\n\n`;
   }
 
   return ctx;
@@ -141,7 +219,6 @@ async function callGemini(model: string, apiKey: string, prompt: string): Promis
 }
 
 function parseJsonObject(raw: string): Record<string, unknown> | null {
-  // Strip markdown code fences and surrounding whitespace.
   let s = (raw ?? '').trim();
   const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fence) s = fence[1].trim();
@@ -167,9 +244,6 @@ serve(async (req: Request) => {
 
   try {
     const authHeader = req.headers.get('Authorization');
-    // The app talks to Supabase using the anon/publishable key (no user JWT),
-    // same as its other calls (get_fleet_vehicles, fmms_report_odometer).
-    // RLS governs whether an anonymous client can read the asset row.
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -185,16 +259,30 @@ serve(async (req: Request) => {
       });
     }
 
-    // Verify device-bound access. fmms_verify_device_access is SECURITY DEFINER
-    // and returns only a boolean decision (never row data), so the anon client
-    // cannot bypass RLS to read fleet data. Requests without a valid device
-    // bound to this vehicle are rejected.
-    const { data: allowed, error: assetError } = await supabase.rpc('fmms_verify_device_access', {
+    // 1. Verify device-bound access + pull real DB context.
+    let dbContext: Record<string, unknown> | null = null;
+    const { data: ctxData, error: ctxError } = await supabase.rpc('fmms_get_vehicle_context', {
       p_device_id: body.device_id ?? null,
       p_asset_id: assetId,
+      p_limit: 10,
     });
 
-    if (assetError || allowed !== true) {
+    if (ctxError) {
+      // RPC chưa tồn tại (migration chưa chạy) -> fallback: verify bằng RPC cũ.
+      console.error('get_vehicle_context error:', ctxError.message);
+      const { data: allowed, error: vErr } = await supabase.rpc('fmms_verify_device_access', {
+        p_device_id: body.device_id ?? null,
+        p_asset_id: assetId,
+      });
+      if (vErr || allowed !== true) {
+        return new Response(JSON.stringify({ error: 'Vehicle not found or access denied' }), {
+          status: 403,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        });
+      }
+    } else if (ctxData && (ctxData as Record<string, unknown>).authorized === true) {
+      dbContext = ctxData as Record<string, unknown>;
+    } else {
       return new Response(JSON.stringify({ error: 'Vehicle not found or access denied' }), {
         status: 403,
         headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
@@ -209,13 +297,12 @@ serve(async (req: Request) => {
       });
     }
 
-    const prompt = `[SYSTEM VAI & CONTEXT ANALIZA]:\n${SYSTEM_PROMPT}\n\n[DATE ACTUALE]:\n${buildContext(body)}`;
+    const prompt = `[HỆ THỐNG & NGỮ CẢNH]:\n${SYSTEM_PROMPT}\n\n[DỮ LIỆU HIỆN TẠI]:\n${buildContext(body, dbContext)}`;
     const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     let result = { ok: false, error: 'No model available' as string | undefined };
 
     for (const model of models) {
       const r = await callGemini(model, apiKey, prompt);
-      console.log(`model=${model} ok=${r.ok} error=${r.error ?? 'none'} textLen=${r.text?.length ?? 0} textHead=${r.text?.slice(0,120) ?? ''}`);
       if (r.ok && r.text) {
         result = { ok: true, text: r.text };
         break;
@@ -242,7 +329,7 @@ serve(async (req: Request) => {
       typeof v === 'string' && v.trim() && v !== 'null' ? v.trim() : null;
 
     const resp = {
-      summary: str(parsed.summary) || 'Analiza a fost generata, dar nu sunt suficiente date.',
+      summary: str(parsed.summary) || 'Đã tạo phân tích nhưng chưa đủ dữ liệu.',
       maintenance_prediction: str(parsed.maintenance_prediction),
       fuel_efficiency_tip: str(parsed.fuel_efficiency_tip),
       cost_alert: str(parsed.cost_alert),
