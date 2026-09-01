@@ -153,14 +153,14 @@ export async function POST(req: NextRequest) {
     // ─────────────────────────────────────────────────────────────
     if (provider === 'gemini') {
       const activeKey = clientApiKey || process.env.GEMINI_API_KEY;
-      let activeModel = model || 'gemini-3.6-flash';
-      if (activeModel === 'gemini-2.0-flash') {
-        activeModel = 'gemini-3.6-flash';
+      let activeModel = model || 'gemini-1.5-flash';
+      if (activeModel.includes('3.6') || activeModel.includes('2.5') || activeModel === 'gemini-2.0-flash') {
+        activeModel = 'gemini-1.5-flash';
       }
 
       if (!activeKey) {
         return NextResponse.json({
-          reply: '⚠️ **Chưa cấu hình Gemini API Key.**\n\nVui lòng vào **Cài đặt → Cấu hình AI Providers** để nhập API Key từ [Google AI Studio](https://aistudio.google.com/apikey) (Hoàn toàn miễn phí).',
+          reply: '⚠️ **Chưa cấu hình Gemini API Key.**\n\nVui lòng vào **Cài đặt → Cấu hình AI** để nhập API Key từ [Google AI Studio](https://aistudio.google.com/apikey) (Hoàn toàn miễn phí).',
           providerUsed: 'Gemini (Chưa có Key)',
           needsConfig: true,
         });
@@ -170,8 +170,8 @@ export async function POST(req: NextRequest) {
         let result = await callGemini(activeModel, activeKey, fullPrompt);
 
         // Fallback cascade if requested model is deprecated / unavailable
-        if (!result.ok && (result.error?.includes('no longer available') || result.error?.includes('not found') || result.error?.includes('404'))) {
-          const fallbackModels = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'].filter(m => m !== activeModel);
+        if (!result.ok && (result.error?.includes('not found') || result.error?.includes('404') || result.error?.includes('deprecated'))) {
+          const fallbackModels = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash-latest'].filter(m => m !== activeModel);
           for (const fbModel of fallbackModels) {
             const fbResult = await callGemini(fbModel, activeKey, fullPrompt);
             if (fbResult.ok) {

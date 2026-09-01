@@ -34,12 +34,17 @@ fun StatsScreen(
     val mode by vm.mode.collectAsState()
     val today by vm.today.collectAsState()
     val month by vm.month.collectAsState()
+    val total by vm.total.collectAsState()
     val dailyLog by vm.dailyLog.collectAsState(emptyList())
     val monthly by vm.monthly.collectAsState(emptyList())
     val yearly by vm.yearly.collectAsState(emptyList())
     val years by vm.years.collectAsState(emptyList())
     val selectedYear by vm.selectedYear.collectAsState()
     val fuelPrice by vm.fuelPriceVnd.collectAsState()
+    val driveSecondsToday by vm.driveSecondsToday.collectAsState()
+    val driveSecondsMonth by vm.driveSecondsMonth.collectAsState()
+    val odoKm by vm.odoKm.collectAsState()
+    val prevMonthDistance by vm.prevMonthDistanceKm.collectAsState()
 
     val border = Color.White.copy(alpha = 0.08f)
     val grid = colors.divider.copy(alpha = 0.35f)
@@ -87,7 +92,10 @@ fun StatsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         when (mode) {
-            AnalyticsMode.DAILY -> DailyMode(today, month, dailyLog, colors, border, grid, strings)
+            AnalyticsMode.DAILY -> DailyMode(
+                today, month, total, dailyLog, driveSecondsToday, driveSecondsMonth,
+                prevMonthDistance, odoKm, colors, border, grid, strings,
+            )
             AnalyticsMode.MONTHLY -> MonthlyMode(
                 selectedYear, years, monthly, vm::selectYear, colors, border, grid, strings,
             )
@@ -104,8 +112,10 @@ fun StatsScreen(
 
 @Composable
 private fun DailyMode(
-    today: TripAggregate?, month: TripAggregate?,
+    today: TripAggregate?, month: TripAggregate?, total: TripAggregate?,
     dailyLog: List<DayLogEntry>,
+    driveSecondsToday: Long, driveSecondsMonth: Long,
+    prevMonthDistanceKm: Double, odoKm: Double?,
     colors: FmmsColors, border: Color, grid: Color,
     strings: FmmsStrings,
 ) {
@@ -117,6 +127,14 @@ private fun DailyMode(
             KpiCell(strings.thisMonth, month, colors)
         }
     }
+    Spacer(modifier = Modifier.height(12.dp))
+
+    // Tổng quan lịch sử: tốc độ, số chuyến, thời gian lái, nhiên liệu lũy kế
+    StatsOverview(total, colors, border, strings)
+    Spacer(modifier = Modifier.height(12.dp))
+
+    // So sánh tháng này vs tháng trước + cảnh báo bảo dưỡng theo ODO
+    CompareAndMaintenance(month, prevMonthDistanceKm, odoKm, colors, border, strings)
     Spacer(modifier = Modifier.height(12.dp))
 
     GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
@@ -141,6 +159,77 @@ private fun DailyMode(
         Spacer(modifier = Modifier.height(8.dp))
         dailyLog.forEach { e -> DayLogRow(e, colors, strings) }
     }
+}
+
+/** Thẻ tổng quan: vài thông số phụ (tốc độ, chuyến, thời gian lái, nhiên liệu lũy kế). */
+@Composable
+private fun StatsOverview(
+    total: TripAggregate?, colors: FmmsColors, border: Color, strings: FmmsStrings,
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        Text("TỔNG QUAN", color = colors.cyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            MiniKpi(strings.tripsCount, "${total?.tripCount ?: 0}", colors.cyan, colors)
+            MiniKpi(strings.fuelUsed, String.format(Locale.US, "%.1f L", total?.fuelUsedLiters ?: 0.0), colors.amber, colors)
+            MiniKpi(strings.avgSpeed, String.format(Locale.US, "%.0f", total?.avgSpeedKmh ?: 0.0) + " km/h", colors.emerald, colors)
+            MiniKpi(strings.maxSpeed, String.format(Locale.US, "%.0f", total?.maxSpeedKmh ?: 0.0) + " km/h", colors.purple, colors)
+        }
+    }
+}
+
+/** So sánh % với tháng trước + cảnh báo bảo dưỡng theo ODO. */
+@Composable
+private fun CompareAndMaintenance(
+    month: TripAggregate?, prevMonthKm: Double, odoKm: Double?,
+    colors: FmmsColors, border: Color, strings: FmmsStrings,
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        Text(strings.thisMonth + " · so sánh tháng trước", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            val mKm = month?.distanceKm ?: 0.0
+            val delta = if (prevMonthKm > 0.05) ((mKm - prevMonthKm) / prevMonthKm) * 100.0 else null
+            MiniKpi(
+                "Quãng đường T.Này",
+                String.format(Locale.US, "%.0f km", mKm), colors.cyan, colors,
+            )
+            MiniKpi(
+                "So vs T.Trước",
+                if (delta == null) "—" else String.format(Locale.US, "%+.0f%%", delta),
+                if (delta == null) colors.textSecondary else if (delta >= 0) colors.emerald else colors.red,
+                colors,
+            )
+            MiniKpi(
+                "Tháng trước",
+                String.format(Locale.US, "%.0f km", prevMonthKm), colors.textSecondary, colors,
+            )
+        }
+        Spacer(modifier = Modifier.height(14.dp))
+        MaintenanceWarning(odoKm, colors)
+    }
+}
+
+/** Cảnh báo bảo dưỡng dựa trên ODO so với các mốc service gợi ý. */
+@Composable
+private fun MaintenanceWarning(odoKm: Double?, colors: FmmsColors) {
+    if (odoKm == null) {
+        Text("Chưa có ODO để theo dõi bảo dưỡng.", color = colors.textSecondary, fontSize = 12.sp)
+        return
+    }
+    val milestone = when {
+        odoKm >= 20000 -> 20000.0
+        odoKm >= 15000 -> 15000.0
+        odoKm >= 10000 -> 10000.0
+        odoKm >= 5000 -> 5000.0
+        else -> 5000.0
+    }
+    val nextMilestone = ((odoKm / milestone).toInt() + 1) * milestone
+    Text(
+        "ODO ${String.format(Locale.US, "%.0f", odoKm)} km · mốc bảo dưỡng tiếp theo ${String.format(Locale.US, "%.0f km", nextMilestone)} (còn ${String.format(Locale.US, "%.0f km", nextMilestone - odoKm)})",
+        color = if (nextMilestone - odoKm <= 500) colors.red else colors.emerald,
+        fontSize = 12.sp, fontWeight = FontWeight.Bold,
+    )
 }
 
 @Composable

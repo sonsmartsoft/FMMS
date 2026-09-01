@@ -106,6 +106,20 @@ class StatsViewModel : ViewModel() {
     private val _selectedYear = MutableStateFlow<Int?>(null)
     val selectedYear = _selectedYear
 
+    /** Tổng thời gian lái (giây) của hôm nay / tháng này. */
+    private val _driveSecondsToday = MutableStateFlow(0L)
+    val driveSecondsToday: StateFlow<Long> = _driveSecondsToday
+    private val _driveSecondsMonth = MutableStateFlow(0L)
+    val driveSecondsMonth: StateFlow<Long> = _driveSecondsMonth
+
+    /** ODO hiện tại (km). */
+    private val _odoKm = MutableStateFlow<Double?>(null)
+    val odoKm: StateFlow<Double?> = _odoKm
+
+    /** Quãng đường tháng trước (km) để so sánh %. */
+    private val _prevMonthDistanceKm = MutableStateFlow(0.0)
+    val prevMonthDistanceKm: StateFlow<Double> = _prevMonthDistanceKm
+
     /** Giá xăng tham chiếu hiện tại (₫/L) từ FuelLog gần nhất. */
     private val _fuelPriceVnd = MutableStateFlow(DEFAULT_FUEL_PRICE_VND)
     val fuelPriceVnd: StateFlow<Double> = _fuelPriceVnd
@@ -139,11 +153,18 @@ class StatsViewModel : ViewModel() {
             val monthStart = now.apply { set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
             val end = System.currentTimeMillis()
 
+            _odoKm.value = vehicle.odometerKm
+
             _fuelPriceVnd.value = latestFuelPrice(vehicle.id, end) ?: DEFAULT_FUEL_PRICE_VND
 
-            _today.value = aggregate(c.tripRepository.getBetween(vehicle.id, todayStart, end))
-            _month.value = aggregate(c.tripRepository.getBetween(vehicle.id, monthStart, end))
+            val todayTrips = c.tripRepository.getBetween(vehicle.id, todayStart, end)
+            val monthTrips = c.tripRepository.getBetween(vehicle.id, monthStart, end)
+            _today.value = aggregate(todayTrips)
+            _month.value = aggregate(monthTrips)
             _total.value = c.tripRepository.aggregate(vehicle.id)
+            _driveSecondsToday.value = todayTrips.sumOf { it.durationSeconds.coerceAtLeast(0) }
+            _driveSecondsMonth.value = monthTrips.sumOf { it.durationSeconds.coerceAtLeast(0) }
+            _prevMonthDistanceKm.value = previousMonthDistance(vehicle.id, monthStart)
 
             _dailyLog.value = buildDailyLog(vehicle.id, _fuelPriceVnd.value)
 
@@ -281,4 +302,13 @@ class StatsViewModel : ViewModel() {
     /** Lấy trips có odometer (end_time DESC) để ước ODO đầu tháng. */
     private suspend fun tripsWithOdoUpTo(vehicleId: String, cutoff: Long): List<TripEntity> =
         c.tripRepository.getWithOdometer()
+
+    /** Tổng quãng đường (km) của tháng liền trước tháng hiện tại (để so sánh %). */
+    private suspend fun previousMonthDistance(vehicleId: String, currentMonthStart: Long): Double {
+        val cal = Calendar.getInstance().apply { timeInMillis = currentMonthStart }
+        cal.add(Calendar.MONTH, -1)
+        val prevStart = cal.timeInMillis
+        val prevEnd = currentMonthStart
+        return c.tripRepository.getBetween(vehicleId, prevStart, prevEnd).sumOf { it.distanceKm }
+    }
 }
