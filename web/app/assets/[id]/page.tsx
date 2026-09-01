@@ -1006,19 +1006,29 @@ export default function AssetDetailPage() {
 
     const dailyReport = sortedDays.map((day) => {
       let kmRun = 0;
-      // Prioritize actual trip distance
+      // 1. Determine kmRun for the day
       if (day.tripDistance > 0) {
         kmRun = day.tripDistance;
-      } else if (day.maxOdo > 0 && prevOdo > 0 && day.maxOdo >= prevOdo) {
+      } else if (day.maxOdo > 0 && prevOdo > 0 && day.maxOdo > prevOdo) {
         kmRun = day.maxOdo - prevOdo;
       } else if (day.maxOdo > 0 && day.minOdo > 0 && day.maxOdo > day.minOdo) {
         kmRun = day.maxOdo - day.minOdo;
       }
 
-      if (day.maxOdo > 0 && day.maxOdo >= prevOdo) {
-        prevOdo = day.maxOdo;
-      } else if (day.tripDistance > 0 && prevOdo > 0) {
-        prevOdo += day.tripDistance;
+      // 2. Advance prevOdo reliably (trips take precedence over point-in-time manual logs)
+      if (day.tripDistance > 0) {
+        if (prevOdo > 0) {
+          prevOdo += day.tripDistance;
+        } else if (day.maxOdo > 0) {
+          prevOdo = day.maxOdo;
+        }
+        if (day.maxOdo > prevOdo) {
+          prevOdo = day.maxOdo;
+        }
+      } else if (day.maxOdo > 0) {
+        if (day.maxOdo > prevOdo) {
+          prevOdo = day.maxOdo;
+        }
       }
 
       const dObj = new Date(day.date);
