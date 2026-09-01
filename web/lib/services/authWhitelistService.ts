@@ -1,6 +1,7 @@
 export const DEFAULT_ALLOWED_EMAILS = [
   'son.nt@utivina.com',
   'sondtk5@gmail.com',
+  'son.smartsoft@gmail.com',
   'uti@utivina.com',
   'thanhvien@utivina.com',
 ];

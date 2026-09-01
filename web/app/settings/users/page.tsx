@@ -43,6 +43,16 @@ export default function UsersManagementPage() {
       created_at: '2026-01-15',
     },
     {
+      id: 'usr-smartsoft',
+      name: 'Nguyễn Trung Sơn (SmartSoft)',
+      email: 'son.smartsoft@gmail.com',
+      phone: '0901234567',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      assigned_asset_ids: [],
+      created_at: '2026-01-16',
+    },
+    {
       id: 'usr-3',
       name: 'Trần Văn A (Thành viên)',
       email: 'thanhvien@utivina.com',
