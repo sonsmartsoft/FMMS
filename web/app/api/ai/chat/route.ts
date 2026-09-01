@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
     // ─────────────────────────────────────────────────────────────
     if (provider === 'gemini') {
       const activeKey = clientApiKey || process.env.GEMINI_API_KEY;
-      const activeModel = model || 'gemini-3.6-flash';
+      let activeModel = model || 'gemini-3.6-flash';
 
       if (!activeKey) {
         return NextResponse.json({

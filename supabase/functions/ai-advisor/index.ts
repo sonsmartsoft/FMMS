@@ -118,7 +118,7 @@ async function callGemini(model: string, apiKey: string, prompt: string): Promis
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 2500,
+            maxOutputTokens: 8000,
           },
         }),
         signal: controller.signal,
