@@ -134,7 +134,7 @@ export default function FinancePage() {
     asset_id: '',
     lender: 'Ngân hàng Techcombank',
     principal: '400000000',
-    down_payment: '100000000',
+    down_payment: '0',
     interest_rate_percent: '8.5',
     term_months: '36',
     start_date: new Date().toISOString().slice(0, 10),
@@ -533,7 +533,7 @@ export default function FinancePage() {
       asset_id: assets[0]?.id || '',
       lender: 'Ngân hàng Techcombank',
       principal: '400000000',
-      down_payment: '100000000',
+      down_payment: '0',
       interest_rate_percent: '8.5',
       term_months: '36',
       start_date: new Date().toISOString().slice(0, 10),
@@ -553,7 +553,7 @@ export default function FinancePage() {
       asset_id: l.asset_id,
       lender: l.lender || '',
       principal: String(l.principal),
-      down_payment: String(l.down_payment || 0),
+      down_payment: String(l.down_payment ?? 0),
       interest_rate_percent: String(l.interest_rate_percent),
       term_months: String(l.term_months),
       start_date: l.start_date ? l.start_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
@@ -570,11 +570,12 @@ export default function FinancePage() {
   const handleSaveLoan = async () => {
     const p = parseFloat(loanForm.principal) || 0;
     const m = parseFloat(loanForm.monthly_payment) || calculatedMonthly;
+    const dp = loanForm.down_payment !== '' && !isNaN(Number(loanForm.down_payment)) ? Math.max(0, Number(loanForm.down_payment)) : 0;
     const input = {
       asset_id: loanForm.asset_id || assets[0]?.id,
       lender: loanForm.lender || 'Ngân hàng',
       principal: p,
-      down_payment: parseFloat(loanForm.down_payment) || 0,
+      down_payment: dp,
       interest_rate_percent: parseFloat(loanForm.interest_rate_percent) || 8.5,
       term_months: parseInt(loanForm.term_months) || 36,
       start_date: loanForm.start_date || new Date().toISOString().slice(0, 10),

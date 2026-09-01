@@ -159,7 +159,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     vehicle_price: String(asset.purchase_price || 500000000),
     loan_ratio_percent: String(loan?.loan_ratio_percent || 80),
     principal: String(loan?.principal || 400000000),
-    down_payment: String(loan?.down_payment || 100000000),
+    down_payment: String(loan?.down_payment ?? 0),
     interest_rate_percent: String(loan?.interest_rate_percent || 8.5),
     preferred_rate_percent: String(loan?.preferred_rate_percent || 7.5),
     preferred_months: String(loan?.preferred_months || 12),
@@ -190,6 +190,24 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
 
     if (loan) {
       getLoanPayments(loan.id).then(setPayments).catch(() => {});
+      setLoanForm(prev => ({
+        ...prev,
+        lender: loan.lender || prev.lender,
+        principal: String(loan.principal ?? prev.principal),
+        down_payment: String(loan.down_payment ?? 0),
+        interest_rate_percent: String(loan.interest_rate_percent ?? prev.interest_rate_percent),
+        preferred_rate_percent: String(loan.preferred_rate_percent ?? prev.preferred_rate_percent),
+        preferred_months: String(loan.preferred_months ?? prev.preferred_months),
+        floating_rate_percent: String(loan.floating_rate_percent ?? prev.floating_rate_percent),
+        term_months: String(loan.term_months ?? prev.term_months),
+        start_date: loan.start_date ? loan.start_date.slice(0, 10) : prev.start_date,
+        monthly_payment: String(loan.monthly_payment ?? prev.monthly_payment),
+        payment_day: String(loan.payment_day ?? prev.payment_day),
+        bank_contact_name: loan.bank_contact_name || '',
+        bank_contact_phone: loan.bank_contact_phone || '',
+        bank_hotline: loan.bank_hotline || '',
+        notes: loan.notes || '',
+      }));
     }
   }, [loan]);
 
@@ -336,9 +354,9 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
   };
 
   const handleSaveLoanConfig = async () => {
-    const vp = parseFloat(loanForm.vehicle_price) || investment;
+    const vp = parseFloat(loanForm.vehicle_price) || purchasePrice;
     const p = parseFloat(loanForm.principal) || 0;
-    const dp = parseFloat(loanForm.down_payment) || (vp - p);
+    const dp = loanForm.down_payment !== '' && !isNaN(Number(loanForm.down_payment)) ? Math.max(0, Number(loanForm.down_payment)) : 0;
     const prefR = parseFloat(loanForm.preferred_rate_percent) || parseFloat(loanForm.interest_rate_percent) || 8.5;
     const floatR = parseFloat(loanForm.floating_rate_percent) || prefR;
     const prefM = parseInt(loanForm.preferred_months) || 12;
