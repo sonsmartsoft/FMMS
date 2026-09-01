@@ -98,25 +98,74 @@ async function callGemini(model: string, apiKey: string, promptText: string): Pr
     { role: 'user', parts: [{ text: promptText }] },
   ];
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents }),
-      signal: AbortSignal.timeout(30000),
-    }
-  );
+  const cleanModel = model.replace(/^models\//, '');
 
-  if (res.ok) {
-    const data = await res.json();
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    return { ok: true, text: reply };
+  const tryEndpoint = async (apiVersion: string, modelName: string) => {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents }),
+          signal: AbortSignal.timeout(30000),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        return { ok: true, text: reply };
+      }
+      const errData = await res.json().catch(() => ({}));
+      const errMsg = errData?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
+      return { ok: false, error: errMsg };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || 'Network error' };
+    }
+  };
+
+  // 1. Try requested model on v1beta then v1
+  let res = await tryEndpoint('v1beta', cleanModel);
+  if (res.ok) return res;
+
+  res = await tryEndpoint('v1', cleanModel);
+  if (res.ok) return res;
+
+  // 2. Cascade through list of all popular models
+  const candidateModels = [
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro',
+  ];
+
+  for (const cand of candidateModels) {
+    if (cand === cleanModel) continue;
+    res = await tryEndpoint('v1beta', cand);
+    if (res.ok) return res;
+    res = await tryEndpoint('v1', cand);
+    if (res.ok) return res;
   }
 
-  const errData = await res.json().catch(() => ({}));
-  const errMsg = errData?.error?.message || `HTTP ${res.status}: ${res.statusText}`;
-  return { ok: false, error: errMsg };
+  // 3. Auto-discover available models directly from the API Key
+  try {
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      const available = (listData.models || [])
+        .filter((m: any) => m.supportedGenerationMethods?.includes('generateContent'))
+        .map((m: any) => m.name?.replace(/^models\//, ''));
+      for (const avModel of available) {
+        res = await tryEndpoint('v1beta', avModel);
+        if (res.ok) return res;
+      }
+    }
+  } catch {}
+
+  return res;
 }
 
 export async function POST(req: NextRequest) {

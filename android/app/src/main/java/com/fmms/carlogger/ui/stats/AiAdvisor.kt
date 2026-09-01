@@ -93,7 +93,12 @@ class AiAdvisorViewModel : ViewModel() {
             userPrompt?.let { put("user_prompt", it) }
         }
 
-        val client = OkHttpClient()
+        val client = OkHttpClient.Builder()
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(90, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
         val request = Request.Builder()
             .url("${BuildConfig.SUPABASE_URL}/functions/v1/ai-advisor")
             .header("apikey", BuildConfig.SUPABASE_PUBLISHABLE_KEY)
