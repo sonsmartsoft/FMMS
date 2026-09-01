@@ -218,7 +218,7 @@ class StatsViewModel : ViewModel() {
     fun selectMonth(month: Int) {
         if (_selectedMonth.value == month) return
         _selectedMonth.value = month
-        viewModelScope.launch { loadExpenseForCurrentSelection(AnalyticsMode.MONTHLY) }
+        viewModelScope.launch { loadExpenseForCurrentSelection(_mode.value) }
     }
 
     /** Tải phân bổ chi phí theo danh mục từ DB cho kỳ đang chọn. */
@@ -228,27 +228,26 @@ class StatsViewModel : ViewModel() {
                 ?: c.vehicleRepository.getActive()?.id
                 ?: return@launch
             val year = _selectedYear.value ?: Calendar.getInstance().get(Calendar.YEAR)
-            val (from, to) = when (mode) {
-                AnalyticsMode.MONTHLY -> {
-                    val m = _selectedMonth.value
-                    val cal = Calendar.getInstance().apply {
-                        clear()
-                        set(year, m - 1, 1)
-                        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                    }
-                    val f = cal.timeInMillis
-                    val t = (cal.clone() as Calendar).also { it.add(Calendar.MONTH, 1) }.timeInMillis - 1
-                    f to t
+            val m = _selectedMonth.value
+            val (from, to) = if (m <= 0) {
+                // "Cả năm": toàn bộ năm đã chọn
+                val cal = Calendar.getInstance().apply {
+                    clear(); set(year, 0, 1)
+                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
                 }
-                else -> {
-                    val cal = Calendar.getInstance().apply {
-                        clear(); set(year, 0, 1)
-                        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                    }
-                    val f = cal.timeInMillis
-                    val t = (cal.clone() as Calendar).also { it.set(year + 1, 0, 1) }.timeInMillis - 1
-                    f to t
+                val f = cal.timeInMillis
+                val t = (cal.clone() as Calendar).also { it.set(year + 1, 0, 1) }.timeInMillis - 1
+                f to t
+            } else {
+                // Một tháng cụ thể trong năm đã chọn
+                val cal = Calendar.getInstance().apply {
+                    clear()
+                    set(year, m - 1, 1)
+                    set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
                 }
+                val f = cal.timeInMillis
+                val t = (cal.clone() as Calendar).also { it.add(Calendar.MONTH, 1) }.timeInMillis - 1
+                f to t
             }
             _expenseBreakdown.value = withContext(Dispatchers.IO) { fetchExpenseBreakdown(assetId, from, to) }
             android.util.Log.d("StatsVM", "expense breakdown [$mode] asset=$assetId n=${_expenseBreakdown.value.size}")

@@ -67,6 +67,13 @@ fun StatsScreen(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
+        // Donut phân bổ chi phí — hiển thị mặc định, Tháng/Năm chỉ là bộ lọc.
+        CostBreakdownCard(
+            selectedYear, selectedMonth, years, expenseBreakdown,
+            vm::selectYear, vm::selectMonth, colors, border,
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
         // Chọn chế độ Ngày / Tháng / Năm
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AnalyticsMode.entries.forEach { m ->
@@ -100,11 +107,11 @@ fun StatsScreen(
                 prevMonthDistance, odoKm, colors, border, grid, strings,
             )
             AnalyticsMode.MONTHLY -> MonthlyMode(
-                selectedYear, selectedMonth, years, monthly, expenseBreakdown,
-                vm::selectYear, vm::selectMonth, colors, border, grid, strings,
+                selectedYear, years, monthly,
+                vm::selectYear, colors, border, grid, strings,
             )
             AnalyticsMode.YEARLY -> YearlyMode(
-                selectedYear, years, yearly, expenseBreakdown, vm::selectYear,
+                selectedYear, years, yearly, vm::selectYear,
                 colors, border, grid, strings,
             )
         }
@@ -303,29 +310,22 @@ private fun DayLogRow(e: DayLogEntry, colors: FmmsColors, strings: FmmsStrings) 
 
 @Composable
 private fun MonthlyMode(
-    year: Int?, month: Int, years: List<Int>, monthly: List<PeriodStat>, expenseBreakdown: List<ExpenseSlice>,
-    onSelectYear: (Int) -> Unit, onSelectMonth: (Int) -> Unit,
+    year: Int?, years: List<Int>, monthly: List<PeriodStat>,
+    onSelectYear: (Int) -> Unit,
     colors: FmmsColors, border: Color, grid: Color,
     strings: FmmsStrings,
 ) {
-    // Chọn năm + tháng (dropdown hiện đại)
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    // Chọn năm (ảnh hưởng biểu đồ 12 tháng bên dưới)
+    if (years.isNotEmpty()) {
         PeriodDropdown(
             label = "Năm",
             value = year?.toString() ?: "—",
             options = years.map { it.toString() },
             colors = colors, border = border,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.fillMaxWidth(),
         ) { onSelectYear(years[it]) }
-        PeriodDropdown(
-            label = "Tháng",
-            value = MONTH_NAMES[month - 1],
-            options = MONTH_NAMES,
-            colors = colors, border = border,
-            modifier = Modifier.weight(2f),
-        ) { onSelectMonth(it + 1) }
+        Spacer(modifier = Modifier.height(12.dp))
     }
-    Spacer(modifier = Modifier.height(12.dp))
 
     // KPI cards
     val stats = monthlyStats(monthly)
@@ -347,20 +347,6 @@ private fun MonthlyMode(
         }
     }
     Spacer(modifier = Modifier.height(12.dp))
-
-    // Donut chi phí theo danh mục (từ DB theo thời gian đã chọn)
-    if (expenseBreakdown.isNotEmpty()) {
-        ExpenseDonutCard("Chi phí · ${MONTH_NAMES[month - 1]} ${year ?: ""}", expenseBreakdown, colors, border, strings)
-        Spacer(modifier = Modifier.height(12.dp))
-    } else {
-        GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
-            Text(
-                "Chưa có chi phí cho ${MONTH_NAMES[month - 1]} ${year ?: ""}",
-                color = colors.textSecondary, fontSize = 12.sp,
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-    }
 
     GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
         Text(strings.monthlyOverview, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -396,7 +382,7 @@ private fun monthlyStats(monthly: List<PeriodStat>): MonthlyStats {
 
 @Composable
 private fun YearlyMode(
-    year: Int?, years: List<Int>, yearly: List<PeriodStat>, expenseBreakdown: List<ExpenseSlice>,
+    year: Int?, years: List<Int>, yearly: List<PeriodStat>,
     onSelectYear: (Int) -> Unit,
     colors: FmmsColors, border: Color, grid: Color,
     strings: FmmsStrings,
@@ -433,60 +419,86 @@ private fun YearlyMode(
             MiniKpi(strings.costPerKmLabel, costPerKm?.let { formatVnd(it) } ?: "—", colors.purple, colors)
         }
     }
-    Spacer(modifier = Modifier.height(12.dp))
-
-    if (expenseBreakdown.isNotEmpty()) {
-        ExpenseDonutCard("Chi phí năm ${selected.label}", expenseBreakdown, colors, border, strings)
-    } else {
-        GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
-            Text(
-                "Chưa có chi phí cho năm ${selected.label}",
-                color = colors.textSecondary, fontSize = 12.sp,
-            )
-        }
-    }
-}
-
-/** Thẻ donut chi phí theo danh mục (từ DB) kèm legend %. */
-@Composable
-private fun ExpenseDonutCard(
-    title: String, data: List<ExpenseSlice>, colors: FmmsColors, border: Color, strings: FmmsStrings,
-) {
-    val total = data.sumOf { it.amount }
-    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
-        Text(title, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(6.dp))
-        Box(modifier = Modifier.fillMaxWidth()) {
-            DonutChart(
-                data = data,
-                centerLabel = "TOTAL",
-                centerValue = formatVnd(total),
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        data.forEachIndexed { i, slice ->
-            val pct = if (total > 0) (slice.amount / total) * 100.0 else 0.0
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .background(DONUT_COLORS[i % DONUT_COLORS.size], RoundedCornerShape(3.dp)),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(slice.label, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                Text(formatVnd(slice.amount), color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(String.format(Locale.US, "%.0f%%", pct), color = colors.textSecondary, fontSize = 11.sp, modifier = Modifier.width(42.dp))
-            }
-        }
-    }
 }
 
 private val MONTH_NAMES = listOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+
+/** Các lựa chọn Tháng trong bộ lọc: ["Cả năm"] + tháng tiếng Anh. */
+private val MONTH_OPTIONS = listOf("Cả năm") + MONTH_NAMES
+
+/** Nhãn cho dropdown Tháng: index 0 = "Cả năm", còn lại = tên tháng tiếng Anh. */
+private fun monthLabel(month: Int): String = if (month == 0) MONTH_OPTIONS[0] else MONTH_NAMES[month - 1]
+
+/** Donut phân bổ chi phí hiển thị mặc định; Năm/Tháng chỉ là bộ lọc. */
+@Composable
+private fun CostBreakdownCard(
+    year: Int?, selectedMonth: Int, years: List<Int>, data: List<ExpenseSlice>,
+    onSelectYear: (Int) -> Unit, onSelectMonth: (Int) -> Unit,
+    colors: FmmsColors, border: Color,
+) {
+    val total = data.sumOf { it.amount }
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("PHÂN BỔ CHI PHÍ", color = colors.cyan, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PeriodDropdown(
+                label = "Năm",
+                value = year?.toString() ?: "—",
+                options = years.map { it.toString() },
+                colors = colors, border = border,
+                modifier = Modifier.weight(1f),
+            ) { onSelectYear(years[it]) }
+            PeriodDropdown(
+                label = "Tháng",
+                value = monthLabel(selectedMonth),
+                options = MONTH_OPTIONS,
+                colors = colors, border = border,
+                modifier = Modifier.weight(2f),
+            ) { onSelectMonth(it) }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (data.isNotEmpty()) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                DonutChart(
+                    data = data,
+                    centerLabel = "TOTAL",
+                    centerValue = formatVnd(total),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            data.forEachIndexed { i, slice ->
+                val pct = if (total > 0) (slice.amount / total) * 100.0 else 0.0
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(DONUT_COLORS[i % DONUT_COLORS.size], RoundedCornerShape(3.dp)),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(slice.label, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Text(formatVnd(slice.amount), color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(String.format(Locale.US, "%.0f%%", pct), color = colors.textSecondary, fontSize = 11.sp, modifier = Modifier.width(42.dp))
+                }
+            }
+        } else {
+            Text(
+                "Chưa có chi phí cho ${monthLabel(selectedMonth)} ${year ?: ""}",
+                color = colors.textSecondary, fontSize = 13.sp,
+            )
+        }
+    }
+}
 
 /** Dropdown hiện đại với avatar zone + trailing chevron, giao diện glass. */
 @OptIn(ExperimentalMaterial3Api::class)
