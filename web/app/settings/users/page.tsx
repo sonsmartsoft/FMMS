@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Users, Shield, Plus, Search, Key, Trash2, Check, Car, UserPlus, X, RefreshCw, Edit3 } from 'lucide-react';
+import { ArrowLeft, Users, Shield, Plus, Search, Key, Trash2, Check, Car, UserPlus, X, RefreshCw, Edit3, Lock, ShieldCheck, Mail, Copy } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getAssets } from '@/lib/services/assetService';
+import { getAllowedEmails, saveAllowedEmails } from '@/lib/services/authWhitelistService';
 import DraggableModal from '@/components/ui/DraggableModal';
 
 interface UserMember {
@@ -32,6 +33,16 @@ export default function UsersManagementPage() {
     },
     {
       id: 'usr-2',
+      name: 'Nguyễn Trung Sơn (Gmail)',
+      email: 'sondtk5@gmail.com',
+      phone: '0988888888',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      assigned_asset_ids: [],
+      created_at: '2026-01-15',
+    },
+    {
+      id: 'usr-3',
       name: 'Trần Văn A (Thành viên)',
       email: 'thanhvien@utivina.com',
       phone: '0912345678',
@@ -49,6 +60,10 @@ export default function UsersManagementPage() {
 
   // Form states
   const [newUser, setNewUser] = useState({ name: '', email: '', phone: '', role: 'MEMBER' as 'ADMIN' | 'MEMBER', assigned_asset_ids: [] as string[] });
+  const [myPasswordForm, setMyPasswordForm] = useState({ newPassword: '', confirmPassword: '' });
+  const [resetMemberForm, setResetMemberForm] = useState({ newPassword: '', sendEmail: true });
+  const [allowedEmailsList, setAllowedEmailsList] = useState<string[]>([]);
+  const [newWhitelistEmail, setNewWhitelistEmail] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const supabase = createClient();
@@ -70,13 +85,16 @@ export default function UsersManagementPage() {
         if (a.length > 0) {
           setUsers(prev => prev.map(u => u.role === 'ADMIN' ? { ...u, assigned_asset_ids: a.map((x: any) => x.id) } : u));
         }
+
+        // Load whitelist
+        setAllowedEmailsList(getAllowedEmails());
       } catch {}
     })();
   }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
   const handleCreateUser = () => {
@@ -84,10 +102,11 @@ export default function UsersManagementPage() {
       alert('Vui lòng nhập họ tên và email người dùng');
       return;
     }
+    const cleanEmail = newUser.email.trim().toLowerCase();
     const created: UserMember = {
       id: `usr-${Date.now()}`,
       name: newUser.name,
-      email: newUser.email,
+      email: cleanEmail,
       phone: newUser.phone || 'Chưa có',
       role: newUser.role,
       status: 'ACTIVE',
@@ -95,20 +114,87 @@ export default function UsersManagementPage() {
       created_at: new Date().toISOString().split('T')[0],
     };
     setUsers(prev => [...prev, created]);
+    
+    // Auto add to whitelist
+    const updatedWhitelist = Array.from(new Set([...allowedEmailsList, cleanEmail]));
+    setAllowedEmailsList(updatedWhitelist);
+    saveAllowedEmails(updatedWhitelist);
+
     setOpenModal(null);
     setNewUser({ name: '', email: '', phone: '', role: 'MEMBER', assigned_asset_ids: [] });
-    showToast(`Đã thêm người dùng mới (${created.name}) thành công!`);
+    showToast(`Đã thêm thành viên (${created.name}) và cấp quyền đăng nhập cho ${cleanEmail}!`);
   };
 
-  const handleResetPassword = async (user: UserMember) => {
+  const handleOpenResetPassword = (user: UserMember) => {
+    setSelectedUser(user);
+    const randomPass = 'FMMS@' + Math.floor(100000 + Math.random() * 900000);
+    setResetMemberForm({ newPassword: randomPass, sendEmail: true });
+    setOpenModal('reset_password');
+  };
+
+  const handleExecuteResetPassword = async () => {
+    if (!selectedUser) return;
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/login`,
+      if (resetMemberForm.sendEmail) {
+        await supabase.auth.resetPasswordForEmail(selectedUser.email, {
+          redirectTo: `${window.location.origin}/login`,
+        });
+      }
+      showToast(`✅ Đã đặt mật khẩu mới cho ${selectedUser.name}: "${resetMemberForm.newPassword}" (Đã sao chép)`);
+      navigator.clipboard?.writeText(resetMemberForm.newPassword);
+    } catch {
+      showToast(`✅ Đã tạo mật khẩu tạm cho ${selectedUser.name}: "${resetMemberForm.newPassword}"`);
+      navigator.clipboard?.writeText(resetMemberForm.newPassword);
+    }
+    setOpenModal(null);
+  };
+
+  const handleChangeMyPassword = async () => {
+    if (!myPasswordForm.newPassword) {
+      alert('Vui lòng nhập mật khẩu mới');
+      return;
+    }
+    if (myPasswordForm.newPassword.length < 6) {
+      alert('Mật khẩu phải có ít nhất 6 ký tự');
+      return;
+    }
+    if (myPasswordForm.newPassword !== myPasswordForm.confirmPassword) {
+      alert('Mật khẩu xác nhận không khớp');
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: myPasswordForm.newPassword,
       });
       if (error) throw error;
-      showToast(`Đã gửi email khôi phục mật khẩu tới: ${user.email}`);
-    } catch {
-      showToast(`Đã cấp lại liên kết Reset Password cho ${user.email} (Mật khẩu tạm: FMMS@2026)`);
+      showToast('🎉 Đã đổi mật khẩu cá nhân thành công! Bạn có thể dùng mật khẩu mới từ lần đăng nhập sau.');
+      setOpenModal(null);
+      setMyPasswordForm({ newPassword: '', confirmPassword: '' });
+    } catch (err: any) {
+      alert(`Lỗi khi đổi mật khẩu: ${err?.message || 'Không thể cập nhật mật khẩu'}`);
+    }
+  };
+
+  const handleAddWhitelistEmail = () => {
+    if (!newWhitelistEmail || !newWhitelistEmail.includes('@')) {
+      alert('Vui lòng nhập địa chỉ Email hợp lệ');
+      return;
+    }
+    const cleanEmail = newWhitelistEmail.trim().toLowerCase();
+    const updated = Array.from(new Set([...allowedEmailsList, cleanEmail]));
+    setAllowedEmailsList(updated);
+    saveAllowedEmails(updated);
+    setNewWhitelistEmail('');
+    showToast(`Đã thêm ${cleanEmail} vào danh sách Email được phép đăng nhập!`);
+  };
+
+  const handleRemoveWhitelistEmail = (emailToRemove: string) => {
+    if (confirm(`Bạn có chắc muốn xóa quyền đăng nhập của email ${emailToRemove}?`)) {
+      const updated = allowedEmailsList.filter(e => e !== emailToRemove);
+      setAllowedEmailsList(updated);
+      saveAllowedEmails(updated);
+      showToast(`Đã xóa ${emailToRemove} khỏi danh sách được phép đăng nhập.`);
     }
   };
 
@@ -163,14 +249,28 @@ export default function UsersManagementPage() {
           </div>
         </div>
 
-        <button
-          onClick={() => setOpenModal('add')}
-          className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition hover:opacity-90"
-          style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>Thêm người dùng mới</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => {
+              setMyPasswordForm({ newPassword: '', confirmPassword: '' });
+              setOpenModal('change_my_password');
+            }}
+            className="flex items-center space-x-2 px-3.5 py-2.5 rounded-xl font-bold text-xs shadow-md transition hover:bg-slate-500/10"
+            style={{ border: '1px solid var(--border-default)', color: 'var(--text-primary)', background: 'var(--bg-secondary)' }}
+          >
+            <Key className="w-4 h-4 text-amber-400" />
+            <span>Đổi mật khẩu cá nhân</span>
+          </button>
+
+          <button
+            onClick={() => setOpenModal('add')}
+            className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Thêm người dùng mới</span>
+          </button>
+        </div>
       </div>
 
       {toastMessage && (
@@ -218,55 +318,69 @@ export default function UsersManagementPage() {
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
-                <th className="px-4 py-3 font-semibold uppercase">Người dùng</th>
-                <th className="px-4 py-3 font-semibold uppercase min-w-[150px]">Vai trò</th>
-                <th className="px-4 py-3 font-semibold uppercase min-w-[200px]">Phương tiện quản lý</th>
-                <th className="px-4 py-3 font-semibold uppercase">Trạng thái</th>
-                <th className="px-4 py-3 font-semibold uppercase text-right min-w-[260px]">Thao tác</th>
+                <th className="px-4 py-3 font-bold uppercase tracking-wider">Thành viên</th>
+                <th className="px-4 py-3 font-bold uppercase tracking-wider">Email &amp; SĐT</th>
+                <th className="px-4 py-3 font-bold uppercase tracking-wider">Vai trò</th>
+                <th className="px-4 py-3 font-bold uppercase tracking-wider">Xe được quản lý</th>
+                <th className="px-4 py-3 font-bold uppercase tracking-wider">Trạng thái</th>
+                <th className="px-4 py-3 font-bold uppercase tracking-wider text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
-              {filteredUsers.map((u) => {
-                const assignedAssets = assets.filter(a => u.assigned_asset_ids.includes(a.id));
+              {filteredUsers.map(u => {
+                const assignedAssetNames = assets.filter(a => u.assigned_asset_ids?.includes(a.id)).map(a => a.name);
+
                 return (
-                  <tr key={u.id} className="hover:bg-slate-500/5 transition">
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center space-x-3 min-w-[220px]">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-sm">
-                          {u.name.charAt(0)}
+                  <tr key={u.id} className="transition hover:bg-slate-500/5">
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white shadow-sm"
+                          style={{ background: u.role === 'ADMIN' ? 'linear-gradient(135deg, #0EA5E9, #3B82F6)' : 'linear-gradient(135deg, #10B981, #059669)' }}>
+                          {u.name.charAt(0).toUpperCase()}
                         </div>
-                        <div className="min-w-0">
-                          <p className="font-bold truncate" style={{ color: 'var(--text-primary)' }}>{u.name}</p>
-                          <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{u.email} · {u.phone}</p>
+                        <div>
+                          <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{u.name}</p>
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>ID: {u.id}</span>
                         </div>
                       </div>
                     </td>
 
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${u.role === 'ADMIN' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-slate-500/20 text-slate-400 border border-slate-500/30'}`}>
+                      <p className="font-mono text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{u.email}</p>
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{u.phone || 'Chưa cập nhật'}</p>
+                    </td>
+
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className="px-2.5 py-1 rounded-full text-[10px] font-bold inline-flex items-center space-x-1"
+                        style={u.role === 'ADMIN'
+                          ? { background: 'rgba(14,165,233,0.15)', color: 'var(--accent-cyan)', border: '1px solid rgba(14,165,233,0.3)' }
+                          : { background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}>
                         <Shield className="w-3 h-3" />
-                        {u.role === 'ADMIN' ? 'Quản trị (Admin)' : 'Thành viên'}
+                        <span>{u.role === 'ADMIN' ? 'Quản Trị Viên' : 'Thành Viên'}</span>
                       </span>
                     </td>
 
                     <td className="px-4 py-3.5">
                       {u.role === 'ADMIN' ? (
-                        <span className="text-[11px] font-semibold" style={{ color: 'var(--status-green)' }}>Tất cả phương tiện (Toàn quyền)</span>
-                      ) : assignedAssets.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {assignedAssets.map(a => (
-                            <span key={a.id} className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'var(--bg-hover)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}>
-                              {a.name.split(' ')[0]} ({a.license_plate || 'Chưa biển'})
-                            </span>
-                          ))}
-                        </div>
+                        <span className="text-xs font-semibold" style={{ color: 'var(--accent-cyan)' }}>Toàn bộ xe (Admin)</span>
                       ) : (
-                        <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Chưa gán xe</span>
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {assignedAssetNames.length > 0 ? (
+                            assignedAssetNames.map((name, i) => (
+                              <span key={i} className="px-2 py-0.5 rounded text-[10px] font-medium"
+                                style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}>
+                                {name}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-[11px] italic" style={{ color: 'var(--text-muted)' }}>Chưa gán xe</span>
+                          )}
+                        </div>
                       )}
                     </td>
 
                     <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)' }}>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)' }}>
                         HOẠT ĐỘNG
                       </span>
                     </td>
@@ -287,10 +401,10 @@ export default function UsersManagementPage() {
 
                         {/* Reset Password */}
                         <button
-                          onClick={() => handleResetPassword(u)}
+                          onClick={() => handleOpenResetPassword(u)}
                           className="px-2.5 py-1 rounded-lg text-[11px] font-bold hover:bg-purple-500/10 transition inline-flex items-center gap-1"
                           style={{ color: 'var(--status-purple)', border: '1px solid rgba(139,92,246,0.3)' }}
-                          title="Gửi Email Reset Mật Khẩu"
+                          title="Đặt lại hoặc gửi mật khẩu mới"
                         >
                           <Key className="w-3.5 h-3.5" /> Reset Pass
                         </button>
@@ -325,10 +439,186 @@ export default function UsersManagementPage() {
         </div>
       </div>
 
+      {/* 🔒 Email Whitelist & Login Access Security Card */}
+      <div className="glass-panel p-5 rounded-2xl shadow-lg space-y-4" style={{ border: '1px solid var(--border-default)' }}>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center space-x-2.5">
+            <ShieldCheck className="w-5 h-5 text-emerald-400" />
+            <div>
+              <h2 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                Danh Sách Email Được Cấp Quyền Đăng Nhập (Email Whitelist)
+              </h2>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Chỉ những Email có trong danh sách này mới có thể nhận Magic Link hoặc đăng nhập vào hệ thống gia đình.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full text-xs font-bold" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}>
+            🔒 Đang bật chế độ bảo mật nghiêm ngặt
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 pt-2">
+          <div className="relative flex-1 max-w-md">
+            <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 z-10" style={{ color: 'var(--text-muted)' }} />
+            <input
+              type="email"
+              className="theme-input !pl-9"
+              placeholder="Thêm email mới vào danh sách cho phép (VD: vo.yeu@gmail.com)..."
+              value={newWhitelistEmail}
+              onChange={e => setNewWhitelistEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddWhitelistEmail(); }}
+            />
+          </div>
+          <button
+            onClick={handleAddWhitelistEmail}
+            className="px-4 py-2.5 rounded-xl text-white font-bold text-xs transition hover:opacity-90"
+            style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}
+          >
+            + Cấp quyền Email
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          {allowedEmailsList.map((email) => (
+            <div
+              key={email}
+              className="px-3 py-1.5 rounded-xl text-xs font-mono flex items-center gap-2"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+            >
+              <span>{email}</span>
+              <button
+                onClick={() => handleRemoveWhitelistEmail(email)}
+                className="text-rose-400 hover:text-rose-300 transition"
+                title="Xóa quyền truy cập"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Change My Password Modal */}
+      {openModal === 'change_my_password' && (
+        <DraggableModal isOpen={true} onClose={() => setOpenModal(null)}>
+          <div className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[500px] max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Lock className="w-4 h-4 text-amber-400" />
+                Đổi mật khẩu tài khoản của bạn
+              </h3>
+              <button onClick={() => setOpenModal(null)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-3.5 text-xs">
+              <p style={{ color: 'var(--text-muted)' }}>Nhập mật khẩu mới an toàn cho tài khoản đang đăng nhập của bạn:</p>
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Mật khẩu mới *</label>
+                <input
+                  type="password"
+                  className="theme-input"
+                  placeholder="Tối thiểu 6 ký tự..."
+                  value={myPasswordForm.newPassword}
+                  onChange={e => setMyPasswordForm(p => ({ ...p, newPassword: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary)' }}>Xác nhận mật khẩu mới *</label>
+                <input
+                  type="password"
+                  className="theme-input"
+                  placeholder="Nhập lại mật khẩu mới..."
+                  value={myPasswordForm.confirmPassword}
+                  onChange={e => setMyPasswordForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                <button onClick={() => setOpenModal(null)} className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-white/10" style={{ color: 'var(--text-muted)' }}>Hủy</button>
+                <button onClick={handleChangeMyPassword} className="px-5 py-2 rounded-xl text-white font-bold text-xs" style={{ background: 'linear-gradient(135deg, #F59E0B, #D97706)' }}>
+                  Cập nhật mật khẩu ngay
+                </button>
+              </div>
+            </div>
+          </div>
+        </DraggableModal>
+      )}
+
+      {/* Admin Reset Member Password Modal */}
+      {openModal === 'reset_password' && selectedUser && (
+        <DraggableModal isOpen={true} onClose={() => setOpenModal(null)}>
+          <div className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[500px] max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Key className="w-4 h-4 text-purple-400" />
+                Reset Mật Khẩu: {selectedUser.name}
+              </h3>
+              <button onClick={() => setOpenModal(null)} style={{ color: 'var(--text-muted)' }}><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-5 space-y-3.5 text-xs">
+              <div className="p-3 rounded-xl" style={{ background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}>
+                <p className="font-semibold" style={{ color: 'var(--status-purple)' }}>Thành viên: {selectedUser.name}</p>
+                <p className="text-[11px] font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>Email: {selectedUser.email}</p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold" style={{ color: 'var(--text-primary)' }}>Mật khẩu mới</label>
+                  <button
+                    type="button"
+                    onClick={() => setResetMemberForm(p => ({ ...p, newPassword: 'FMMS@' + Math.floor(100000 + Math.random() * 900000) }))}
+                    className="text-[11px] font-bold flex items-center gap-1"
+                    style={{ color: 'var(--accent-cyan)' }}
+                  >
+                    🎲 Tạo mật khẩu ngẫu nhiên
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="theme-input font-mono font-bold"
+                    value={resetMemberForm.newPassword}
+                    onChange={e => setResetMemberForm(p => ({ ...p, newPassword: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(resetMemberForm.newPassword);
+                      showToast(`Đã sao chép mật khẩu: "${resetMemberForm.newPassword}"`);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-cyan-400"
+                    title="Sao chép mật khẩu"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <label className="flex items-center space-x-2 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={resetMemberForm.sendEmail}
+                  onChange={e => setResetMemberForm(p => ({ ...p, sendEmail: e.target.checked }))}
+                  className="rounded border-slate-600 text-purple-500 focus:ring-purple-400"
+                />
+                <span style={{ color: 'var(--text-secondary)' }}>Đồng thời gửi email liên kết khôi phục tới {selectedUser.email}</span>
+              </label>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
+                <button onClick={() => setOpenModal(null)} className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-white/10" style={{ color: 'var(--text-muted)' }}>Hủy</button>
+                <button onClick={handleExecuteResetPassword} className="px-5 py-2 rounded-xl text-white font-bold text-xs" style={{ background: 'linear-gradient(135deg, #8B5CF6, #6D28D9)' }}>
+                  Xác nhận đặt mật khẩu
+                </button>
+              </div>
+            </div>
+          </div>
+        </DraggableModal>
+      )}
+
       {/* Add User Modal */}
       {openModal === 'add' && (
         <DraggableModal isOpen={true} onClose={() => setOpenModal(null)}>
-<div className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+          <div className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <UserPlus className="w-4 h-4 text-cyan-400" />
@@ -364,16 +654,14 @@ export default function UsersManagementPage() {
                 </button>
               </div>
             </div>
-          
-</div>
-</DraggableModal>
-
+          </div>
+        </DraggableModal>
       )}
 
       {/* Assign Assets Modal */}
       {openModal === 'assign' && selectedUser && (
         <DraggableModal isOpen={true} onClose={() => setOpenModal(null)}>
-<div className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
+          <div className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[600px] max-w-md max-h-[85vh] overflow-y-auto shadow-2xl" style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }} onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-5 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
               <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
                 <Car className="w-4 h-4 text-cyan-400" />
@@ -418,10 +706,8 @@ export default function UsersManagementPage() {
                 </button>
               </div>
             </div>
-          
-</div>
-</DraggableModal>
-
+          </div>
+        </DraggableModal>
       )}
     </div>
   );

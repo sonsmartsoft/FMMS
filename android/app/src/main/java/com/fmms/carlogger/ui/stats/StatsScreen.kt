@@ -308,38 +308,22 @@ private fun MonthlyMode(
     colors: FmmsColors, border: Color, grid: Color,
     strings: FmmsStrings,
 ) {
-    // Chọn năm
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        years.forEach { y ->
-            FilterChip(
-                selected = year == y,
-                onClick = { onSelectYear(y) },
-                label = { Text(y.toString(), fontSize = 12.sp) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = colors.cyan.copy(alpha = 0.18f),
-                    selectedLabelColor = colors.cyan,
-                ),
-            )
-        }
-    }
-    Spacer(modifier = Modifier.height(8.dp))
-
-    // Chọn tháng (mặc định = tháng hiện tại)
-    Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        (1..12).forEach { m ->
-            FilterChip(
-                selected = month == m,
-                onClick = { onSelectMonth(m) },
-                label = { Text("T$m", fontSize = 12.sp) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = colors.amber.copy(alpha = 0.18f),
-                    selectedLabelColor = colors.amber,
-                ),
-            )
-        }
+    // Chọn năm + tháng (dropdown hiện đại)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        PeriodDropdown(
+            label = "Năm",
+            value = year?.toString() ?: "—",
+            options = years.map { it.toString() },
+            colors = colors, border = border,
+            modifier = Modifier.weight(1f),
+        ) { onSelectYear(years[it]) }
+        PeriodDropdown(
+            label = "Tháng",
+            value = MONTH_NAMES[month - 1],
+            options = MONTH_NAMES,
+            colors = colors, border = border,
+            modifier = Modifier.weight(2f),
+        ) { onSelectMonth(it + 1) }
     }
     Spacer(modifier = Modifier.height(12.dp))
 
@@ -366,7 +350,7 @@ private fun MonthlyMode(
 
     // Donut chi phí theo danh mục (từ DB theo thời gian đã chọn)
     if (expenseBreakdown.isNotEmpty()) {
-        ExpenseDonutCard("Chi phí tháng T$month", expenseBreakdown, colors, border, strings)
+        ExpenseDonutCard("Chi phí · ${MONTH_NAMES[month - 1]} ${year ?: ""}", expenseBreakdown, colors, border, strings)
         Spacer(modifier = Modifier.height(12.dp))
     }
 
@@ -409,21 +393,15 @@ private fun YearlyMode(
     colors: FmmsColors, border: Color, grid: Color,
     strings: FmmsStrings,
 ) {
-    // Chọn năm
+    // Chọn năm (dropdown hiện đại)
     if (years.isNotEmpty()) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            years.forEach { y ->
-                FilterChip(
-                    selected = year == y,
-                    onClick = { onSelectYear(y) },
-                    label = { Text(y.toString(), fontSize = 12.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = colors.cyan.copy(alpha = 0.18f),
-                        selectedLabelColor = colors.cyan,
-                    ),
-                )
-            }
-        }
+        PeriodDropdown(
+            label = "Năm",
+            value = year?.toString() ?: "—",
+            options = years.map { it.toString() },
+            colors = colors, border = border,
+            modifier = Modifier.fillMaxWidth(),
+        ) { onSelectYear(years[it]) }
         Spacer(modifier = Modifier.height(12.dp))
     }
 
@@ -466,7 +444,7 @@ private fun ExpenseDonutCard(
         Box(modifier = Modifier.fillMaxWidth()) {
             DonutChart(
                 data = data,
-                centerLabel = "Tổng chi",
+                centerLabel = "TOTAL",
                 centerValue = formatVnd(total),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -488,6 +466,79 @@ private fun ExpenseDonutCard(
                 Text(formatVnd(slice.amount), color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(String.format(Locale.US, "%.0f%%", pct), color = colors.textSecondary, fontSize = 11.sp, modifier = Modifier.width(42.dp))
+            }
+        }
+    }
+}
+
+private val MONTH_NAMES = listOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+
+/** Dropdown hiện đại với avatar zone + trailing chevron, giao diện glass. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PeriodDropdown(
+    label: String,
+    value: String,
+    options: List<String>,
+    colors: FmmsColors,
+    border: Color,
+    modifier: Modifier = Modifier,
+    onSelect: (Int) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier,
+    ) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label, color = colors.textSecondary, fontSize = 10.sp) },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            modifier = Modifier.fillMaxWidth().menuAnchor(),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colors.cyan.copy(alpha = 0.5f),
+                unfocusedBorderColor = border,
+                focusedContainerColor = colors.surface.copy(alpha = 0.55f),
+                unfocusedContainerColor = colors.surface.copy(alpha = 0.55f),
+                focusedTextColor = colors.textPrimary,
+                unfocusedTextColor = colors.textPrimary,
+                cursorColor = colors.cyan,
+                focusedLabelColor = colors.cyan,
+                unfocusedLabelColor = colors.textSecondary,
+            ),
+            singleLine = true,
+            textStyle = androidx.compose.ui.text.TextStyle(
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary,
+            ),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            options.forEachIndexed { i, opt ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            opt,
+                            fontSize = 13.sp,
+                            fontWeight = if (opt == value) FontWeight.Bold else FontWeight.Normal,
+                            color = if (opt == value) colors.cyan else colors.textPrimary,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onSelect(i)
+                    },
+                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                )
             }
         }
     }

@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { isEmailAllowed } from '@/lib/services/authWhitelistService';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [isMagicLink, setIsMagicLink] = useState(false);
   const router = useRouter();
   const supabase = createClient();
@@ -17,20 +19,29 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccessMsg(null);
+
+    // 🔒 Security Check: Whitelist Enforcement
+    if (!isEmailAllowed(email)) {
+      setError(`🚫 Email "${email}" không nằm trong danh sách thành viên gia đình được cấp quyền truy cập. Vui lòng liên hệ Quản trị viên (Admin).`);
+      setLoading(false);
+      return;
+    }
 
     try {
       if (isMagicLink) {
         const { error } = await supabase.auth.signInWithOtp({
-          email,
+          email: email.trim().toLowerCase(),
           options: {
             emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+            shouldCreateUser: false, // Prevent creating random new accounts
           },
         });
         if (error) throw error;
-        alert('Vui lòng kiểm tra email của bạn để lấy liên kết đăng nhập!');
+        setSuccessMsg(`✅ Đã gửi liên kết đăng nhập tới ${email}. Vui lòng kiểm tra hộp thư đến (hoặc thư rác).`);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
-          email,
+          email: email.trim().toLowerCase(),
           password,
         });
         if (error) throw error;
@@ -38,29 +49,35 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (err: any) {
-      setError(err.message || 'Đã có lỗi xảy ra trong quá trình đăng nhập');
+      setError(err.message || 'Đã có lỗi xảy ra trong quá trình đăng nhập. Vui lòng kiểm tra lại mật khẩu.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isMagicLink) return;
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Vui lòng nhập địa chỉ Email của bạn để nhận liên kết khôi phục mật khẩu.');
+      return;
+    }
+
+    if (!isEmailAllowed(email)) {
+      setError(`🚫 Email "${email}" không nằm trong danh sách thành viên được cấp quyền.`);
+      return;
+    }
+
     setLoading(true);
     setError(null);
+    setSuccessMsg(null);
+
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-        },
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: `${window.location.origin}/login`,
       });
       if (error) throw error;
-      alert('Vui lòng kiểm tra email của bạn để xác nhận tài khoản!');
+      setSuccessMsg(`✅ Đã gửi email hướng dẫn đặt lại mật khẩu tới ${email}.`);
     } catch (err: any) {
-      setError(err.message || 'Đã có lỗi xảy ra trong quá trình đăng ký');
+      setError(err.message || 'Không thể gửi email khôi phục. Vui lòng liên hệ Quản trị viên.');
     } finally {
       setLoading(false);
     }
@@ -119,6 +136,21 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {successMsg && (
+          <div style={{
+            padding: '0.75rem',
+            marginBottom: '1.5rem',
+            borderRadius: '8px',
+            background: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            color: '#34d399',
+            fontSize: '0.875rem',
+            textAlign: 'center'
+          }}>
+            {successMsg}
+          </div>
+        )}
+
         {error && (
           <div style={{
             padding: '0.75rem',
@@ -137,7 +169,7 @@ export default function LoginPage() {
         <form onSubmit={handleAuth} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: 'var(--text-primary, #e5e7eb)' }}>
-              Email
+              Email thành viên
             </label>
             <input
               type="email"
@@ -161,9 +193,25 @@ export default function LoginPage() {
 
           {!isMagicLink && (
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', marginBottom: '0.5rem', color: 'var(--text-primary, #e5e7eb)' }}>
-                Mật khẩu
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontSize: '0.875rem', color: 'var(--text-primary, #e5e7eb)' }}>
+                  Mật khẩu
+                </label>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent-cyan, #06b6d4)',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    padding: 0
+                  }}
+                >
+                  Quên mật khẩu?
+                </button>
+              </div>
               <input
                 type="password"
                 value={password}
@@ -204,11 +252,11 @@ export default function LoginPage() {
               boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.2)'
             }}
           >
-            {loading ? 'Đang xử lý...' : (isMagicLink ? 'Gửi liên kết đăng nhập' : 'Đăng nhập')}
+            {loading ? 'Đang xử lý...' : (isMagicLink ? 'Gửi liên kết đăng nhập qua Email' : 'Đăng nhập')}
           </button>
         </form>
 
-        <div style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.875rem' }}>
+        <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.875rem' }}>
           <button
             onClick={() => setIsMagicLink(!isMagicLink)}
             style={{
@@ -217,33 +265,15 @@ export default function LoginPage() {
               color: 'var(--text-secondary, #9ca3af)',
               cursor: 'pointer',
               textDecoration: 'underline',
-              marginBottom: '1rem',
               display: 'inline-block'
             }}
           >
-            {isMagicLink ? 'Đăng nhập bằng mật khẩu' : 'Đăng nhập bằng Magic Link'}
+            {isMagicLink ? 'Đăng nhập bằng mật khẩu' : 'Đăng nhập bằng Magic Link (Gửi vào Gmail)'}
           </button>
           
-          {!isMagicLink && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-              <span style={{ color: 'var(--text-secondary, #9ca3af)' }}>Chưa có tài khoản?</span>
-              <button
-                type="button"
-                onClick={handleSignUp}
-                disabled={loading}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--btn-primary-bg, #3b82f6)',
-                  cursor: 'pointer',
-                  fontWeight: '600',
-                  padding: 0
-                }}
-              >
-                Đăng ký ngay
-              </button>
-            </div>
-          )}
+          <div style={{ marginTop: '1.25rem', padding: '0.75rem', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', fontSize: '0.75rem', color: 'var(--text-muted, #94a3b8)' }}>
+            🔒 <strong>Bảo mật nội bộ gia đình:</strong> Chỉ các email được Quản trị viên cấp phép mới có thể nhận liên kết hoặc đăng nhập.
+          </div>
         </div>
       </div>
     </div>

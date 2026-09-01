@@ -222,7 +222,9 @@ class StatsViewModel : ViewModel() {
     /** Tải phân bổ chi phí theo danh mục từ DB cho kỳ đang chọn. */
     fun loadExpenseForCurrentSelection(mode: AnalyticsMode) {
         viewModelScope.launch {
-            val vehicle = c.vehicleRepository.getActive() ?: return@launch
+            val assetId = c.vehicleRepository.getAssignedVehicleId()
+                ?: c.vehicleRepository.getActive()?.id
+                ?: return@launch
             val year = _selectedYear.value ?: Calendar.getInstance().get(Calendar.YEAR)
             val (from, to) = when (mode) {
                 AnalyticsMode.MONTHLY -> {
@@ -246,7 +248,8 @@ class StatsViewModel : ViewModel() {
                     f to t
                 }
             }
-            _expenseBreakdown.value = fetchExpenseBreakdown(vehicle.id, from, to)
+            _expenseBreakdown.value = fetchExpenseBreakdown(assetId, from, to)
+            android.util.Log.d("StatsVM", "expense breakdown [$mode] asset=$assetId n=${_expenseBreakdown.value.size}")
         }
     }
 

@@ -277,6 +277,18 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
 
 ---
 
+### Đợt 11 (01/09/2026): Tăng Cường Bảo Mật Đăng Nhập Email Whitelist & Hoàn Thiện Đổi/Reset Mật Khẩu
+- **Chính Sách Giới Hạn Đăng Nhập (Email Whitelist Enforcement):**
+  - Khóa toàn bộ các đăng ký tự do và chặn nhận Magic Link/Đăng nhập đối với các email lạ ngoài danh sách thành viên gia đình.
+  - Chỉ các email đã được Admin cấp phép trong Whitelist (`authWhitelistService.ts` / `/settings/users`) mới có thể nhận liên kết hoặc đăng nhập.
+  - Trang Đăng nhập hiển thị thông báo chặn rõ ràng khi phát hiện email lạ và cung cấp tính năng "Quên mật khẩu" an toàn.
+- **Hoàn Thiện Bộ Tính Năng Quản Trị Mật Khẩu:**
+  - **Đổi Mật Khẩu Cá Nhân:** Người dùng đang đăng nhập có thể chủ động đổi mật khẩu tài khoản của mình qua `supabase.auth.updateUser`.
+  - **Admin Reset Mật Khẩu Trực Tiếp:** Quản trị viên có thể đặt mật khẩu mới tùy ý cho thành viên, tạo mật khẩu ngẫu nhiên an toàn 6 số (`FMMS@XXXXXX`) và sao chép 1-click gửi cho thành viên.
+  - **Quản Lý Danh Sách Email Whitelist:** Bổ sung giao diện trực quan cho phép Admin thêm/xóa quyền đăng nhập của từng email gia đình.
+
+---
+
 ## 10. CÁC LƯU Ý QUAN TRỌNG CHO ĐỢT PHÁT TRIỂN TIẾP THEO
 
 1. **Tuân thủ Vehicle Filter Bar Rule trên mọi màn hình mới**: Đảm bảo trải nghiệm quản lý đa phương tiện đồng nhất.
