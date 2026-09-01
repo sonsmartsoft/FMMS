@@ -1,174 +1,48 @@
 package com.fmms.carlogger.ui.stats
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.data.repository.TripAggregate
+import com.fmms.carlogger.ui.i18n.FmmsStrings
 import com.fmms.carlogger.ui.i18n.LocalStrings
+import com.fmms.carlogger.ui.theme.FmmsColors
 import com.fmms.carlogger.ui.theme.LocalFmmsColors
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
-data class DailyStat(val label: String, val distanceKm: Double, val consumptionL100km: Double?)
-
-class StatsViewModel : ViewModel() {
-    private val c = AppContainer
-
-    private val _today = MutableStateFlow<TripAggregate?>(null)
-    val today = _today
-    private val _month = MutableStateFlow<TripAggregate?>(null)
-    val month = _month
-    private val _total = MutableStateFlow<TripAggregate?>(null)
-    val total = _total
-    private val _daily = MutableStateFlow<List<DailyStat>>(emptyList())
-    val daily = _daily
-    private val _years = MutableStateFlow<List<Int>>(emptyList())
-    val years = _years
-    private val _selectedYear = MutableStateFlow<Int?>(null)
-    val selectedYear = _selectedYear
-    private val _monthly = MutableStateFlow<List<DailyStat>>(emptyList())
-    val monthly = _monthly
-
-    init {
-        viewModelScope.launch {
-            val vehicle = c.vehicleRepository.getActive() ?: return@launch
-            val now = Calendar.getInstance()
-            val todayStart = now.apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
-            val monthStart = now.apply { set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
-            val end = System.currentTimeMillis()
-
-            _today.value = c.tripRepository.getBetween(vehicle.id, todayStart, end).let { trips ->
-                TripAggregate(
-                    trips.sumOf { it.distanceKm },
-                    trips.sumOf { it.fuelUsedLiters ?: 0.0 },
-                    trips.size,
-                    trips.maxOfOrNull { it.maxSpeedKmh ?: 0.0 } ?: 0.0,
-                    trips.mapNotNull { it.averageSpeedKmh }.average().takeIf { it.isFinite() } ?: 0.0,
-                )
-            }
-            _month.value = c.tripRepository.getBetween(vehicle.id, monthStart, end).let { trips ->
-                TripAggregate(
-                    trips.sumOf { it.distanceKm },
-                    trips.sumOf { it.fuelUsedLiters ?: 0.0 },
-                    trips.size,
-                    trips.maxOfOrNull { it.maxSpeedKmh ?: 0.0 } ?: 0.0,
-                    trips.mapNotNull { it.averageSpeedKmh }.average().takeIf { it.isFinite() } ?: 0.0,
-                )
-            }
-            _total.value = c.tripRepository.aggregate(vehicle.id)
-
-            // Last 7 days (incl. today) for the bar/line charts.
-            val cal = Calendar.getInstance()
-            cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0); cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
-            val dayFmt = SimpleDateFormat("EEE", Locale.getDefault())
-            val daily = mutableListOf<DailyStat>()
-            for (i in 6 downTo 0) {
-                val start = cal.clone() as Calendar
-                start.add(Calendar.DAY_OF_MONTH, -i)
-                val s = start.timeInMillis
-                val e = start.clone() as Calendar
-                e.add(Calendar.DAY_OF_MONTH, 1)
-                val dayTrips = c.tripRepository.getBetween(vehicle.id, s, e.timeInMillis)
-                val dist = dayTrips.sumOf { it.distanceKm }
-                val fuel = dayTrips.sumOf { it.fuelUsedLiters ?: 0.0 }
-                daily += DailyStat(
-                    label = dayFmt.format(Date(s)),
-                    distanceKm = dist,
-                    consumptionL100km = if (dist > 0.05 && fuel > 0) fuel / dist * 100 else null,
-                )
-            }
-            _daily.value = daily
-
-            _years.value = c.tripRepository.getYears(vehicle.id).ifEmpty {
-                listOf(Calendar.getInstance().get(Calendar.YEAR))
-            }
-            _selectedYear.value = _years.value.firstOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)
-        }
-    }
-
-    fun selectYear(year: Int) {
-        if (_selectedYear.value == year) return
-        _selectedYear.value = year
-        viewModelScope.launch {
-            val vehicle = c.vehicleRepository.getActive() ?: return@launch
-            _monthly.value = buildMonthly(vehicle.id, year)
-        }
-    }
-
-    /** Loads monthly aggregates lazily once the year is chosen. */
-    suspend fun ensureMonthly(vehicleId: String, year: Int) {
-        if (_monthly.value.isNotEmpty()) return
-        _monthly.value = buildMonthly(vehicleId, year)
-    }
-
-    private suspend fun buildMonthly(vehicleId: String, year: Int): List<DailyStat> {
-        val monthFmt = SimpleDateFormat("MMM", Locale.getDefault())
-        val result = mutableListOf<DailyStat>()
-        for (m in 0 until 12) {
-            val ms = Calendar.getInstance().apply {
-                clear()
-                set(year, m, 1)
-                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
-            val me = Calendar.getInstance().apply {
-                clear()
-                set(year, m, 1)
-                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-                add(Calendar.MONTH, 1)
-            }.timeInMillis
-            val monthTrips = c.tripRepository.getBetween(vehicleId, ms, me)
-            val dist = monthTrips.sumOf { it.distanceKm }
-            val fuel = monthTrips.sumOf { it.fuelUsedLiters ?: 0.0 }
-            result += DailyStat(
-                label = monthFmt.format(Date(ms)),
-                distanceKm = dist,
-                consumptionL100km = if (dist > 0.05 && fuel > 0) fuel / dist * 100 else null,
-            )
-        }
-        return result
-    }
-}
-
 @Composable
-fun StatsScreen(vm: StatsViewModel = viewModel()) {
-    val today by vm.today.collectAsState()
-    val month by vm.month.collectAsState()
-    val total by vm.total.collectAsState()
-    val daily by vm.daily.collectAsState(emptyList())
-    val years by vm.years.collectAsState(emptyList())
-    val selectedYear by vm.selectedYear.collectAsState()
-    val monthly by vm.monthly.collectAsState(emptyList())
+fun StatsScreen(
+    vm: StatsViewModel = viewModel(),
+    aiVm: AiAdvisorViewModel = viewModel(),
+) {
     val colors = LocalFmmsColors.current
     val strings = LocalStrings.current
-    val context = LocalContext.current
-    val appScope = rememberCoroutineScope()
 
-    LaunchedEffect(years) {
-        val first = selectedYear ?: years.firstOrNull() ?: return@LaunchedEffect
-        vm.ensureMonthly(AppContainer.vehicleRepository.getActive()?.id ?: return@LaunchedEffect, first)
-    }
+    val mode by vm.mode.collectAsState()
+    val today by vm.today.collectAsState()
+    val month by vm.month.collectAsState()
+    val dailyLog by vm.dailyLog.collectAsState(emptyList())
+    val monthly by vm.monthly.collectAsState(emptyList())
+    val yearly by vm.yearly.collectAsState(emptyList())
+    val years by vm.years.collectAsState(emptyList())
+    val selectedYear by vm.selectedYear.collectAsState()
+    val fuelPrice by vm.fuelPriceVnd.collectAsState()
+
+    val border = Color.White.copy(alpha = 0.08f)
+    val grid = colors.divider.copy(alpha = 0.35f)
 
     Column(
         modifier = Modifier
@@ -177,222 +51,377 @@ fun StatsScreen(vm: StatsViewModel = viewModel()) {
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Text(strings.stats, color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(strings.stats, color = colors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            "Giá tham chiếu: ${formatVndFull(fuelPrice)}/L",
+            color = colors.textSecondary, fontSize = 11.sp,
+        )
         Spacer(modifier = Modifier.height(12.dp))
 
-        StatsCard(strings.today, today)
-        Spacer(modifier = Modifier.height(10.dp))
-        StatsCard(strings.thisMonth, month)
-        Spacer(modifier = Modifier.height(10.dp))
-        StatsCard(strings.allTime, total)
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Charts: last 7 days
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = colors.surface),
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text(strings.distance + " (7 " + strings.tripsCount.toLowerCase(Locale.getDefault()) + ")", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                BarChart(
-                    data = daily.map { it.distanceKm },
-                    labels = daily.map { it.label },
-                    color = colors.cyan,
-                    textColor = colors.textSecondary,
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = colors.surface),
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text("L/100KM", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-                LineChart(
-                    data = daily.map { it.consumptionL100km },
-                    labels = daily.map { it.label },
-                    color = colors.amber,
-                    textColor = colors.textSecondary,
-                    lineColor = colors.background,
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Charts: by month (with year filter)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = colors.surface),
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Text(strings.distance + " (" + strings.byMonth + ")", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    years.forEach { y ->
-                        FilterChip(
-                            selected = selectedYear == y,
-                            onClick = {
-                                vm.selectYear(y)
-                                appScope.launch {
-                                    vm.ensureMonthly(AppContainer.vehicleRepository.getActive()?.id ?: return@launch, y)
-                                }
+        // Chọn chế độ Ngày / Tháng / Năm
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AnalyticsMode.entries.forEach { m ->
+                FilterChip(
+                    selected = mode == m,
+                    onClick = { vm.setMode(m) },
+                    label = {
+                        Text(
+                            when (m) {
+                                AnalyticsMode.DAILY -> strings.statsModeDaily
+                                AnalyticsMode.MONTHLY -> strings.statsModeMonthly
+                                AnalyticsMode.YEARLY -> strings.statsModeYearly
                             },
-                            label = { Text(y.toString(), fontSize = 12.sp) },
+                            fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                         )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = colors.cyan.copy(alpha = 0.18f),
+                        selectedLabelColor = colors.cyan,
+                        disabledContainerColor = Color.Transparent,
+                    ),
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        when (mode) {
+            AnalyticsMode.DAILY -> DailyMode(today, month, dailyLog, colors, border, grid, strings)
+            AnalyticsMode.MONTHLY -> MonthlyMode(
+                selectedYear, years, monthly, vm::selectYear, colors, border, grid, strings,
+            )
+            AnalyticsMode.YEARLY -> YearlyMode(yearly, colors, border, grid, strings)
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        AiAdvisorPanel(aiVm, colors, border, strings)
+    }
+}
+
+// ============ Chế độ Ngày ============
+
+@Composable
+private fun DailyMode(
+    today: TripAggregate?, month: TripAggregate?,
+    dailyLog: List<DayLogEntry>,
+    colors: FmmsColors, border: Color, grid: Color,
+    strings: FmmsStrings,
+) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        GlassCard(modifier = Modifier.weight(1f), colors = colors, border = border) {
+            KpiCell(strings.today, today, colors)
+        }
+        GlassCard(modifier = Modifier.weight(1f), colors = colors, border = border) {
+            KpiCell(strings.thisMonth, month, colors)
+        }
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        Text(strings.distance + " (" + strings.byMonth + ")", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        KmBarChart(
+            data = dailyLog.map { it.distanceKm },
+            labels = dailyLog.map { it.dayOfMonth.toString() },
+            color = colors.cyan, textColor = colors.textSecondary,
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            ChartLegend(color = colors.cyan, label = strings.kmLegend, textColor = colors.textSecondary)
+            Text(strings.restDayLegend, color = colors.textSecondary, fontSize = 10.sp)
+        }
+    }
+
+    Spacer(modifier = Modifier.height(12.dp))
+
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        Text(strings.dailyLog, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        dailyLog.forEach { e -> DayLogRow(e, colors, strings) }
+    }
+}
+
+@Composable
+private fun DayLogRow(e: DayLogEntry, colors: FmmsColors, strings: FmmsStrings) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            e.dateLabel,
+            color = if (e.isRestDay) colors.textSecondary else colors.textPrimary,
+            fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.width(54.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            if (e.isRestDay) {
+                Text(strings.restDayLegend, color = colors.textSecondary, fontSize = 11.sp)
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    e.tripsKm.take(4).forEach { km ->
+                        Box(
+                            modifier = Modifier
+                                .background(colors.cyan.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        ) {
+                            Text(String.format(Locale.US, "%.1f km", km), color = colors.cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
+                    if (e.tripsKm.size > 4) Text("+${e.tripsKm.size - 4}", color = colors.textSecondary, fontSize = 10.sp)
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                BarChart(
-                    data = monthly.map { it.distanceKm },
-                    labels = monthly.map { it.label },
-                    color = colors.cyan,
-                    textColor = colors.textSecondary,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("L/100KM", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
-                LineChart(
-                    data = monthly.map { it.consumptionL100km },
-                    labels = monthly.map { it.label },
-                    color = colors.amber,
-                    textColor = colors.textSecondary,
-                    lineColor = colors.background,
-                )
+                if (e.consumptionL100km != null) {
+                    Text(
+                        String.format(Locale.US, "%.1f L/100km", e.consumptionL100km),
+                        color = colors.emerald, fontSize = 10.sp,
+                    )
+                }
             }
         }
+        Column(horizontalAlignment = Alignment.End) {
+            if (!e.isRestDay) {
+                Text(String.format(Locale.US, "%.1f km", e.distanceKm), color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(formatVnd(e.fuelCostVnd), color = colors.amber, fontSize = 10.sp)
+            }
+            e.odoKm?.let { Text(String.format(Locale.US, "ODO %.0f", it), color = colors.textSecondary, fontSize = 9.sp) }
+        }
     }
+    HorizontalDivider(color = colors.divider.copy(alpha = 0.3f))
 }
 
-/** Simple Canvas bar chart (7-day distance). */
+// ============ Chế độ Tháng ============
+
 @Composable
-private fun BarChart(
-    data: List<Double>,
-    labels: List<String>,
-    color: Color,
-    textColor: Color,
-    modifier: Modifier = Modifier,
+private fun MonthlyMode(
+    year: Int?, years: List<Int>, monthly: List<PeriodStat>,
+    onSelectYear: (Int) -> Unit,
+    colors: FmmsColors, border: Color, grid: Color,
+    strings: FmmsStrings,
 ) {
-    Canvas(modifier = modifier.fillMaxWidth().height(160.dp)) {
-        val max = data.maxOrNull()?.takeIf { it > 0 } ?: 1.0
-        val barW = size.width / data.size
-        val rightPad = 0f
-        data.forEachIndexed { i, v ->
-            val h = (v / max).toFloat() * size.height * 0.8f
-            val left = i * barW + barW * 0.18f
-            val w = barW * 0.64f
-            drawRoundRect(
-                color = color,
-                topLeft = Offset(left + rightPad / 2, size.height - h),
-                size = androidx.compose.ui.geometry.Size(w, h),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(6f, 6f),
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        years.forEach { y ->
+            FilterChip(
+                selected = year == y,
+                onClick = { onSelectYear(y) },
+                label = { Text(y.toString(), fontSize = 12.sp) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = colors.cyan.copy(alpha = 0.18f),
+                    selectedLabelColor = colors.cyan,
+                ),
             )
         }
     }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        labels.forEach { lbl ->
-            Text(lbl, color = textColor, fontSize = 9.sp, maxLines = 1)
+    Spacer(modifier = Modifier.height(12.dp))
+
+    val stats = monthlyStats(monthly)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        GlassCard(modifier = Modifier.weight(1f), colors = colors, border = border) {
+            MiniKpi(strings.avgL100kmLabel, stats.consumption?.let { String.format(Locale.US, "%.1f", it) } ?: "—", colors.amber, colors)
         }
+        GlassCard(modifier = Modifier.weight(1f), colors = colors, border = border) {
+            MiniKpi(strings.costPerKmLabel, stats.costPerKm?.let { formatVnd(it) } ?: "—", colors.emerald, colors)
+        }
+    }
+    Spacer(modifier = Modifier.height(10.dp))
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        MiniKpi(strings.totalCost, stats.totalCost?.let { formatVnd(it) } ?: "—", colors.amber, colors, big = true)
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        Text(strings.monthlyOverview, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            ChartLegend(color = colors.amber, label = strings.costLegend, textColor = colors.textSecondary)
+            ChartLegend(color = colors.cyan, label = strings.kmLegend, textColor = colors.textSecondary)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        DualAxisBarLineChart(
+            data = monthly, costColor = colors.amber,
+            kmColor = colors.cyan, textColor = colors.textSecondary, gridColor = grid,
+        )
     }
 }
 
-/** Simple Canvas line chart (consumption / avg). */
+private data class MonthlyStats(val consumption: Double?, val costPerKm: Double?, val totalCost: Double?)
+
+private fun monthlyStats(monthly: List<PeriodStat>): MonthlyStats {
+    val dist = monthly.sumOf { it.distanceKm }
+    val fuel = monthly.sumOf { it.fuelUsedLiters }
+    val cost = monthly.sumOf { it.fuelCostVnd }
+    val consumptions = monthly.mapNotNull { it.consumptionL100km }
+    return MonthlyStats(
+        consumption = if (consumptions.isNotEmpty()) consumptions.average() else null,
+        costPerKm = if (dist > 0.05 && cost > 0) cost / dist else null,
+        totalCost = if (cost > 0) cost else null,
+    )
+}
+
+// ============ Chế độ Năm ============
+
 @Composable
-private fun LineChart(
-    data: List<Double?>,
-    labels: List<String>,
-    color: Color,
-    textColor: Color,
-    lineColor: Color,
-    modifier: Modifier = Modifier,
+private fun YearlyMode(
+    yearly: List<PeriodStat>,
+    colors: FmmsColors, border: Color, grid: Color,
+    strings: FmmsStrings,
 ) {
-    Canvas(modifier = modifier.fillMaxWidth().height(160.dp)) {
-        val max = data.mapNotNull { it }.maxOrNull()?.takeIf { it > 0 } ?: 1.0
-        val stepX = size.width / (data.size - 1).coerceAtLeast(1)
-        val points = data.mapIndexedNotNull { i, v ->
-            if (v == null) null else Offset(i * stepX, size.height - ((v / max).toFloat() * size.height * 0.75f) - size.height * 0.15f)
+    val hasData = yearly.any { it.distanceKm > 0.05 }
+    if (!hasData) {
+        GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+            Text(strings.noData, color = colors.textSecondary, fontSize = 12.sp)
         }
-        if (points.isNotEmpty()) {
-            // fill under line
-            val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(points.first().x, size.height)
-                points.forEach { lineTo(it.x, it.y) }
-                lineTo(points.last().x, size.height)
-                close()
-            }
-            drawPath(path, color = color.copy(alpha = 0.18f))
-            for (i in 0 until points.size - 1) {
-                drawLine(color = color, start = points[i], end = points[i + 1], strokeWidth = 8.dp.toPx(), cap = StrokeCap.Round)
-            }
-            points.forEach { p ->
-                drawCircle(color = color, radius = 5.dp.toPx() * 0.8f, center = p)
-            }
-        } else {
-            drawLine(
-                color = textColor.copy(alpha = 0.4f),
-                start = Offset(0f, size.height / 2),
-                end = Offset(size.width, size.height / 2),
-                strokeWidth = 2.dp.toPx(),
-            )
-        }
+        return
     }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        labels.forEach { lbl ->
-            Text(lbl, color = textColor, fontSize = 9.sp, maxLines = 1)
-        }
-    }
-}
 
-@Composable
-private fun StatsCard(title: String, agg: TripAggregate?) {
-    val colors = LocalFmmsColors.current
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = colors.surface),
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(title, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    yearly.forEach { y ->
+        val avgPerMonth = y.distanceKm / 12.0
+        val costPerKm = if (y.distanceKm > 0.05 && y.fuelCostVnd > 0) y.fuelCostVnd / y.distanceKm else null
+        GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+            Text(y.label, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                StatCell("DISTANCE", agg?.distanceKm?.let { String.format(Locale.US, "%.1f km", it) } ?: "—", colors.cyan)
-                StatCell("FUEL USED", agg?.fuelUsedLiters?.let { String.format(Locale.US, "%.1f L", it) } ?: "—", colors.amber)
-                StatCell("TRIPS", agg?.tripCount?.toString() ?: "0", colors.textPrimary)
-                StatCell("AVG SPEED", agg?.avgSpeedKmh?.takeIf { it > 0 }?.let { String.format(Locale.US, "%.0f km/h", it) } ?: "—", colors.emerald)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                MiniKpi(strings.yearlyTotalKm, String.format(Locale.US, "%.0f", y.distanceKm), colors.cyan, colors)
+                MiniKpi(strings.yearlyAvgMonth, String.format(Locale.US, "%.0f km", avgPerMonth), colors.emerald, colors)
+                MiniKpi(strings.costLegend, formatVnd(y.fuelCostVnd), colors.amber, colors)
+                MiniKpi(strings.costPerKmLabel, costPerKm?.let { formatVnd(it) } ?: "—", colors.purple, colors)
             }
         }
+        Spacer(modifier = Modifier.height(10.dp))
+    }
+}
+
+// ============ Components ============
+
+@Composable
+private fun GlassCard(
+    modifier: Modifier = Modifier,
+    colors: FmmsColors,
+    border: Color,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface.copy(alpha = 0.55f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, border),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(14.dp), content = content)
     }
 }
 
 @Composable
-private fun StatCell(label: String, value: String, color: Color) {
-    val colors = LocalFmmsColors.current
+private fun KpiCell(title: String, agg: TripAggregate?, colors: FmmsColors) {
+    Text(title, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        String.format(Locale.US, "%.1f km", agg?.distanceKm ?: 0.0),
+        color = colors.cyan, fontSize = 22.sp, fontWeight = FontWeight.Black,
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        String.format(Locale.US, "%.1f L", agg?.fuelUsedLiters ?: 0.0),
+        color = colors.amber, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+    )
+    Text("${agg?.tripCount ?: 0} trips", color = colors.textSecondary, fontSize = 11.sp)
+}
+
+@Composable
+private fun MiniKpi(label: String, value: String, color: Color, colors: FmmsColors, big: Boolean = false) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = colors.textSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(2.dp))
-        Text(value, color = color, fontSize = 15.sp, fontWeight = FontWeight.Black)
+        Text(value, color = color, fontSize = if (big) 24.sp else 15.sp, fontWeight = FontWeight.Black)
+    }
+}
+
+/** Panel AI Advisor — mở rộng để hiển thị insights từ Edge Function. */
+@Composable
+fun AiAdvisorPanel(
+    vm: AiAdvisorViewModel,
+    colors: FmmsColors,
+    border: Color,
+    strings: FmmsStrings,
+) {
+    val state by vm.state.collectAsState()
+    var expanded by remember { mutableStateOf(false) }
+
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.AutoAwesome,
+                    contentDescription = null,
+                    tint = colors.purple,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("AI Advisor", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            TextButton(onClick = { expanded = !expanded }) {
+                Text(if (expanded) "▲" else "▼", color = colors.purple, fontSize = 12.sp)
+            }
+        }
+
+        if (expanded) {
+            Spacer(modifier = Modifier.height(10.dp))
+            when (val s = state) {
+                is AiUiState.Idle -> {
+                    Text(
+                        "Phân tích chuyến đi, dự báo bảo dưỡng và mẹo tiết kiệm bằng AI dùng chung với Web.",
+                        color = colors.textSecondary, fontSize = 12.sp,
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = { vm.ask() },
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.purple.copy(alpha = 0.2f), contentColor = colors.purple),
+                    ) {
+                        Text("Chạy phân tích AI", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                is AiUiState.Loading -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = colors.purple, strokeWidth = 2.dp,
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("Đang phân tích...", color = colors.textSecondary, fontSize = 12.sp)
+                    }
+                }
+                is AiUiState.Success -> {
+                    AiInsightBlock("Summary", s.insights.summary, colors.cyan)
+                    s.insights.maintenancePrediction?.let { AiInsightBlock("Bảo dưỡng", it, colors.emerald) }
+                    s.insights.costAlert?.let { AiInsightBlock("Chi phí", it, colors.amber) }
+                    s.insights.fuelEfficiencyTip?.let { AiInsightBlock("Tiết kiệm", it, colors.cyan) }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    TextButton(onClick = { vm.ask() }) {
+                        Text("Làm mới", color = colors.purple, fontSize = 12.sp)
+                    }
+                }
+                is AiUiState.Error -> {
+                    Text("Lỗi: ${s.message}", color = colors.red, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = { vm.ask() }) {
+                        Text("Thử lại", color = colors.purple, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiInsightBlock(title: String, body: String, color: Color) {
+    Column {
+        Text(title, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(body, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, lineHeight = 18.sp)
+        Spacer(modifier = Modifier.height(10.dp))
     }
 }

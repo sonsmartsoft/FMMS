@@ -296,6 +296,28 @@ export default function AssetDetailPage() {
   useEffect(() => {
     if (!assetId) return;
     const sb = createClient();
+
+    // Fetch most recent telemetry sample on initial load
+    (async () => {
+      try {
+        const { data } = await sb
+          .from('telemetry_samples')
+          .select('*')
+          .eq('asset_id', assetId)
+          .order('timestamp', { ascending: false })
+          .limit(1);
+        if (data && data.length > 0) {
+          const r = data[0];
+          setLive({
+            speed: r.speed_kmh != null ? Number(r.speed_kmh) : null,
+            rpm: r.rpm != null ? Number(r.rpm) : null,
+            coolant: r.coolant_temp_c != null ? Number(r.coolant_temp_c) : null,
+            voltage: r.battery_voltage != null ? Number(r.battery_voltage) : null,
+          });
+        }
+      } catch {}
+    })();
+
     const ch = sb
       .channel(`telemetry-${assetId}`)
       .on(
@@ -2412,7 +2434,7 @@ export default function AssetDetailPage() {
           <div className="space-y-5">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Vận hành &amp; OBD</h3>
-              {asset.capabilities.has_obd
+              {hasLive || asset.capabilities.has_obd
                 ? <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1.5" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}>
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /><span>OBD Connected</span>
                   </span>
