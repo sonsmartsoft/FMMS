@@ -131,12 +131,15 @@ async function callGemini(model: string, apiKey: string, promptText: string): Pr
   res = await tryEndpoint('v1', cleanModel);
   if (res.ok) return res;
 
-  // 2. Cascade through list of all popular models
+  // 2. Cascade through list of all popular models (newest first)
   const candidateModels = [
-    'gemini-1.5-flash-latest',
-    'gemini-1.5-pro-latest',
+    'gemini-3.6-flash',
+    'gemini-3.0-pro',
+    'gemini-2.5-flash',
     'gemini-2.0-flash',
     'gemini-2.0-flash-lite',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest',
     'gemini-1.5-flash',
     'gemini-1.5-pro',
     'gemini-pro',
@@ -202,10 +205,7 @@ export async function POST(req: NextRequest) {
     // ─────────────────────────────────────────────────────────────
     if (provider === 'gemini') {
       const activeKey = clientApiKey || process.env.GEMINI_API_KEY;
-      let activeModel = model || 'gemini-1.5-flash';
-      if (activeModel.includes('3.6') || activeModel.includes('2.5') || activeModel === 'gemini-2.0-flash') {
-        activeModel = 'gemini-1.5-flash';
-      }
+      const activeModel = model || 'gemini-3.6-flash';
 
       if (!activeKey) {
         return NextResponse.json({
