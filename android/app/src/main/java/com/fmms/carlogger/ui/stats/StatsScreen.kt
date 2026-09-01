@@ -1,6 +1,7 @@
 package com.fmms.carlogger.ui.stats
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +46,8 @@ fun StatsScreen(
     val driveSecondsMonth by vm.driveSecondsMonth.collectAsState()
     val odoKm by vm.odoKm.collectAsState()
     val prevMonthDistance by vm.prevMonthDistanceKm.collectAsState()
+    val selectedMonth by vm.selectedMonth.collectAsState()
+    val expenseBreakdown by vm.expenseBreakdown.collectAsState()
 
     val border = Color.White.copy(alpha = 0.08f)
     val grid = colors.divider.copy(alpha = 0.35f)
@@ -97,9 +100,13 @@ fun StatsScreen(
                 prevMonthDistance, odoKm, colors, border, grid, strings,
             )
             AnalyticsMode.MONTHLY -> MonthlyMode(
-                selectedYear, years, monthly, vm::selectYear, colors, border, grid, strings,
+                selectedYear, selectedMonth, years, monthly, expenseBreakdown,
+                vm::selectYear, vm::selectMonth, colors, border, grid, strings,
             )
-            AnalyticsMode.YEARLY -> YearlyMode(yearly, colors, border, grid, strings)
+            AnalyticsMode.YEARLY -> YearlyMode(
+                selectedYear, years, yearly, expenseBreakdown, vm::selectYear,
+                colors, border, grid, strings,
+            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -155,9 +162,21 @@ private fun DailyMode(
     Spacer(modifier = Modifier.height(12.dp))
 
     GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
-        Text(strings.dailyLog, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        dailyLog.forEach { e -> DayLogRow(e, colors, strings) }
+        var logExpanded by remember { mutableStateOf(false) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(strings.dailyLog, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            TextButton(onClick = { logExpanded = !logExpanded }) {
+                Text(if (logExpanded) "▲ Thu gọn" else "▼ Xem chi tiết", color = colors.cyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        if (logExpanded) {
+            Spacer(modifier = Modifier.height(8.dp))
+            dailyLog.forEach { e -> DayLogRow(e, colors, strings) }
+        }
     }
 }
 
@@ -284,11 +303,12 @@ private fun DayLogRow(e: DayLogEntry, colors: FmmsColors, strings: FmmsStrings) 
 
 @Composable
 private fun MonthlyMode(
-    year: Int?, years: List<Int>, monthly: List<PeriodStat>,
-    onSelectYear: (Int) -> Unit,
+    year: Int?, month: Int, years: List<Int>, monthly: List<PeriodStat>, expenseBreakdown: List<ExpenseSlice>,
+    onSelectYear: (Int) -> Unit, onSelectMonth: (Int) -> Unit,
     colors: FmmsColors, border: Color, grid: Color,
     strings: FmmsStrings,
 ) {
+    // Chọn năm
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         years.forEach { y ->
             FilterChip(
@@ -302,22 +322,53 @@ private fun MonthlyMode(
             )
         }
     }
+    Spacer(modifier = Modifier.height(8.dp))
+
+    // Chọn tháng (mặc định = tháng hiện tại)
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        (1..12).forEach { m ->
+            FilterChip(
+                selected = month == m,
+                onClick = { onSelectMonth(m) },
+                label = { Text("T$m", fontSize = 12.sp) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = colors.amber.copy(alpha = 0.18f),
+                    selectedLabelColor = colors.amber,
+                ),
+            )
+        }
+    }
     Spacer(modifier = Modifier.height(12.dp))
 
+    // KPI cards
     val stats = monthlyStats(monthly)
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         GlassCard(modifier = Modifier.weight(1f), colors = colors, border = border) {
-            MiniKpi(strings.avgL100kmLabel, stats.consumption?.let { String.format(Locale.US, "%.1f", it) } ?: "—", colors.amber, colors)
+            MiniKpi(strings.totalCost, stats.totalCost?.let { formatVnd(it) } ?: "—", colors.amber, colors)
         }
         GlassCard(modifier = Modifier.weight(1f), colors = colors, border = border) {
-            MiniKpi(strings.costPerKmLabel, stats.costPerKm?.let { formatVnd(it) } ?: "—", colors.emerald, colors)
+            MiniKpi(strings.avgL100kmLabel, stats.consumption?.let { String.format(Locale.US, "%.1f", it) } ?: "—", colors.cyan, colors)
         }
     }
     Spacer(modifier = Modifier.height(10.dp))
-    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
-        MiniKpi(strings.totalCost, stats.totalCost?.let { formatVnd(it) } ?: "—", colors.amber, colors, big = true)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        GlassCard(modifier = Modifier.weight(1f), colors = colors, border = border) {
+            MiniKpi(strings.costPerKmLabel, stats.costPerKm?.let { formatVnd(it) } ?: "—", colors.emerald, colors)
+        }
+        GlassCard(modifier = Modifier.weight(1f), colors = colors, border = border) {
+            MiniKpi(strings.kmLegend, if (stats.totalKm > 0.05) String.format(Locale.US, "%.0f km", stats.totalKm) else "—", colors.cyan, colors)
+        }
     }
     Spacer(modifier = Modifier.height(12.dp))
+
+    // Donut chi phí theo danh mục (từ DB theo thời gian đã chọn)
+    if (expenseBreakdown.isNotEmpty()) {
+        ExpenseDonutCard("Chi phí tháng T$month", expenseBreakdown, colors, border, strings)
+        Spacer(modifier = Modifier.height(12.dp))
+    }
 
     GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
         Text(strings.monthlyOverview, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -334,7 +385,7 @@ private fun MonthlyMode(
     }
 }
 
-private data class MonthlyStats(val consumption: Double?, val costPerKm: Double?, val totalCost: Double?)
+private data class MonthlyStats(val consumption: Double?, val costPerKm: Double?, val totalCost: Double?, val totalKm: Double)
 
 private fun monthlyStats(monthly: List<PeriodStat>): MonthlyStats {
     val dist = monthly.sumOf { it.distanceKm }
@@ -345,6 +396,7 @@ private fun monthlyStats(monthly: List<PeriodStat>): MonthlyStats {
         consumption = if (consumptions.isNotEmpty()) consumptions.average() else null,
         costPerKm = if (dist > 0.05 && cost > 0) cost / dist else null,
         totalCost = if (cost > 0) cost else null,
+        totalKm = dist,
     )
 }
 
@@ -352,32 +404,92 @@ private fun monthlyStats(monthly: List<PeriodStat>): MonthlyStats {
 
 @Composable
 private fun YearlyMode(
-    yearly: List<PeriodStat>,
+    year: Int?, years: List<Int>, yearly: List<PeriodStat>, expenseBreakdown: List<ExpenseSlice>,
+    onSelectYear: (Int) -> Unit,
     colors: FmmsColors, border: Color, grid: Color,
     strings: FmmsStrings,
 ) {
-    val hasData = yearly.any { it.distanceKm > 0.05 }
-    if (!hasData) {
+    // Chọn năm
+    if (years.isNotEmpty()) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            years.forEach { y ->
+                FilterChip(
+                    selected = year == y,
+                    onClick = { onSelectYear(y) },
+                    label = { Text(y.toString(), fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = colors.cyan.copy(alpha = 0.18f),
+                        selectedLabelColor = colors.cyan,
+                    ),
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+    }
+
+    val selected = yearly.firstOrNull { it.label.toIntOrNull() == year }
+    if (selected == null) {
         GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
             Text(strings.noData, color = colors.textSecondary, fontSize = 12.sp)
         }
         return
     }
 
-    yearly.forEach { y ->
-        val avgPerMonth = y.distanceKm / 12.0
-        val costPerKm = if (y.distanceKm > 0.05 && y.fuelCostVnd > 0) y.fuelCostVnd / y.distanceKm else null
-        GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
-            Text(y.label, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MiniKpi(strings.yearlyTotalKm, String.format(Locale.US, "%.0f", y.distanceKm), colors.cyan, colors)
-                MiniKpi(strings.yearlyAvgMonth, String.format(Locale.US, "%.0f km", avgPerMonth), colors.emerald, colors)
-                MiniKpi(strings.costLegend, formatVnd(y.fuelCostVnd), colors.amber, colors)
-                MiniKpi(strings.costPerKmLabel, costPerKm?.let { formatVnd(it) } ?: "—", colors.purple, colors)
+    val avgPerMonth = selected.distanceKm / 12.0
+    val costPerKm = if (selected.distanceKm > 0.05 && selected.fuelCostVnd > 0) selected.fuelCostVnd / selected.distanceKm else null
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        Text(selected.label, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            MiniKpi(strings.yearlyTotalKm, String.format(Locale.US, "%.0f", selected.distanceKm), colors.cyan, colors)
+            MiniKpi(strings.yearlyAvgMonth, String.format(Locale.US, "%.0f km", avgPerMonth), colors.emerald, colors)
+            MiniKpi(strings.costLegend, formatVnd(selected.fuelCostVnd), colors.amber, colors)
+            MiniKpi(strings.costPerKmLabel, costPerKm?.let { formatVnd(it) } ?: "—", colors.purple, colors)
+        }
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+
+    if (expenseBreakdown.isNotEmpty()) {
+        ExpenseDonutCard("Chi phí năm ${selected.label}", expenseBreakdown, colors, border, strings)
+    }
+}
+
+/** Thẻ donut chi phí theo danh mục (từ DB) kèm legend %. */
+@Composable
+private fun ExpenseDonutCard(
+    title: String, data: List<ExpenseSlice>, colors: FmmsColors, border: Color, strings: FmmsStrings,
+) {
+    val total = data.sumOf { it.amount }
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        Text(title, color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(6.dp))
+        Box(modifier = Modifier.fillMaxWidth()) {
+            DonutChart(
+                data = data,
+                centerLabel = "Tổng chi",
+                centerValue = formatVnd(total),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        data.forEachIndexed { i, slice ->
+            val pct = if (total > 0) (slice.amount / total) * 100.0 else 0.0
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .background(DONUT_COLORS[i % DONUT_COLORS.size], RoundedCornerShape(3.dp)),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(slice.label, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text(formatVnd(slice.amount), color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(String.format(Locale.US, "%.0f%%", pct), color = colors.textSecondary, fontSize = 11.sp, modifier = Modifier.width(42.dp))
             }
         }
-        Spacer(modifier = Modifier.height(10.dp))
     }
 }
 

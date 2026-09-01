@@ -1,6 +1,6 @@
 # 📘 LỊCH SỬ PHÁT TRIỂN & QUY CHUẨN KỸ THUẬT FMMS WEB APP
 > **Hệ Thống Quản Lý Đội Xe Gia Đình (Family Mobility Management System - FMMS)**  
-> **Cập nhật lần cuối:** 24/08/2026
+> **Cập nhật lần cuối:** 01/09/2026
 
 ---
 
@@ -12,7 +12,9 @@
 5. [Hệ Thống Màu Sắc & CSS Variables (Light / Dark Mode)](#5-hệ-thống-màu-sắc--css-variables-light--dark-mode)
 6. [Tích Hợp Supabase Backend & Xác Thực (Auth)](#6-tích-hợp-supabase-backend--xác-thực-auth)
 7. [Quản Lý Danh Mục Chi Phí 2 Tầng (Taxonomy Master Data)](#7-quản-lý-danh-mục-chi-phí-2-tầng-taxonomy-master-data)
-8. [Các Lưu Ý Quan Trọng Cho Đợt Phát Triển Tiếp Theo](#8-các-lưu-ý-quan-trọng-cho-đợt-phát-triển-tiếp-theo)
+8. [Quy Chuẩn Thiết Kế Bộ Lọc Phương Tiện (Vehicle Filter Bar Rule)](#8-quy-chuẩn-thiết-kế-bộ-lọc-phương-tiện-vehicle-filter-bar-rule)
+9. [Lịch Sử Các Đợt Phát Triển & Nâng Cấp](#9-lịch-sử-các-đợt-phát-triển--nâng-cấp)
+10. [Các Lưu Ý Quan Trọng Cho Đợt Phát Triển Tiếp Theo](#10-các-lưu-ý-quan-trọng-cho-đợt-phát-triển-tiếp-theo)
 
 ---
 
@@ -232,6 +234,46 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
   - Sửa lỗi Flexbox height collapse trên popup modal thêm giấy tờ (hỗ trợ nhập liệu 2 cột đầy đủ).
 - **Trang Báo Cáo & Phân Tích (`/analytics`):**
   - Bổ sung Vehicle Filter Bar: Xem TCO, tỷ lệ khấu hao, và chi phí vận hành cho từng xe hoặc cả đội xe.
+
+---
+
+### Đợt 8 (31/08/2026): Chuẩn Hóa Nhật Ký Lịch Liên Tục & Bảo Vệ ODO Chốt Ngày (Monotonic Odometer Strategy)
+- **Nhật Ký Lịch Liên Tục (Continuous Calendar Log):**
+  - Tự động lấp đầy trọn vẹn mọi ngày trong tháng (không bị ngắt quãng giữa các ngày xe nghỉ).
+  - Ngày xe nghỉ hiển thị rõ ràng nhãn `💤 Nghỉ • Xe nghỉ / Không phát sinh di chuyển` kèm ODO bảo lưu.
+- **Khử trùng lặp Double-Counting & Bảo vệ ODO Chốt ngày:**
+  - Khử trùng lặp giữa `dailySummaries` và `trips` riêng lẻ để ngày 31/08 hiển thị chuẩn xác **125.99 km** (8 chuyến đi).
+  - **Quy tắc Monotonic Odometer:** Chuyến đi thực tế từ thiết bị OBD/GPS là chân lý chốt ODO cuối ngày (`prevOdo += day.tripDistance`). Số ODO nhập tay tại thời điểm phát sinh chi phí/xăng xe chỉ mang tính chất tham khảo, tuyệt đối không được ghi đè hay kéo lùi ODO chốt ngày.
+  - Đồng bộ mốc ODO tích lũy của Mazda 2 đạt chuẩn **2.858,2 km** trên cả Bảng nhật ký, Header và Virtual Odometer.
+
+---
+
+### Đợt 9 (01/09/2026): Đột Phá Thiết Kế Đồng Hồ Vận Hành OBD (Radial Gauge Meters) & Sửa Dứt Điểm Lỗi Dính Chuột
+- **Thiết kế Đồng hồ Vận hành & OBD (High-Tech Radial Gauge Meters):**
+  - **Vòng cung Gauge Meter điện tử (SVG 260°):** Mỗi đồng hồ có vòng cung kim đo trực quan uốn cong với hiệu ứng tiến trình chuyển động mượt mà theo giá trị thời gian thực từ thiết bị OBD xe.
+  - **Chữ số siêu to & sắc nét (`text-4xl font-black`):** Số to gấp đôi, đặt ở trung tâm đồng hồ kèm đơn vị đo rõ ràng (`km/h`, `rpm`, `°C`, `V`).
+  - **Phân màu theo 4 tone KPI chuyên biệt:**
+    - ⚡ **Tốc độ (Speed - Cyan Neon):** Dải đo `0 - 160 km/h`, gradient `#06B6D4` -> `#10B981`, kèm đánh giá trạng thái (*Xe nổ máy tại chỗ / Chạy trong phố / Tốc độ đường trường / Đang chạy cao tốc*).
+    - 🔄 **Vòng tua máy (RPM - Amber / Redline):** Dải đo `0 - 6.000 rpm`, gradient `#F59E0B` -> `#F97316` (chuyển đỏ `#EF4444` khi tua máy > 3.500 rpm), kèm nhận diện chế độ (*Garanti chuẩn 800 rpm / Vùng tiết kiệm xăng / Vùng tua cao / Vùng đỏ Redline*).
+    - 🌡️ **Nhiệt độ nước (Coolant - Emerald / Cyan / Red):** Dải đo `0 - 120 °C`, gradient `#10B981` -> `#06B6D4` (chuyển đỏ khi quá nhiệt > 100 °C), tự động cảnh báo (*Đang làm nóng máy / Nhiệt độ tối ưu 85-95°C / Quạt gió làm việc / Cảnh báo sôi nước quá nhiệt*).
+    - 🔋 **Điện áp bình (Voltage - Purple / Indigo):** Dải đo `10 - 16 V`, gradient `#A855F7` -> `#6366F1`, hiển thị trạng thái ắc quy (*Bình yếu cần sạc / Điện áp bình tốt 12.6V / Máy phát đang nạp sạc tốt 13.2V - 14.8V / Cảnh báo quá áp sạc*).
+  - **Hiệu ứng Ambient Glow & Glassmorphism:** Có ánh sáng đèn nền neon mờ ảo (`blur-2xl opacity-15`) theo từng màu KPI, bo góc thể thao `rounded-2xl`, viền bóng mờ và hiệu ứng hover phóng to (`scale-[1.02]`) nổi bật.
+- **Sửa triệt để lỗi "Dính chuột" khi Kéo / Resize Popup (DraggableModal):**
+  - Chuyển toàn bộ cơ chế bắt sự kiện `pointermove`, `pointerup`, `pointercancel`, `blur` lên cấp độ toàn màn hình (`window`).
+  - Tích hợp cơ chế tự ngắt an toàn `if (e.buttons === 0)` và khóa quét chọn chữ (`userSelect: none`) trong suốt quá trình kéo thả/resize.
+
+---
+
+### Đợt 10 (01/09/2026): Tích Hợp Toàn Diện Bộ Não & Trí Nhớ Sâu AI (Deep System Context & Memory)
+- **Nạp Toàn Bộ Cơ Sở Dữ Liệu Sống (Real-time Live RAG):**
+  - **Tài chính 60 kỳ:** Tự động tính toán và nạp bảng phân bổ chi tiết 60 kỳ vay (Gốc, Lãi, Tổng trả, Dư nợ giảm dần sau từng kỳ, Trạng thái thanh toán).
+  - **Dữ liệu Vận hành:** Toàn bộ lịch sử đổ xăng, bảo dưỡng định kỳ, 12 món đồ chơi & phụ tùng nâng cấp, bảo hiểm và hotline cứu hộ 24/7.
+  - **19 Chuyến đi thực tế:** Lộ trình, km, thời lượng và mức tiêu hao nhiên liệu.
+- **Hỗ Trợ Thế Hệ Gemini Mới Nhất:**
+  - Hỗ trợ toàn diện **Gemini 3.6 Flash, 3.0 Pro, 2.5 Flash, 2.0 Flash, 1.5 Pro**.
+  - Cơ chế **Auto-Discovery & Multi-Version Fallback** tự động nhận diện và kích hoạt model tối ưu nhất theo tài khoản Google AI Studio.
+- **Trí Nhớ Hội Thoại (Conversational Memory):**
+  - Tự động ghi nhớ chuỗi các câu hỏi và câu trả lời trước đó trong phiên chat, giúp thảo luận thông minh và liền mạch.
 
 ---
 

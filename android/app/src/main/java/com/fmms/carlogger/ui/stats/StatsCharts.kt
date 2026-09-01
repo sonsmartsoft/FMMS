@@ -2,6 +2,7 @@ package com.fmms.carlogger.ui.stats
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -186,4 +188,54 @@ fun formatVndFull(value: Double): String {
         sb.append(ch)
     }
     return sb.reverse().toString() + "₫"
+}
+
+/** Bảng màu cho donut chi phí (tương đồng CHART_COLORS bên Web). */
+val DONUT_COLORS = listOf(
+    Color(0xFF38BDF8), Color(0xFFF59E0B), Color(0xFF10B981), Color(0xFF8B5CF6),
+    Color(0xFFEC4899), Color(0xFFF87171), Color(0xFFFBBF24), Color(0xFF06B6D4),
+    Color(0xFF64748B), Color(0xFF34D399), Color(0xFFA78BFA), Color(0xFFFB923C),
+)
+
+/** Biểu đồ tròn (donut) phân bố chi phí theo danh mục. */
+@Composable
+fun DonutChart(
+    data: List<ExpenseSlice>,
+    centerLabel: String,
+    centerValue: String,
+    modifier: Modifier = Modifier,
+) {
+    val total = data.sumOf { it.amount }
+    Canvas(modifier = modifier.fillMaxWidth().height(170.dp)) {
+        if (total <= 0) return@Canvas
+        val strokeWidth = 26.dp.toPx()
+        val radius = (minOf(size.width, size.height) - strokeWidth) / 2f
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val topLeft = Offset(center.x - radius, center.y - radius)
+        val arcSize = Size(radius * 2, radius * 2)
+        val pad = 3f
+        var start = -90f
+        data.forEachIndexed { i, slice ->
+            val sweep = (slice.amount / total).toFloat() * 360f
+            drawArc(
+                color = DONUT_COLORS[i % DONUT_COLORS.size],
+                startAngle = start + pad / 2,
+                sweepAngle = (sweep - pad).coerceAtLeast(0.5f),
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(width = strokeWidth, cap = StrokeCap.Butt),
+            )
+            start += sweep
+        }
+    }
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(centerLabel, color = Color.White.copy(alpha = 0.55f), fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(centerValue, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        }
+    }
 }

@@ -9,6 +9,8 @@ import com.fmms.carlogger.data.repository.TripAggregate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -79,6 +81,14 @@ data class FuelSummaryDto(
     val currency: String,
 )
 
+/** Một lát cắt chi phí theo danh mục (cho donut chart). */
+data class ExpenseSlice(
+    val category: String,
+    val label: String,
+    val amount: Double,
+    val currency: String = "VND",
+)
+
 class StatsViewModel : ViewModel() {
     private val c = AppContainer
 
@@ -119,6 +129,14 @@ class StatsViewModel : ViewModel() {
     /** Quãng đường tháng trước (km) để so sánh %. */
     private val _prevMonthDistanceKm = MutableStateFlow(0.0)
     val prevMonthDistanceKm: StateFlow<Double> = _prevMonthDistanceKm
+
+    /** Tháng được chọn trong chế độ Tháng (1..12). Mặc định = tháng hiện tại. */
+    private val _selectedMonth = MutableStateFlow(Calendar.getInstance().get(Calendar.MONTH) + 1)
+    val selectedMonth: StateFlow<Int> = _selectedMonth
+
+    /** Phân bổ chi phí theo danh mục của kỳ đang xem (từ RPC DB). */
+    private val _expenseBreakdown = MutableStateFlow<List<ExpenseSlice>>(emptyList())
+    val expenseBreakdown: StateFlow<List<ExpenseSlice>> = _expenseBreakdown
 
     /** Giá xăng tham chiếu hiện tại (₫/L) từ FuelLog gần nhất. */
     private val _fuelPriceVnd = MutableStateFlow(DEFAULT_FUEL_PRICE_VND)
@@ -171,13 +189,19 @@ class StatsViewModel : ViewModel() {
             _years.value = c.tripRepository.getYears(vehicle.id).ifEmpty {
                 listOf(Calendar.getInstance().get(Calendar.YEAR))
             }
-            _selectedYear.value = _years.value.firstOrNull() ?: Calendar.getInstance().get(Calendar.YEAR)
+            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+            _selectedYear.value = if (_years.value.contains(currentYear)) currentYear
+                                  else (_years.value.firstOrNull() ?: currentYear)
             _monthly.value = buildMonthly(vehicle.id, _selectedYear.value!!, _fuelPriceVnd.value)
             _yearly.value = buildYearly(vehicle.id, _fuelPriceVnd.value)
+            loadExpenseForCurrentSelection(AnalyticsMode.MONTHLY)
         }
     }
 
-    fun setMode(mode: AnalyticsMode) { _mode.value = mode }
+    fun setMode(mode: AnalyticsMode) {
+        _mode.value = mode
+        viewModelScope.launch { loadExpenseForCurrentSelection(mode) }
+    }
 
     fun selectYear(year: Int) {
         if (_selectedYear.value == year) return
@@ -185,6 +209,78 @@ class StatsViewModel : ViewModel() {
         viewModelScope.launch {
             val vehicle = c.vehicleRepository.getActive() ?: return@launch
             _monthly.value = buildMonthly(vehicle.id, year, _fuelPriceVnd.value)
+            loadExpenseForCurrentSelection(_mode.value)
+        }
+    }
+
+    fun selectMonth(month: Int) {
+        if (_selectedMonth.value == month) return
+        _selectedMonth.value = month
+        viewModelScope.launch { loadExpenseForCurrentSelection(AnalyticsMode.MONTHLY) }
+    }
+
+    /** Tải phân bổ chi phí theo danh mục từ DB cho kỳ đang chọn. */
+    fun loadExpenseForCurrentSelection(mode: AnalyticsMode) {
+        viewModelScope.launch {
+            val vehicle = c.vehicleRepository.getActive() ?: return@launch
+            val year = _selectedYear.value ?: Calendar.getInstance().get(Calendar.YEAR)
+            val (from, to) = when (mode) {
+                AnalyticsMode.MONTHLY -> {
+                    val m = _selectedMonth.value
+                    val cal = Calendar.getInstance().apply {
+                        clear()
+                        set(year, m - 1, 1)
+                        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                    }
+                    val f = cal.timeInMillis
+                    val t = (cal.clone() as Calendar).also { it.add(Calendar.MONTH, 1) }.timeInMillis - 1
+                    f to t
+                }
+                else -> {
+                    val cal = Calendar.getInstance().apply {
+                        clear(); set(year, 0, 1)
+                        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                    }
+                    val f = cal.timeInMillis
+                    val t = (cal.clone() as Calendar).also { it.set(year + 1, 0, 1) }.timeInMillis - 1
+                    f to t
+                }
+            }
+            _expenseBreakdown.value = fetchExpenseBreakdown(vehicle.id, from, to)
+        }
+    }
+
+    /** Gọi RPC fmms_get_expense_breakdown để lấy chi phí theo danh mục từ DB. */
+    private suspend fun fetchExpenseBreakdown(assetId: String, from: Long, to: Long): List<ExpenseSlice> {
+        return try {
+            val body = org.json.JSONObject().apply {
+                put("p_device_id", c.prefs.getDeviceId())
+                put("p_asset_id", assetId)
+                put("p_from", from)
+                put("p_to", to)
+            }
+            val request = okhttp3.Request.Builder()
+                .url("${com.fmms.carlogger.BuildConfig.SUPABASE_URL}/rest/v1/rpc/fmms_get_expense_breakdown")
+                .header("apikey", com.fmms.carlogger.BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+                .header("Authorization", "Bearer ${com.fmms.carlogger.BuildConfig.SUPABASE_PUBLISHABLE_KEY}")
+                .header("Content-Type", "application/json")
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            val resp = okhttp3.OkHttpClient().newCall(request).execute()
+            if (!resp.isSuccessful) return emptyList()
+            val text = resp.body?.string() ?: return emptyList()
+            val arr = try { org.json.JSONArray(text) } catch (e: Exception) { return emptyList() }
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                ExpenseSlice(
+                    category = o.optString("category"),
+                    label = o.optString("label").takeIf { it.isNotBlank() } ?: o.optString("category"),
+                    amount = o.optDouble("amount", 0.0),
+                    currency = o.optString("currency").takeIf { it.isNotBlank() } ?: "VND",
+                )
+            }.filter { it.amount > 0 }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
