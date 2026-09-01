@@ -993,7 +993,7 @@ export default function AssetDetailPage() {
         kmRun = day.maxOdo - day.minOdo;
       }
 
-      if (day.maxOdo > 0) {
+      if (day.maxOdo > 0 && day.maxOdo >= prevOdo) {
         prevOdo = day.maxOdo;
       } else if (day.tripDistance > 0 && prevOdo > 0) {
         prevOdo += day.tripDistance;
@@ -1007,7 +1007,7 @@ export default function AssetDetailPage() {
         ...day,
         dayOfWeek,
         kmRun: Number(kmRun.toFixed(2)),
-        displayOdo: day.maxOdo || prevOdo,
+        displayOdo: Number((Math.max(day.maxOdo || 0, prevOdo)).toFixed(1)),
       };
     }).reverse();
 
@@ -2159,7 +2159,9 @@ export default function AssetDetailPage() {
             <div className="flex items-center space-x-4">
               <div>
                 <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>Virtual Odometer</p>
-                <p className="text-lg font-bold mt-0.5" style={{ color: 'var(--accent-cyan)' }}>{fmt(asset.current_odometer_km)} km</p>
+                <p className="text-lg font-bold mt-0.5" style={{ color: 'var(--accent-cyan)' }}>
+                  {fmt(Math.max(asset.current_odometer_km || 0, mileageAnalytics.dailyReport[0]?.displayOdo || 0))} km
+                </p>
                 <button onClick={() => setOpenModal('odometer')} className="text-[10px] font-bold hover:underline block mt-0.5" style={{ color: 'var(--accent-cyan)' }}>
                   Hiệu chỉnh ODO ✎
                 </button>
