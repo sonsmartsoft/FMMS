@@ -205,6 +205,12 @@ export default function AssetDetailPage() {
     coverage_details: '',
   });
   const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; title?: string; description?: string; actionName?: string; onConfirm?: () => void }>({ isOpen: false });
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   /* ── Live OBD telemetry (realtime from Android app) ── */
   const [live, setLive] = useState<{ speed: number | null; rpm: number | null; coolant: number | null; voltage: number | null }>({
@@ -5260,6 +5266,14 @@ export default function AssetDetailPage() {
           if (securityModal.onConfirm) securityModal.onConfirm();
         }}
       />
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-2xl text-xs font-bold flex items-center space-x-2 border bg-emerald-950/90 text-emerald-300 border-emerald-500/30 backdrop-blur-md animate-slideIn">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }
