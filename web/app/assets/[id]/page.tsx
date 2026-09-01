@@ -884,10 +884,11 @@ export default function AssetDetailPage() {
       });
     });
 
-    // Daily Summaries
+    // Daily Summaries (only for days without individual trips to prevent double-counting)
+    const datesWithTrips = new Set(trips.map(t => toLocalDateString(t.start_time)));
     dailySummaries.forEach(ds => {
       const dStr = toLocalDateString(ds.date);
-      if (Number(ds.distance_km) > 0) {
+      if (!datesWithTrips.has(dStr) && Number(ds.distance_km) > 0) {
         events.push({
           date: dStr,
           odometer_km: 0,
