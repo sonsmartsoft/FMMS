@@ -93,6 +93,67 @@ export default function DraggableModal({
     setIsMinimized(prev => !prev);
   };
 
+  // --- Global Window Pointer Listeners (Fixes "Dính chuột" permanently) ---
+  useEffect(() => {
+    if (!isDragging && !resizeDir) return;
+
+    // Prevent text selection during drag/resize
+    const originalUserSelect = document.body.style.userSelect;
+    document.body.style.userSelect = 'none';
+
+    const handleGlobalPointerMove = (e: PointerEvent) => {
+      // Safety: If mouse button is no longer pressed, immediately stop
+      if (e.buttons === 0) {
+        setIsDragging(false);
+        setResizeDir(null);
+        return;
+      }
+
+      if (isDragging) {
+        setPosition({
+          x: Math.max(-100, Math.min(window.innerWidth - 100, e.clientX - dragStart.current.x)),
+          y: Math.max(0, Math.min(window.innerHeight - 50, e.clientY - dragStart.current.y)),
+        });
+      } else if (resizeDir) {
+        const dx = e.clientX - resizeStart.current.x;
+        const dy = e.clientY - resizeStart.current.y;
+        const { w, h, left, top } = resizeStart.current;
+        const MIN_W = 320, MIN_H = 120;
+        let newW = w, newH = h, newX = left, newY = top;
+        if (resizeDir.includes('e')) newW = Math.max(MIN_W, w + dx);
+        if (resizeDir.includes('s')) newH = Math.max(MIN_H, h + dy);
+        if (resizeDir.includes('w')) {
+          newW = Math.max(MIN_W, w - dx);
+          if (newW > MIN_W) newX = left + dx;
+        }
+        if (resizeDir.includes('n')) {
+          newH = Math.max(MIN_H, h - dy);
+          if (newH > MIN_H) newY = top + dy;
+        }
+        setSize({ w: newW, h: newH });
+        setPosition({ x: newX, y: newY });
+      }
+    };
+
+    const handleGlobalPointerUp = () => {
+      setIsDragging(false);
+      setResizeDir(null);
+    };
+
+    window.addEventListener('pointermove', handleGlobalPointerMove, { passive: true });
+    window.addEventListener('pointerup', handleGlobalPointerUp);
+    window.addEventListener('pointercancel', handleGlobalPointerUp);
+    window.addEventListener('blur', handleGlobalPointerUp);
+
+    return () => {
+      document.body.style.userSelect = originalUserSelect;
+      window.removeEventListener('pointermove', handleGlobalPointerMove);
+      window.removeEventListener('pointerup', handleGlobalPointerUp);
+      window.removeEventListener('pointercancel', handleGlobalPointerUp);
+      window.removeEventListener('blur', handleGlobalPointerUp);
+    };
+  }, [isDragging, resizeDir]);
+
   // --- Drag to move ---
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (resizeDir) return;
@@ -116,23 +177,12 @@ export default function DraggableModal({
 
     setIsDragging(true);
     dragStart.current = { x: e.clientX - startX, y: e.clientY - startY };
-    target.setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (resizeDir) { handleResizeMove(e); return; }
-    if (!isDragging) return;
-    setPosition({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isDragging) { setIsDragging(false); (e.target as HTMLElement).releasePointerCapture(e.pointerId); }
-    if (resizeDir) { setResizeDir(null); (e.target as HTMLElement).releasePointerCapture(e.pointerId); }
   };
 
   // --- Resize ---
   const handleResizePointerDown = (e: React.PointerEvent<HTMLDivElement>, dir: ResizeDir) => {
-    e.stopPropagation(); e.preventDefault();
+    e.stopPropagation();
+    e.preventDefault();
     let sx = position.x, sy = position.y, sw = size.w, sh = size.h;
     if (!isMoved && modalRef.current) {
       const rect = modalRef.current.getBoundingClientRect();
@@ -141,21 +191,6 @@ export default function DraggableModal({
     }
     setResizeDir(dir);
     resizeStart.current = { x: e.clientX, y: e.clientY, w: sw, h: sh, left: sx, top: sy };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  };
-
-  const handleResizeMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!resizeDir) return;
-    const dx = e.clientX - resizeStart.current.x;
-    const dy = e.clientY - resizeStart.current.y;
-    const { w, h, left, top } = resizeStart.current;
-    const MIN_W = 320, MIN_H = 120;
-    let newW = w, newH = h, newX = left, newY = top;
-    if (resizeDir.includes('e')) newW = Math.max(MIN_W, w + dx);
-    if (resizeDir.includes('s')) newH = Math.max(MIN_H, h + dy);
-    if (resizeDir.includes('w')) { newW = Math.max(MIN_W, w - dx); if (newW > MIN_W) newX = left + dx; }
-    if (resizeDir.includes('n')) { newH = Math.max(MIN_H, h - dy); if (newH > MIN_H) newY = top + dy; }
-    setSize({ w: newW, h: newH }); setPosition({ x: newX, y: newY });
   };
 
   const ResizeHandle = ({ dir, style }: { dir: ResizeDir; style: React.CSSProperties }) => (
@@ -173,9 +208,6 @@ export default function DraggableModal({
     <div
       ref={modalRef}
       onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
       className={`fixed z-[9999] shadow-2xl overflow-hidden ${className}`}
       style={{
         left: isMoved ? `${position.x}px` : '50%',
