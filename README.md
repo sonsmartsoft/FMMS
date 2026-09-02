@@ -12,12 +12,12 @@ Hệ thống quản lý toàn bộ phương tiện và tài sản di chuyển c�
                                           │
              ┌────────────────────────────┼────────────────────────────┐
              │                            │                            │
-      WEB APPLICATION             ANDROID IN-CAR APP           SUPABASE CENTRAL DB
-  (Next.js 14 + Tailwind)         (Kotlin Jetpack Compose)     (PostgreSQL + RLS)
-  • Visual Asset Cards            • ZESTECH 9" ADAS UI         • Ref: opslebsdmwsnsyfmbynf
-  • Capability-based UI           • KONNWEI KW906 OBD-II       • Assets & Capabilities
-  • TCO & Cost/km Analytics       • Virtual Odometer Ledger    • Telemetry & Trip Logs
-  • Floating Multi-AI Chat        • Local Room DB Sync Queue   • RLS & Security Policies
+       WEB APPLICATION             ANDROID IN-CAR APP           SUPABASE CENTRAL DB
+   (Next.js 14 + Tailwind)         (Kotlin Jetpack Compose)     (PostgreSQL + RLS)
+   • Visual Asset Cards            • ZESTECH 9" ADAS UI         • PostgreSQL Central Cloud DB
+   • Capability-based UI           • KONNWEI KW906 OBD-II       • Assets & Capabilities
+   • TCO & Cost/km Analytics       • Virtual Odometer Ledger    • Telemetry & Trip Logs
+   • Floating Multi-AI Chat        • Local Room DB Sync Queue   • RLS & Security Policies
 ```
 
 ---
@@ -60,7 +60,7 @@ Mở trình duyệt tại: `http://localhost:3000`
 
 ---
 
-## 🛡️ BẢO MẬT & SECRET RULES
-
-- URL Supabase: `https://opslebsdmwsnsyfmbynf.supabase.co`
-- Mọi bí danh bí mật (`SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`,...) được quản lý thông qua biến môi trường server-side, tuyệt đối không hardcode trong client APK hoặc GitHub repository.
+## 🛡️ BẢO MẬT & QUẢN TRỊ BIẾN MÔI TRƯỜNG (SECURITY RULES)
+ 
+- Cấu hình kết nối Supabase và các API Gateway được quản lý thông qua file biến môi trường (`.env.local` cho Web và `local.properties` cho Android).
+- Mọi khóa bí mật cấp cao (`SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `OPENAI_API_KEY`,...) chỉ được lưu trữ trên Server-side Environment Variables (Vercel / Cloud Functions), **tuyệt đối không hardcode trong client APK hoặc public repository**.

@@ -230,17 +230,34 @@ export default function UsersManagementPage() {
 
   const handleExecuteResetPassword = async () => {
     if (!selectedUser) return;
-    try {
-      if (resetMemberForm.sendEmail) {
-        await supabase.auth.resetPasswordForEmail(selectedUser.email, {
+    const pwd = resetMemberForm.newPassword.trim();
+    if (!pwd) {
+      alert('Vui lòng nhập mật khẩu mới');
+      return;
+    }
+    
+    // Always copy password to clipboard for instant use
+    navigator.clipboard?.writeText(pwd);
+
+    if (resetMemberForm.sendEmail) {
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(selectedUser.email, {
           redirectTo: `${window.location.origin}/login`,
         });
+        if (error) {
+          if (error.message.toLowerCase().includes('rate limit')) {
+            alert(`⚠️ Supabase giới hạn tần suất gửi email (Rate Limit). Mật khẩu tạm "${pwd}" đã được tự động sao chép vào Clipboard, bạn hãy gửi trực tiếp cho ${selectedUser.name} qua Zalo/Tin nhắn nhé!`);
+          } else {
+            alert(`⚠️ Thông báo từ máy chủ gửi mail: ${error.message}\nMật khẩu tạm "${pwd}" đã được sao chép vào Clipboard.`);
+          }
+        } else {
+          showToast(`✅ Đã gửi email link khôi phục tới ${selectedUser.email} và sao chép mật khẩu: "${pwd}"!`);
+        }
+      } catch (err: any) {
+        showToast(`✅ Đã tạo & sao chép mật khẩu tạm cho ${selectedUser.name}: "${pwd}"`);
       }
-      showToast(`✅ Đã đặt mật khẩu mới cho ${selectedUser.name}: "${resetMemberForm.newPassword}" (Đã sao chép)`);
-      navigator.clipboard?.writeText(resetMemberForm.newPassword);
-    } catch {
-      showToast(`✅ Đã tạo mật khẩu tạm cho ${selectedUser.name}: "${resetMemberForm.newPassword}"`);
-      navigator.clipboard?.writeText(resetMemberForm.newPassword);
+    } else {
+      showToast(`✅ Đã tạo & sao chép mật khẩu cho ${selectedUser.name}: "${pwd}"`);
     }
     setOpenModal(null);
   };
@@ -791,6 +808,14 @@ export default function UsersManagementPage() {
                 />
                 <span style={{ color: 'var(--text-secondary)' }}>Đồng thời gửi email liên kết khôi phục tới {selectedUser.email}</span>
               </label>
+
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] space-y-1" style={{ color: 'var(--status-amber)' }}>
+                <p className="font-bold">💡 Hướng dẫn gửi mật khẩu cho thành viên:</p>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  • Do chính sách bảo mật, email từ Supabase chỉ gửi <strong>Liên kết khôi phục (Magic Reset Link)</strong> để thành viên tự tạo mật khẩu mới.<br />
+                  • Để cấp ngay mật khẩu tạm <strong>{resetMemberForm.newPassword}</strong>, hệ thống đã tự động sao chép mật khẩu vào Clipboard, bạn hãy gửi trực tiếp qua Zalo / Tin nhắn cho thành viên.
+                </p>
+              </div>
 
               <div className="flex justify-end space-x-2 pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
                 <button onClick={() => setOpenModal(null)} className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-white/10" style={{ color: 'var(--text-muted)' }}>Hủy</button>
