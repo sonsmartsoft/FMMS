@@ -80,7 +80,7 @@ export async function getUserContext(): Promise<{ userId: string | null; fleetId
   const { data: fleets } = await supabase
     .from('fleets')
     .select('id')
-    .eq('owner_user_id', userId)
+    .order('created_at', { ascending: true })
     .limit(1);
   if (fleets && fleets.length > 0) {
     return { userId, fleetId: fleets[0].id };
