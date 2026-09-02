@@ -314,6 +314,8 @@ serve(async (req: Request) => {
         result = { ok: true, text: r.text };
         break;
       }
+      // Giữ lỗi của model cuối để dễ chẩn đoán khi tất cả fallback đều thất bại.
+      result = r;
     }
 
     if (!result.ok || !result.text) {

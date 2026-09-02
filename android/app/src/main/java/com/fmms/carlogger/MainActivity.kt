@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -93,12 +92,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         AppContainer.init(applicationContext)
         try {
-            // Probe phím vô lăng (debug): ghi file log mỗi phím trung gian nhận được.
-            com.fmms.carlogger.core.input.KeyProbe(this).also { it.start() }
-        } catch (e: Exception) {
-            android.util.Log.e("FMMS", "KeyProbe start failed", e)
-        }
-        try {
             AppContainer.startTelemetryService()
         } catch (e: Exception) {
             // Never let a background-service failure kill the UI.
@@ -137,11 +130,6 @@ class MainActivity : ComponentActivity() {
             } catch (_: Exception) {
             }
         }
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        android.util.Log.d("SteerWheel", "dispatch key=${event.keyCode} a=${event.action} src=${event.source}")
-        return super.dispatchKeyEvent(event)
     }
 
     private fun requestPermissionsIfNeeded() {

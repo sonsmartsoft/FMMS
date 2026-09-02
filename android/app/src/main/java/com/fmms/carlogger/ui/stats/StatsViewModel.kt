@@ -202,7 +202,26 @@ class StatsViewModel : ViewModel() {
 
     fun setMode(mode: AnalyticsMode) {
         _mode.value = mode
-        viewModelScope.launch { loadExpenseForCurrentSelection(mode) }
+        viewModelScope.launch {
+            when (mode) {
+                // Donut phân bổ chi phí không hiển thị ở chế độ NGÀY.
+                AnalyticsMode.DAILY -> Unit
+                // Ở chế độ NĂM: donut mặc định xem CẢ NĂM, mở tab là có data ngay.
+                AnalyticsMode.YEARLY -> {
+                    if (_selectedMonth.value != 0) {
+                        _selectedMonth.value = 0
+                        loadExpenseForCurrentSelection(mode)
+                    }
+                }
+                // Ở chế độ THÁNG: donut mặc định tháng hiện tại.
+                AnalyticsMode.MONTHLY -> {
+                    if (_selectedMonth.value == 0) {
+                        _selectedMonth.value = Calendar.getInstance().get(Calendar.MONTH) + 1
+                    }
+                    loadExpenseForCurrentSelection(mode)
+                }
+            }
+        }
     }
 
     fun selectYear(year: Int) {

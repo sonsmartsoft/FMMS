@@ -25,60 +25,80 @@ export async function POST(request: NextRequest) {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    // If SUPABASE_SERVICE_ROLE_KEY is provided, directly update user in Supabase Auth!
+    // METHOD 1: Try Direct PostgreSQL RPC Function (Instant & Bypasses All SMTP Rate Limits)
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    try {
+      const { data: rpcData, error: rpcError } = await supabaseClient.rpc('admin_reset_user_password', {
+        p_email: cleanEmail,
+        p_new_password: newPassword,
+        p_admin_pin: adminPin,
+      });
+
+      if (!rpcError && rpcData) {
+        if (rpcData.success) {
+          return NextResponse.json({
+            success: true,
+            mode: 'DIRECT_SET_RPC',
+            message: rpcData.message || `Đã đặt trực tiếp mật khẩu mới cho ${cleanEmail}!`,
+          });
+        } else if (rpcData.error) {
+          return NextResponse.json({ error: rpcData.error }, { status: 400 });
+        }
+      }
+    } catch (rpcErr) {
+      console.warn('RPC admin_reset_user_password error:', rpcErr);
+    }
+
+    // METHOD 2: If SUPABASE_SERVICE_ROLE_KEY is provided, use Admin API
     if (SUPABASE_SERVICE_ROLE_KEY) {
       const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
         auth: { autoRefreshToken: false, persistSession: false },
       });
 
-      // Find user by email
       const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-      if (listError) {
-        return NextResponse.json({ error: `Lỗi truy vấn danh sách user: ${listError.message}` }, { status: 500 });
-      }
-
-      const target = users?.find(u => u.email?.toLowerCase() === cleanEmail);
-
-      if (target) {
-        // Direct password reset
-        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(target.id, {
-          password: newPassword,
-          email_confirm: true,
-        });
-        if (updateError) {
-          return NextResponse.json({ error: `Lỗi cập nhật mật khẩu: ${updateError.message}` }, { status: 500 });
+      if (!listError && users) {
+        const target = users.find(u => u.email?.toLowerCase() === cleanEmail);
+        if (target) {
+          const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(target.id, {
+            password: newPassword,
+            email_confirm: true,
+          });
+          if (!updateError) {
+            return NextResponse.json({
+              success: true,
+              mode: 'DIRECT_SET_ADMIN',
+              message: `Đã cập nhật trực tiếp mật khẩu mới cho ${cleanEmail}!`,
+            });
+          }
+        } else {
+          const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+            email: cleanEmail,
+            password: newPassword,
+            email_confirm: true,
+          });
+          if (!createError) {
+            return NextResponse.json({
+              success: true,
+              mode: 'DIRECT_SET_ADMIN',
+              message: `Đã khởi tạo tài khoản và đặt mật khẩu mới cho ${cleanEmail}!`,
+            });
+          }
         }
-      } else {
-        // Create user with this password
-        const { error: createError } = await supabaseAdmin.auth.admin.createUser({
-          email: cleanEmail,
-          password: newPassword,
-          email_confirm: true,
-        });
-        if (createError) {
-          return NextResponse.json({ error: `Lỗi tạo tài khoản mới: ${createError.message}` }, { status: 500 });
-        }
       }
-
-      return NextResponse.json({
-        success: true,
-        mode: 'DIRECT_SET',
-        message: `✅ Đã đặt trực tiếp mật khẩu mới cho ${cleanEmail} trong hệ thống Supabase!`,
-      });
     }
 
-    // Fallback if SERVICE_ROLE_KEY is not yet defined: send recovery email via Client
-    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // METHOD 3: Fallback try sending recovery email
     const { error: resetError } = await supabaseClient.auth.resetPasswordForEmail(cleanEmail, {
       redirectTo: `${request.nextUrl.origin}/login`,
     });
 
     if (resetError) {
       return NextResponse.json({
-        success: true,
-        mode: 'FALLBACK_CLIPBOARD',
-        message: `Mật khẩu tạm "${newPassword}" đã được sao chép vào Clipboard (Gửi trực tiếp cho thành viên).`,
-      });
+        success: false,
+        mode: 'FALLBACK_REQUIRED',
+        error: `Supabase giới hạn gửi email (${resetError.message}). Vui lòng chạy lệnh SQL RPC trong Supabase SQL Editor để bật tính năng đổi mật khẩu tức thì.`,
+        message: `Mật khẩu tạm "${newPassword}" đã được sao chép vào Clipboard.`,
+      }, { status: 200 });
     }
 
     return NextResponse.json({

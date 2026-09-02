@@ -69,12 +69,15 @@ fun StatsScreen(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Donut phân bổ chi phí — hiển thị mặc định, Tháng/Năm chỉ là bộ lọc.
-        CostBreakdownCard(
-            selectedYear, selectedMonth, years, expenseBreakdown,
-            vm::selectYear, vm::selectMonth, colors, border,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+        // Donut phân bổ chi phí — chỉ ở chế độ THÁNG và NĂM (không hiện ở NGÀY).
+        // Ở chế độ NĂM donut tự hiện data CẢ NĂM khi mở tab, không cần chọn gì thêm.
+        if (mode != AnalyticsMode.DAILY) {
+            CostBreakdownCard(
+                selectedYear, selectedMonth, years, expenseBreakdown,
+                vm::selectYear, vm::selectMonth, colors, border,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         // Chọn chế độ Ngày / Tháng / Năm
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -651,6 +654,14 @@ fun AiAdvisorPanel(
 
         if (expanded) {
             Spacer(modifier = Modifier.height(10.dp))
+
+            // Dòng ra lệnh bằng giọng nói qua nút micro ảo trên màn hình.
+            VoiceAskBar(
+                onTranscript = { vm.ask(it) },
+                colors = colors, border = border,
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
             when (val s = state) {
                 is AiUiState.Idle -> {
                     Text(
@@ -724,6 +735,159 @@ fun AiAdvisorPanel(
                 }
             }
         }
+    }
+}
+
+/** Thanh micro ảo: dùng SpeechRecognizer nhận giọng nói tiếng Việt rồi gửi làm câu hỏi cho AI. */
+@Composable
+private fun VoiceAskBar(
+    onTranscript: (String) -> Unit,
+    colors: FmmsColors,
+    border: Color,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val sr = remember { runCatching { android.speech.SpeechRecognizer.createSpeechRecognizer(context) }.getOrNull() }
+    DisposableEffect(Unit) {
+        onDispose { runCatching { sr?.destroy() } }
+    }
+    var listening by remember { mutableStateOf(false) }
+    var partial by remember { mutableStateOf("") }
+    var micError by remember { mutableStateOf<String?>(null) }
+
+    val listener = remember {
+        object : android.speech.RecognitionListener {
+            override fun onReadyForSpeech(params: android.os.Bundle?) {
+                listening = true
+                micError = null
+            }
+
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+
+            override fun onBufferReceived(buffer: ByteArray?) {}
+
+            override fun onEndOfSpeech() {
+                listening = false
+            }
+
+            override fun onError(error: Int) {
+                listening = false
+                micError = when (error) {
+                    android.speech.SpeechRecognizer.ERROR_NO_MATCH -> "Không nghe rõ, thử lại"
+                    android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Hết thời gian nghe"
+                    android.speech.SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Cần quyền micro"
+                    android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Bộ nhận giọng nói đang bận"
+                    android.speech.SpeechRecognizer.ERROR_CLIENT -> "Không dùng được mic (thiếu Google voice?)"
+                    else -> "Lỗi mic ($error)"
+                }
+            }
+
+            override fun onResults(results: android.os.Bundle?) {
+                listening = false
+                val txt = results
+                    ?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                    ?.trim()
+                if (!txt.isNullOrBlank()) {
+                    onTranscript(txt)
+                    partial = ""
+                }
+            }
+
+            override fun onPartialResults(partialResults: android.os.Bundle?) {
+                partial = partialResults
+                    ?.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                    .orEmpty()
+            }
+
+            override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+        }
+    }
+
+    val micPermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            startVoiceListening(sr, listener) { listening = true; partial = "" }
+        } else {
+            micError = "Chưa cấp quyền micro"
+        }
+    }
+
+    fun handleMicClick() {
+        micError = null
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.RECORD_AUDIO,
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            micPermLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        if (listening) {
+            runCatching { sr?.cancel() }
+            listening = false
+            return
+        }
+        startVoiceListening(sr, listener) { listening = true; partial = "" }
+    }
+
+    GlassCard(modifier = Modifier.fillMaxWidth(), colors = colors, border = border) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = { handleMicClick() },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (listening) colors.red.copy(alpha = 0.25f)
+                    else colors.purple.copy(alpha = 0.2f),
+                    contentColor = colors.purple,
+                ),
+                modifier = Modifier.size(width = 44.dp, height = 40.dp),
+                contentPadding = PaddingValues(0.dp),
+            ) {
+                Text(if (listening) "◉" else "🎙", fontSize = 16.sp)
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                if (listening) {
+                    Text("Đang nghe...", color = colors.cyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    if (partial.isNotBlank()) {
+                        Text("“$partial”", color = colors.textSecondary, fontSize = 11.sp,
+                            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                } else {
+                    Text("Hỏi AI bằng giọng nói (tiếng Việt)", color = colors.textSecondary, fontSize = 12.sp)
+                    micError?.let {
+                        Text(it, color = colors.red, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun startVoiceListening(
+    sr: android.speech.SpeechRecognizer?,
+    listener: android.speech.RecognitionListener,
+    onStart: () -> Unit,
+) {
+    val engine = sr ?: run {
+        android.util.Log.d("VoiceAsk", "chưa có speech recognizer")
+        return
+    }
+    onStart()
+    runCatching {
+        val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "vi-VN")
+            putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        }
+        engine.setRecognitionListener(listener)
+        engine.startListening(intent)
+    }.onFailure {
+        android.util.Log.e("VoiceAsk", "startListening thất bại", it)
     }
 }
 

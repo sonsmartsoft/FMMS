@@ -11,7 +11,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [isMagicLink, setIsMagicLink] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetPin, setResetPin] = useState('');
+  const [resetNewPass, setResetNewPass] = useState('');
+  const [resetConfirmPass, setResetConfirmPass] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+
   const router = useRouter();
   const supabase = createClient();
 
@@ -55,31 +62,85 @@ export default function LoginPage() {
     }
   };
 
-  const handleForgotPassword = async () => {
-    if (!email) {
-      setError('Vui lòng nhập địa chỉ Email của bạn để nhận liên kết khôi phục mật khẩu.');
+  const handleOpenResetModal = () => {
+    setResetEmail(email.trim().toLowerCase() || 'sondtk5@gmail.com');
+    setResetPin('');
+    setResetNewPass('');
+    setResetConfirmPass('');
+    setResetError(null);
+    setShowResetModal(true);
+  };
+
+  const handleDirectResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+
+    const cleanEmail = resetEmail.trim().toLowerCase();
+    if (!cleanEmail) {
+      setResetError('Vui lòng nhập Email cần đổi mật khẩu');
       return;
     }
 
-    if (!isEmailAllowed(email)) {
-      setError(`🚫 Email "${email}" không nằm trong danh sách thành viên được cấp quyền.`);
+    if (!isEmailAllowed(cleanEmail)) {
+      setResetError(`Email "${cleanEmail}" không nằm trong danh sách được cấp quyền.`);
       return;
     }
 
-    setLoading(true);
-    setError(null);
-    setSuccessMsg(null);
+    if (resetPin !== '0075') {
+      setResetError('Mã PIN Admin không chính xác (Mã chuẩn là 0075)');
+      return;
+    }
+
+    if (resetNewPass.length < 6) {
+      setResetError('Mật khẩu mới phải có ít nhất 6 ký tự');
+      return;
+    }
+
+    if (resetNewPass !== resetConfirmPass) {
+      setResetError('Xác nhận mật khẩu mới không khớp');
+      return;
+    }
+
+    setResetLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: `${window.location.origin}/login`,
+      const res = await fetch('/api/auth/admin-reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          newPassword: resetNewPass,
+          adminPin: resetPin,
+        }),
       });
-      if (error) throw error;
-      setSuccessMsg(`✅ Đã gửi email hướng dẫn đặt lại mật khẩu tới ${email}.`);
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Lỗi khi cập nhật mật khẩu');
+      }
+
+      // Success
+      setEmail(cleanEmail);
+      setPassword(resetNewPass);
+      setIsMagicLink(false);
+      setShowResetModal(false);
+      setSuccessMsg(`🎉 Đã đổi mật khẩu thành công cho ${cleanEmail}! Mật khẩu mới đã được điền sẵn, bạn có thể bấm Đăng nhập ngay.`);
+
+      // Attempt auto-login
+      try {
+        const { error: loginErr } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: resetNewPass,
+        });
+        if (!loginErr) {
+          router.push('/');
+          router.refresh();
+        }
+      } catch {}
     } catch (err: any) {
-      setError(err.message || 'Không thể gửi email khôi phục. Vui lòng liên hệ Quản trị viên.');
+      setResetError(err.message || 'Không thể đổi mật khẩu');
     } finally {
-      setLoading(false);
+      setResetLoading(false);
     }
   };
 
@@ -199,7 +260,7 @@ export default function LoginPage() {
                 </label>
                 <button
                   type="button"
-                  onClick={handleForgotPassword}
+                  onClick={handleOpenResetModal}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -209,7 +270,7 @@ export default function LoginPage() {
                     padding: 0
                   }}
                 >
-                  Quên mật khẩu?
+                  Quên mật khẩu? (Khôi phục)
                 </button>
               </div>
               <input
@@ -276,6 +337,99 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      {/* 🔑 Direct Password Reset Modal using Master Admin PIN (0075) */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="relative w-full max-w-md p-6 rounded-2xl shadow-2xl space-y-4" style={{ background: 'var(--bg-secondary, #1e293b)', border: '1px solid var(--border-default, rgba(255,255,255,0.1))' }}>
+            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border-subtle, rgba(255,255,255,0.08))' }}>
+              <h3 className="font-bold text-base flex items-center gap-2" style={{ color: 'var(--text-primary, #ffffff)' }}>
+                🔑 Đặt Lại Mật Khẩu Trực Tiếp
+              </h3>
+              <button onClick={() => setShowResetModal(false)} className="text-slate-400 hover:text-white p-1">✕</button>
+            </div>
+
+            {resetError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                ⚠️ {resetError}
+              </div>
+            )}
+
+            <form onSubmit={handleDirectResetPassword} className="space-y-3 text-xs">
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary, #e2e8f0)' }}>Email tài khoản *</label>
+                <input
+                  type="email"
+                  className="theme-input"
+                  required
+                  placeholder="sondtk5@gmail.com..."
+                  value={resetEmail}
+                  onChange={e => setResetEmail(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1 font-bold flex items-center justify-between" style={{ color: 'var(--text-primary, #e2e8f0)' }}>
+                  <span>Mã PIN Quản trị viên (Admin PIN) *</span>
+                  <span className="text-[10px] text-amber-400 font-mono">PIN: 0075</span>
+                </label>
+                <input
+                  type="password"
+                  maxLength={6}
+                  className="theme-input font-mono font-bold tracking-widest text-center"
+                  required
+                  placeholder="Nhập 0075"
+                  value={resetPin}
+                  onChange={e => setResetPin(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary, #e2e8f0)' }}>Mật khẩu mới *</label>
+                <input
+                  type="password"
+                  className="theme-input"
+                  required
+                  placeholder="Tối thiểu 6 ký tự..."
+                  value={resetNewPass}
+                  onChange={e => setResetNewPass(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary, #e2e8f0)' }}>Xác nhận mật khẩu mới *</label>
+                <input
+                  type="password"
+                  className="theme-input"
+                  required
+                  placeholder="Nhập lại mật khẩu mới..."
+                  value={resetConfirmPass}
+                  onChange={e => setResetConfirmPass(e.target.value)}
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-3 border-t" style={{ borderColor: 'var(--border-subtle, rgba(255,255,255,0.08))' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowResetModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-white/10"
+                  style={{ color: 'var(--text-muted, #94a3b8)' }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg hover:opacity-90 transition"
+                  style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+                >
+                  {resetLoading ? 'Đang cập nhật...' : 'Xác nhận đổi mật khẩu'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
