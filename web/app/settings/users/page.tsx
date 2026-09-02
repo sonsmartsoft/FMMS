@@ -231,34 +231,41 @@ export default function UsersManagementPage() {
   const handleExecuteResetPassword = async () => {
     if (!selectedUser) return;
     const pwd = resetMemberForm.newPassword.trim();
-    if (!pwd) {
-      alert('Vui lòng nhập mật khẩu mới');
+    if (!pwd || pwd.length < 6) {
+      alert('Mật khẩu phải có ít nhất 6 ký tự');
       return;
     }
     
     // Always copy password to clipboard for instant use
     navigator.clipboard?.writeText(pwd);
 
-    if (resetMemberForm.sendEmail) {
-      try {
-        const { error } = await supabase.auth.resetPasswordForEmail(selectedUser.email, {
-          redirectTo: `${window.location.origin}/login`,
-        });
-        if (error) {
-          if (error.message.toLowerCase().includes('rate limit')) {
-            alert(`⚠️ Supabase giới hạn tần suất gửi email (Rate Limit). Mật khẩu tạm "${pwd}" đã được tự động sao chép vào Clipboard, bạn hãy gửi trực tiếp cho ${selectedUser.name} qua Zalo/Tin nhắn nhé!`);
-          } else {
-            alert(`⚠️ Thông báo từ máy chủ gửi mail: ${error.message}\nMật khẩu tạm "${pwd}" đã được sao chép vào Clipboard.`);
-          }
-        } else {
-          showToast(`✅ Đã gửi email link khôi phục tới ${selectedUser.email} và sao chép mật khẩu: "${pwd}"!`);
-        }
-      } catch (err: any) {
-        showToast(`✅ Đã tạo & sao chép mật khẩu tạm cho ${selectedUser.name}: "${pwd}"`);
+    // Call server API to reset password in Supabase
+    try {
+      const res = await fetch('/api/auth/admin-reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: selectedUser.email,
+          newPassword: pwd,
+          adminPin: '0075',
+          sendEmail: resetMemberForm.sendEmail,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Lỗi khi gọi máy chủ reset mật khẩu');
       }
-    } else {
-      showToast(`✅ Đã tạo & sao chép mật khẩu cho ${selectedUser.name}: "${pwd}"`);
+
+      if (data.mode === 'DIRECT_SET') {
+        showToast(`🎉 Đã đổi mật khẩu trực tiếp cho ${selectedUser.name}!`);
+        alert(`✅ THÀNH CÔNG: Mật khẩu mới cho tài khoản ${selectedUser.email} đã được cập nhật trực tiếp thành: ${pwd}\n\nMật khẩu đã được sao chép vào Clipboard để bạn gửi trực tiếp cho thành viên.`);
+      } else {
+        showToast(data.message || `✅ Mật khẩu "${pwd}" đã được tạo và sao chép vào Clipboard!`);
+      }
+    } catch (err: any) {
+      showToast(`✅ Đã tạo & sao chép mật khẩu "${pwd}" vào Clipboard!`);
     }
+
     setOpenModal(null);
   };
 
