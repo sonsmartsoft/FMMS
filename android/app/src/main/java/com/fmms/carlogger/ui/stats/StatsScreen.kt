@@ -469,31 +469,38 @@ private fun CostBreakdownCard(
         Spacer(modifier = Modifier.height(8.dp))
 
         if (data.isNotEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+            ) {
+                // Biểu đồ donut bên TRÁI, tổng chi phí nằm chính giữa donut.
                 DonutChart(
                     data = data,
                     centerLabel = "TOTAL",
                     centerValue = formatVnd(total),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.size(150.dp),
                 )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            data.forEachIndexed { i, slice ->
-                val pct = if (total > 0) (slice.amount / total) * 100.0 else 0.0
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(DONUT_COLORS[i % DONUT_COLORS.size], RoundedCornerShape(3.dp)),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(slice.label, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                    Text(formatVnd(slice.amount), color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(String.format(Locale.US, "%.0f%%", pct), color = colors.textSecondary, fontSize = 11.sp, modifier = Modifier.width(42.dp))
+                Spacer(modifier = Modifier.width(14.dp))
+                // Chú thích (legend) bên PHẢI.
+                Column(modifier = Modifier.weight(1f)) {
+                    data.forEachIndexed { i, slice ->
+                        val pct = if (total > 0) (slice.amount / total) * 100.0 else 0.0
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(DONUT_COLORS[i % DONUT_COLORS.size], RoundedCornerShape(3.dp)),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(slice.label, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                            Text(formatVnd(slice.amount), color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(String.format(Locale.US, "%.0f%%", pct), color = colors.textSecondary, fontSize = 11.sp, modifier = Modifier.width(42.dp))
+                        }
+                    }
                 }
             }
         } else {

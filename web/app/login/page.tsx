@@ -370,16 +370,15 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <label className="block mb-1 font-bold flex items-center justify-between" style={{ color: 'var(--text-primary, #e2e8f0)' }}>
-                  <span>Mã PIN Quản trị viên (Admin PIN) *</span>
-                  <span className="text-[10px] text-amber-400 font-mono">PIN: 0075</span>
+                <label className="block mb-1 font-bold" style={{ color: 'var(--text-primary, #e2e8f0)' }}>
+                  Mã PIN Quản trị viên (Admin PIN) *
                 </label>
                 <input
                   type="password"
                   maxLength={6}
                   className="theme-input font-mono font-bold tracking-widest text-center"
                   required
-                  placeholder="Nhập 0075"
+                  placeholder="••••"
                   value={resetPin}
                   onChange={e => setResetPin(e.target.value)}
                 />

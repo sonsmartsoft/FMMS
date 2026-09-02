@@ -94,11 +94,8 @@ export async function POST(request: NextRequest) {
 
     if (resetError) {
       return NextResponse.json({
-        success: false,
-        mode: 'FALLBACK_REQUIRED',
-        error: `Supabase giới hạn gửi email (${resetError.message}). Vui lòng chạy lệnh SQL RPC trong Supabase SQL Editor để bật tính năng đổi mật khẩu tức thì.`,
-        message: `Mật khẩu tạm "${newPassword}" đã được sao chép vào Clipboard.`,
-      }, { status: 200 });
+        error: `Supabase giới hạn gửi email (${resetError.message}). Hãy chạy file SQL RPC trong Supabase SQL Editor để bật đổi mật khẩu tức thì.`,
+      }, { status: 400 });
     }
 
     return NextResponse.json({

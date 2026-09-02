@@ -3,27 +3,32 @@
 -- Run this in Supabase SQL Editor to enable instant password reset using Master Admin PIN (0075)
 -- ========================================================
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
 CREATE OR REPLACE FUNCTION public.admin_reset_user_password(
     p_email text,
     p_new_password text,
     p_admin_pin text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = auth, public, extensions, pg_temp
+AS $$
 DECLARE
     v_user_id uuid;
+    v_clean_email text;
 BEGIN
     -- 🔒 Verify Master Admin PIN
     IF p_admin_pin != '0075' THEN
-        RETURN jsonb_build_object('success', false, 'error', 'Mã PIN Quản trị viên không chính xác (0075)');
+        RETURN jsonb_build_object('success', false, 'error', 'Mã PIN Quản trị viên không chính xác');
     END IF;
 
     IF length(p_new_password) < 6 THEN
         RETURN jsonb_build_object('success', false, 'error', 'Mật khẩu phải có ít nhất 6 ký tự');
     END IF;
 
+    v_clean_email := lower(trim(p_email));
+
     -- Find user in auth.users
-    SELECT id INTO v_user_id FROM auth.users WHERE lower(email) = lower(trim(p_email));
+    SELECT id INTO v_user_id FROM auth.users WHERE lower(email) = v_clean_email LIMIT 1;
 
     IF v_user_id IS NULL THEN
         -- Create user if not exists
@@ -40,25 +45,31 @@ BEGIN
             updated_at,
             role,
             aud,
-            confirmation_token
+            confirmation_token,
+            recovery_token,
+            email_change_token_new,
+            email_change
         ) VALUES (
             v_user_id,
-            '00000000-0000-0000-0000-000000000000',
-            lower(trim(p_email)),
-            crypt(p_new_password, gen_salt('bf')),
+            '00000000-0000-0000-0000-000000000000'::uuid,
+            v_clean_email,
+            extensions.crypt(p_new_password, extensions.gen_salt('bf')),
             now(),
             '{"provider":"email","providers":["email"]}'::jsonb,
-            jsonb_build_object('full_name', p_email),
+            jsonb_build_object('full_name', v_clean_email),
             now(),
             now(),
             'authenticated',
             'authenticated',
+            '',
+            '',
+            '',
             ''
         );
 
         -- Also create public profile
         INSERT INTO public.profiles (id, email, full_name, created_at, updated_at)
-        VALUES (v_user_id, lower(trim(p_email)), lower(trim(p_email)), now(), now())
+        VALUES (v_user_id, v_clean_email, v_clean_email, now(), now())
         ON CONFLICT (id) DO NOTHING;
 
         RETURN jsonb_build_object(
@@ -68,9 +79,12 @@ BEGIN
     ELSE
         -- Update existing user password
         UPDATE auth.users
-        SET encrypted_password = crypt(p_new_password, gen_salt('bf')),
+        SET encrypted_password = extensions.crypt(p_new_password, extensions.gen_salt('bf')),
             updated_at = now(),
-            email_confirmed_at = COALESCE(email_confirmed_at, now())
+            email_confirmed_at = COALESCE(email_confirmed_at, now()),
+            banned_until = NULL,
+            confirmation_token = '',
+            recovery_token = ''
         WHERE id = v_user_id;
 
         RETURN jsonb_build_object(

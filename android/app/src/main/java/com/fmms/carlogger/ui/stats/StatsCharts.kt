@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -203,36 +204,33 @@ fun DonutChart(
     data: List<ExpenseSlice>,
     centerLabel: String,
     centerValue: String,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier.fillMaxWidth().height(180.dp),
 ) {
     val total = data.sumOf { it.amount }
-    Canvas(modifier = modifier.fillMaxWidth().height(170.dp)) {
-        if (total <= 0) return@Canvas
-        val strokeWidth = 26.dp.toPx()
-        val radius = (minOf(size.width, size.height) - strokeWidth) / 2f
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val topLeft = Offset(center.x - radius, center.y - radius)
-        val arcSize = Size(radius * 2, radius * 2)
-        val pad = 3f
-        var start = -90f
-        data.forEachIndexed { i, slice ->
-            val sweep = (slice.amount / total).toFloat() * 360f
-            drawArc(
-                color = DONUT_COLORS[i % DONUT_COLORS.size],
-                startAngle = start + pad / 2,
-                sweepAngle = (sweep - pad).coerceAtLeast(0.5f),
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(width = strokeWidth, cap = StrokeCap.Butt),
-            )
-            start += sweep
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            if (total <= 0) return@Canvas
+            val strokeWidth = 26.dp.toPx()
+            val radius = (minOf(size.width, size.height) - strokeWidth) / 2f
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val topLeft = Offset(center.x - radius, center.y - radius)
+            val arcSize = Size(radius * 2, radius * 2)
+            val pad = 3f
+            var start = -90f
+            data.forEachIndexed { i, slice ->
+                val sweep = (slice.amount / total).toFloat() * 360f
+                drawArc(
+                    color = DONUT_COLORS[i % DONUT_COLORS.size],
+                    startAngle = start + pad / 2,
+                    sweepAngle = (sweep - pad).coerceAtLeast(0.5f),
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Butt),
+                )
+                start += sweep
+            }
         }
-    }
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center,
-    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(centerLabel, color = Color.White.copy(alpha = 0.55f), fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Text(centerValue, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black, maxLines = 1)
