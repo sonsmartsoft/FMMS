@@ -301,8 +301,8 @@ export default function UsersManagementPage() {
   };
 
   const handleToggleRole = (user: UserMember) => {
-    const nextRole = user.role === 'ADMIN' ? 'MEMBER' : 'ADMIN';
-    const updatedUsers = users.map(u => u.id === user.id ? { ...u, role: nextRole } : u);
+    const nextRole: 'ADMIN' | 'MEMBER' = user.role === 'ADMIN' ? 'MEMBER' : 'ADMIN';
+    const updatedUsers: UserMember[] = users.map(u => u.id === user.id ? { ...u, role: nextRole } : u);
     saveUsers(updatedUsers);
 
     if (user.id === 'usr-1') {
