@@ -42,17 +42,46 @@ export default function LoginPage() {
           email: email.trim().toLowerCase(),
           options: {
             emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-            shouldCreateUser: false, // Prevent creating random new accounts
+            shouldCreateUser: false,
           },
         });
         if (error) throw error;
         setSuccessMsg(`✅ Đã gửi liên kết đăng nhập tới ${email}. Vui lòng kiểm tra hộp thư đến (hoặc thư rác).`);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
+        const cleanEmail = email.trim().toLowerCase();
+        let { error: signInError } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
           password,
         });
-        if (error) throw error;
+
+        // If signIn failed (e.g. user not created or corrupt auth record), attempt native signUp
+        if (signInError) {
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: cleanEmail,
+            password,
+          });
+
+          if (!signUpError && signUpData.user) {
+            if (signUpData.session) {
+              router.push('/');
+              router.refresh();
+              return;
+            } else {
+              const { error: retryErr } = await supabase.auth.signInWithPassword({
+                email: cleanEmail,
+                password,
+              });
+              if (!retryErr) {
+                router.push('/');
+                router.refresh();
+                return;
+              }
+            }
+          }
+
+          throw signInError;
+        }
+
         router.push('/');
         router.refresh();
       }
