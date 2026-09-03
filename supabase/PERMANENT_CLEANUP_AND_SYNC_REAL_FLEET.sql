@@ -1,9 +1,8 @@
 -- ============================================================================
--- FMMS: BẢN PRODUCTION CHUẨN - XÓA SẠCH DEMO & NẠP VĨNH VIỄN DÀN XE THỰC TẾ
--- (Đảm bảo 100% cột CSDL tồn tại, Mazda 2 Trắng Ngọc Trai, Trả trước = 0đ, Hotline, Cán bộ NH)
+-- FMMS: BẢN MASTER PRODUCTION - PHÂN BỔ CHUẨN INITIAL VÀ RUNNING
 -- ============================================================================
 
--- 1. Bổ sung tất cả các cột cần thiết cho CSDL Production (Nếu chưa có)
+-- 1. Đảm bảo cấu trúc cột cơ sở dữ liệu
 ALTER TABLE IF EXISTS public.assets ADD COLUMN IF NOT EXISTS sales_rep_name TEXT;
 ALTER TABLE IF EXISTS public.assets ADD COLUMN IF NOT EXISTS sales_rep_phone TEXT;
 ALTER TABLE IF EXISTS public.assets ADD COLUMN IF NOT EXISTS brand_hotline TEXT;
@@ -30,7 +29,7 @@ ALTER TABLE IF EXISTS public.expenses DROP CONSTRAINT IF EXISTS expenses_categor
 ALTER TABLE IF EXISTS public.maintenance_records ADD COLUMN IF NOT EXISTS next_due_km NUMERIC;
 ALTER TABLE IF EXISTS public.maintenance_records ADD COLUMN IF NOT EXISTS next_due_date DATE;
 
--- 2. Tạm thời tắt RLS trong lúc nạp dữ liệu
+-- 2. Tắt RLS tạm thời để nạp dữ liệu chuẩn
 ALTER TABLE IF EXISTS public.assets DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.expenses DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.loans DISABLE ROW LEVEL SECURITY;
@@ -52,7 +51,7 @@ DECLARE
 BEGIN
   SELECT id INTO target_user_id FROM auth.users LIMIT 1;
 
-  -- A. XÓA BỎ HOÀN TOÀN CÁC DỮ LIỆU CŨ & DEMO
+  -- A. XÓA BỎ DỮ LIỆU CŨ & SEED DEMO
   DELETE FROM public.loan_payments;
   DELETE FROM public.loans;
   DELETE FROM public.expenses;
@@ -62,7 +61,7 @@ BEGIN
   DELETE FROM public.asset_capabilities;
   DELETE FROM public.assets;
 
-  -- B. NẠP 6 PHƯƠNG TIỆN THỰC TẾ CHUẨN GIA ĐÌNH
+  -- B. NẠP 6 PHƯƠNG TIỆN THỰC TẾ GIA ĐÌNH
   INSERT INTO public.assets (
     id, owner_id, name, asset_type, category, brand, model, year, trim, color, license_plate, vin, engine, fuel_type, tank_capacity_liters, purchase_date, purchase_price, current_value, initial_odometer_km, current_odometer_km, virtual_odometer_km, odometer_source, status, image_url, description, sales_rep_name, sales_rep_phone, brand_hotline
   ) VALUES
@@ -73,7 +72,7 @@ BEGIN
   (v_mtb20_id, target_user_id, 'Xe đạp Thống Nhất MTB 20-05', 'BICYCLE', 'Kids/Youth Bike', 'THONGNHAT', 'MTB 20-05', 2024, NULL, 'Đỏ', 'MTB 20-999', NULL, NULL, 'HUMAN_POWER', NULL, '2024-03-10', 2500000, 1800000, 0, 235, 235, 'VIRTUAL', 'ACTIVE', 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?q=80&w=1000&auto=format&fit=crop', 'Xe đạp trẻ em Thống Nhất MTB 20-05', NULL, NULL, NULL),
   (v_carnival_id, target_user_id, 'Kia Carnival (Dự kiến)', 'CAR', 'MPV 7 chỗ', 'KIA', 'Canival', 2030, NULL, 'Đen', 'CANIVAL', NULL, NULL, 'PETROL', NULL, '2030-03-08', 2000000000, 2000000000, 0, 0, 0, 'VIRTUAL', 'INACTIVE', NULL, 'Mục tiêu ô tô 7 chỗ gia đình tương lai', NULL, NULL, '1900 54 55 91');
 
-  -- C. KHOẢN VAY TPBANK MAZDA 2 (TRẢ TRƯỚC = 0 VNĐ, ĐẦY ĐỦ HOTLINE & CÁN BỘ TÍN DỤNG)
+  -- C. KHOẢN VAY TPBANK MAZDA 2 (VAY 295TR, ĐỐI ỨNG 102TR ĐÃ GHI QUA 3 LẦN CHUYỂN KHOẢN)
   INSERT INTO public.loans (
     id, asset_id, lender, principal, down_payment, interest_rate_percent, preferred_rate_percent, preferred_months, floating_rate_percent, loan_ratio_percent, term_months, start_date, monthly_payment, payment_day, current_balance, status, notes, bank_contact_name, bank_contact_phone, bank_hotline
   ) VALUES
@@ -97,7 +96,13 @@ BEGIN
   (v_mazda_id, 'Thùng rác mini ô tô', 'OEM', 'Nội thất', '2026-04-19', 52000, 230, 'Thùng rác mini gắn cửa xe', 'INSTALLED'),
   (v_mazda_id, 'Bộ thảm lót sàn da 5D', '5D Auto', 'Nội thất', '2026-04-19', 864000, 230, 'Bộ thảm lót sàn da 5D may chuẩn form', 'INSTALLED'),
   (v_mazda_id, 'Máy rửa xe cao áp gia đình', 'Bosch', 'Thiết bị chăm sóc xe', '2026-04-19', 2200000, 235, 'Máy rửa xe cao áp gia đình', 'INSTALLED'),
-  (v_mazda_id, 'Bơm lốp Toyota điện tử', 'Toyota', 'Thiết bị lốp', '2026-04-21', 389000, 235, 'Bơm lốp điện tử cắm tẩu 12V', 'INSTALLED');
+  (v_mazda_id, 'Bơm lốp Toyota điện tử', 'Toyota', 'Thiết bị lốp', '2026-04-21', 389000, 235, 'Bơm lốp điện tử cắm tẩu 12V', 'INSTALLED'),
+  (v_mtb26_id, 'Gác chân xe đạp', 'Thống Nhất', 'Phụ kiện', '2025-02-21', 35000, 0, 'Gác chân sau', 'INSTALLED'),
+  (v_mtb26_id, 'Ghế ngồi trước cho bé', 'Thống Nhất', 'Phụ kiện', '2025-04-21', 390000, 0, 'Ghế em bé an toàn', 'INSTALLED'),
+  (v_mtb26_id, 'Đèn trước xe đạp', 'OEM', 'Điện tử', '2025-04-21', 64900, 0, 'Đèn LED siêu sáng', 'INSTALLED'),
+  (v_mtb26_id, 'Mũ thể thao', 'OEM', 'Phụ kiện', '2025-04-21', 36000, 0, 'Mũ bảo hiểm xe đạp', 'INSTALLED'),
+  (v_mtb26_id, 'Đèn hậu xe đạp', 'OEM', 'Điện tử', '2025-04-21', 67500, 0, 'Đèn LED cảnh báo sau', 'INSTALLED'),
+  (v_mtb26_id, 'Giá bình nước', 'OEM', 'Phụ kiện', '2025-04-21', 24650, 0, 'Gọng kẹp bình nước', 'INSTALLED');
 
   -- E. 10 LƯỢT ĐỔ XĂNG THỰC TẾ
   INSERT INTO public.fuel_logs (asset_id, timestamp, odometer_km, fuel_liters, price_per_liter, total_cost, station, tank_full, notes) VALUES
@@ -114,21 +119,63 @@ BEGIN
 
   -- F. BẢN GHI BẢO DƯỠNG THỰC TẾ
   INSERT INTO public.maintenance_records (asset_id, maintenance_type, date, odometer_km, cost, vendor, notes, next_due_km, next_due_date) VALUES
-  (v_mazda_id, 'Bảo dưỡng định kỳ lần đầu mức 1000Km', '2026-07-16', 1920, 1172016, 'Mazda Thaco', 'Thay nhớt động cơ + lọc nhớt + kiểm tra 20 hạng mục Thaco', 5000, '2026-10-15');
+  (v_mazda_id, 'Bảo dưỡng định kỳ lần đầu mức 1000Km', '2026-07-16', 1920, 1172016, 'Mazda Thaco', 'Thay nhớt động cơ + lọc nhớt + kiểm tra 20 hạng mục Thaco', 5000, '2026-10-15'),
+  (v_mtb20_id, 'Sửa phanh xe đạp MTB 20', '2025-06-21', 235, 100000, 'Tiệm sửa xe', NULL, NULL, NULL),
+  (v_mtb20_id, 'Thay tay phanh xe đạp', '2023-02-23', 235, 100000, 'Tiệm sửa xe', NULL, NULL, NULL);
 
-  -- G. CHI PHÍ THỰC TẾ
+  -- G. ĐẦY ĐỦ CHI TIẾT TỪNG KHOẢN CHI PHÍ (EXPENSES) THEO EXCEL
   INSERT INTO public.expenses (asset_id, date, category, amount, currency, vendor, odometer_km, description) VALUES
-  (v_mazda_id, '2026-04-09', 'Mua xe ban đầu', 397000000, 'VND', 'Mazda Phú Thọ', 0, 'Giá mua xe niêm yết (Đã thanh toán trước 102tr, vay 295tr)'),
-  (v_mazda_id, '2026-04-09', 'Lệ phí trước bạ', 39700000, 'VND', 'Chi cục Thuế', 0, 'Lệ phí trước bạ xe ô tô (10%)'),
-  (v_mazda_id, '2026-04-09', 'Bảo hiểm thân vỏ', 6000000, 'VND', 'Bảo Việt', 0, 'Bảo hiểm vật chất xe 1 năm'),
-  (v_mazda_id, '2026-04-09', 'Bảo hiểm TNDS', 480700, 'VND', 'Bảo Việt', 0, 'Bảo hiểm TNDS bắt buộc 1 năm'),
-  (v_mazda_id, '2026-04-09', 'Biển số & Đăng ký', 2000000, 'VND', 'Phòng CSGT', 0, 'Phí cấp biển số xe ô tô 19B-213.87'),
-  (v_mazda_id, '2026-04-09', 'Phí đăng kiểm', 340000, 'VND', 'Trung tâm đăng kiểm', 0, 'Phí kiểm định an toàn kỹ thuật'),
-  (v_mazda_id, '2026-04-09', 'Phí đường bộ (1 năm)', 1560000, 'VND', 'Cục Đường Bộ', 0, 'Phí bảo trì đường bộ 12 tháng');
+  -- 1. INITIAL: 3 Lần cọc & chuyển tiền đối ứng mua xe (10tr + 30tr + 62tr = 102tr)
+  (v_mazda_id, '2026-03-08', 'INITIAL', 10000000, 'VND', 'Showroom Mazda Phú Thọ', NULL, 'Đặt cọc lần 1'),
+  (v_mazda_id, '2026-03-19', 'INITIAL', 30000000, 'VND', 'Showroom Mazda Phú Thọ', NULL, 'Chuyển tiền lần 2'),
+  (v_mazda_id, '2026-04-01', 'INITIAL', 62000000, 'VND', 'Showroom Mazda Phú Thọ', NULL, 'Chuyển tiền lần 3 (Tiền mặt xe)'),
+  
+  -- 2. INITIAL: Lệ phí trước bạ, phí đăng ký biển số, phí dịch vụ ngân hàng, bảo hiểm khoản vay (48.140.000 ₫)
+  (v_mazda_id, '2026-04-05', 'INITIAL', 40300000, 'VND', 'Chi cục Thuế', NULL, 'Lệ phí trước bạ xe'),
+  (v_mazda_id, '2026-04-07', 'INITIAL', 1400000, 'VND', 'Dịch vụ ĐK', NULL, 'Phí dịch vụ đăng ký biển số'),
+  (v_mazda_id, '2026-04-06', 'INITIAL', 3440000, 'VND', 'TPBank', NULL, 'Phí dịch vụ ngân hàng'),
+  (v_mazda_id, '2026-04-06', 'INITIAL', 3000000, 'VND', 'Bảo hiểm khoản vay', NULL, 'Phí bảo hiểm khoản vay TPBank'),
+
+  -- 3. UPGRADE: Chi phí đồ chơi & nâng cấp xe
+  (v_mazda_id, '2026-05-09', 'UPGRADE', 17000000, 'VND', 'Zestech Auto', 593, 'Lắp màn hình ZX ADAS Limited'),
+  (v_mazda_id, '2026-04-09', 'UPGRADE', 1800000, 'VND', 'Garage Gập Gương', 20, 'Gập gương điện'),
+  (v_mazda_id, '2026-04-12', 'UPGRADE', 2000000, 'VND', NULL, 24, 'Phím media vô năng'),
+  (v_mazda_id, '2026-04-12', 'UPGRADE', 1500000, 'VND', 'Zestech', 24, 'Cảm biến áp suất lốp Zestech (TPMS)'),
+  (v_mazda_id, '2026-04-12', 'UPGRADE', 93000, 'VND', NULL, 24, 'Bao chìa khoá da'),
+  (v_mazda_id, '2026-04-14', 'UPGRADE', 70000, 'VND', NULL, 108, 'Biển tên số điện thoại taplo'),
+  (v_mazda_id, '2026-04-19', 'UPGRADE', 100000, 'VND', NULL, 230, 'Củ sạc nhanh trên xe'),
+  (v_mazda_id, '2026-04-19', 'UPGRADE', 52000, 'VND', NULL, 230, 'Thùng rác ô tô mini'),
+  (v_mazda_id, '2026-04-19', 'UPGRADE', 864000, 'VND', NULL, 230, 'Bộ thảm lót sàn da 5D'),
+  (v_mazda_id, '2026-04-21', 'UPGRADE', 389000, 'VND', 'Toyota', 235, 'Bơm lốp điện tử Toyota'),
+
+  -- 4. RUNNING: Bảo hiểm thân vỏ, đăng kiểm đường bộ TNDS, vận hành, xăng xe, rửa xe, sân đỗ
+  (v_mazda_id, '2026-04-06', 'RUNNING', 4300000, 'VND', 'Bảo hiểm', NULL, 'Phí bảo hiểm thân vỏ'),
+  (v_mazda_id, '2026-04-05', 'RUNNING', 3270700, 'VND', 'Trạm Đăng Kiểm', NULL, 'Đăng kiểm, đường bộ, dân sự TNDS'),
+  (v_mazda_id, '2026-04-17', 'RUNNING', 120000, 'VND', 'Epass', 218, 'Phí đăng ký thẻ Epass'),
+  (v_mazda_id, '2026-04-18', 'RUNNING', 6600, 'VND', 'Epass', NULL, 'Trừ phí DV quản lý TK và TB xe qua trạm 04/2026'),
+  (v_mazda_id, '2026-04-19', 'RUNNING', 2200000, 'VND', 'Bosch', 235, 'Máy rửa xe gia đình cao áp'),
+  (v_mazda_id, '2026-04-30', 'RUNNING', 3250000, 'VND', NULL, 409, 'Đổ bê tông sân đỗ xe'),
+  (v_mazda_id, '2026-05-02', 'RUNNING', 13200, 'VND', 'Epass', 479, 'Phí trạm BOT 05/2026'),
+  (v_mazda_id, '2026-07-26', 'RUNNING', 50000, 'VND', 'Anh Chung Lương', 2163, 'Rửa xe nhà anh Chung Lương'),
+  (v_mazda_id, '2026-07-26', 'RUNNING', 250000, 'VND', NULL, 2163, 'Khử mùi trong xe vị cafe'),
+
+  -- 5. INITIAL: Chi phí mua xe xe máy & xe đạp gia đình
+  (v_bike16_id, '2017-08-01', 'INITIAL', 35000000, 'VND', NULL, NULL, 'Mua xe Air Blade 2016'),
+  (v_bike21_id, '2021-04-05', 'INITIAL', 45000000, 'VND', NULL, NULL, 'Mua xe Air Blade 2021'),
+  (v_mtb26_id, '2024-03-10', 'INITIAL', 3000000, 'VND', NULL, NULL, 'Mua xe MTB 26-05'),
+  (v_mtb20_id, '2024-03-10', 'INITIAL', 2500000, 'VND', NULL, NULL, 'Mua xe MTB 20-05'),
+  (v_mtb26_id, '2025-02-21', 'UPGRADE', 35000, 'VND', NULL, NULL, 'Gác chân xe đạp'),
+  (v_mtb26_id, '2025-04-21', 'UPGRADE', 390000, 'VND', NULL, NULL, 'Ghế ngồi trước cho bé'),
+  (v_mtb26_id, '2025-04-21', 'UPGRADE', 64900, 'VND', NULL, NULL, 'Đèn trước xe đạp'),
+  (v_mtb26_id, '2025-04-21', 'UPGRADE', 36000, 'VND', NULL, NULL, 'Mũ thể thao'),
+  (v_mtb26_id, '2025-04-21', 'UPGRADE', 67500, 'VND', NULL, NULL, 'Đèn hậu xe đạp'),
+  (v_mtb26_id, '2025-04-21', 'UPGRADE', 24650, 'VND', NULL, NULL, 'Giá bình nước'),
+  (v_mtb26_id, '2025-04-21', 'UPGRADE', 56000, 'VND', NULL, NULL, 'Khóa dây'),
+  (v_mtb26_id, '2025-04-21', 'UPGRADE', 72000, 'VND', NULL, NULL, 'Túi treo sườn');
 
 END $$;
 
--- 3. Bật lại RLS và cấp quyền cho tất cả thành viên xác thực
+-- 3. Cấp quyền phân quyền RLS cho toàn bộ thành viên gia đình
 ALTER TABLE IF EXISTS public.assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.loans ENABLE ROW LEVEL SECURITY;

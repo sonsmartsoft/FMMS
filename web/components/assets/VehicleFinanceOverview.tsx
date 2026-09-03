@@ -62,12 +62,21 @@ function isLoanPrincipal(e: ExpenseRecord): boolean {
 
 function isInitialRollout(e: ExpenseRecord): boolean {
   if (isLoanInterest(e) || isLoanPrincipal(e)) return false;
+  const desc = (e.description || '').toLowerCase();
+  
+  // Exclude recurring annual items even if marked as registration
+  if (desc.includes('thân vỏ') || desc.includes('tnds') || desc.includes('đăng kiểm') || desc.includes('đường bộ')) {
+    return false;
+  }
+
   const c = (e.category || '').toUpperCase();
   const sc = (e.subcategory || '').toLowerCase();
-  const desc = (e.description || '').toLowerCase();
+
   return c === 'INITIAL' || c === 'REGISTRATION' ||
-    sc === 'registration' || sc === 'plate' || sc === 'inspection' || sc === 'loan fee' || sc === 'loan insurance' ||
-    desc.includes('trước bạ') || desc.includes('biển số') || desc.includes('lăn bánh');
+    sc === 'registration' || sc === 'plate' || sc === 'loan fee' || sc === 'loan insurance' ||
+    desc.includes('cọc') || desc.includes('tiền mặt xe') || desc.includes('chuyển tiền') ||
+    desc.includes('trước bạ') || desc.includes('biển số') || desc.includes('dịch vụ ngân hàng') ||
+    desc.includes('bảo hiểm khoản vay');
 }
 
 function isUpgradeExpense(e: ExpenseRecord): boolean {
@@ -82,11 +91,18 @@ function isUpgradeExpense(e: ExpenseRecord): boolean {
 
 function isRunningExpense(e: ExpenseRecord): boolean {
   if (isLoanInterest(e) || isLoanPrincipal(e) || isInitialRollout(e) || isUpgradeExpense(e)) return false;
+  const desc = (e.description || '').toLowerCase();
   const c = (e.category || '').toUpperCase();
   const sc = (e.subcategory || '').toLowerCase();
-  return c === 'RUNNING' || c === 'MAINTENANCE' || c === 'FUEL' || c === 'TOLL' || c === 'PARKING' || c === 'CAR_WASH' ||
+
+  // Annual recurring insurance & inspection items
+  if (desc.includes('thân vỏ') || desc.includes('tnds') || desc.includes('đăng kiểm') || desc.includes('đường bộ')) {
+    return true;
+  }
+
+  return c === 'RUNNING' || c === 'MAINTENANCE' || c === 'FUEL' || c === 'TOLL' || c === 'PARKING' || c === 'CAR_WASH' || c === 'INSURANCE' ||
     sc === 'fuel' || sc === 'maintenance' || sc === 'car wash' || sc === 'epass fee' ||
-    sc === 'toll' || sc === 'parking' || sc === 'running fine' || sc === 'oil' || sc === 'tires';
+    sc === 'toll' || sc === 'parking' || sc === 'running fine' || sc === 'oil' || sc === 'tires' || sc === 'insurance';
 }
 
 const DEFAULT_BANKS = [

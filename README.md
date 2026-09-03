@@ -1,7 +1,7 @@
 # FAMILY MOBILITY MANAGEMENT SYSTEM (FMMS)
 ### Multi-Asset Mobility, Finance, Telemetry & Omnichannel AI Platform
 
-Hệ thống quản lý toàn bộ phương tiện và tài sản di chuyển của gia đình (Ô tô Mazda2 Base 2026, Mô tô BMW S1000RR, Xe đạp đường trường Specialized, Xe điện VinFast Feliz S).
+Hệ thống quản lý toàn bộ phương tiện và tài sản di chuyển của gia đình (Ô tô Mazda 2AT 2026, Xe máy Honda Air Blade 2016, Honda Air Blade 2021, Xe đạp Thống Nhất MTB 26 & 20, Dự kiến Kia Carnival).
 
 ---
 

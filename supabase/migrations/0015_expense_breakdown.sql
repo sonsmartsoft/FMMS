@@ -49,25 +49,14 @@ BEGIN
             SELECT
                 e.category AS cat,
                 CASE
-                    WHEN upper(e.category) IN ('FUEL','NHLIELU','NHIÊN LIỆU') THEN 'Nhiên liệu'
-                    WHEN upper(e.category) IN ('MAINTENANCE','BUDUONG','BẢO DƯỠNG','CHI PHÍ VẬN HÀNH') THEN 'Bảo dưỡng'
-                    WHEN upper(e.category) IN ('PARTS','PHTNG','PHỤ TÙNG') THEN 'Phụ tùng'
-                    WHEN upper(e.category) IN ('LABOR','CNGTH') THEN 'Công thợ'
-                    WHEN upper(e.category) IN ('INSURANCE','BẢO HIỂM THÂN VỎ','BẢO HIỂM TNDS','BẢO HIỂM') THEN 'Bảo hiểm'
-                    WHEN upper(e.category) IN ('REGISTRATION','LPH TRC B','LỆ PHÍ TRƯỚC BẠ','BIỂN SỐ & ĐĂNG KÝ','BIỂN SỐ') THEN 'Lệ phí/Đăng ký'
-                    WHEN upper(e.category) IN ('INSPECTION','PHÍ ĐĂNG KIỂM','ĐĂNG KIỂM') THEN 'Đăng kiểm'
-                    WHEN upper(e.category) IN ('TOLL','PHÍ ĐƯỜNG BỘ (1 NĂM)','PHÍ ĐƯỜNG BỘ','PHÍ ĐƯỜNG') THEN 'Phí đường'
-                    WHEN upper(e.category) = 'PARKING' THEN 'Gửi xe'
-                    WHEN upper(e.category) IN ('UPGRADE','NNG CP') THEN 'Nâng cấp'
-                    WHEN upper(e.category) IN ('WASH','CAR_WASH','RA XE') THEN 'Rửa xe'
-                    WHEN upper(e.category) IN ('INITIAL','MUA XE BAN ĐẦU','CHI PHÍ BAN ĐẦU') THEN 'Chi phí ban đầu'
-                    WHEN upper(e.category) = 'RUNNING' THEN 'Chi phí vận hành'
-                    WHEN upper(e.category) IN ('LOAN','VAY') THEN 'Vay/Tài chính'
-                    WHEN upper(e.category) = 'LOAN_INTEREST' THEN 'Lãi vay'
-                    WHEN upper(e.category) = 'LOAN_PAYMENT' THEN 'Trả gốc vay'
-                    WHEN upper(e.category) IN ('EQUIPMENT','THITB','THIẾT BỊ') THEN 'Trang thiết bị'
-                    WHEN upper(e.category) IN ('OIL','DNNHT','DẦU NHỚT') THEN 'Dầu nhớt'
-                    WHEN upper(e.category) IN ('TYRES','TIRES','LOP','LỐP') THEN 'Lốp xe'
+                    WHEN upper(e.category) IN ('FUEL','NHLIELU','NHIÊN LIỆU','WASH','CAR_WASH','RA XE','PARKING','INSURANCE','BẢO HIỂM THÂN VỎ','BẢO HIỂM TNDS','BẢO HIỂM','LABOR','CNGTH','REGISTRATION','LPH TRC B','LỆ PHÍ TRƯỚC BẠ','BIỂN SỐ & ĐĂNG KÝ','BIỂN SỐ','INSPECTION','PHÍ ĐĂNG KIỂM','ĐĂNG KIỂM','TOLL','PHÍ ĐƯỜNG BỘ (1 NĂM)','PHÍ ĐƯỜNG BỘ','PHÍ ĐƯỜNG','RUNNING') THEN 'Running'
+                    WHEN upper(e.category) IN ('PARTS','PHTNG','PHỤ TÙNG','EQUIPMENT','THITB','THIẾT BỊ') THEN 'Upgrade'
+                    WHEN upper(e.category) IN ('UPGRADE','NNG CP') THEN 'Upgrade'
+                    WHEN upper(e.category) IN ('INITIAL','MUA XE BAN ĐẦU','CHI PHÍ BAN ĐẦU') THEN 'Initial'
+                    WHEN upper(e.category) IN ('MAINTENANCE','BUDUONG','BẢO DƯỠNG','CHI PHÍ VẬN HÀNH','OIL','DNNHT','DẦU NHỚT','TYRES','TIRES','LOP','LỐP') THEN 'Maintenance'
+                    WHEN upper(e.category) IN ('LOAN','VAY') THEN 'Loan'
+                    WHEN upper(e.category) = 'LOAN_INTEREST' THEN 'Loan'
+                    WHEN upper(e.category) = 'LOAN_PAYMENT' THEN 'Loan'
                     ELSE 'Khác'
                 END AS label,
                 e.amount,
@@ -77,6 +66,33 @@ BEGIN
               AND e.date >= p_from::date
               AND e.date <= p_to::date
               AND e.amount > 0
+
+            UNION ALL
+
+            -- Xăng từ fuel_logs: gộp vào Running (tương ứng web VehicleFinanceOverview)
+            SELECT
+                'FUEL' AS cat,
+                'Running' AS label,
+                COALESCE(f.total_cost, 0) AS amount,
+                'VND' AS currency
+            FROM public.fuel_logs f
+            WHERE f.asset_id = p_asset_id
+              AND COALESCE(f.total_cost, 0) > 0
+              AND (f.timestamp IS NOT NULL AND f.timestamp::date >= p_from::date AND f.timestamp::date <= p_to::date)
+
+            UNION ALL
+
+            -- Bảo dưỡng từ maintenance_records: nhóm riêng Maintenance
+            SELECT
+                'MAINTENANCE' AS cat,
+                'Maintenance' AS label,
+                COALESCE(m.cost, 0) AS amount,
+                'VND' AS currency
+            FROM public.maintenance_records m
+            WHERE m.asset_id = p_asset_id
+              AND COALESCE(m.cost, 0) > 0
+              AND m.date >= p_from::date
+              AND m.date <= p_to::date
         ) g
         GROUP BY g.label
         ORDER BY SUM(g.amount) DESC

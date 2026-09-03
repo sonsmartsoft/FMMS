@@ -11,7 +11,6 @@ import { getTrips } from '@/lib/services/tripService';
 import { getFuelLogs } from '@/lib/services/fuelService';
 import { getExpenses } from '@/lib/services/expenseService';
 import { getLoans } from '@/lib/services/loanService';
-import { importSampleData } from '@/lib/services/sampleDataImporter';
 import { Plus, Car, Bike, Zap, Gauge, DollarSign, Fuel, Sparkles, Search, X, Download, Sliders } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
 
@@ -45,8 +44,6 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
     color: '', license_plate: '', fuel_type: 'PETROL', purchase_price: '', description: '',
   });
   const [saving, setSaving] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [importMsg, setImportMsg] = useState<string | null>(null);
   const [openCardConfigModal, setOpenCardConfigModal] = useState(false);
   const [cardConfig, setCardConfig] = useState<CardDisplaySettings>(cardSettings || DEFAULT_CARD_SETTINGS);
 
@@ -123,28 +120,6 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       alert(`Lỗi khi thêm phương tiện: ${err?.message ?? 'Vui lòng thử lại'}`);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleImportSample = async () => {
-    if (!confirm('Import dữ liệu mẫu (4 xe + nhiên liệu, bảo dưỡng, chi phí, chuyến đi, bảo hiểm, khoản vay...) vào DB?')) return;
-    setImporting(true);
-    setImportMsg(null);
-    try {
-      const res = await importSampleData();
-      if (res.alreadyImported) {
-        setImportMsg('Bạn đã có dữ liệu rồi — không import lại.');
-      } else {
-        const errs = res.errors.length > 0 ? ` (${res.errors.length} lỗi, xem console)` : '';
-        setImportMsg(`Đã import: ${res.assets} xe, ${res.fuelLogs} đổ xăng, ${res.maintenance} bảo dưỡng, ${res.expenses} chi phí, ${res.trips} chuyến, ${res.parts} phụ tùng, ${res.insurance} bảo hiểm, ${res.loans} khoản vay.${errs}`);
-        if (res.errors.length > 0) console.error(res.errors);
-      }
-      const [a] = await Promise.all([getAssets()]);
-      setAssets(a);
-    } catch (err: any) {
-      setImportMsg(`Import thất bại: ${err?.message ?? 'Vui lòng đăng nhập trước'}`);
-    } finally {
-      setImporting(false);
     }
   };
 
