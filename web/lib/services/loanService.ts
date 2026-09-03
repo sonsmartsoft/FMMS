@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { addSyncLog } from './syncLogger';
 
 export interface LoanRow {
   id: string;
@@ -139,8 +140,34 @@ export async function createLoan(input: LoanInput): Promise<LoanRow> {
       .insert(payload)
       .select()
       .maybeSingle();
-    if (!error && data) return data as LoanRow;
-  } catch (err) {
+    if (error) {
+      addSyncLog({
+        table: 'loans',
+        action: 'INSERT',
+        status: 'ERROR',
+        summary: `Tạo khoản vay ${input.lender} thất bại`,
+        payload,
+        errorDetails: error.message,
+      });
+    } else if (data) {
+      addSyncLog({
+        table: 'loans',
+        action: 'INSERT',
+        status: 'SUCCESS',
+        entityId: data.id,
+        summary: `Đã tạo khoản vay ${input.lender} lên Cloud thành công`,
+        payload,
+      });
+      return data as LoanRow;
+    }
+  } catch (err: any) {
+    addSyncLog({
+      table: 'loans',
+      action: 'INSERT',
+      status: 'FALLBACK',
+      summary: `Tạo khoản vay ${input.lender} lưu tạm LocalStorage`,
+      errorDetails: err?.message,
+    });
     console.warn('createLoan Supabase fallback:', err);
   }
 
@@ -356,8 +383,36 @@ export async function updateLoanFull(id: string, data: Partial<LoanInput>) {
   if (isValidUuid(id)) {
     try {
       const supabase = createClient();
-      await supabase.from('loans').update(payload).eq('id', id);
-    } catch (err) {
+      const { error } = await supabase.from('loans').update(payload).eq('id', id);
+      if (error) {
+        addSyncLog({
+          table: 'loans',
+          action: 'UPDATE',
+          status: 'ERROR',
+          entityId: id,
+          summary: `Cập nhật khoản vay ${id} thất bại`,
+          payload,
+          errorDetails: error.message,
+        });
+      } else {
+        addSyncLog({
+          table: 'loans',
+          action: 'UPDATE',
+          status: 'SUCCESS',
+          entityId: id,
+          summary: `Đã cập nhật khoản vay ${id} lên Cloud thành công`,
+          payload,
+        });
+      }
+    } catch (err: any) {
+      addSyncLog({
+        table: 'loans',
+        action: 'UPDATE',
+        status: 'FALLBACK',
+        entityId: id,
+        summary: `Cập nhật khoản vay ${id} lưu tạm LocalStorage`,
+        errorDetails: err?.message,
+      });
       console.warn('updateLoanFull Supabase fallback:', err);
     }
   }
@@ -378,8 +433,34 @@ export async function deleteLoan(id: string) {
   if (isValidUuid(id)) {
     try {
       const supabase = createClient();
-      await supabase.from('loans').delete().eq('id', id);
-    } catch (err) {
+      const { error } = await supabase.from('loans').delete().eq('id', id);
+      if (error) {
+        addSyncLog({
+          table: 'loans',
+          action: 'DELETE',
+          status: 'ERROR',
+          entityId: id,
+          summary: `Xóa khoản vay ${id} thất bại`,
+          errorDetails: error.message,
+        });
+      } else {
+        addSyncLog({
+          table: 'loans',
+          action: 'DELETE',
+          status: 'SUCCESS',
+          entityId: id,
+          summary: `Đã xóa khoản vay ${id} trên Cloud thành công`,
+        });
+      }
+    } catch (err: any) {
+      addSyncLog({
+        table: 'loans',
+        action: 'DELETE',
+        status: 'FALLBACK',
+        entityId: id,
+        summary: `Xóa khoản vay ${id} lưu tạm LocalStorage`,
+        errorDetails: err?.message,
+      });
       console.warn('deleteLoan Supabase fallback:', err);
     }
   }

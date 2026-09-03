@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { Asset, AssetCapabilities, AssetType } from '@/types/mobility';
+import { addSyncLog } from './syncLogger';
 
 export type AssetCapabilitiesRow = AssetCapabilities;
 
@@ -258,7 +259,26 @@ export async function createAsset(data: AssetInput) {
     })
     .select()
     .single();
-  if (error) throw error;
+  if (error) {
+    addSyncLog({
+      table: 'assets',
+      action: 'INSERT',
+      status: 'ERROR',
+      summary: `Tạo xe "${data.name}" thất bại`,
+      payload: data,
+      errorDetails: error.message,
+    });
+    throw error;
+  }
+
+  addSyncLog({
+    table: 'assets',
+    action: 'INSERT',
+    status: 'SUCCESS',
+    entityId: created.id,
+    summary: `Đã tạo xe "${data.name}" lên Cloud thành công`,
+    payload: data,
+  });
 
   if (data.capabilities) {
     const merged = { ...DEFAULT_CAPS, ...data.capabilities };
@@ -284,8 +304,7 @@ export async function updateAsset(id: string, data: Partial<AssetInput>): Promis
     } catch {}
   }
 
-
-  // 3. Update Supabase
+  // 2. Update Supabase
   try {
     const supabase = createClient();
     const payload: Record<string, any> = {};
@@ -320,14 +339,40 @@ export async function updateAsset(id: string, data: Partial<AssetInput>): Promis
       .or(`id.eq.${realId},id.eq.${id}`);
 
     if (error) {
+      addSyncLog({
+        table: 'assets',
+        action: 'UPDATE',
+        status: 'ERROR',
+        entityId: id,
+        summary: `Cập nhật xe ${id} thất bại`,
+        payload: data,
+        errorDetails: error.message,
+      });
       if (error.message?.includes('schema cache') || error.message?.includes('column')) {
         delete payload.sales_rep_name;
         delete payload.sales_rep_phone;
         delete payload.brand_hotline;
         await supabase.from('assets').update(payload).or(`id.eq.${realId},id.eq.${id}`);
       }
+    } else {
+      addSyncLog({
+        table: 'assets',
+        action: 'UPDATE',
+        status: 'SUCCESS',
+        entityId: id,
+        summary: `Đã cập nhật xe ${id} lên Cloud thành công`,
+        payload: data,
+      });
     }
   } catch (err: any) {
+    addSyncLog({
+      table: 'assets',
+      action: 'UPDATE',
+      status: 'FALLBACK',
+      entityId: id,
+      summary: `Cập nhật xe ${id} lưu tạm LocalStorage`,
+      errorDetails: err?.message,
+    });
     console.warn('updateAsset fallback:', err?.message);
   }
 
@@ -337,5 +382,22 @@ export async function updateAsset(id: string, data: Partial<AssetInput>): Promis
 export async function deleteAsset(id: string) {
   const supabase = createClient();
   const { error } = await supabase.from('assets').delete().eq('id', id);
-  if (error) throw error;
+  if (error) {
+    addSyncLog({
+      table: 'assets',
+      action: 'DELETE',
+      status: 'ERROR',
+      entityId: id,
+      summary: `Xóa xe ${id} thất bại`,
+      errorDetails: error.message,
+    });
+    throw error;
+  }
+  addSyncLog({
+    table: 'assets',
+    action: 'DELETE',
+    status: 'SUCCESS',
+    entityId: id,
+    summary: `Đã xóa xe ${id} trên Cloud thành công`,
+  });
 }
