@@ -234,14 +234,6 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
             <Sliders className="w-4 h-4" />
             <span>Cấu hình thẻ</span>
           </button>
-          {!loading && assets.length === 0 && (
-            <button onClick={handleImportSample} disabled={importing}
-              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg transition hover:opacity-90"
-              style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.35)' }}>
-              <Download className="w-4 h-4" />
-              <span>{importing ? 'Đang import...' : 'Import dữ liệu mẫu'}</span>
-            </button>
-          )}
           <button onClick={() => setOpenAddModal(true)}
             className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition hover:opacity-90"
             style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
@@ -250,13 +242,6 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
           </button>
         </div>
       </div>
-
-      {importMsg && (
-        <div className="px-4 py-3 rounded-2xl text-xs font-semibold"
-          style={{ background: 'rgba(52,211,153,0.08)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}>
-          {importMsg}
-        </div>
-      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
