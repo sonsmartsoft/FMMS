@@ -878,7 +878,7 @@ export default function AssetDetailPage() {
     const initialHandoverDate = asset?.purchase_date ? toLocalDateString(asset.purchase_date) : '';
 
     // 0. Initial vehicle handover / purchase baseline (if vehicle has purchase_date)
-    if (initialHandoverDate) {
+    if (asset && initialHandoverDate) {
       events.push({
         date: initialHandoverDate,
         odometer_km: asset.current_odometer_km > 0 ? Math.min(12, asset.current_odometer_km) : 0,

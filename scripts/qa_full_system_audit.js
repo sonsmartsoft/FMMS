@@ -52,22 +52,14 @@ function getAllFiles(dir, exts = ['.ts', '.tsx']) {
 
 const allWebFiles = getAllFiles('./web');
 
-check(`All ${allWebFiles.length} TypeScript / TSX files have zero AST errors`, () => {
-  let parseErrors = [];
-  for (const file of allWebFiles) {
-    const code = fs.readFileSync(file, 'utf8');
-    const sf = ts.createSourceFile(
-      file,
-      code,
-      ts.ScriptTarget.Latest,
-      true,
-      file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
-    );
-    if (sf.parseDiagnostics && sf.parseDiagnostics.length > 0) {
-      parseErrors.push(`${file}: ${sf.parseDiagnostics.map(d => d.messageText).join(', ')}`);
-    }
+check(`Full TypeScript typecheck (tsc --noEmit) passes with 0 errors`, () => {
+  const { execSync } = require('child_process');
+  try {
+    execSync('cd web && ./node_modules/.bin/tsc --noEmit', { stdio: 'pipe' });
+    return true;
+  } catch (err) {
+    return err.stdout ? err.stdout.toString() : err.message;
   }
-  return parseErrors.length === 0 ? true : parseErrors.join('\n');
 });
 
 // ─────────────────────────────────────────────────────────────
