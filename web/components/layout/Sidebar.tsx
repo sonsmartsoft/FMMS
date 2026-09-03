@@ -24,32 +24,31 @@ interface VehicleDeviceStatus {
 const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 const STANDBY_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-function computeDeviceStatus(lastSeenIso?: string | null): { status: 'ONLINE' | 'STANDBY' | 'OFFLINE'; statusText: string; lastSeenText: string } {
+function computeDeviceStatus(lastSeenIso?: string | null, isEn = false): { status: 'ONLINE' | 'STANDBY' | 'OFFLINE'; statusText: string; lastSeenText: string } {
   if (!lastSeenIso) {
-    return { status: 'OFFLINE', statusText: 'Ngoại tuyến', lastSeenText: 'Chưa có kết nối' };
+    return { status: 'OFFLINE', statusText: isEn ? 'Offline' : 'Ngoại tuyến', lastSeenText: isEn ? 'No connection' : 'Chưa có kết nối' };
   }
   const diffMs = Date.now() - new Date(lastSeenIso).getTime();
   const diffSec = Math.floor(diffMs / 1000);
 
   let lastSeenText = '';
-  if (diffSec < 60) lastSeenText = `${diffSec}s trước`;
-  else if (diffSec < 3600) lastSeenText = `${Math.floor(diffSec / 60)}ph trước`;
-  else if (diffSec < 86400) lastSeenText = `${Math.floor(diffSec / 3600)}g trước`;
-  else lastSeenText = new Date(lastSeenIso).toLocaleDateString('vi-VN');
+  if (diffSec < 60) lastSeenText = isEn ? `${diffSec}s ago` : `${diffSec}s trước`;
+  else if (diffSec < 3600) lastSeenText = isEn ? `${Math.floor(diffSec / 60)}m ago` : `${Math.floor(diffSec / 60)}ph trước`;
+  else if (diffSec < 86400) lastSeenText = isEn ? `${Math.floor(diffSec / 3600)}h ago` : `${Math.floor(diffSec / 3600)}g trước`;
+  else lastSeenText = new Date(lastSeenIso).toLocaleDateString(isEn ? 'en-US' : 'vi-VN');
 
   if (diffMs < OFFLINE_THRESHOLD_MS) {
-    return { status: 'ONLINE', statusText: 'OBD Active', lastSeenText };
+    return { status: 'ONLINE', statusText: isEn ? 'Live Connected' : 'OBD Active', lastSeenText };
   } else if (diffMs < STANDBY_THRESHOLD_MS) {
-    return { status: 'STANDBY', statusText: `Tắt máy (${lastSeenText})`, lastSeenText };
+    return { status: 'STANDBY', statusText: isEn ? `Standby (${lastSeenText})` : `Tắt máy (${lastSeenText})`, lastSeenText };
   } else {
-    return { status: 'OFFLINE', statusText: `Ngoại tuyến (${lastSeenText})`, lastSeenText };
+    return { status: 'OFFLINE', statusText: isEn ? `Offline (${lastSeenText})` : `Ngoại tuyến (${lastSeenText})`, lastSeenText };
   }
 }
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
-  const { language } = useLanguage();
-  const isEn = language === 'en';
+  const { language, isEn, t } = useLanguage();
 
   const [vehicleStatuses, setVehicleStatuses] = useState<VehicleDeviceStatus[]>([]);
   const [activeVehicleIdx, setActiveVehicleIdx] = useState(0);
@@ -68,10 +67,10 @@ export const Sidebar: React.FC = () => {
           return {
             asset: a,
             status: 'NO_DEVICE',
-            statusText: isCar ? 'Chờ kết nối OBD' : 'Chưa gắn Tracker GPS',
+            statusText: isCar ? (isEn ? 'Waiting for OBD' : 'Chờ kết nối OBD') : (isEn ? 'No GPS Tracker' : 'Chưa gắn Tracker GPS'),
           };
         }
-        const st = computeDeviceStatus(assignedDevice.last_seen);
+        const st = computeDeviceStatus(assignedDevice.last_seen, isEn);
         return {
           asset: a,
           device: assignedDevice,
@@ -253,7 +252,7 @@ export const Sidebar: React.FC = () => {
                     {currentVehicle.asset.name}
                   </p>
                   <p className="text-[9px] truncate" style={{ color: 'var(--text-muted)' }}>
-                    {currentVehicle.device?.device_name || (currentVehicle.asset.asset_type === 'CAR' ? 'Thiết bị OBD' : 'Tracker GPS')}
+                    {currentVehicle.device?.device_name || (currentVehicle.asset.asset_type === 'CAR' ? (isEn ? 'OBD2 Device' : 'Thiết bị OBD') : (isEn ? 'GPS Tracker' : 'Tracker GPS'))}
                   </p>
                 </div>
               </Link>
@@ -262,7 +261,7 @@ export const Sidebar: React.FC = () => {
                 <button
                   onClick={() => setActiveVehicleIdx(prev => (prev + 1) % vehicleStatuses.length)}
                   className="p-1 rounded-md text-slate-400 hover:text-cyan-400 hover:bg-black/5 dark:hover:bg-white/5 transition text-[10px] flex items-center shrink-0"
-                  title="Chuyển sang xe tiếp theo"
+                  title={isEn ? 'Next vehicle' : 'Chuyển sang xe tiếp theo'}
                 >
                   <span className="font-mono mr-0.5">{(activeVehicleIdx % vehicleStatuses.length) + 1}/{vehicleStatuses.length}</span>
                   <ChevronRight className="w-3 h-3" />
@@ -293,7 +292,7 @@ export const Sidebar: React.FC = () => {
                       : 'rgba(100,116,139,0.2)'
                 }`,
               }}
-              title="Nhấn để mở Cài đặt thiết bị Tracker"
+              title={isEn ? 'Click to open Tracker Device settings' : 'Nhấn để mở Cài đặt thiết bị Tracker'}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full inline-block ${
@@ -311,8 +310,8 @@ export const Sidebar: React.FC = () => {
             >
               <Radio className="w-3.5 h-3.5" />
             </div>
-            <p className="text-[11px] font-bold" style={{ color: 'var(--text-primary)' }}>Thiết bị Tracker</p>
-            <p className="text-[10px] mt-0.5 text-slate-400">Quản lý kết nối OBD</p>
+            <p className="text-[11px] font-bold" style={{ color: 'var(--text-primary)' }}>{isEn ? 'Tracker Devices' : 'Thiết bị Tracker'}</p>
+            <p className="text-[10px] mt-0.5 text-slate-400">{isEn ? 'Manage OBD/GPS connections' : 'Quản lý kết nối OBD'}</p>
           </Link>
         )}
       </div>

@@ -11,6 +11,7 @@ import { getTrips } from '@/lib/services/tripService';
 import { getFuelLogs } from '@/lib/services/fuelService';
 import { getExpenses } from '@/lib/services/expenseService';
 import { getLoans } from '@/lib/services/loanService';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { Plus, Car, Bike, Zap, Gauge, DollarSign, Fuel, Sparkles, Search, X, Download, Sliders } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
 
@@ -19,16 +20,10 @@ interface HomePageProps {
 }
 
 const ASSET_TYPES = ['CAR', 'MOTORCYCLE', 'MOTORBIKE', 'BICYCLE', 'E_BIKE', 'SCOOTER', 'OTHER'];
-const ASSET_TYPE_LABELS: Record<string, string> = {
-  CAR: 'Ô tô', MOTORCYCLE: 'Mô tô phân khối lớn', MOTORBIKE: 'Xe máy',
-  BICYCLE: 'Xe đạp', E_BIKE: 'Xe điện / E-scooter', SCOOTER: 'Scooter', OTHER: 'Khác',
-};
 const FUEL_TYPES = ['PETROL', 'DIESEL', 'ELECTRIC', 'HYBRID', 'HUMAN_POWER'];
-const FUEL_LABELS: Record<string, string> = {
-  PETROL: 'Xăng', DIESEL: 'Dầu Diesel', ELECTRIC: 'Điện', HYBRID: 'Hybrid', HUMAN_POWER: 'Sức người',
-};
 
 export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomePageProps) {
+  const { language, isEn, t } = useLanguage();
   const [filterType, setFilterType] = useState<AssetType | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [openAddModal, setOpenAddModal] = useState(false);
@@ -39,6 +34,24 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
   const [loans, setLoans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const ASSET_TYPE_LABELS: Record<string, string> = {
+    CAR: isEn ? 'Car / Sedan' : 'Ô tô',
+    MOTORCYCLE: isEn ? 'Motorcycle' : 'Mô tô phân khối lớn',
+    MOTORBIKE: isEn ? 'Motorbike' : 'Xe máy',
+    BICYCLE: isEn ? 'Bicycle' : 'Xe đạp',
+    E_BIKE: isEn ? 'E-Bike / Scooter' : 'Xe điện / E-scooter',
+    SCOOTER: isEn ? 'Scooter' : 'Scooter',
+    OTHER: isEn ? 'Other' : 'Khác',
+  };
+
+  const FUEL_LABELS: Record<string, string> = {
+    PETROL: isEn ? 'Petrol' : 'Xăng',
+    DIESEL: isEn ? 'Diesel' : 'Dầu Diesel',
+    ELECTRIC: isEn ? 'Electric' : 'Điện',
+    HYBRID: isEn ? 'Hybrid' : 'Hybrid',
+    HUMAN_POWER: isEn ? 'Human Power' : 'Sức người',
+  };
   const [addForm, setAddForm] = useState({
     name: '', asset_type: 'CAR', brand: '', model: '', year: new Date().getFullYear().toString(),
     color: '', license_plate: '', fuel_type: 'PETROL', purchase_price: '', description: '',
@@ -148,10 +161,10 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
 
   const KPI = [
     {
-      label: 'Tổng phương tiện',
+      label: isEn ? 'Total Fleet Vehicles' : 'Tổng phương tiện',
       href: '/assets',
-      value: `${assets.length} tài sản`,
-      sub: loading ? 'Đang tải...' : assets.some(a => a.status === 'MAINTENANCE') ? '● Có xe đang bảo dưỡng' : '● Tất cả đang hoạt động tốt',
+      value: isEn ? `${assets.length} vehicles` : `${assets.length} tài sản`,
+      sub: loading ? (isEn ? 'Loading...' : 'Đang tải...') : assets.some(a => a.status === 'MAINTENANCE') ? (isEn ? '● Vehicle in maintenance' : '● Có xe đang bảo dưỡng') : (isEn ? '● All operating normally' : '● Tất cả đang hoạt động tốt'),
       subColor: 'var(--status-green)',
       icon: Car,
       iconBg: 'var(--accent-cyan-bg)',
@@ -160,10 +173,10 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       valueColor: 'var(--text-primary)',
     },
     {
-      label: 'Quãng đường tháng này',
+      label: isEn ? 'This Month Mileage' : 'Quãng đường tháng này',
       href: '/analytics',
-      value: `${totalDistanceThisMonth.toLocaleString('vi-VN')} km`,
-      sub: trips.length > 0 ? `${trips.length} chuyến ghi nhận` : 'Chưa có chuyến đi',
+      value: `${totalDistanceThisMonth.toLocaleString(isEn ? 'en-US' : 'vi-VN')} km`,
+      sub: trips.length > 0 ? (isEn ? `${trips.length} trips logged` : `${trips.length} chuyến ghi nhận`) : (isEn ? 'No trips logged' : 'Chưa có chuyến đi'),
       subColor: 'var(--accent-cyan)',
       icon: Gauge,
       iconBg: 'rgba(59,130,246,0.12)',
@@ -172,10 +185,10 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       valueColor: 'var(--text-primary)',
     },
     {
-      label: 'Tốn nhiên liệu / Pin',
+      label: isEn ? 'Fuel & Energy Cost' : 'Tốn nhiên liệu / Pin',
       href: '/fuel',
-      value: `${totalFuelCostThisMonth.toLocaleString('vi-VN')} ₫`,
-      sub: `${fuelLogs.length} lần ghi nhận`,
+      value: `${totalFuelCostThisMonth.toLocaleString(isEn ? 'en-US' : 'vi-VN')} ₫`,
+      sub: isEn ? `${fuelLogs.length} logs recorded` : `${fuelLogs.length} lần ghi nhận`,
       subColor: 'var(--text-muted)',
       icon: Fuel,
       iconBg: 'rgba(245,158,11,0.12)',
@@ -184,10 +197,10 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       valueColor: 'var(--status-amber)',
     },
     {
-      label: 'Dư nợ khoản vay',
+      label: isEn ? 'Loan Balance' : 'Dư nợ khoản vay',
       href: '/finance',
       value: totalLoanBalance > 0 ? `${(totalLoanBalance / 1_000_000).toFixed(0)}M ₫` : '0 ₫',
-      sub: loans.length > 0 ? `${loans.length} khoản · ${(totalLoanMonthly / 1_000_000).toFixed(1)}M ₫/tháng` : 'Không có khoản vay',
+      sub: loans.length > 0 ? (isEn ? `${loans.length} loans · ${(totalLoanMonthly / 1_000_000).toFixed(1)}M ₫/mo` : `${loans.length} khoản · ${(totalLoanMonthly / 1_000_000).toFixed(1)}M ₫/tháng`) : (isEn ? 'No active loans' : 'Không có khoản vay'),
       subColor: 'var(--text-muted)',
       icon: DollarSign,
       iconBg: 'rgba(244,63,94,0.12)',
@@ -202,7 +215,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
     return acc;
   }, {});
   const FILTERS = [
-    { id: 'ALL', label: `Tất cả (${assets.length})`, icon: Car },
+    { id: 'ALL', label: isEn ? `All (${assets.length})` : `Tất cả (${assets.length})`, icon: Car },
     ...(['CAR', 'BICYCLE', 'E_BIKE', 'MOTORCYCLE', 'MOTORBIKE', 'SCOOTER'] as AssetType[])
       .filter(t => typeCounts[t])
       .map(t => ({ id: t, label: `${ASSET_TYPE_LABELS[t].split(' ')[0]}${ASSET_TYPE_LABELS[t].includes('/') ? '' : ' ' + ASSET_TYPE_LABELS[t].split(' ').slice(1).join(' ')} (${typeCounts[t]})`, icon: t === 'CAR' ? Car : t === 'BICYCLE' ? Bike : t === 'E_BIKE' ? Zap : Bike })),
@@ -218,13 +231,15 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
         <div>
           <div className="flex items-center space-x-2 text-xs font-semibold mb-1" style={{ color: 'var(--accent-cyan)' }}>
             <Sparkles className="w-4 h-4" />
-            <span>HỆ THỐNG QUẢN LÝ TÀI SẢN DI CHUYỂN GIA ĐÌNH</span>
+            <span>{isEn ? 'FAMILY MOBILITY MANAGEMENT SYSTEM' : 'HỆ THỐNG QUẢN LÝ TÀI SẢN DI CHUYỂN GIA ĐÌNH'}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight" style={{ color: 'var(--text-primary)' }}>
             FAMILY MOBILITY DASHBOARD
           </h1>
           <p className="text-xs mt-1 max-w-2xl" style={{ color: 'var(--text-muted)' }}>
-            Theo dõi {assets.length} phương tiện gia đình · Virtual Odometer · Nhiên liệu/Pin · Lịch bảo dưỡng · Phân tích TCO
+            {isEn
+              ? `Monitoring ${assets.length} family vehicles · Virtual Odometer · Fuel/EV Charging · Maintenance Alerts · TCO Analytics`
+              : `Theo dõi ${assets.length} phương tiện gia đình · Virtual Odometer · Nhiên liệu/Pin · Lịch bảo dưỡng · Phân tích TCO`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 self-start">
@@ -232,13 +247,13 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
             className="flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition hover:opacity-90"
             style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '1px solid var(--border-default)' }}>
             <Sliders className="w-4 h-4" />
-            <span>Cấu hình thẻ</span>
+            <span>{isEn ? 'Card Settings' : 'Cấu hình thẻ'}</span>
           </button>
           <button onClick={() => setOpenAddModal(true)}
             className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition hover:opacity-90"
             style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}>
             <Plus className="w-4 h-4" />
-            <span>Thêm phương tiện</span>
+            <span>{isEn ? 'Add Vehicle' : 'Thêm phương tiện'}</span>
           </button>
         </div>
       </div>
@@ -290,7 +305,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm kiếm phương tiện..."
+            placeholder={isEn ? 'Search vehicles by name, brand...' : 'Tìm kiếm phương tiện...'}
             className="theme-input !pl-9 w-full sm:w-60"
           />
         </div>

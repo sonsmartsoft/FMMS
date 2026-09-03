@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import com.fmms.carlogger.data.repository.PrefsStore
 import com.fmms.carlogger.service.TelemetryService
+import com.fmms.carlogger.ui.MainActivity
 
 /**
  * ZESTECH reboot recovery (spec §40):
@@ -37,6 +38,15 @@ class BootReceiver : BroadcastReceiver() {
             try {
                 val service = Intent(context, TelemetryService::class.java)
                 context.startForegroundService(service)
+                // Mở giao diện app lên màn hình sau boot để người dùng thấy rõ app đang chạy.
+                val ui = Intent(context, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+                try {
+                    context.startActivity(ui)
+                } catch (e: Exception) {
+                    android.util.Log.w("BootReceiver", "cannot open UI after boot", e)
+                }
             } finally {
                 pending.finish()
             }

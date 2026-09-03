@@ -3,16 +3,18 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Language, TRANSLATIONS } from './translations';
 
-interface LanguageContextType {
+export interface LanguageContextType {
   language: Language;
+  isEn: boolean;
   setLanguage: (lang: Language) => void;
-  t: (key: keyof typeof TRANSLATIONS['vi']) => string;
+  t: (key: string, fallback?: string) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType>({
   language: 'vi',
+  isEn: false,
   setLanguage: () => {},
-  t: (key) => TRANSLATIONS.vi[key] || key,
+  t: (key, fallback) => TRANSLATIONS.vi[key] || fallback || key,
 });
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
@@ -36,13 +38,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  const t = (key: keyof typeof TRANSLATIONS['vi']): string => {
+  const t = (key: string, fallback?: string): string => {
     const dict = TRANSLATIONS[language] || TRANSLATIONS.vi;
-    return (dict as any)[key] || TRANSLATIONS.vi[key] || key;
+    return dict[key] || TRANSLATIONS.vi[key] || fallback || key;
   };
 
+  const isEn = language === 'en';
+
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language, isEn, setLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Car, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, X, Save } from 'lucide-react';
 import { useTheme } from '@/lib/theme/ThemeContext';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { createClient } from '@/lib/supabase/client';
 import DraggableModal from '@/components/ui/DraggableModal';
 
@@ -15,6 +16,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }) => {
   const { theme, toggleTheme } = useTheme();
+  const { language, setLanguage, isEn, t } = useLanguage();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string>('demo@fmms.com');
   const [userName, setUserName] = useState<string>('Nguyễn Trung Sơn');
@@ -143,7 +145,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
             onClick={toggleTheme}
             className="p-2 rounded-xl transition-all duration-300"
             style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
-            title={theme === 'dark' ? 'Chuyển Light Mode' : 'Chuyển Dark Mode'}
+            title={theme === 'dark' ? (isEn ? 'Switch to Light Mode' : 'Chuyển Light Mode') : (isEn ? 'Switch to Dark Mode' : 'Chuyển Dark Mode')}
             aria-label="Toggle theme"
           >
             {theme === 'dark' ? (
@@ -158,7 +160,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
             onClick={onOpenSettings}
             className="p-2 rounded-xl transition"
             style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
-            title="Tùy chỉnh Dashboard"
+            title={isEn ? 'Dashboard Settings' : 'Tùy chỉnh Dashboard'}
           >
             <Sliders className="w-4 h-4" />
           </button>
@@ -233,7 +235,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
                         {userEmail}
                       </p>
                       <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase" style={{ background: userRole === 'ADMIN' ? 'rgba(59,130,246,0.2)' : 'rgba(100,116,139,0.2)', color: userRole === 'ADMIN' ? '#60a5fa' : '#94a3b8' }}>
-                        {userRole === 'ADMIN' ? 'Quản trị viên (Admin)' : 'Thành viên (Member)'}
+                        {userRole === 'ADMIN' ? (isEn ? 'Administrator (Admin)' : 'Quản trị viên (Admin)') : (isEn ? 'Family Member' : 'Thành viên (Member)')}
                       </span>
 
                       <div className="pt-2 space-y-1">
@@ -241,10 +243,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
                           onClick={openEdit}
                           className="text-xs font-bold text-cyan-400 hover:underline block text-left"
                         >
-                          ✏️ Chỉnh sửa thông tin tài khoản
+                          ✏️ {isEn ? 'Edit Profile Information' : 'Chỉnh sửa thông tin tài khoản'}
                         </button>
                         <Link href="/settings/users" onClick={() => setShowProfileMenu(false)} className="text-xs font-bold text-blue-400 hover:underline block text-left">
-                          👥 Quản lý thành viên & phân quyền
+                          👥 {isEn ? 'Manage Members & Roles' : 'Quản lý thành viên & phân quyền'}
                         </Link>
                       </div>
                     </div>
@@ -258,7 +260,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
                       style={{ background: 'rgba(239,68,68,0.1)', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}
                     >
                       <LogOut className="w-4 h-4" />
-                      <span>Đăng xuất khỏi hệ thống</span>
+                      <span>{isEn ? 'Sign Out of System' : 'Đăng xuất khỏi hệ thống'}</span>
                     </button>
                   </div>
                 </div>
@@ -281,8 +283,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
           >
             <div className="flex items-center justify-between p-5" style={{ borderBottom: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}>
               <div>
-                <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>Chỉnh sửa thông tin tài khoản</h3>
-                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Cập nhật tên hiển thị và tên tổ chức</p>
+                <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{isEn ? 'Edit Profile Information' : 'Chỉnh sửa thông tin tài khoản'}</h3>
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{isEn ? 'Update display name and household/org name' : 'Cập nhật tên hiển thị và tên tổ chức'}</p>
               </div>
               <button onClick={() => setShowEditModal(false)} className="p-1.5 rounded-lg transition hover:bg-slate-500/10" style={{ color: 'var(--text-muted)' }}>
                 <X className="w-4 h-4" />
@@ -290,34 +292,34 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
             </div>
             <div className="p-5 space-y-4 text-xs">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Họ và tên hiển thị *</label>
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>{isEn ? 'Full Display Name *' : 'Họ và tên hiển thị *'}</label>
                 <input
                   type="text"
                   className="theme-input"
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
-                  placeholder="Nhập họ và tên..."
+                  placeholder={isEn ? 'Enter your full name...' : 'Nhập họ và tên...'}
                   autoFocus
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tên Công ty / Hộ gia đình</label>
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>{isEn ? 'Company / Household Name' : 'Tên Công ty / Hộ gia đình'}</label>
                 <input
                   type="text"
                   className="theme-input"
                   value={editOrg}
                   onChange={e => setEditOrg(e.target.value)}
-                  placeholder="VD: Công ty TNHH ABC hoặc Gia đình Nguyễn"
+                  placeholder={isEn ? 'e.g. UTI VINA LLC or Nguyen Family' : 'VD: Công ty TNHH ABC hoặc Gia đình Nguyễn'}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Email đăng nhập</label>
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>{isEn ? 'Login Email' : 'Email đăng nhập'}</label>
                 <input type="text" className="theme-input opacity-60 cursor-not-allowed" value={userEmail} disabled />
-                <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>Email không thể thay đổi trực tiếp. Liên hệ Admin để cập nhật.</p>
+                <p className="text-[10px]" style={{ color: 'var(--text-faint)' }}>{isEn ? 'Email cannot be changed directly. Contact Admin to update.' : 'Email không thể thay đổi trực tiếp. Liên hệ Admin để cập nhật.'}</p>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Vai trò phân quyền</label>
-                <input type="text" className="theme-input opacity-60 cursor-not-allowed" value={userRole === 'ADMIN' ? 'ADMIN — Quản trị viên (Toàn quyền)' : 'MEMBER — Thành viên'} disabled />
+                <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>{isEn ? 'Role Permission' : 'Vai trò phân quyền'}</label>
+                <input type="text" className="theme-input opacity-60 cursor-not-allowed" value={userRole === 'ADMIN' ? (isEn ? 'ADMIN — Administrator (Full Access)' : 'ADMIN — Quản trị viên (Toàn quyền)') : (isEn ? 'MEMBER — Family Member' : 'MEMBER — Thành viên')} disabled />
               </div>
               <div className="flex space-x-2 pt-2">
                 <button
@@ -326,14 +328,14 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
                   style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>Lưu thay đổi</span>
+                  <span>{isEn ? 'Save Changes' : 'Lưu thay đổi'}</span>
                 </button>
                 <button
                   onClick={() => setShowEditModal(false)}
                   className="px-4 py-2.5 rounded-xl text-xs font-semibold"
                   style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
                 >
-                  Hủy
+                  {isEn ? 'Cancel' : 'Hủy'}
                 </button>
               </div>
             </div>

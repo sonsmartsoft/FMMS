@@ -10,6 +10,7 @@ import { createExpense, updateExpense, deleteExpense } from '@/lib/services/expe
 import { getFuelLogs } from '@/lib/services/fuelService';
 import { getMaintenanceRecords } from '@/lib/services/maintenanceService';
 import { getParts } from '@/lib/services/partService';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 import {
@@ -168,6 +169,7 @@ function generate2TierLoanSchedule(loan: LoanRecord | null, payments: any[]) {
 
 export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuelLogs, maintenance, onRefresh, onNavigateTab }: VehicleFinanceOverviewProps) {
   const router = useRouter();
+  const { isEn } = useLanguage();
   const [payments, setPayments] = useState<any[]>([]);
   const [bankList, setBankList] = useState<string[]>(DEFAULT_BANKS);
   const [activeModal, setActiveModal] = useState<string | null>(null);
@@ -662,109 +664,109 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
       id: 'investment',
       title: 'Investment',
       href: '/assets',
-      sub: 'Vốn tự có ban đầu',
+      sub: isEn ? 'Initial Equity / Down Payment' : 'Vốn tự có ban đầu',
       value: `${fmt(investment)} ₫`,
       color: '#3B82F6',
       bg: 'rgba(59,130,246,0.12)',
       border: 'rgba(59,130,246,0.3)',
       icon: Landmark,
-      detailText: `Trả trước ${fmt(downPayment)}₫ + Phí lăn bánh ${fmt(initialFeesTotal)}₫`,
+      detailText: isEn ? `Down payment ${fmt(downPayment)}₫ + Initial fees ${fmt(initialFeesTotal)}₫` : `Trả trước ${fmt(downPayment)}₫ + Phí lăn bánh ${fmt(initialFeesTotal)}₫`,
     },
     {
       id: 'upgrade',
       title: 'Upgrade',
       href: '/maintenance',
-      sub: 'Đồ độ & Nâng cấp',
+      sub: isEn ? 'Upgrades & Accessories' : 'Đồ độ & Nâng cấp',
       value: `${fmt(totalUpgradeCost)} ₫`,
       color: '#A78BFA',
       bg: 'rgba(167,139,250,0.12)',
       border: 'rgba(167,139,250,0.3)',
       icon: Wrench,
-      detailText: `${uniqueUpgradeCount} món độ — Mở tab Phụ tùng`,
+      detailText: isEn ? `${uniqueUpgradeCount} upgrade items — Open Parts` : `${uniqueUpgradeCount} món độ — Mở tab Phụ tùng`,
     },
     {
       id: 'running',
       title: 'Running',
       href: '/fuel',
-      sub: 'Chi phí vận hành',
+      sub: isEn ? 'Running & Fuel Costs' : 'Chi phí vận hành',
       value: `${fmt(totalRunningCost)} ₫`,
       color: '#F59E0B',
       bg: 'rgba(245,158,11,0.12)',
       border: 'rgba(245,158,11,0.3)',
       icon: Fuel,
-      detailText: 'Xăng, Đổ bê tông/Gửi xe, BOT, Rửa xe... — Mở tab Chi phí',
+      detailText: isEn ? 'Fuel, Parking, Tolls, Wash... — Open Expenses' : 'Xăng, Đổ bê tông/Gửi xe, BOT, Rửa xe... — Mở tab Chi phí',
     },
     {
       id: 'interest',
       title: 'Interest',
       href: '/finance',
-      sub: 'Lãi vay ngân hàng',
+      sub: isEn ? 'Bank Loan Interest' : 'Lãi vay ngân hàng',
       value: `${fmt(totalInterest)} ₫`,
       color: '#EC4899',
       bg: 'rgba(236,72,153,0.12)',
       border: 'rgba(236,72,153,0.3)',
       icon: TrendingUp,
-      detailText: loan ? `Ưu đãi ${loan.preferred_rate_percent || loan.interest_rate_percent}% + Thả nổi ${loan.floating_rate_percent || loan.interest_rate_percent}% — Mở Khoản vay` : 'Chưa có khoản vay',
+      detailText: loan ? (isEn ? `Pref ${loan.preferred_rate_percent || loan.interest_rate_percent}% + Float ${loan.floating_rate_percent || loan.interest_rate_percent}% — Open Loans` : `Ưu đãi ${loan.preferred_rate_percent || loan.interest_rate_percent}% + Thả nổi ${loan.floating_rate_percent || loan.interest_rate_percent}% — Mở Khoản vay`) : (isEn ? 'No active loan' : 'Chưa có khoản vay'),
     },
     {
       id: 'totalCost',
       title: 'Total Cost',
       href: '/finance',
-      sub: 'Tổng chi phí toàn bộ',
+      sub: isEn ? 'Total Cost of Ownership' : 'Tổng chi phí toàn bộ',
       value: `${fmt(totalCost)} ₫`,
       color: '#0EA5E9',
       bg: 'rgba(14,165,233,0.12)',
       border: 'rgba(14,165,233,0.3)',
       icon: PieChart,
-      detailText: 'Vốn tự có + Nâng cấp + Vận hành + Lãi vay',
+      detailText: isEn ? 'Equity + Upgrades + Running + Interest' : 'Vốn tự có + Nâng cấp + Vận hành + Lãi vay',
     },
     {
       id: 'cashOut',
       title: 'Cash Out',
       href: '/finance',
-      sub: 'Thực chi từ túi',
+      sub: isEn ? 'Out-of-Pocket Cash Out' : 'Thực chi từ túi',
       value: `${fmt(cashOut)} ₫`,
       color: '#F43F5E',
       bg: 'rgba(244,63,94,0.12)',
       border: 'rgba(244,63,94,0.3)',
       icon: DollarSign,
-      detailText: 'Tổng chi phí + Gốc vay đã thanh toán',
+      detailText: isEn ? 'Total Cost + Principal Paid' : 'Tổng chi phí + Gốc vay đã thanh toán',
     },
     {
       id: 'usage',
       title: 'Usage / Odometer',
-      sub: 'Quãng đường & Tình trạng',
+      sub: isEn ? 'Mileage & Usage' : 'Quãng đường & Tình trạng',
       value: `${fmt(asset.current_odometer_km || 0)} km`,
       color: '#10B981',
       bg: 'rgba(16,185,129,0.12)',
       border: 'rgba(16,185,129,0.3)',
       icon: Gauge,
-      detailText: `Trạng thái: ${asset.status === 'ACTIVE' ? 'Hoạt động tốt' : asset.status === 'MAINTENANCE' ? 'Đang bảo dưỡng' : 'Không hoạt động'}`,
+      detailText: isEn ? `Status: ${asset.status === 'ACTIVE' ? 'Active' : asset.status === 'MAINTENANCE' ? 'Maintenance' : 'Inactive'}` : `Trạng thái: ${asset.status === 'ACTIVE' ? 'Hoạt động tốt' : asset.status === 'MAINTENANCE' ? 'Đang bảo dưỡng' : 'Không hoạt động'}`,
       href: '/fuel',
     },
     {
       id: 'remaining',
       title: 'Remaining (Loan)',
       href: '/finance',
-      sub: 'Dư nợ vay còn lại',
+      sub: isEn ? 'Remaining Principal' : 'Dư nợ vay còn lại',
       value: `${fmt(remainingLoan)} ₫`,
       color: '#FB923C',
       bg: 'rgba(251,146,60,0.12)',
       border: 'rgba(251,146,60,0.3)',
       icon: CreditCard,
-      detailText: loan ? `Còn ${loan.term_months - schedule.filter(s => s.status === 'PAID').length} kỳ đóng — Mở Khoản vay` : 'Không có dư nợ',
+      detailText: loan ? (isEn ? `${loan.term_months - schedule.filter(s => s.status === 'PAID').length} months remaining — Open Loans` : `Còn ${loan.term_months - schedule.filter(s => s.status === 'PAID').length} kỳ đóng — Mở Khoản vay`) : (isEn ? 'No remaining debt' : 'Không có dư nợ'),
     },
     {
       id: 'ownership',
       title: 'Ownership Cost',
       href: '/finance',
-      sub: 'Tổng chi phí cam kết & thực tế',
+      sub: isEn ? 'Total Ownership Commitment' : 'Tổng chi phí cam kết & thực tế',
       value: `${fmt(ownershipCost)} ₫`,
       color: '#8B5CF6',
       bg: 'rgba(139,92,246,0.12)',
       border: 'rgba(139,92,246,0.3)',
       icon: TrendingDown,
-      detailText: 'Total Cost + Dư nợ khoản vay còn lại',
+      detailText: isEn ? 'Total Cost + Remaining Principal' : 'Total Cost + Dư nợ khoản vay còn lại',
     },
   ];
 
@@ -775,7 +777,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
         <div>
           <h3 className="text-base font-extrabold flex items-center space-x-2" style={{ color: 'var(--text-primary)' }}>
             <PieChart className="w-5 h-5 text-cyan-400" />
-            <span>BẢNG ĐIỀU KHIỂN TÀI CHÍNH XE &amp; TCO (9 METRIC CARDS)</span>
+            <span>{isEn ? 'VEHICLE FINANCIAL & TCO DASHBOARD (9 METRIC CARDS)' : 'BẢNG ĐIỀU KHIỂN TÀI CHÍNH XE & TCO (9 METRIC CARDS)'}</span>
           </h3>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
             Click vào từng thẻ để chuyển thẳng màn hình chi tiết hoặc chỉnh sửa thông số

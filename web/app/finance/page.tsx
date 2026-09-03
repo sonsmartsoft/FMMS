@@ -374,7 +374,6 @@ export default function FinancePage() {
       const d = e.date || '';
       if (!d) return;
       const mKey = d.slice(0, 7);
-      const cat = (e.category || 'Other').toUpperCase();
       const prev = map.get(mKey) || {
         monthKey: mKey,
         label: `T${parseInt(mKey.slice(5))}/${mKey.slice(2, 4)}`,
@@ -386,13 +385,23 @@ export default function FinancePage() {
         other: 0,
         total: 0,
       };
+      const cat = (e.category || 'Other').toUpperCase();
+      const sub = (e.subcategory || '').toUpperCase();
       const amt = e.amount || 0;
-      if (cat === 'FUEL' || cat === 'RUNNING') prev.fuel += amt;
-      else if (cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR') prev.maint += amt;
-      else if (cat === 'UPGRADE') prev.upgrade += amt;
-      else if (cat === 'INSURANCE' || cat === 'INITIAL' || cat === 'REGISTRATION') prev.ins += amt;
-      else if (cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST') prev.loan += amt;
-      else prev.other += amt;
+
+      if (cat === 'FUEL' || sub.includes('FUEL') || sub.includes('XĂNG') || sub.includes('PIN')) {
+        prev.fuel += amt;
+      } else if (cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR' || sub.includes('SERVICE') || sub.includes('BRAKE')) {
+        prev.maint += amt;
+      } else if (cat === 'UPGRADE' || sub.includes('SCREEN') || sub.includes('TPMS') || sub.includes('ACCESSORIE')) {
+        prev.upgrade += amt;
+      } else if (cat === 'INSURANCE' || cat === 'REGISTRATION' || sub.includes('REGISTRATION') || sub.includes('INSURANCE')) {
+        prev.ins += amt;
+      } else if (cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST' || sub.includes('PAYMENT') || sub.includes('INTEREST')) {
+        prev.loan += amt;
+      } else {
+        prev.other += amt;
+      }
       prev.total += amt;
       map.set(mKey, prev);
     });

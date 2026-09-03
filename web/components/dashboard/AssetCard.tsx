@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Asset, CardDisplaySettings } from '@/types/mobility';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { Car, Bike, Zap, Gauge, Fuel, DollarSign, ArrowRight, Battery } from 'lucide-react';
 
 interface AssetCardProps {
@@ -10,20 +11,22 @@ interface AssetCardProps {
   settings: CardDisplaySettings;
 }
 
-const ASSET_BADGE: Record<string, { label: string; bg: string; color: string }> = {
-  CAR:        { label: 'Ô TÔ',    bg: 'rgba(59,130,246,0.15)',  color: '#60A5FA' },
-  MOTORCYCLE: { label: 'MÔ TÔ',   bg: 'rgba(139,92,246,0.15)', color: '#A78BFA' },
-  BICYCLE:    { label: 'XE ĐẠP',  bg: 'rgba(52,211,153,0.15)', color: '#34D399' },
-  E_BIKE:     { label: 'XE ĐIỆN', bg: 'rgba(251,191,36,0.15)', color: '#FBBF24' },
-};
-
 export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
-  const badge = ASSET_BADGE[asset.asset_type] || { label: 'KHÁC', bg: 'rgba(100,116,139,0.15)', color: '#94A3B8' };
+  const { isEn } = useLanguage();
+
+  const ASSET_BADGE: Record<string, { label: string; bg: string; color: string }> = {
+    CAR:        { label: isEn ? 'CAR' : 'Ô TÔ',       bg: 'rgba(59,130,246,0.15)',  color: '#60A5FA' },
+    MOTORCYCLE: { label: isEn ? 'MOTO' : 'MÔ TÔ',     bg: 'rgba(139,92,246,0.15)', color: '#A78BFA' },
+    BICYCLE:    { label: isEn ? 'BIKE' : 'XE ĐẠP',    bg: 'rgba(52,211,153,0.15)', color: '#34D399' },
+    E_BIKE:     { label: isEn ? 'E-BIKE' : 'XE ĐIỆN', bg: 'rgba(251,191,36,0.15)', color: '#FBBF24' },
+  };
+
+  const badge = ASSET_BADGE[asset.asset_type] || { label: isEn ? 'OTHER' : 'KHÁC', bg: 'rgba(100,116,139,0.15)', color: '#94A3B8' };
 
   const fmt = (v: number) => {
     if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}B ₫`;
     if (v >= 1_000_000)     return `${(v / 1_000_000).toFixed(0)}M ₫`;
-    return `${v.toLocaleString('vi-VN')} ₫`;
+    return `${v.toLocaleString(isEn ? 'en-US' : 'vi-VN')} ₫`;
   };
 
   const AssetIcon = asset.asset_type === 'BICYCLE' ? Bike : asset.asset_type === 'E_BIKE' ? Zap : Car;
@@ -66,7 +69,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
             <div className="absolute top-3 right-3 flex items-center space-x-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold backdrop-blur-md"
               style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.15)', color: '#34D399' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Active</span>
+              <span>{isEn ? 'Active' : 'Hoạt động'}</span>
             </div>
 
             {/* License plate overlay */}
@@ -99,7 +102,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
             {settings.showPrice && asset.purchase_price > 0 && (
               <div className="mt-2 flex items-center space-x-1.5 text-xs font-semibold" style={{ color: 'var(--accent-cyan)' }}>
                 <DollarSign className="w-3.5 h-3.5" />
-                <span>Giá mua: {fmt(asset.purchase_price)}</span>
+                <span>{isEn ? 'Price' : 'Giá mua'}: {fmt(asset.purchase_price)}</span>
               </div>
             )}
           </div>
@@ -113,10 +116,10 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
               <div className="p-2 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center space-x-1 text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
                   <Gauge className="w-3 h-3" style={{ color: 'var(--accent-cyan)' }} />
-                  <span>{asset.asset_type === 'BICYCLE' ? 'Quãng đường' : 'Mileage'}</span>
+                  <span>{asset.asset_type === 'BICYCLE' ? (isEn ? 'Distance' : 'Quãng đường') : (isEn ? 'Mileage' : 'Quãng đường')}</span>
                 </div>
                 <p className="font-bold mt-0.5" style={{ color: 'var(--text-primary)' }}>
-                  {asset.current_odometer_km.toLocaleString('vi-VN')} km
+                  {asset.current_odometer_km.toLocaleString(isEn ? 'en-US' : 'vi-VN')} km
                 </p>
               </div>
             )}
@@ -125,7 +128,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
               <div className="p-2 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center space-x-1 text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
                   <Fuel className="w-3 h-3" style={{ color: 'var(--status-amber)' }} />
-                  <span>Mức xăng</span>
+                  <span>{isEn ? 'Fuel Level' : 'Mức xăng'}</span>
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
                   <span className="font-bold" style={{ color: 'var(--status-amber)' }}>{asset.fuel_level_percent}%</span>
@@ -140,7 +143,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
               <div className="p-2 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
                 <div className="flex items-center space-x-1 text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
                   <Battery className="w-3 h-3" style={{ color: 'var(--status-green)' }} />
-                  <span>Mức pin</span>
+                  <span>{isEn ? 'Battery' : 'Mức pin'}</span>
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
                   <span className="font-bold" style={{ color: 'var(--status-green)' }}>{asset.fuel_level_percent}%</span>
@@ -153,15 +156,15 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
 
             {settings.showConsumption && asset.capabilities.has_fuel && asset.avg_consumption_l100km && (
               <div className="p-2 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
-                <div className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Tiêu thụ TB</div>
+                <div className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>{isEn ? 'Avg Economy' : 'Tiêu thụ TB'}</div>
                 <p className="font-bold mt-0.5" style={{ color: 'var(--text-secondary)' }}>{asset.avg_consumption_l100km} L/100km</p>
               </div>
             )}
 
             {asset.asset_type === 'BICYCLE' && asset.total_rides !== undefined && (
               <div className="p-2 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
-                <div className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>Số chuyến</div>
-                <p className="font-bold mt-0.5" style={{ color: 'var(--status-green)' }}>{asset.total_rides} chuyến</p>
+                <div className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>{isEn ? 'Total Rides' : 'Số chuyến'}</div>
+                <p className="font-bold mt-0.5" style={{ color: 'var(--status-green)' }}>{asset.total_rides} {isEn ? 'rides' : 'chuyến'}</p>
               </div>
             )}
           </div>
@@ -171,7 +174,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
             className="pt-2 flex items-center justify-between text-xs font-semibold transition-colors"
             style={{ color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)' }}
           >
-            <span>Xem chi tiết quản lý</span>
+            <span>{isEn ? 'View Vehicle Details' : 'Xem chi tiết quản lý'}</span>
             <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" style={{ color: 'var(--accent-cyan)' }} />
           </div>
         </div>
