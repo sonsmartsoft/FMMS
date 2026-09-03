@@ -4533,7 +4533,7 @@ export default function AssetDetailPage() {
               name: 'Chi phí khoản vay (Tiền lãi vay)',
               total: loanCost,
               color: '#EC4899',
-              items: assetLoanSchedule.filter(s => s.status === 'PAID').map(s => ({ date: s.paid_date || s.due_date, description: `Lãi vay kỳ #${s.payment_number}`, vendor: loan?.bank_name || 'Ngân hàng', amount: s.interest_paid })),
+              items: assetLoanSchedule.filter(s => s.status === 'PAID').map(s => ({ date: s.paid_date || s.due_date, description: `Lãi vay kỳ #${s.payment_number}`, vendor: loan?.lender || 'Ngân hàng', amount: s.interest_paid })),
             },
             {
               id: 'downpayment',
