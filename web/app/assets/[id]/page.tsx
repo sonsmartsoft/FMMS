@@ -875,10 +875,10 @@ export default function AssetDetailPage() {
     };
 
     const events: OdoEvent[] = [];
+    const initialHandoverDate = asset?.purchase_date ? toLocalDateString(asset.purchase_date) : '';
 
     // 0. Initial vehicle handover / purchase baseline (if vehicle has purchase_date)
-    if (asset?.purchase_date) {
-      const initialHandoverDate = toLocalDateString(asset.purchase_date);
+    if (initialHandoverDate) {
       events.push({
         date: initialHandoverDate,
         odometer_km: asset.current_odometer_km > 0 ? Math.min(12, asset.current_odometer_km) : 0,
@@ -990,8 +990,8 @@ export default function AssetDetailPage() {
       });
     }
 
-    // Filter out any events before vehicle handover date (e.g. initial deposit in March)
-    const validEvents = events.filter(e => e.date >= initialHandoverDate);
+    // Filter out any events before vehicle handover date (if purchase_date is set)
+    const validEvents = initialHandoverDate ? events.filter(e => e.date >= initialHandoverDate) : events;
 
     // Sort events by date ascending
     validEvents.sort((a, b) => {
