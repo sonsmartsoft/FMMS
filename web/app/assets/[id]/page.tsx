@@ -688,6 +688,11 @@ export default function AssetDetailPage() {
   const [partSortDir, setPartSortDir] = useState<'asc' | 'desc'>('desc');
   const [maintSortCol, setMaintSortCol] = useState<string>('date');
   const [maintSortDir, setMaintSortDir] = useState<'asc' | 'desc'>('desc');
+  const [tcoDrillDown, setTcoDrillDown] = useState<{
+    title: string;
+    color: string;
+    items: { date: string; description: string; vendor?: string; amount: number; odo?: number }[];
+  } | null>(null);
   const [loanSortCol, setLoanSortCol] = useState<string>('payment_number');
   const [loanSortDir, setLoanSortDir] = useState<'asc' | 'desc'>('asc');
   const [tripSortCol, setTripSortCol] = useState<string>('start_time');
@@ -4407,26 +4412,52 @@ export default function AssetDetailPage() {
 
         {/* ═══ ANALYTICS (PHÂN TÍCH TCO THỰC TẾ) ═══ */}
         {activeTab === 'analytics' && (() => {
-          const upgradeCost = expenses.filter(e => (e.category || '').toUpperCase() === 'UPGRADE' || (e.subcategory || '').toUpperCase().includes('ACCESSORIE')).reduce((s, e) => s + e.amount, 0);
-          
-          // 1. Tính bảo hiểm & giấy tờ (từ cả bảng insurance_policies lẫn expenses)
-          const insFromTable = insurances.reduce((s, ins) => s + (Number(ins.annual_fee) || 0), 0);
-          const insFromExp = expenses.filter(e => {
+          // 1. Nâng cấp & Phụ kiện
+          const upgradeItems = expenses.filter(e => (e.category || '').toUpperCase() === 'UPGRADE' || (e.subcategory || '').toUpperCase().includes('ACCESSORIE'));
+          const upgradeCost = upgradeItems.reduce((s, e) => s + e.amount, 0);
+
+          // 2. Bảo hiểm & Giấy tờ định kỳ
+          const insItems = expenses.filter(e => {
             const cat = (e.category || '').toUpperCase();
             const sub = (e.subcategory || '').toUpperCase();
             const desc = (e.description || '').toUpperCase();
             return cat.includes('INSUR') || sub.includes('INSUR') || desc.includes('BẢO HIỂM') || desc.includes('ĐĂNG KIỂM') || desc.includes('PHÍ ĐƯỜNG BỘ');
-          }).reduce((s, e) => s + e.amount, 0);
+          });
+          const insFromTable = insurances.reduce((s, ins) => s + (Number(ins.annual_fee) || 0), 0);
+          const insFromExp = insItems.reduce((s, e) => s + e.amount, 0);
           const effectiveInsurance = Math.max(insFromTable, insFromExp);
 
-          // 2. Tính chi phí khoản vay (Tiền lãi vay đã trả từ lịch trả nợ hoặc chi phí ghi nhận)
-          const loanInterestFromExpenses = expenses.filter(e => {
+          // 3. Lệ phí Trước bạ & Thủ tục Lăn bánh ban đầu
+          const registrationItems = expenses.filter(e => {
+            const cat = (e.category || '').toUpperCase();
+            const desc = (e.description || '').toUpperCase();
+            return (
+              desc.includes('TRƯỚC BẠ') ||
+              desc.includes('LỆ PHÍ TRƯỚC BẠ') ||
+              desc.includes('ĐĂNG KÝ BIỂN SỐ') ||
+              desc.includes('DỊCH VỤ NGÂN HÀNG') ||
+              desc.includes('BẢO HIỂM KHOẢN VAY') ||
+              (cat === 'INITIAL' && !desc.includes('CỌC') && !desc.includes('CHUYỂN TIỀN') && !desc.includes('TIỀN MẶT XE'))
+            );
+          });
+          const registrationCost = registrationItems.reduce((s, e) => s + e.amount, 0);
+
+          // 4. Tiền cọc & Đối ứng mua xe ban đầu (Vốn tự có)
+          const downpaymentItems = expenses.filter(e => {
+            const cat = (e.category || '').toUpperCase();
+            const desc = (e.description || '').toUpperCase();
+            return cat === 'INITIAL' && (desc.includes('CỌC') || desc.includes('CHUYỂN TIỀN') || desc.includes('TIỀN MẶT XE') || desc.includes('ĐỐI ỨNG'));
+          });
+          const downpaymentCost = downpaymentItems.reduce((s, e) => s + e.amount, 0);
+
+          // 5. Chi phí khoản vay (Lãi vay ngân hàng)
+          const loanItems = expenses.filter(e => {
             const cat = (e.category || '').toUpperCase();
             const sub = (e.subcategory || '').toUpperCase();
             const desc = (e.description || '').toUpperCase();
             return cat.includes('LOAN') || sub.includes('LOAN') || desc.includes('LÃI VAY') || desc.includes('TRẢ GÓP') || desc.includes('LÃI NGÂN HÀNG');
-          }).reduce((s, e) => s + e.amount, 0);
-
+          });
+          const loanInterestFromExpenses = loanItems.reduce((s, e) => s + e.amount, 0);
           const loanInterestFromSchedule = assetLoanSchedule.filter(s => s.status === 'PAID').reduce((sum, s) => sum + (s.interest_paid || 0), 0);
           const loanCost = loanInterestFromExpenses > 0 
             ? loanInterestFromExpenses 
@@ -4434,26 +4465,98 @@ export default function AssetDetailPage() {
                 ? loanInterestFromSchedule 
                 : (loan && loan.interest_rate_percent > 0 ? Math.round(loan.principal * (loan.interest_rate_percent / 100) * ((loan.term_months || 12) / 12)) : 0));
 
-          const otherCost = Math.max(0, totalExpenses - totalFuelCost - totalMaintCost - effectiveInsurance - upgradeCost - loanInterestFromExpenses);
+          // 6. Chi phí Vận hành thường xuyên khác (Gửi xe, Rửa xe, BOT, Sân đỗ...)
+          const knownAccountedExpenseSum = upgradeCost + insFromExp + registrationCost + downpaymentCost + loanInterestFromExpenses;
+          const otherRunningCost = Math.max(0, totalExpenses - totalFuelCost - totalMaintCost - knownAccountedExpenseSum);
+
+          const otherRunningItems = expenses.filter(e => {
+            const isUpgrade = upgradeItems.some(x => x.id === e.id);
+            const isIns = insItems.some(x => x.id === e.id);
+            const isReg = registrationItems.some(x => x.id === e.id);
+            const isDown = downpaymentItems.some(x => x.id === e.id);
+            const isLoan = loanItems.some(x => x.id === e.id);
+            return !isUpgrade && !isIns && !isReg && !isDown && !isLoan;
+          });
+
           const purchasePrice = asset.purchase_price || 0;
           const totalRealSpent = purchasePrice + totalExpenses + (loanCost > loanInterestFromExpenses ? loanCost : 0);
 
           const tcoDonutData = [
             { name: 'Giá mua ban đầu', value: purchasePrice, color: '#3B82F6' },
-            { name: 'Nhiên liệu & Pin', value: totalFuelCost, color: '#F59E0B' },
-            { name: 'Bảo dưỡng & Phụ tùng', value: totalMaintCost, color: '#06B6D4' },
+            { name: 'Nhiên liệu & Pin', value: totalFuelCost, color: '#EF4444' },
+            { name: 'Bảo dưỡng & Phụ tùng', value: totalMaintCost, color: '#0EA5E9' },
             { name: 'Bảo hiểm & Giấy tờ', value: effectiveInsurance, color: '#10B981' },
-            { name: 'Nâng cấp / Đồ chơi', value: upgradeCost, color: '#8B5CF6' },
+            { name: 'Lệ phí Trước bạ & Lăn bánh', value: registrationCost, color: '#F59E0B' },
+            { name: 'Nâng cấp / Phụ kiện', value: upgradeCost, color: '#8B5CF6' },
             { name: 'Chi phí khoản vay', value: loanCost, color: '#EC4899' },
-            { name: 'Vận hành khác', value: otherCost, color: '#64748B' },
+            { name: 'Vận hành khác (BOT, rửa xe...)', value: otherRunningCost, color: '#64748B' },
           ].filter(d => d.value > 0);
+
+          const tcoTableRows = [
+            {
+              id: 'fuel',
+              name: 'Nhiên liệu (Xăng / Điện)',
+              total: totalFuelCost,
+              color: '#EF4444',
+              items: fuelLogs.map(f => ({ date: f.date, description: `Đổ nhiên liệu ${f.liters ? `${f.liters}L` : ''}`, vendor: f.gas_station_name, amount: f.total_cost, odo: f.odometer_km })),
+            },
+            {
+              id: 'maint',
+              name: 'Bảo dưỡng & Phụ tùng thay thế',
+              total: totalMaintCost,
+              color: '#0EA5E9',
+              items: maintenance.map(m => ({ date: m.date, description: m.service_name || m.description || 'Bảo dưỡng', vendor: m.service_center, amount: m.cost, odo: m.odometer_km })),
+            },
+            {
+              id: 'insurance',
+              name: 'Bảo hiểm & Đăng kiểm định kỳ',
+              total: effectiveInsurance,
+              color: '#10B981',
+              items: insItems.map(e => ({ date: e.date, description: e.description, vendor: e.vendor, amount: e.amount, odo: e.odometer_km })),
+            },
+            {
+              id: 'registration',
+              name: 'Lệ phí Trước bạ & Thủ tục Lăn bánh ban đầu',
+              total: registrationCost,
+              color: '#F59E0B',
+              items: registrationItems.map(e => ({ date: e.date, description: e.description, vendor: e.vendor, amount: e.amount, odo: e.odometer_km })),
+            },
+            {
+              id: 'upgrade',
+              name: 'Nâng cấp / Đồ chơi & Phụ kiện xe',
+              total: upgradeCost,
+              color: '#8B5CF6',
+              items: upgradeItems.map(e => ({ date: e.date, description: e.description, vendor: e.vendor, amount: e.amount, odo: e.odometer_km })),
+            },
+            {
+              id: 'loan',
+              name: 'Chi phí khoản vay (Tiền lãi vay)',
+              total: loanCost,
+              color: '#EC4899',
+              items: assetLoanSchedule.filter(s => s.status === 'PAID').map(s => ({ date: s.paid_date || s.due_date, description: `Lãi vay kỳ #${s.payment_number}`, vendor: loan?.bank_name || 'Ngân hàng', amount: s.interest_paid })),
+            },
+            {
+              id: 'downpayment',
+              name: 'Vốn tự có / Tiền đối ứng mua xe ban đầu',
+              total: downpaymentCost,
+              color: '#3B82F6',
+              items: downpaymentItems.map(e => ({ date: e.date, description: e.description, vendor: e.vendor, amount: e.amount, odo: e.odometer_km })),
+            },
+            {
+              id: 'other',
+              name: 'Chi phí Vận hành khác (Rửa xe, gửi xe, BOT, sân bãi...)',
+              total: otherRunningCost,
+              color: '#64748B',
+              items: otherRunningItems.map(e => ({ date: e.date, description: e.description, vendor: e.vendor, amount: e.amount, odo: e.odometer_km })),
+            },
+          ].filter(r => r.total > 0);
 
           return (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Phân tích Dòng Tiền &amp; Chi Phí Thực Tế (TCO)</h3>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Tổng dòng tiền thực chi cho xe (Giá mua ban đầu + Toàn bộ chi phí phát sinh)</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>Tổng dòng tiền thực chi cho xe (Giá mua ban đầu + Toàn bộ chi phí phát sinh minh bạch)</p>
                 </div>
               </div>
 
@@ -4520,7 +4623,6 @@ export default function AssetDetailPage() {
                   )}
                 </div>
 
-
                 {/* Horizontal Bar Chart: So sánh Giá trị xe vs Chi phí phát sinh */}
                 <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <div className="flex items-center gap-2">
@@ -4558,42 +4660,50 @@ export default function AssetDetailPage() {
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-
                 </div>
-
               </div>
 
-
-              {/* Chi tiết từng hạng mục */}
+              {/* Chi tiết từng hạng mục có thể Click xem Drill-down */}
               <div className="overflow-x-auto rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
+                <div className="p-3 bg-cyan-500/5 border-b border-cyan-500/20 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 text-cyan-600 dark:text-cyan-400 font-semibold">
+                    <span className="text-sm">💡</span>
+                    <span>Bấm vào bất kỳ hạng mục nào bên dưới để xem chi tiết từng hóa đơn/khoản chi</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-mono">Tổng {tcoTableRows.length} danh mục</span>
+                </div>
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
-                      {['Hạng mục chi phí', 'Tổng chi tiêu', '% Chi phí VH', '% Trên giá xe'].map(h => (
+                      {['Hạng mục chi phí', 'Tổng chi tiêu', '% Chi phí VH', '% Trên giá xe', 'Hành động'].map(h => (
                         <th key={h} className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide" style={{ color: 'var(--text-muted)' }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {[
-                      { name: 'Nhiên liệu (Xăng / Điện)', total: totalFuelCost, color: '#EF4444' },
-                      { name: 'Bảo dưỡng & Phụ tùng', total: totalMaintCost, color: '#0EA5E9' },
-                      { name: 'Bảo hiểm & Giấy tờ', total: effectiveInsurance, color: '#8B5CF6' },
-                      { name: 'Nâng cấp / Đồ độ xe', total: upgradeCost, color: '#A78BFA' },
-                      { name: 'Chi phí khoản vay', total: loanCost, color: '#EC4899' },
-                      { name: 'Chi phí khác (Rửa xe, gửi xe, BOT...)', total: otherCost, color: '#64748B' },
-                    ].map((row, i) => {
+                    {tcoTableRows.map((row, i) => {
                       const pctVH = totalExpenses > 0 ? ((row.total / totalExpenses) * 100).toFixed(1) : '0';
                       const pctAsset = (asset.purchase_price || 0) > 0 ? ((row.total / asset.purchase_price) * 100).toFixed(1) : '0';
                       return (
-                        <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
+                        <tr
+                          key={i}
+                          onClick={() => setTcoDrillDown({ title: row.name, color: row.color, items: row.items })}
+                          className="cursor-pointer hover:bg-cyan-500/10 transition group"
+                          style={{ borderBottom: '1px solid var(--border-subtle)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}
+                          title="Nhấn để xem chi tiết tất cả các khoản chi trong mục này"
+                        >
                           <td className="px-3.5 py-2.5 font-medium" style={{ color: 'var(--text-secondary)' }}>
-                            <span className="inline-block w-2 h-2 rounded-full mr-2" style={{ background: row.color }} />
-                            {row.name}
+                            <span className="inline-block w-2.5 h-2.5 rounded-full mr-2" style={{ background: row.color }} />
+                            <span className="group-hover:text-cyan-500 group-hover:underline transition font-semibold">{row.name}</span>
                           </td>
                           <td className="px-3.5 py-2.5 font-bold font-mono" style={{ color: row.color }}>{fmt(row.total)} ₫</td>
                           <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--text-muted)' }}>{pctVH}%</td>
                           <td className="px-3.5 py-2.5 font-mono font-semibold" style={{ color: 'var(--accent-cyan)' }}>{pctAsset}%</td>
+                          <td className="px-3.5 py-2.5">
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 font-semibold group-hover:bg-cyan-500 group-hover:text-white transition">
+                              Xem {row.items.length} mục 🔍
+                            </span>
+                          </td>
                         </tr>
                       );
                     })}
@@ -5364,9 +5474,100 @@ export default function AssetDetailPage() {
                   Hủy
                 </button>
               </div>
-            
-</div>
-</DraggableModal>
+            </div>
+          </DraggableModal>
+        )}
+
+      {/* 📊 TCO Category Drill-down Modal */}
+      {tcoDrillDown && (
+        <DraggableModal isOpen={true} onClose={() => setTcoDrillDown(null)}>
+          <div className="flex flex-col h-full max-h-[85vh] w-[95vw] sm:w-[850px] max-w-4xl" style={{ background: 'var(--bg-card)', color: 'var(--text-primary)' }}>
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b flex items-center justify-between" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <div className="flex items-center gap-3">
+                <div className="w-3.5 h-3.5 rounded-full shrink-0" style={{ background: tcoDrillDown.color }} />
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                    <span>{tcoDrillDown.title}</span>
+                  </h3>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    Danh sách chi tiết {tcoDrillDown.items.length} khoản chi • Tổng cộng: <strong style={{ color: tcoDrillDown.color }}>{fmt(tcoDrillDown.items.reduce((s, x) => s + (x.amount || 0), 0))} ₫</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setTcoDrillDown(null)}
+                className="p-1.5 rounded-xl hover:bg-white/10 transition"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Table */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 text-xs">
+              {tcoDrillDown.items.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--border-default)' }}>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-default)' }}>
+                        {['STT', 'Ngày', 'Mô tả chi phí', 'Đơn vị / Nơi chi', 'ODO', 'Số tiền (₫)'].map(h => (
+                          <th key={h} className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px] tracking-wide" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tcoDrillDown.items.map((item, idx) => (
+                        <tr
+                          key={idx}
+                          style={{
+                            borderBottom: '1px solid var(--border-subtle)',
+                            background: idx % 2 === 0 ? 'transparent' : 'var(--bg-hover)',
+                          }}
+                        >
+                          <td className="px-3.5 py-2.5 font-mono text-[11px]" style={{ color: 'var(--text-muted)' }}>#{idx + 1}</td>
+                          <td className="px-3.5 py-2.5 font-mono text-[11px] whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                            {item.date ? toLocalDateString(item.date) : '—'}
+                          </td>
+                          <td className="px-3.5 py-2.5 font-semibold" style={{ color: 'var(--text-primary)' }}>
+                            {item.description || '—'}
+                          </td>
+                          <td className="px-3.5 py-2.5" style={{ color: 'var(--text-muted)' }}>
+                            {item.vendor || '—'}
+                          </td>
+                          <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--accent-cyan)' }}>
+                            {item.odo ? `${fmt(item.odo)} km` : '—'}
+                          </td>
+                          <td className="px-3.5 py-2.5 font-mono font-bold whitespace-nowrap" style={{ color: tcoDrillDown.color }}>
+                            {fmt(item.amount || 0)} ₫
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-12 text-center text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Không có bản ghi chi tiết nào
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t flex items-center justify-between" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                Được tổng hợp từ sổ kế toán &amp; vận hành xe
+              </span>
+              <button
+                onClick={() => setTcoDrillDown(null)}
+                className="px-5 py-2 rounded-xl text-xs font-semibold hover:bg-white/10 transition"
+                style={{ background: 'var(--bg-hover)', color: 'var(--text-primary)', border: '1px solid var(--border-default)' }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </DraggableModal>
       )}
 
       {/* 🔒 Master Admin Security PIN Confirmation Modal */}
