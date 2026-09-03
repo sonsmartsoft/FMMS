@@ -204,6 +204,14 @@ export default function AssetDetailPage() {
     expiry_date: '',
     coverage_details: '',
   });
+  const [docsForm, setDocsForm] = useState({
+    license_plate: '',
+    vin: '',
+    engine: '',
+    registration_date: '',
+    next_maintenance_due: '',
+    notes: '',
+  });
   const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; title?: string; description?: string; actionName?: string; onConfirm?: () => void }>({ isOpen: false });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -715,11 +723,14 @@ export default function AssetDetailPage() {
   const thisYearEnd = `${nowD.getFullYear()}-12-31`;
 
   const dateFilterPresets = [
-    { label: 'Tất cả', start: '', end: '' },
+    { label: 'Tất cả từ ngày mua (09/04)', start: '2026-04-09', end: '' },
+    { label: 'Tháng 4', start: '2026-04-01', end: '2026-04-30' },
+    { label: 'Tháng 5', start: '2026-05-01', end: '2026-05-31' },
+    { label: 'Tháng 6', start: '2026-06-01', end: '2026-06-30' },
+    { label: 'Tháng 7', start: '2026-07-01', end: '2026-07-31' },
+    { label: 'Tháng 8', start: '2026-08-01', end: '2026-08-31' },
+    { label: 'Tháng 9', start: '2026-09-01', end: '2026-09-30' },
     { label: 'Hôm nay', start: todayLocalDate, end: todayLocalDate },
-    { label: 'Tháng này', start: currentMonthStart, end: currentMonthEnd },
-    { label: 'Tháng trước', start: prevMonthStart, end: prevMonthEnd },
-    { label: 'Năm nay', start: thisYearStart, end: thisYearEnd },
   ];
 
 
@@ -851,6 +862,17 @@ export default function AssetDetailPage() {
     };
 
     const events: OdoEvent[] = [];
+
+    // 0. Initial vehicle handover / purchase baseline (e.g. 2026-04-09 lúc 12 km)
+    const initialHandoverDate = asset?.purchase_date ? toLocalDateString(asset.purchase_date) : '2026-04-09';
+    events.push({
+      date: initialHandoverDate,
+      odometer_km: 12,
+      type: 'ODO_LOG',
+      note: 'Bàn giao xe từ Showroom Mazda (Mốc ODO khởi điểm 12 km)',
+      id: `handover_baseline_${asset?.id || 'mazda2'}`,
+      raw: { date: initialHandoverDate, odometer_km: 12 },
+    });
 
     // Odometer logs
     odometerLogs.forEach(o => {
@@ -1001,7 +1023,7 @@ export default function AssetDetailPage() {
       const endD = new Date(maxDateStr);
       
       const diffDays = Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays <= 90) {
+      if (diffDays <= 365) {
         for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
           const dStr = toLocalDateString(d.toISOString());
           if (!dailyMap.has(dStr)) {
@@ -2103,6 +2125,25 @@ export default function AssetDetailPage() {
     setInsForm({ type: 'Bảo hiểm vật chất', company: '', policy_number: '', start_date: '', expiry_date: '', annual_fee: '', coverage_amount: '', agent_name: '', agent_phone: '', provider_hotline: '', notes: '' });
   };
 
+  const saveVehicleDocs = async () => {
+    try {
+      if (!asset) return;
+      const updated = await updateAsset(asset.id, {
+        license_plate: docsForm.license_plate || undefined,
+        vin: docsForm.vin || undefined,
+        engine: docsForm.engine || undefined,
+        next_maintenance_due: docsForm.next_maintenance_due || undefined,
+      });
+      if (updated) {
+        setAsset(updated);
+        showToast('✅ Đã cập nhật Giấy tờ xe & Hạn đăng kiểm thành công!');
+      }
+      setOpenModal(null);
+    } catch (err: any) {
+      alert(`Lỗi khi lưu giấy tờ xe: ${err?.message ?? 'Không lưu được'}`);
+    }
+  };
+
   const saveEdit = async () => {
     setSavingEdit(true);
     try {
@@ -2852,7 +2893,6 @@ export default function AssetDetailPage() {
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart
                             data={[...displayedDailyReport]
-                              .slice(0, 31)
                               .reverse()
                               .map(d => ({
                                 date: d.date ? `${d.date.slice(8, 10)}/${d.date.slice(5, 7)}` : '',
@@ -4231,21 +4271,15 @@ export default function AssetDetailPage() {
                 <p className="font-bold" style={{ color: 'var(--text-primary)' }}>Đăng kiểm &amp; Giấy tờ xe</p>
                 <button
                   onClick={() => {
-                    setEditForm({
-                      name: asset.name, brand: asset.brand, model: asset.model, year: String(asset.year || ''),
-                      color: asset.color || '', license_plate: asset.license_plate || '',
-                      vin: asset.vin || '', engine: asset.engine || '', fuel_type: asset.fuel_type || 'PETROL',
-                      tank_capacity_liters: String(asset.tank_capacity_liters ?? ''),
-                      battery_capacity_kwh: String(asset.battery_capacity_kwh ?? ''),
-                      purchase_price: String(asset.purchase_price || ''), current_value: String(asset.current_value || ''),
-                      purchase_date: asset.purchase_date || '', image_url: asset.image_url || '',
-                      current_odometer_km: String(asset.current_odometer_km || 0),
-                      status: asset.status || 'ACTIVE', description: asset.description || '',
-                      sales_rep_name: asset.sales_rep_name || '',
-                      sales_rep_phone: asset.sales_rep_phone || '',
-                      brand_hotline: asset.brand_hotline || '',
+                    setDocsForm({
+                      license_plate: asset.license_plate || '',
+                      vin: asset.vin || '',
+                      engine: asset.engine || '',
+                      registration_date: asset.purchase_date || '',
+                      next_maintenance_due: asset.next_maintenance_due || '',
+                      notes: asset.description || '',
                     });
-                    setOpenModal('edit');
+                    setOpenModal('vehicle_docs');
                   }}
                   className="text-xs font-semibold text-cyan-400 hover:underline flex items-center space-x-1"
                 >
@@ -4990,6 +5024,53 @@ export default function AssetDetailPage() {
               {editingInsurance ? 'Cập nhật bảo hiểm' : 'Lưu bảo hiểm'}
             </button>
             <button onClick={() => { setOpenModal(null); setEditingInsurance(null); }} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Vehicle Documents & Inspection Modal */}
+      {openModal === 'vehicle_docs' && (
+        <Modal title="📋 Cập nhật Đăng kiểm & Giấy tờ xe" onClose={() => setOpenModal(null)}>
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+              <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">1. Đăng kiểm &amp; Lưu hành xe</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Hạn đăng kiểm tiếp theo *</label>
+                  <input type="date" className="theme-input font-bold text-amber-400" value={docsForm.next_maintenance_due} onChange={e => setDocsForm(p => ({ ...p, next_maintenance_due: e.target.value }))} />
+                  <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>Xe mới miễn kiểm định lần đầu (36 tháng)</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Biển số đăng ký *</label>
+                  <input type="text" className="theme-input font-bold uppercase tracking-wider text-cyan-400" placeholder="VD: 19B-213.87" value={docsForm.license_plate} onChange={e => setDocsForm(p => ({ ...p, license_plate: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+              <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">2. Số khung &amp; Số máy (Cà vẹt xe)</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số khung (VIN)</label>
+                  <input type="text" className="theme-input font-mono font-bold uppercase" placeholder="VD: JM1DJ1010102026" value={docsForm.vin} onChange={e => setDocsForm(p => ({ ...p, vin: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Số máy / Động cơ</label>
+                  <input type="text" className="theme-input font-mono font-bold" placeholder="VD: 1.5L SkyActiv-G" value={docsForm.engine} onChange={e => setDocsForm(p => ({ ...p, engine: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ghi chú tình trạng giấy tờ</label>
+                  <input type="text" className="theme-input" placeholder="VD: Đăng ký gốc thế chấp ngân hàng TPBank, Bản sao công chứng còn hạn..." value={docsForm.notes} onChange={e => setDocsForm(p => ({ ...p, notes: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex space-x-2 pt-2 border-t" style={{ borderColor: 'var(--border-default)' }}>
+              <button onClick={saveVehicleDocs} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 shadow-md transition">
+                Lưu Đăng kiểm &amp; Giấy tờ
+              </button>
+              <button onClick={() => setOpenModal(null)} className="px-5 py-2.5 rounded-xl text-xs font-semibold hover:bg-white/10 transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+            </div>
           </div>
         </Modal>
       )}

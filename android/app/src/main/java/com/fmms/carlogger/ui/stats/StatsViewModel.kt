@@ -300,6 +300,7 @@ class StatsViewModel : ViewModel() {
             }
             val text = resp.body?.string() ?: return 0
             val arr = try { org.json.JSONArray(text) } catch (e: Exception) { return 0 }
+            android.util.Log.d("StatsVM", "pullTrips HTTP OK rawArrayLen=${arr.length()} first=${if (arr.length()>0) arr.optJSONObject(0)?.optString("start_time") else "none"}")
             val fmtIn = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
                 timeZone = java.util.TimeZone.getTimeZone("UTC")
             }
