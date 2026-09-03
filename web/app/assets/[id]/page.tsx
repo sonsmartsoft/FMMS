@@ -212,6 +212,7 @@ export default function AssetDetailPage() {
     next_maintenance_due: '',
     notes: '',
   });
+  const [hideRestDays, setHideRestDays] = useState(true);
   const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; title?: string; description?: string; actionName?: string; onConfirm?: () => void }>({ isOpen: false });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -975,14 +976,17 @@ export default function AssetDetailPage() {
       });
     }
 
+    // Filter out any events before vehicle handover date (e.g. initial deposit in March)
+    const validEvents = events.filter(e => e.date >= initialHandoverDate);
+
     // Sort events by date ascending
-    events.sort((a, b) => {
+    validEvents.sort((a, b) => {
       const dCmp = a.date.localeCompare(b.date);
       if (dCmp !== 0) return dCmp;
       return a.odometer_km - b.odometer_km;
     });
 
-    // Group by Day
+    // Group by Day (Chỉ tạo các ngày thực sự có sự kiện lăn bánh/đổ xăng/bảo dưỡng/trips)
     const dailyMap = new Map<string, {
       date: string;
       minOdo: number;
@@ -991,7 +995,7 @@ export default function AssetDetailPage() {
       notes: { type: string; text: string; id: string; raw?: any }[];
     }>();
 
-    events.forEach(ev => {
+    validEvents.forEach(ev => {
       if (!dailyMap.has(ev.date)) {
         dailyMap.set(ev.date, {
           date: ev.date,
@@ -1012,32 +1016,6 @@ export default function AssetDetailPage() {
         cur.notes.push({ type: ev.type, text: ev.note, id: ev.id, raw: ev.raw });
       }
     });
-
-    // Fill in missing days so the calendar/log is continuous and not skipping rest days
-    if (events.length > 0) {
-      const dates = Array.from(dailyMap.keys()).sort();
-      const minDateStr = dates[0];
-      const maxDateStr = todayStr > dates[dates.length - 1] ? todayStr : dates[dates.length - 1];
-      
-      const startD = new Date(minDateStr);
-      const endD = new Date(maxDateStr);
-      
-      const diffDays = Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
-      if (diffDays <= 365) {
-        for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
-          const dStr = toLocalDateString(d.toISOString());
-          if (!dailyMap.has(dStr)) {
-            dailyMap.set(dStr, {
-              date: dStr,
-              minOdo: 0,
-              maxOdo: 0,
-              tripDistance: 0,
-              notes: [{ type: 'REST', text: 'Xe nghỉ / Không phát sinh di chuyển', id: `rest_${dStr}` }],
-            });
-          }
-        }
-      }
-    }
 
     const sortedDays = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
     let prevOdo = 0;
@@ -1205,6 +1183,7 @@ export default function AssetDetailPage() {
     let list = mileageAnalytics.dailyReport;
     if (tabStartDate) list = list.filter(d => d.date >= tabStartDate);
     if (tabEndDate) list = list.filter(d => d.date <= tabEndDate);
+    if (hideRestDays) list = list.filter(d => d.kmRun > 0 || (d.notes && d.notes.some(n => n.type !== 'REST')));
     return [...list].sort((a: any, b: any) => {
       let valA = a[dailySortCol] ?? '';
       let valB = b[dailySortCol] ?? '';
@@ -1222,7 +1201,7 @@ export default function AssetDetailPage() {
         ? String(valA).localeCompare(String(valB), 'vi')
         : String(valB).localeCompare(String(valA), 'vi');
     });
-  }, [mileageAnalytics.dailyReport, tabStartDate, tabEndDate, dailySortCol, dailySortDir]);
+  }, [mileageAnalytics.dailyReport, tabStartDate, tabEndDate, hideRestDays, dailySortCol, dailySortDir]);
 
 
   if (loading) {
@@ -2885,9 +2864,22 @@ export default function AssetDetailPage() {
                           </p>
                         </div>
 
-                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                          Hiển thị {displayedDailyReport.length} ngày
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setHideRestDays(p => !p)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 ${
+                              hideRestDays
+                                ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
+                                : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                            }`}
+                            title="Bấm để chuyển đổi hiển thị ngày xe nghỉ"
+                          >
+                            <span>{hideRestDays ? '✓ Ẩn ngày xe nghỉ (0 km)' : 'Hiện tất cả'}</span>
+                          </button>
+                          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            ({displayedDailyReport.length} ngày)
+                          </span>
+                        </div>
                       </div>
                       <div style={{ height: 200 }}>
                         <ResponsiveContainer width="100%" height="100%">

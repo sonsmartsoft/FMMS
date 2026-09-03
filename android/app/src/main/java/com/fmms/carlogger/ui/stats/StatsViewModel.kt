@@ -172,6 +172,7 @@ class StatsViewModel : ViewModel() {
             // trên bất kỳ thiết bị nào (không phụ thuộc trips cục bộ của device này).
             withContext(Dispatchers.IO) {
                 runCatching { pullTripsFromCloud(vehicle.id) }
+                runCatching { pullFuelLogsFromCloud(vehicle.id) }
             }
             val now = Calendar.getInstance()
             val todayStart = now.apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
@@ -361,6 +362,61 @@ class StatsViewModel : ViewModel() {
         }
     }
 
+    /** Đồng bộ lịch sử đổ xăng (fuel_logs) từ cloud về Room local theo UID asset.
+     *  Map cột cloud `asset_id` → `FuelLogEntity.vehicleId`, `timestamp` → epoch ms. */
+    private suspend fun pullFuelLogsFromCloud(assetId: String): Int {
+        return try {
+            val url = "${com.fmms.carlogger.BuildConfig.SUPABASE_URL}/rest/v1/fuel_logs" +
+                "?asset_id=eq.${android.net.Uri.encode(assetId)}&select=*&limit=1000"
+            val request = okhttp3.Request.Builder()
+                .url(url)
+                .header("apikey", com.fmms.carlogger.BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+                .header("Authorization", "Bearer ${com.fmms.carlogger.BuildConfig.SUPABASE_PUBLISHABLE_KEY}")
+                .get()
+                .build()
+            val resp = okhttp3.OkHttpClient().newCall(request).execute()
+            if (!resp.isSuccessful) {
+                android.util.Log.d("StatsVM", "pullFuel http=${resp.code}")
+                return 0
+            }
+            val text = resp.body?.string() ?: return 0
+            val arr = try { org.json.JSONArray(text) } catch (e: Exception) { return 0 }
+            android.util.Log.d("StatsVM", "pullFuel HTTP OK rawArrayLen=${arr.length()} first=${if (arr.length()>0) arr.optJSONObject(0)?.optString("timestamp") else "none"}")
+            fun parseEpoch(s: String?): Long? {
+                if (s.isNullOrBlank()) return null
+                var normalized = s.replace("+00:00", "Z")
+                return try {
+                    java.time.Instant.parse(normalized).toEpochMilli()
+                } catch (e: Exception) { null }
+            }
+            val logs = (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val ts = parseEpoch(o.optString("timestamp")) ?: return@mapNotNull null
+                FuelLogEntity(
+                    id = o.optString("id"),
+                    vehicleId = o.optString("asset_id").ifBlank { assetId },
+                    timestamp = ts,
+                    odometerKm = if (o.isNull("odometer_km")) null else o.optDouble("odometer_km", -1.0),
+                    fuelLiters = o.optDouble("fuel_liters", 0.0),
+                    pricePerLiter = if (o.isNull("price_per_liter")) null else o.optDouble("price_per_liter"),
+                    totalCost = if (o.isNull("total_cost")) null else o.optDouble("total_cost"),
+                    currency = o.optString("currency").ifBlank { "VND" },
+                    station = o.optString("station").takeIf { it.isNotBlank() },
+                    tankFull = o.optBoolean("tank_full", true),
+                    notes = o.optString("notes").takeIf { it.isNotBlank() },
+                    createdAt = parseEpoch(o.optString("created_at")) ?: ts,
+                    updatedAt = parseEpoch(o.optString("updated_at")) ?: ts,
+                )
+            }
+            c.fuelLogRepository.upsertCloudFuelLogs(logs)
+            android.util.Log.d("StatsVM", "pullFuel asset=$assetId n=${logs.size}")
+            logs.size
+        } catch (e: Exception) {
+            android.util.Log.d("StatsVM", "pullFuel EXC", e)
+            0
+        }
+    }
+
     /** Gọi RPC fmms_get_expense_breakdown để lấy chi phí theo danh mục từ DB. */
     private suspend fun fetchExpenseBreakdown(assetId: String, from: Long, to: Long): List<ExpenseSlice> {
         return try {
@@ -474,12 +530,14 @@ class StatsViewModel : ViewModel() {
             val trips = c.tripRepository.getBetween(vehicleId, ms, me)
             val dist = trips.sumOf { it.distanceKm }
             val fuel = trips.sumOf { it.fuelUsedLiters ?: 0.0 }
+            val fuelLogs = c.fuelLogRepository.getBetween(vehicleId, ms, me)
+            val fuelLogCost = fuelLogs.sumOf { it.totalCost ?: 0.0 }
             result += PeriodStat(
                 label = monthFmt.format(Date(ms)),
                 distanceKm = dist,
                 fuelUsedLiters = fuel,
                 consumptionL100km = consumptionL100km(trips),
-                fuelCostVnd = fuel * price,
+                fuelCostVnd = if (fuelLogCost > 0) fuelLogCost else fuel * price,
             )
         }
         return result
@@ -501,12 +559,14 @@ class StatsViewModel : ViewModel() {
             val trips = c.tripRepository.getBetween(vehicleId, ys, ye)
             val dist = trips.sumOf { it.distanceKm }
             val fuel = trips.sumOf { it.fuelUsedLiters ?: 0.0 }
+            val fuelLogs = c.fuelLogRepository.getBetween(vehicleId, ys, ye)
+            val fuelLogCost = fuelLogs.sumOf { it.totalCost ?: 0.0 }
             result += PeriodStat(
                 label = y.toString(),
                 distanceKm = dist,
                 fuelUsedLiters = fuel,
                 consumptionL100km = consumptionL100km(trips),
-                fuelCostVnd = fuel * price,
+                fuelCostVnd = if (fuelLogCost > 0) fuelLogCost else fuel * price,
             )
         }
         return result

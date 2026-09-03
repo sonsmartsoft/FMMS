@@ -100,6 +100,10 @@ class FuelLogRepository(
         fuelLogDao.upsert(log)
         syncQueueRepository?.enqueueFuelLog(log)
     }
+    suspend fun upsertCloudFuelLogs(logs: List<com.fmms.carlogger.core.database.entity.FuelLogEntity>) {
+        if (logs.isEmpty()) return
+        fuelLogDao.upsertAll(logs)
+    }
     suspend fun delete(log: com.fmms.carlogger.core.database.entity.FuelLogEntity) = fuelLogDao.delete(log)
     suspend fun getFullTankEvents(vehicleId: String) = fuelLogDao.getFullTankEvents(vehicleId)
     suspend fun totalsBetween(vehicleId: String, from: Long, to: Long) =

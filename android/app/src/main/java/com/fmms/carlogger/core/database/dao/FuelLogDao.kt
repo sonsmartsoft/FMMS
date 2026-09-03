@@ -14,6 +14,9 @@ interface FuelLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(log: FuelLogEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(logs: List<FuelLogEntity>)
+
     @Delete
     suspend fun delete(log: FuelLogEntity)
 
