@@ -66,13 +66,15 @@ export async function getInsurancePolicies(assetId?: string): Promise<InsuranceR
   return (data ?? []).map(mapInsuranceRow);
 }
 
-export async function createInsurancePolicy(input: InsuranceInput) {
+export async function createInsurancePolicy(input: InsuranceInput): Promise<InsuranceRow> {
   const supabase = createClient();
   try {
     const { data, error } = await supabase.from('insurance_policies').insert([input]).select().single();
     if (!error && data) return mapInsuranceRow(data);
     if (error && error.message.includes('column')) throw error;
     if (error) throw error;
+    if (!data) throw new Error('Không thể tạo hợp đồng bảo hiểm');
+    return mapInsuranceRow(data);
   } catch (err: any) {
     if (err?.message?.includes('column') || err?.code === 'PGRST204') {
       // Fallback to core columns if database schema has not been migrated yet
@@ -93,19 +95,22 @@ export async function createInsurancePolicy(input: InsuranceInput) {
         .select()
         .single();
       if (fallbackError) throw fallbackError;
+      if (!fallbackData) throw new Error('Không thể tạo hợp đồng bảo hiểm');
       return mapInsuranceRow({ ...fallbackData, agent_name: input.agent_name, agent_phone: input.agent_phone, provider_hotline: input.provider_hotline });
     }
     throw err;
   }
 }
 
-export async function updateInsurancePolicy(id: string, input: Partial<InsuranceInput>) {
+export async function updateInsurancePolicy(id: string, input: Partial<InsuranceInput>): Promise<InsuranceRow> {
   const supabase = createClient();
   try {
     const { data, error } = await supabase.from('insurance_policies').update(input).eq('id', id).select().single();
     if (!error && data) return mapInsuranceRow(data);
     if (error && error.message.includes('column')) throw error;
     if (error) throw error;
+    if (!data) throw new Error('Không thể cập nhật hợp đồng bảo hiểm');
+    return mapInsuranceRow(data);
   } catch (err: any) {
     if (err?.message?.includes('column') || err?.code === 'PGRST204') {
       const basePayload: Record<string, any> = {};
@@ -125,6 +130,7 @@ export async function updateInsurancePolicy(id: string, input: Partial<Insurance
         .select()
         .single();
       if (fallbackError) throw fallbackError;
+      if (!fallbackData) throw new Error('Không thể cập nhật hợp đồng bảo hiểm');
       return mapInsuranceRow({ ...fallbackData, ...input });
     }
     throw err;
