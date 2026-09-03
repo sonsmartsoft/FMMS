@@ -64,12 +64,39 @@ export async function assignDeviceToVehicle(
   return { success: !error, error };
 }
 
-export async function deleteDevice(id: string): Promise<{ success: boolean; error: any }> {
+export async function deleteDevice(id: string, deviceName?: string): Promise<{ success: boolean; error: any }> {
   const supabase = createClient();
-  const { error } = await supabase
-    .from('devices')
-    .delete()
-    .eq('id', id);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
-  return { success: !error, error };
+  try {
+    // 1. Dọn dẹp bảng gps_track_points
+    await supabase.from('gps_track_points').delete().eq('device_id', id);
+    await supabase.from('gps_track_points').delete().eq('device_name', id);
+    if (deviceName) {
+      await supabase.from('gps_track_points').delete().eq('device_name', deviceName);
+    }
+
+    // 2. Dọn dẹp bảng telemetry_samples
+    if (isUuid) {
+      await supabase.from('telemetry_samples').delete().eq('device_id', id);
+    }
+
+    // 3. Xóa khỏi bảng devices
+    let error: any = null;
+    if (isUuid) {
+      const res = await supabase.from('devices').delete().eq('id', id);
+      error = res.error;
+    } else {
+      const res = await supabase.from('devices').delete().or(`device_name.eq.${id},mac_address.eq.${id}`);
+      error = res.error;
+    }
+
+    if (deviceName && !error) {
+      await supabase.from('devices').delete().eq('device_name', deviceName);
+    }
+
+    return { success: !error, error };
+  } catch (err: any) {
+    return { success: false, error: err };
+  }
 }

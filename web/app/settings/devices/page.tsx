@@ -138,15 +138,27 @@ export default function DeviceManagementPage() {
     setSaving(false);
   };
 
-  const handleDeleteDevice = async (id: string) => {
-    if (!confirm('Bạn có chắc chắn muốn xóa thiết bị này?')) return;
-    const { success } = await deleteDevice(id);
-    if (success) {
-      showToast('✓ Đã xóa thiết bị.');
+  const handleDeleteDevice = async (id: string, name?: string) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn thiết bị "${name || id}" khỏi hệ thống?`)) return;
+    setSaving(true);
+    try {
+      // Optimistic instant state cleanup
+      setDevices(prev => prev.filter(d => d.device_id !== id));
+      setRegisteredDevices(prev => prev.filter(r => r.id !== id));
+      setEditingDevice(null);
+
+      const { success, error } = await deleteDevice(id, name);
+      if (success) {
+        showToast('✓ Đã xóa thiết bị thành công.');
+      } else {
+        showToast(`❌ Không thể xóa: ${error?.message || 'Lỗi cơ sở dữ liệu'}`);
+      }
       await load();
-    } else {
-      showToast('❌ Thất bại khi xóa.');
+    } catch {
+      showToast('❌ Đã xảy ra lỗi khi xóa thiết bị.');
+      await load();
     }
+    setSaving(false);
   };
 
   const assetMap = new Map(assets.map(a => [a.id, a]));
@@ -271,6 +283,13 @@ export default function DeviceManagementPage() {
                       title="Chỉnh sửa & gán xe"
                     >
                       <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteDevice(d.device_id, d.device_name || undefined)}
+                      className="p-1.5 rounded-lg transition text-rose-400 hover:bg-rose-500/10"
+                      title="Xóa thiết bị"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
                       style={{
@@ -423,7 +442,7 @@ export default function DeviceManagementPage() {
 
               <div className="flex items-center justify-between pt-3 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
                 <button
-                  onClick={() => handleDeleteDevice(editingDevice.id)}
+                  onClick={() => handleDeleteDevice(editingDevice.id, editingDevice.name)}
                   className="px-3 py-2 rounded-xl text-xs font-bold text-rose-400 hover:bg-rose-500/10 flex items-center gap-1.5"
                 >
                   <Trash2 className="w-4 h-4" />
