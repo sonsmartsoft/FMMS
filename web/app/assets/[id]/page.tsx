@@ -4505,7 +4505,7 @@ export default function AssetDetailPage() {
               name: 'Bảo dưỡng & Phụ tùng thay thế',
               total: totalMaintCost,
               color: '#0EA5E9',
-              items: maintenance.map(m => ({ date: m.date, description: m.service_name || m.description || 'Bảo dưỡng', vendor: m.service_center, amount: m.cost, odo: m.odometer_km })),
+              items: maintenance.map(m => ({ date: m.date, description: m.maintenance_type || m.notes || 'Bảo dưỡng', vendor: m.vendor, amount: m.cost, odo: m.odometer_km })),
             },
             {
               id: 'insurance',
