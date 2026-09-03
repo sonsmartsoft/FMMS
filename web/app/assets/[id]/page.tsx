@@ -4416,7 +4416,7 @@ export default function AssetDetailPage() {
             return cat.includes('LOAN') || sub.includes('LOAN') || desc.includes('LÃI VAY') || desc.includes('TRẢ GÓP') || desc.includes('LÃI NGÂN HÀNG');
           }).reduce((s, e) => s + e.amount, 0);
 
-          const loanInterestFromSchedule = assetLoanSchedule.filter(s => s.status === 'PAID').reduce((sum, s) => sum + (s.interest || 0), 0);
+          const loanInterestFromSchedule = assetLoanSchedule.filter(s => s.status === 'PAID').reduce((sum, s) => sum + (s.interest_paid || 0), 0);
           const loanCost = loanInterestFromExpenses > 0 
             ? loanInterestFromExpenses 
             : (loanInterestFromSchedule > 0 
