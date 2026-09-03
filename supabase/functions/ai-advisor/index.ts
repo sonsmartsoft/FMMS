@@ -44,10 +44,21 @@ interface FuelSummary {
   currency?: string;
 }
 
+interface AppStats {
+  total_distance_km?: number;
+  total_fuel_liters?: number;
+  trip_count?: number;
+  current_odometer_km?: number;
+  total_fuel_cost_vnd?: number;
+  avg_consumption_l100km?: number | null;
+  fuel_log_count?: number;
+}
+
 interface AdvisorRequest {
   asset_id?: string;
   device_id?: string;
   current_odo?: number;
+  stats?: AppStats;
   recent_trips?: TripSummary[];
   fuel_logs?: FuelSummary[];
   user_prompt?: string | null;
@@ -59,14 +70,14 @@ const SYSTEM_PROMPT = `Bạn là Cố vấn cấp cao về quản lý xe và nhi
 YÊU CẦU TRẢ LỜI: Một đối tượng JSON hợp lệ và chỉ duy nhất đó (không có văn bản nào ngoài JSON), có đúng 4 trường:
 {
   "summary": "tóm tắt định tính trong 3-4 dòng, BẰNG TIẾNG VIỆT tự nhiên, dựa trên dữ liệu thực (quãng đường, nhiên liệu, xu hướng)",
-  "maintenance_prediction": "dự đoán bảo dưỡng/vật tư sắp cần dựa trên quãng đường đã đi",
+  "maintenance_prediction": "dự đoán bảo dưỡng/vật tư sắp cần dựa trên quãng đường đã đi và mốc ODO hiện tại",
   "fuel_efficiency_tip": "mẹo cụ thể để giảm tiêu hao nhiên liệu",
   "cost_alert": "cảnh báo chi phí dựa trên giá nhiên liệu / chi phí mỗi km"
 }
 
 QUY TẮC:
 - NGÔN NGỮ: LUÔN trả lời tiếng Việt chuẩn, nhất quán, chuyên nghiệp.
-- Không bịa số liệu — chỉ dùng dữ liệu được cung cấp.
+- SỐ LIỆU CHÍNH XÁC: Luôn ưu tiên dùng mốc ODO hiện tại và Tổng quãng đường từ mục "THỐNG KÊ VẬN HÀNH THỰC TẾ" (hoặc ODO từ các chuyến đi thực tế gần nhất). Tuyệt đối không bịa số km.
 - Nếu không đủ dữ liệu cho một trường, đặt null.
 - Không thêm markdown, tiêu đề, hoặc văn bản ngoài đối tượng JSON.`;
 
@@ -96,23 +107,53 @@ function fuelToLine(f: Record<string, unknown>): string {
   return `  + ${day}: ${fmtNum(liters)} L, ${fmtNum(cost)} ₫ (${fmtNum(price ?? 0)} ₫/L${odo != null ? `, ODO ${fmtNum(odo)}` : ''})`;
 }
 
-// Xây context từ DB (ưu tiên) và dữ liệu app (bổ sung).
+// Xây context từ DB và dữ liệu app (ưu tiên thống kê thực tế chuẩn).
 function buildContext(req: AdvisorRequest, db: Record<string, unknown> | null): string {
   const appTrips = req.recent_trips ?? [];
   const appFuel = req.fuel_logs ?? [];
+  const dbTrips = Array.isArray(db?.recent_trips) ? (db.recent_trips as Record<string, unknown>[]) : [];
+  const dbFuel = Array.isArray(db?.recent_fuel_logs) ? (db.recent_fuel_logs as Record<string, unknown>[]) : [];
+  const asset = db?.asset ? (db.asset as Record<string, unknown>) : null;
+
+  // Tính ODO thực tế chính xác nhất:
+  // Ưu tiên: 1. Stats gửi từ app -> 2. Max ODO từ trips/fuel -> 3. DB asset ODO -> 4. current_odo fallback
+  const tripsMaxOdo = dbTrips.reduce((max, t) => Math.max(max, Number(t.end_odometer ?? 0)), 0);
+  const fuelMaxOdo = dbFuel.reduce((max, f) => Math.max(max, Number(f.odometer_km ?? 0)), 0);
+  const bestCalculatedOdo = Math.max(tripsMaxOdo, fuelMaxOdo);
+
+  let effectiveOdo = req.stats?.current_odometer_km;
+  if (!effectiveOdo || effectiveOdo <= 0) {
+    effectiveOdo = bestCalculatedOdo > 0 ? bestCalculatedOdo : (Number(asset?.current_odometer_km ?? 0) || req.current_odo || 0);
+  }
 
   let ctx = `DỮ LIỆU XE (asset_id: ${req.asset_id ?? '—'}):\n`;
 
-  // 1. Thông tin xe từ DB
-  const asset = db?.asset ? (db.asset as Record<string, unknown>) : null;
+  // 1. Thông tin định danh xe
   if (asset) {
     ctx += `- Xe: ${asset.name ?? ''} (${asset.brand ?? ''} ${asset.model ?? ''})\n`;
-    const odo = asset.current_odometer_km;
-    if (odo != null && Number(odo) > 0) ctx += `- ODO hiện tại (DB): ${fmtNum(Number(odo))} km\n`;
-  } else if (req.current_odo != null && req.current_odo > 0) {
-    ctx += `- ODO hiện tại: ${fmtNum(req.current_odo)} km\n`;
   }
-  ctx += '\n';
+  ctx += `- Mốc ODO hiện tại của xe: ${fmtNum(effectiveOdo)} km\n\n`;
+
+  // 2. Thống kê vận hành thực tế (Từ app hoặc tổng hợp)
+  if (req.stats) {
+    ctx += `THỐNG KÊ VẬN HÀNH THỰC TẾ (DỮ LIỆU CHÍNH XÁC TỪ THIẾT BỊ):\n`;
+    if (req.stats.total_distance_km != null && req.stats.total_distance_km > 0) {
+      ctx += `  + Tổng quãng đường xe đã chạy: ${fmtNum(req.stats.total_distance_km)} km\n`;
+    }
+    if (req.stats.trip_count != null && req.stats.trip_count > 0) {
+      ctx += `  + Tổng số chuyến đi: ${fmtNum(req.stats.trip_count)} chuyến\n`;
+    }
+    if (req.stats.total_fuel_liters != null && req.stats.total_fuel_liters > 0) {
+      ctx += `  + Tổng xăng tiêu thụ: ${fmtNum(req.stats.total_fuel_liters)} L\n`;
+    }
+    if (req.stats.total_fuel_cost_vnd != null && req.stats.total_fuel_cost_vnd > 0) {
+      ctx += `  + Tổng tiền xăng: ${fmtNum(req.stats.total_fuel_cost_vnd)} ₫\n`;
+    }
+    if (req.stats.avg_consumption_l100km != null && Number(req.stats.avg_consumption_l100km) > 0) {
+      ctx += `  + Tiêu thụ trung bình: ${fmtNum(req.stats.avg_consumption_l100km)} L/100km\n`;
+    }
+    ctx += '\n';
+  }
 
   // 2. Chuyến đi từ DB (nếu có)
   const dbTrips = Array.isArray(db?.recent_trips) ? (db.recent_trips as Record<string, unknown>[]) : [];

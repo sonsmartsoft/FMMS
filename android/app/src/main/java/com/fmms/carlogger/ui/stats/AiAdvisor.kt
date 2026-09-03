@@ -119,14 +119,40 @@ class AiAdvisorViewModel : ViewModel() {
         val vehicle = c.vehicleRepository.getActive()
             ?: throw IllegalStateException("Chưa có xe hoạt động")
 
-        val trips = c.tripRepository.getWithOdometer().take(10)
+        val trips = c.tripRepository.getWithOdometer()
+        val allTrips = c.tripRepository.getAllByVehicle(vehicle.id)
+            .filter { it.status == "COMPLETED" }
         val fuelLogs = c.fuelLogRepository.getByVehicle(vehicle.id)
         val currentOdo = trips.mapNotNull { it.endOdometer }.firstOrNull() ?: vehicle.odometerKm ?: 0.0
+
+        // Tính các thống kê vận hành CHÍNH XÁC từ dữ liệu thực tế (đã pull từ cloud).
+        val totalDistanceKm = allTrips.sumOf { it.distanceKm }
+        val totalFuelLiters = allTrips.sumOf { it.fuelUsedLiters ?: 0.0 }
+        val tripCount = allTrips.size
+        val totalFuelCost = fuelLogs.sumOf { it.totalCost ?: 0.0 }
+        val avgConsumption = if (totalDistanceKm > 0.05 && totalFuelLiters > 0) {
+            totalFuelLiters / totalDistanceKm * 100.0
+        } else null
+        // Odometer gần nhất CHÍNH XÁC từ end_odometer của trips hoặc fuel_logs.
+        val latestOdoFromTrips = trips.mapNotNull { it.endOdometer }.maxOrNull()
+        val latestOdoFromFuel = fuelLogs.mapNotNull { it.odometerKm }.maxOrNull()
+        val currentOdometerKm = (latestOdoFromTrips ?: 0.0).coerceAtLeast(latestOdoFromFuel ?: 0.0)
+            .takeIf { it > 0 } ?: currentOdo
 
         val requestBody = JSONObject().apply {
             put("asset_id", vehicle.id)
             put("device_id", c.prefs.getDeviceId())
             put("current_odo", currentOdo)
+            // --- Thống kê vận hành chính xác do ứng dụng tính từ dữ liệu thật (KHÔNG để AI tự suy) ---
+            put("stats", JSONObject().apply {
+                put("total_distance_km", totalDistanceKm)
+                put("total_fuel_liters", totalFuelLiters)
+                put("trip_count", tripCount)
+                put("current_odometer_km", currentOdometerKm)
+                put("total_fuel_cost_vnd", totalFuelCost)
+                put("avg_consumption_l100km", avgConsumption ?: JSONObject.NULL)
+                put("fuel_log_count", fuelLogs.size)
+            })
             put("recent_trips", org.json.JSONArray().apply {
                 trips.forEach { t ->
                     put(JSONObject().apply {
