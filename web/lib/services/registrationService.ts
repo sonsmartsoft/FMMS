@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { resolveAssetId } from './assetService';
 
 export interface RegistrationRow {
   id: string;
@@ -36,9 +37,10 @@ export function mapRegistrationRow(row: any): RegistrationRow {
 
 export async function getRegistrations(assetId?: string): Promise<RegistrationRow[]> {
   const supabase = createClient();
+  const realId = assetId ? resolveAssetId(assetId) : undefined;
   let query = supabase.from('registrations').select('*').order('created_at', { ascending: false });
-  if (assetId) {
-    query = query.eq('asset_id', assetId);
+  if (realId) {
+    query = query.or(`asset_id.eq.${realId},asset_id.eq.${assetId}`);
   }
   const { data, error } = await query;
   if (error) throw error;
@@ -46,11 +48,12 @@ export async function getRegistrations(assetId?: string): Promise<RegistrationRo
 }
 
 export async function createRegistration(input: RegistrationInput) {
+  const realId = resolveAssetId(input.asset_id);
   const supabase = createClient();
   const { data, error } = await supabase
     .from('registrations')
     .insert({
-      asset_id: input.asset_id,
+      asset_id: realId,
       registration_number: input.registration_number ?? null,
       inspection_date: input.inspection_date ?? null,
       inspection_expiry: input.inspection_expiry ?? null,

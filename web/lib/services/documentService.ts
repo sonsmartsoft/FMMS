@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { resolveAssetId } from './assetService';
 
 export interface DocumentRow {
   id: string;
@@ -37,9 +38,10 @@ export function mapDocumentRow(row: any): DocumentRow {
 
 export async function getDocuments(assetId?: string): Promise<DocumentRow[]> {
   const supabase = createClient();
+  const realId = assetId ? resolveAssetId(assetId) : undefined;
   let query = supabase.from('asset_documents').select('*').order('expiry_date', { ascending: true });
-  if (assetId) {
-    query = query.eq('asset_id', assetId);
+  if (realId) {
+    query = query.or(`asset_id.eq.${realId},asset_id.eq.${assetId}`);
   }
   const { data, error } = await query;
   if (error) throw error;
@@ -47,11 +49,12 @@ export async function getDocuments(assetId?: string): Promise<DocumentRow[]> {
 }
 
 export async function createDocument(input: DocumentInput) {
+  const realId = resolveAssetId(input.asset_id);
   const supabase = createClient();
   const { data, error } = await supabase
     .from('asset_documents')
     .insert({
-      asset_id: input.asset_id,
+      asset_id: realId,
       document_type: input.document_type,
       title: input.title,
       document_date: input.document_date ?? null,

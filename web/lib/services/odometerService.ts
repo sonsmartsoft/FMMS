@@ -89,10 +89,12 @@ export async function getOdometerLogs(assetId?: string): Promise<OdometerLogReco
     return oAssetId === realId || o.asset_id === assetId || o.asset_id === realId;
   });
 
-  // Merge unique logs by id
+  // Merge unique logs by id and prevent local duplicate if DB record matches date + odo
   const map = new Map<string, OdometerLogRecord>();
-  [...supabaseLogs, ...localLogs].forEach(item => {
-    if (!map.has(item.id)) {
+  supabaseLogs.forEach(item => map.set(item.id, item));
+  localLogs.forEach(item => {
+    const isAlreadyInDb = supabaseLogs.some(s => s.date === item.date && Number(s.odometer_km) === Number(item.odometer_km));
+    if (!isAlreadyInDb && !map.has(item.id)) {
       map.set(item.id, item);
     }
   });
@@ -107,7 +109,7 @@ export async function createOdometerLog(input: {
   note?: string;
 }): Promise<OdometerLogRecord> {
   const realId = resolveAssetId(input.asset_id);
-  const newLog: OdometerLogRecord = {
+  let newLog: OdometerLogRecord = {
     id: `ODO_${Date.now()}`,
     asset_id: realId,
     date: input.date || new Date().toISOString().slice(0, 10),
@@ -117,14 +119,18 @@ export async function createOdometerLog(input: {
 
   try {
     const supabase = createClient();
-    await supabase.from('odometer_adjustments').insert({
+    const { data: dbData } = await supabase.from('odometer_adjustments').insert({
       asset_id: realId,
       previous_value_km: input.odometer_km,
       adjustment_km: 0,
       new_value_km: input.odometer_km,
       reason: input.note || 'Cập nhật Odometer định kỳ',
       source: 'MANUAL',
-    });
+    }).select().single();
+
+    if (dbData) {
+      newLog.id = dbData.id;
+    }
 
     await supabase
       .from('assets')
@@ -134,7 +140,7 @@ export async function createOdometerLog(input: {
     console.warn('Supabase createOdometerLog warning:', err);
   }
 
-  const locals = getLocalOdoLogs().filter(o => o.id !== newLog.id);
+  const locals = getLocalOdoLogs().filter(o => o.id !== newLog.id && !(o.date === newLog.date && Number(o.odometer_km) === Number(newLog.odometer_km)));
   saveLocalOdoLogs([newLog, ...locals]);
 
   return newLog;

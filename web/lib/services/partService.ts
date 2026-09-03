@@ -69,9 +69,14 @@ export async function getParts(assetId?: string): Promise<PartRecord[]> {
   // Apply custom edits from localStorage
   allParts = allParts.map(p => customMap[p.id] ? { ...p, ...customMap[p.id] } : p);
 
-  // Add any locally created parts
+  // Add any locally created parts not in DB (avoid duplicating if matching name + install_date + cost exists)
   Object.values(customMap).forEach((customPart: any) => {
-    if (!allParts.some(p => p.id === customPart.id)) {
+    if (!customPart || !customPart.id) return;
+    const isAlreadyInDb = allParts.some(p => 
+      p.id === customPart.id || 
+      (customPart.id.startsWith('PR_') && p.name === customPart.name && p.install_date === customPart.install_date && Number(p.cost) === Number(customPart.cost))
+    );
+    if (!isAlreadyInDb) {
       const cAssetId = customPart.asset_id ? resolveAssetId(customPart.asset_id) : undefined;
       if (!assetId || cAssetId === realId || customPart.asset_id === assetId || customPart.asset_id === realId) {
         allParts.unshift(customPart);
@@ -79,7 +84,16 @@ export async function getParts(assetId?: string): Promise<PartRecord[]> {
     }
   });
 
-  return allParts.sort((a, b) => (b.install_date || '').localeCompare(a.install_date || ''));
+  const seenIds = new Set<string>();
+  const uniqueParts: PartRecord[] = [];
+  for (const part of allParts) {
+    if (!seenIds.has(part.id)) {
+      seenIds.add(part.id);
+      uniqueParts.push(part);
+    }
+  }
+
+  return uniqueParts.sort((a, b) => (b.install_date || '').localeCompare(a.install_date || ''));
 }
 
 export async function createPart(input: PartInput): Promise<PartRecord> {
@@ -99,8 +113,36 @@ export async function createPart(input: PartInput): Promise<PartRecord> {
     status: 'INSTALLED',
   };
 
-  const newPartObj: PartRecord = {
-    id: `PR_${Date.now()}`,
+  let newPartObj: PartRecord;
+
+  // 1. Insert to Supabase DB first
+  try {
+    const { data, error } = await supabase.from('parts').insert(payload).select().single();
+    if (!error && data) {
+      newPartObj = mapPartRow(data);
+      // Clean up matching temporary local custom items
+      if (typeof window !== 'undefined') {
+        try {
+          const stored = localStorage.getItem('fmms_custom_parts');
+          if (stored) {
+            const customMap = JSON.parse(stored);
+            Object.keys(customMap).forEach(k => {
+              if (k.startsWith('PR_') && customMap[k].name === input.part_name && Number(customMap[k].cost) === Number(input.cost)) {
+                delete customMap[k];
+              }
+            });
+            localStorage.setItem('fmms_custom_parts', JSON.stringify(customMap));
+          }
+        } catch {}
+      }
+      return newPartObj;
+    }
+  } catch {}
+
+  // 2. Fallback to LocalStorage if DB insert fails
+  const tempId = `PR_${Date.now()}`;
+  newPartObj = {
+    id: tempId,
     name: input.part_name,
     brand: input.brand || '',
     category: input.supplier || 'Khác',
@@ -115,17 +157,10 @@ export async function createPart(input: PartInput): Promise<PartRecord> {
     try {
       const stored = localStorage.getItem('fmms_custom_parts');
       const customMap = stored ? JSON.parse(stored) : {};
-      customMap[newPartObj.id] = newPartObj;
+      customMap[tempId] = newPartObj;
       localStorage.setItem('fmms_custom_parts', JSON.stringify(customMap));
     } catch {}
   }
-
-  try {
-    const { data, error } = await supabase.from('parts').insert(payload).select().single();
-    if (!error && data) {
-      newPartObj.id = data.id;
-    }
-  } catch {}
 
   return newPartObj;
 }

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { resolveAssetId } from './assetService';
 
 export interface WarrantyRecord {
   id: string;
@@ -31,14 +32,18 @@ export interface WarrantyClaimRecord {
 
 export async function getWarranties(assetId?: string) {
   const supabase = createClient();
+  const realId = assetId ? resolveAssetId(assetId) : undefined;
   let query = supabase.from('warranties').select('*').order('created_at', { ascending: false });
-  if (assetId) query = query.eq('asset_id', assetId);
+  if (realId) {
+    query = query.or(`asset_id.eq.${realId},asset_id.eq.${assetId}`);
+  }
   return await query;
 }
 
 export async function createWarranty(data: Omit<WarrantyRecord, 'id' | 'created_at'>) {
+  const realId = resolveAssetId(data.asset_id);
   const supabase = createClient();
-  return await supabase.from('warranties').insert([data]).select().single();
+  return await supabase.from('warranties').insert([{ ...data, asset_id: realId }]).select().single();
 }
 
 export async function updateWarranty(id: string, data: Partial<WarrantyRecord>) {

@@ -71,16 +71,30 @@ export async function getMaintenanceRecords(assetId?: string): Promise<Maintenan
   // Apply custom edits from localStorage
   allMaint = allMaint.map(item => customMap[item.id] ? { ...item, ...customMap[item.id] } : item);
 
-  // Add any new locally created items not in DB
+  // Add any new locally created items not in DB (avoid duplicating if matching date + maintenance_type + cost exists)
   Object.values(customMap).forEach((customItem: any) => {
-    if (!allMaint.some(m => m.id === customItem.id)) {
+    if (!customItem || !customItem.id) return;
+    const isAlreadyInDb = allMaint.some(m => 
+      m.id === customItem.id || 
+      (customItem.id.startsWith('MAINT_') && m.date === customItem.date && m.maintenance_type === customItem.maintenance_type && Number(m.cost) === Number(customItem.cost))
+    );
+    if (!isAlreadyInDb) {
       if (!assetId || customItem.asset_id === realId || customItem.asset_id === assetId) {
         allMaint.unshift(customItem);
       }
     }
   });
 
-  return allMaint.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const seenIds = new Set<string>();
+  const uniqueMaint: MaintenanceRecord[] = [];
+  for (const m of allMaint) {
+    if (!seenIds.has(m.id)) {
+      seenIds.add(m.id);
+      uniqueMaint.push(m);
+    }
+  }
+
+  return uniqueMaint.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
 export async function createMaintenanceRecord(data: MaintenanceInput, skipExpenseSync = false): Promise<MaintenanceRecord> {
@@ -100,39 +114,57 @@ export async function createMaintenanceRecord(data: MaintenanceInput, skipExpens
     warranty_until: data.warranty_until ?? null,
   };
 
-  let newId = `MAINT_${Date.now()}`;
+  let newMaintObj: MaintenanceRecord;
 
-  // 1. Save to LocalStorage
-  const newMaintObj: MaintenanceRecord = {
-    id: newId,
-    asset_id: realId,
-    maintenance_type: data.maintenance_type,
-    date: payload.date,
-    odometer_km: data.odometer_km || 0,
-    cost: data.cost || 0,
-    vendor: data.vendor || '',
-    notes: data.notes,
-    next_due_km: data.next_due_km,
-    next_due_date: data.next_due_date,
-    status: computeStatus(payload),
-  };
-
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('fmms_custom_maintenance');
-      const customMap = stored ? JSON.parse(stored) : {};
-      customMap[newId] = newMaintObj;
-      localStorage.setItem('fmms_custom_maintenance', JSON.stringify(customMap));
-    } catch {}
-  }
-
-  // 2. Insert to Supabase DB
+  // 1. Insert to Supabase DB first
   try {
     const { data: dbData, error } = await supabase.from('maintenance_records').insert(payload).select().single();
     if (!error && dbData) {
-      newMaintObj.id = dbData.id;
+      newMaintObj = mapMaintenanceRow(dbData);
+      // Clean up matching temporary local custom items
+      if (typeof window !== 'undefined') {
+        try {
+          const stored = localStorage.getItem('fmms_custom_maintenance');
+          if (stored) {
+            const customMap = JSON.parse(stored);
+            Object.keys(customMap).forEach(k => {
+              if (k.startsWith('MAINT_') && customMap[k].maintenance_type === data.maintenance_type && Number(customMap[k].cost) === Number(data.cost)) {
+                delete customMap[k];
+              }
+            });
+            localStorage.setItem('fmms_custom_maintenance', JSON.stringify(customMap));
+          }
+        } catch {}
+      }
+    } else {
+      throw error || new Error('DB insert failed');
     }
-  } catch {}
+  } catch (err) {
+    // 2. Fallback to LocalStorage if DB insert fails
+    const newId = `MAINT_${Date.now()}`;
+    newMaintObj = {
+      id: newId,
+      asset_id: realId,
+      maintenance_type: data.maintenance_type,
+      date: payload.date,
+      odometer_km: data.odometer_km || 0,
+      cost: data.cost || 0,
+      vendor: data.vendor || '',
+      notes: data.notes,
+      next_due_km: data.next_due_km,
+      next_due_date: data.next_due_date,
+      status: computeStatus(payload),
+    };
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fmms_custom_maintenance');
+        const customMap = stored ? JSON.parse(stored) : {};
+        customMap[newId] = newMaintObj;
+        localStorage.setItem('fmms_custom_maintenance', JSON.stringify(customMap));
+      } catch {}
+    }
+  }
 
   // 3. Auto-sync to expenses
   if (!skipExpenseSync && (data.cost ?? 0) > 0) {
