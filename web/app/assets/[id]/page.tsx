@@ -4498,7 +4498,7 @@ export default function AssetDetailPage() {
               name: 'Nhiên liệu (Xăng / Điện)',
               total: totalFuelCost,
               color: '#EF4444',
-              items: fuelLogs.map(f => ({ date: f.date, description: `Đổ nhiên liệu ${f.liters ? `${f.liters}L` : ''}`, vendor: f.gas_station_name, amount: f.total_cost, odo: f.odometer_km })),
+              items: fuelLogs.map(f => ({ date: f.date, description: `Đổ nhiên liệu ${f.liters ? `${f.liters}L` : ''}`, vendor: f.station, amount: f.total_cost, odo: f.odometer_km })),
             },
             {
               id: 'maint',
