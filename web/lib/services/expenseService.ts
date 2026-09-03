@@ -57,16 +57,31 @@ export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
   // Apply custom edits from localStorage
   allExpenses = allExpenses.map(item => customMap[item.id] ? { ...item, ...customMap[item.id] } : item);
 
-  // Add any new locally created items not in DB
+  // Add any new locally created items not in DB (avoid duplicating if matching date + amount + description exists in DB)
   Object.values(customMap).forEach((customItem: any) => {
-    if (!allExpenses.some(e => e.id === customItem.id)) {
+    if (!customItem || !customItem.id) return;
+    const isAlreadyInDb = allExpenses.some(e => 
+      e.id === customItem.id || 
+      (customItem.id.startsWith('EX_') && e.date === customItem.date && Number(e.amount) === Number(customItem.amount) && (e.description || '').trim() === (customItem.description || '').trim())
+    );
+    if (!isAlreadyInDb) {
       if (!assetId || customItem.asset_id === realId || customItem.asset_id === assetId) {
         allExpenses.unshift(customItem);
       }
     }
   });
 
-  return allExpenses.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  // Deduplicate exact duplicate items in memory by ID
+  const seenIds = new Set<string>();
+  const uniqueExpenses: ExpenseRecord[] = [];
+  for (const exp of allExpenses) {
+    if (!seenIds.has(exp.id)) {
+      seenIds.add(exp.id);
+      uniqueExpenses.push(exp);
+    }
+  }
+
+  return uniqueExpenses.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
 export async function createExpense(data: ExpenseInput, skipAutoLinks = false): Promise<ExpenseRecord> {
@@ -85,32 +100,49 @@ export async function createExpense(data: ExpenseInput, skipAutoLinks = false): 
     description: data.description ?? null,
   };
 
-  let newId = `EX_${Date.now()}`;
+  let newExpObj: ExpenseRecord;
 
-  // 1. Save to LocalStorage
-  const newExpObj: ExpenseRecord = {
-    id: newId,
-    ...payload,
-    currency: payload.currency,
-    description: payload.description || '',
-  };
-
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = localStorage.getItem('fmms_custom_expenses');
-      const customMap = stored ? JSON.parse(stored) : {};
-      customMap[newId] = newExpObj;
-      localStorage.setItem('fmms_custom_expenses', JSON.stringify(customMap));
-    } catch {}
-  }
-
-  // 2. Insert to Supabase DB
+  // 1. Insert to Supabase DB first
   try {
     const { data: dbData, error } = await supabase.from('expenses').insert(payload).select().single();
     if (!error && dbData) {
-      newExpObj.id = dbData.id;
+      newExpObj = mapExpenseRow(dbData);
+      // Clean up matching temporary custom items in localStorage
+      if (typeof window !== 'undefined') {
+        try {
+          const stored = localStorage.getItem('fmms_custom_expenses');
+          if (stored) {
+            const customMap = JSON.parse(stored);
+            Object.keys(customMap).forEach(k => {
+              if (k.startsWith('EX_') && (customMap[k].description || '').trim() === (payload.description || '').trim() && Number(customMap[k].amount) === Number(payload.amount)) {
+                delete customMap[k];
+              }
+            });
+            localStorage.setItem('fmms_custom_expenses', JSON.stringify(customMap));
+          }
+        } catch {}
+      }
+    } else {
+      throw error || new Error('DB insert failed');
     }
-  } catch {}
+  } catch (err) {
+    // 2. Fallback to LocalStorage only if DB fails
+    const newId = `EX_${Date.now()}`;
+    newExpObj = {
+      id: newId,
+      ...payload,
+      currency: payload.currency,
+      description: payload.description || '',
+    };
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('fmms_custom_expenses');
+        const customMap = stored ? JSON.parse(stored) : {};
+        customMap[newId] = newExpObj;
+        localStorage.setItem('fmms_custom_expenses', JSON.stringify(customMap));
+      } catch {}
+    }
+  }
 
   // 3. Auto-link to related services if requested
   if (!skipAutoLinks) {
