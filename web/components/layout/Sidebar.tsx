@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Car, Fuel, Wrench, DollarSign,
+  LayoutDashboard, Car, Bike, Fuel, Wrench, DollarSign,
   FileText, BarChart3, Settings, Activity, Sparkles, Award, MapPin, Radio, ChevronRight
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
@@ -63,11 +63,12 @@ export const Sidebar: React.FC = () => {
 
       const mapped: VehicleDeviceStatus[] = assetsList.map(a => {
         const assignedDevice = devicesList.find(d => d.vehicle_id === a.id || d.asset_id === a.id);
+        const isCar = a.asset_type === 'CAR';
         if (!assignedDevice) {
           return {
             asset: a,
             status: 'NO_DEVICE',
-            statusText: 'Chờ kết nối OBD',
+            statusText: isCar ? 'Chờ kết nối OBD' : 'Chưa gắn Tracker GPS',
           };
         }
         const st = computeDeviceStatus(assignedDevice.last_seen);
@@ -78,6 +79,28 @@ export const Sidebar: React.FC = () => {
           statusText: st.statusText,
           lastSeenText: st.lastSeenText,
         };
+      });
+
+      // 🏆 SẮP XẾP ƯU TIÊN: Thiết bị ONLINE lên đầu tiên, sau đó đến STANDBY -> OFFLINE -> NO_DEVICE
+      const statusRank: Record<string, number> = {
+        ONLINE: 1,
+        STANDBY: 2,
+        OFFLINE: 3,
+        NO_DEVICE: 4,
+      };
+
+      mapped.sort((a, b) => {
+        const rankA = statusRank[a.status] || 99;
+        const rankB = statusRank[b.status] || 99;
+        if (rankA !== rankB) return rankA - rankB;
+
+        // Nếu cùng trạng thái, ưu tiên Ô tô -> Xe máy -> Xe đạp
+        const typeRank: Record<string, number> = { CAR: 1, MOTORCYCLE: 2, BICYCLE: 3 };
+        const tA = typeRank[a.asset.asset_type] || 5;
+        const tB = typeRank[b.asset.asset_type] || 5;
+        if (tA !== tB) return tA - tB;
+
+        return a.asset.name.localeCompare(b.asset.name, 'vi');
       });
 
       setVehicleStatuses(mapped);
@@ -219,14 +242,18 @@ export const Sidebar: React.FC = () => {
                   className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
                   style={{ background: 'var(--accent-cyan-bg)', border: '1px solid var(--accent-cyan-border)', color: 'var(--accent-cyan)' }}
                 >
-                  <Car className="w-3.5 h-3.5" />
+                  {currentVehicle.asset.asset_type === 'BICYCLE' ? (
+                    <Bike className="w-3.5 h-3.5" />
+                  ) : (
+                    <Car className="w-3.5 h-3.5" />
+                  )}
                 </div>
                 <div className="truncate">
                   <p className="text-[11px] font-bold truncate leading-tight" style={{ color: 'var(--text-primary)' }}>
                     {currentVehicle.asset.name}
                   </p>
                   <p className="text-[9px] truncate" style={{ color: 'var(--text-muted)' }}>
-                    {currentVehicle.device?.device_name || 'Thiết bị OBD'}
+                    {currentVehicle.device?.device_name || (currentVehicle.asset.asset_type === 'CAR' ? 'Thiết bị OBD' : 'Tracker GPS')}
                   </p>
                 </div>
               </Link>
