@@ -2342,6 +2342,8 @@ export default function AssetDetailPage() {
               loan={loan}
               expenses={expenses}
               parts={parts}
+              fuelLogs={fuelLogs}
+              maintenance={maintenance}
               onRefresh={() => { window.location.reload(); }}
               onNavigateTab={(tabId) => setActiveTab(tabId)}
             />

@@ -40,39 +40,46 @@ BEGIN
       INTO v_result
       FROM (
         SELECT jsonb_build_object(
-            'category', e.category,
-            'label', CASE
-                WHEN upper(e.category) IN ('FUEL','NHLIELU','NHIÊN LIỆU') THEN 'Nhiên liệu'
-                WHEN upper(e.category) IN ('MAINTENANCE','BUDUONG','BẢO DƯỠNG') THEN 'Bảo dưỡng'
-                WHEN upper(e.category) IN ('PARTS','PHTNG','PHỤ TÙNG') THEN 'Phụ tùng'
-                WHEN upper(e.category) IN ('LABOR','CNGTH') THEN 'Công thợ'
-                WHEN upper(e.category) = 'INSURANCE' THEN 'Bảo hiểm'
-                WHEN upper(e.category) IN ('REGISTRATION','LPH TRC B') THEN 'Lệ phí/Đăng ký'
-                WHEN upper(e.category) = 'INSPECTION' THEN 'Đăng kiểm'
-                WHEN upper(e.category) = 'TOLL' THEN 'Phí đường'
-                WHEN upper(e.category) = 'PARKING' THEN 'Gửi xe'
-                WHEN upper(e.category) IN ('UPGRADE','NNG CP') THEN 'Nâng cấp'
-                WHEN upper(e.category) IN ('WASH','CAR_WASH','RA XE') THEN 'Rửa xe'
-                WHEN upper(e.category) = 'INITIAL' THEN 'Chi phí ban đầu'
-                WHEN upper(e.category) = 'RUNNING' THEN 'Chi phí vận hành'
-                WHEN upper(e.category) IN ('LOAN','VAY') THEN 'Vay/Tài chính'
-                WHEN upper(e.category) = 'LOAN_INTEREST' THEN 'Lãi vay'
-                WHEN upper(e.category) = 'LOAN_PAYMENT' THEN 'Trả gốc vay'
-                WHEN upper(e.category) IN ('EQUIPMENT','THITB','THIẾT BỊ') THEN 'Trang thiết bị'
-                WHEN upper(e.category) IN ('OIL','DNNHT','DẦU NHỚT') THEN 'Dầu nhớt'
-                WHEN upper(e.category) IN ('TYRES','TIRES','LOP','LỐP') THEN 'Lốp xe'
-                ELSE 'Khác'
-            END,
-            'amount', SUM(e.amount),
-            'currency', MAX(e.currency)
+            'category', g.label,
+            'label', g.label,
+            'amount', SUM(g.amount),
+            'currency', MAX(g.currency)
         ) AS j
-        FROM public.expenses e
-        WHERE e.asset_id = p_asset_id
-          AND e.date >= p_from::date
-          AND e.date <= p_to::date
-          AND e.amount > 0
-        GROUP BY e.category
-        ORDER BY SUM(e.amount) DESC
+        FROM (
+            SELECT
+                e.category AS cat,
+                CASE
+                    WHEN upper(e.category) IN ('FUEL','NHLIELU','NHIÊN LIỆU') THEN 'Nhiên liệu'
+                    WHEN upper(e.category) IN ('MAINTENANCE','BUDUONG','BẢO DƯỠNG','CHI PHÍ VẬN HÀNH') THEN 'Bảo dưỡng'
+                    WHEN upper(e.category) IN ('PARTS','PHTNG','PHỤ TÙNG') THEN 'Phụ tùng'
+                    WHEN upper(e.category) IN ('LABOR','CNGTH') THEN 'Công thợ'
+                    WHEN upper(e.category) IN ('INSURANCE','BẢO HIỂM THÂN VỎ','BẢO HIỂM TNDS','BẢO HIỂM') THEN 'Bảo hiểm'
+                    WHEN upper(e.category) IN ('REGISTRATION','LPH TRC B','LỆ PHÍ TRƯỚC BẠ','BIỂN SỐ & ĐĂNG KÝ','BIỂN SỐ') THEN 'Lệ phí/Đăng ký'
+                    WHEN upper(e.category) IN ('INSPECTION','PHÍ ĐĂNG KIỂM','ĐĂNG KIỂM') THEN 'Đăng kiểm'
+                    WHEN upper(e.category) IN ('TOLL','PHÍ ĐƯỜNG BỘ (1 NĂM)','PHÍ ĐƯỜNG BỘ','PHÍ ĐƯỜNG') THEN 'Phí đường'
+                    WHEN upper(e.category) = 'PARKING' THEN 'Gửi xe'
+                    WHEN upper(e.category) IN ('UPGRADE','NNG CP') THEN 'Nâng cấp'
+                    WHEN upper(e.category) IN ('WASH','CAR_WASH','RA XE') THEN 'Rửa xe'
+                    WHEN upper(e.category) IN ('INITIAL','MUA XE BAN ĐẦU','CHI PHÍ BAN ĐẦU') THEN 'Chi phí ban đầu'
+                    WHEN upper(e.category) = 'RUNNING' THEN 'Chi phí vận hành'
+                    WHEN upper(e.category) IN ('LOAN','VAY') THEN 'Vay/Tài chính'
+                    WHEN upper(e.category) = 'LOAN_INTEREST' THEN 'Lãi vay'
+                    WHEN upper(e.category) = 'LOAN_PAYMENT' THEN 'Trả gốc vay'
+                    WHEN upper(e.category) IN ('EQUIPMENT','THITB','THIẾT BỊ') THEN 'Trang thiết bị'
+                    WHEN upper(e.category) IN ('OIL','DNNHT','DẦU NHỚT') THEN 'Dầu nhớt'
+                    WHEN upper(e.category) IN ('TYRES','TIRES','LOP','LỐP') THEN 'Lốp xe'
+                    ELSE 'Khác'
+                END AS label,
+                e.amount,
+                e.currency
+            FROM public.expenses e
+            WHERE e.asset_id = p_asset_id
+              AND e.date >= p_from::date
+              AND e.date <= p_to::date
+              AND e.amount > 0
+        ) g
+        GROUP BY g.label
+        ORDER BY SUM(g.amount) DESC
     ) x;
 
     RETURN v_result;

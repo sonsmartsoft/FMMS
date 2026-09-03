@@ -7,6 +7,8 @@ import { getLoanPayments, createLoanPayment, updateLoanPayment, updateLoan, crea
 
 import { updateAsset } from '@/lib/services/assetService';
 import { createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
+import { getFuelLogs } from '@/lib/services/fuelService';
+import { getMaintenanceRecords } from '@/lib/services/maintenanceService';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 import {
@@ -31,6 +33,8 @@ interface VehicleFinanceOverviewProps {
   loan: LoanRecord | null;
   expenses: ExpenseRecord[];
   parts?: PartItem[];
+  fuelLogs?: any[];
+  maintenance?: any[];
   onRefresh: () => void;
   onNavigateTab?: (tabId: string) => void;
 }
@@ -145,11 +149,30 @@ function generate2TierLoanSchedule(loan: LoanRecord | null, payments: any[]) {
   return schedule;
 }
 
-export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRefresh, onNavigateTab }: VehicleFinanceOverviewProps) {
+export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuelLogs, maintenance, onRefresh, onNavigateTab }: VehicleFinanceOverviewProps) {
   const router = useRouter();
   const [payments, setPayments] = useState<any[]>([]);
   const [bankList, setBankList] = useState<string[]>(DEFAULT_BANKS);
   const [activeModal, setActiveModal] = useState<string | null>(null);
+
+  const [internalFuelLogs, setInternalFuelLogs] = useState<any[]>(fuelLogs || []);
+  const [internalMaintenance, setInternalMaintenance] = useState<any[]>(maintenance || []);
+
+  useEffect(() => {
+    if (fuelLogs) {
+      setInternalFuelLogs(fuelLogs);
+    } else if (asset?.id) {
+      getFuelLogs(asset.id).then(f => setInternalFuelLogs(f || [])).catch(() => {});
+    }
+  }, [fuelLogs, asset?.id]);
+
+  useEffect(() => {
+    if (maintenance) {
+      setInternalMaintenance(maintenance);
+    } else if (asset?.id) {
+      getMaintenanceRecords(asset.id).then(m => setInternalMaintenance(m || [])).catch(() => {});
+    }
+  }, [maintenance, asset?.id]);
 
   // Editable forms
   const [marketValueInput, setMarketValueInput] = useState<string>(String(asset.current_market_value || asset.current_value || asset.purchase_price));
@@ -255,8 +278,61 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], onRe
     return upgradeExpenses.length;
   }, [validParts, upgradeExpenses]);
 
-  // 5. Running Costs Total (KHÔNG có gốc/lãi vay!)
-  const runningExpenses = useMemo(() => expenses.filter(isRunningExpense), [expenses]);
+  // 5. Running Costs Total (KHÔNG có gốc/lãi vay! Tự động bao gồm Xăng xe, Bảo dưỡng và Chi phí vận hành)
+  const runningExpenses = useMemo(() => {
+    const list: ExpenseRecord[] = [...expenses.filter(isRunningExpense)];
+
+    // Tự động kết nạp dữ liệu từ Fuel Logs
+    if (internalFuelLogs && internalFuelLogs.length > 0) {
+      internalFuelLogs.forEach((f: any) => {
+        const cost = Number(f.total_cost || f.amount || 0);
+        if (cost <= 0) return;
+        const dateStr = (f.date || f.timestamp || '').slice(0, 10);
+        const alreadyIn = list.some(e => e.id === f.id || (Math.abs(e.amount - cost) < 100 && (e.date || '').slice(0, 10) === dateStr));
+        if (!alreadyIn) {
+          list.push({
+            id: f.id || `FUEL_${dateStr}_${cost}`,
+            asset_id: asset.id,
+            date: dateStr,
+            category: 'FUEL',
+            subcategory: 'fuel',
+            amount: cost,
+            currency: 'VND',
+            vendor: f.station || 'Cây xăng',
+            odometer_km: f.odometer_km,
+            description: f.notes || `Đổ xăng (${f.liters || f.fuel_liters || 0}L)`,
+          });
+        }
+      });
+    }
+
+    // Tự động kết nạp dữ liệu từ Maintenance Records
+    if (internalMaintenance && internalMaintenance.length > 0) {
+      internalMaintenance.forEach((m: any) => {
+        const cost = Number(m.cost || m.amount || 0);
+        if (cost <= 0) return;
+        const dateStr = (m.date || '').slice(0, 10);
+        const alreadyIn = list.some(e => e.id === m.id || (Math.abs(e.amount - cost) < 100 && (e.date || '').slice(0, 10) === dateStr));
+        if (!alreadyIn) {
+          list.push({
+            id: m.id || `MAINT_${dateStr}_${cost}`,
+            asset_id: asset.id,
+            date: dateStr,
+            category: 'MAINTENANCE',
+            subcategory: 'maintenance',
+            amount: cost,
+            currency: 'VND',
+            vendor: m.vendor || 'Gara',
+            odometer_km: m.odometer_km,
+            description: m.notes || m.maintenance_type || 'Bảo dưỡng định kỳ',
+          });
+        }
+      });
+    }
+
+    return list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }, [expenses, internalFuelLogs, internalMaintenance, asset.id]);
+
   const totalRunningCost = useMemo(() => runningExpenses.reduce((s, e) => s + e.amount, 0), [runningExpenses]);
 
   // 6. Loan Schedule & Payments
