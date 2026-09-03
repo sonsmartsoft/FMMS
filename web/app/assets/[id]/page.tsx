@@ -4397,18 +4397,43 @@ export default function AssetDetailPage() {
         {/* ═══ ANALYTICS (PHÂN TÍCH TCO THỰC TẾ) ═══ */}
         {activeTab === 'analytics' && (() => {
           const upgradeCost = expenses.filter(e => (e.category || '').toUpperCase() === 'UPGRADE' || (e.subcategory || '').toUpperCase().includes('ACCESSORIE')).reduce((s, e) => s + e.amount, 0);
-          const loanCost = expenses.filter(e => (e.category || '').toUpperCase().includes('LOAN')).reduce((s, e) => s + e.amount, 0);
-          const otherCost = Math.max(0, totalExpenses - totalFuelCost - totalMaintCost - totalInsurance - upgradeCost - loanCost);
+          
+          // 1. Tính bảo hiểm & giấy tờ (từ cả bảng insurance_policies lẫn expenses)
+          const insFromTable = insurances.reduce((s, ins) => s + (Number(ins.annual_fee) || 0), 0);
+          const insFromExp = expenses.filter(e => {
+            const cat = (e.category || '').toUpperCase();
+            const sub = (e.subcategory || '').toUpperCase();
+            const desc = (e.description || '').toUpperCase();
+            return cat.includes('INSUR') || sub.includes('INSUR') || desc.includes('BẢO HIỂM') || desc.includes('ĐĂNG KIỂM') || desc.includes('PHÍ ĐƯỜNG BỘ');
+          }).reduce((s, e) => s + e.amount, 0);
+          const effectiveInsurance = Math.max(insFromTable, insFromExp);
+
+          // 2. Tính chi phí khoản vay (Tiền lãi vay đã trả từ lịch trả nợ hoặc chi phí ghi nhận)
+          const loanInterestFromExpenses = expenses.filter(e => {
+            const cat = (e.category || '').toUpperCase();
+            const sub = (e.subcategory || '').toUpperCase();
+            const desc = (e.description || '').toUpperCase();
+            return cat.includes('LOAN') || sub.includes('LOAN') || desc.includes('LÃI VAY') || desc.includes('TRẢ GÓP') || desc.includes('LÃI NGÂN HÀNG');
+          }).reduce((s, e) => s + e.amount, 0);
+
+          const loanInterestFromSchedule = assetLoanSchedule.filter(s => s.status === 'PAID').reduce((sum, s) => sum + (s.interest || 0), 0);
+          const loanCost = loanInterestFromExpenses > 0 
+            ? loanInterestFromExpenses 
+            : (loanInterestFromSchedule > 0 
+                ? loanInterestFromSchedule 
+                : (loan && loan.interest_rate_percent > 0 ? Math.round(loan.principal * (loan.interest_rate_percent / 100) * ((loan.term_months || 12) / 12)) : 0));
+
+          const otherCost = Math.max(0, totalExpenses - totalFuelCost - totalMaintCost - effectiveInsurance - upgradeCost - loanInterestFromExpenses);
           const purchasePrice = asset.purchase_price || 0;
-          const totalRealSpent = purchasePrice + totalExpenses;
+          const totalRealSpent = purchasePrice + totalExpenses + (loanCost > loanInterestFromExpenses ? loanCost : 0);
 
           const tcoDonutData = [
             { name: 'Giá mua ban đầu', value: purchasePrice, color: '#3B82F6' },
             { name: 'Nhiên liệu & Pin', value: totalFuelCost, color: '#F59E0B' },
             { name: 'Bảo dưỡng & Phụ tùng', value: totalMaintCost, color: '#06B6D4' },
-            { name: 'Bảo hiểm & Giấy tờ', value: totalInsurance, color: '#10B981' },
+            { name: 'Bảo hiểm & Giấy tờ', value: effectiveInsurance, color: '#10B981' },
             { name: 'Nâng cấp / Đồ chơi', value: upgradeCost, color: '#8B5CF6' },
-            { name: 'Khoản vay & Lãi', value: loanCost, color: '#EC4899' },
+            { name: 'Chi phí khoản vay', value: loanCost, color: '#EC4899' },
             { name: 'Vận hành khác', value: otherCost, color: '#64748B' },
           ].filter(d => d.value > 0);
 
@@ -4504,14 +4529,14 @@ export default function AssetDetailPage() {
                           { name: 'Tổng tiền thực chi', amount: totalRealSpent, fill: '#10B981' },
                         ]}
                         layout="vertical"
-                        margin={{ top: 5, right: 15, left: 10, bottom: 5 }}
+                        margin={{ top: 5, right: 25, left: 10, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
                         <XAxis type="number" tickFormatter={v => `${(v / 1_000_000).toFixed(0)}M`} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
-                        <YAxis type="category" dataKey="name" tick={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 10, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={85} />
+                        <YAxis type="category" dataKey="name" tick={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 10, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={130} />
                         <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }} />
 
-                        <Bar dataKey="amount" name="Số tiền" radius={[0, 4, 4, 0]}>
+                        <Bar dataKey="amount" name="Số tiền" radius={[0, 4, 4, 0]} barSize={16}>
                           {[
                             <Cell key="0" fill="#3B82F6" />,
                             <Cell key="1" fill="#F59E0B" />,
@@ -4542,7 +4567,7 @@ export default function AssetDetailPage() {
                     {[
                       { name: 'Nhiên liệu (Xăng / Điện)', total: totalFuelCost, color: '#EF4444' },
                       { name: 'Bảo dưỡng & Phụ tùng', total: totalMaintCost, color: '#0EA5E9' },
-                      { name: 'Bảo hiểm & Giấy tờ', total: totalInsurance, color: '#8B5CF6' },
+                      { name: 'Bảo hiểm & Giấy tờ', total: effectiveInsurance, color: '#8B5CF6' },
                       { name: 'Nâng cấp / Đồ độ xe', total: upgradeCost, color: '#A78BFA' },
                       { name: 'Chi phí khoản vay', total: loanCost, color: '#EC4899' },
                       { name: 'Chi phí khác (Rửa xe, gửi xe, BOT...)', total: otherCost, color: '#64748B' },
