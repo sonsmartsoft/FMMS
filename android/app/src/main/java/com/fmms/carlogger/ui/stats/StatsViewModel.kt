@@ -309,10 +309,16 @@ class StatsViewModel : ViewModel() {
 
             fun parseEpoch(s: String?): Long? {
                 if (s.isNullOrBlank()) return null
+                var normalized = s
+                // Cloud SQL có thể trả thời gian dạng "+00:00" (không ms) hoặc ".SSS+00:00".
+                // Chuẩn hóa về dạng ISO-8601 UTC "...Z" để Instant.parse xử lý chính xác.
+                normalized = normalized.replace("+00:00", "Z").replace("+00:00", "Z")
                 return try {
-                    (if (s.contains(".")) fmtInMs.parse(s) else fmtIn.parse(s))?.time
+                    java.time.Instant.parse(normalized).toEpochMilli()
                 } catch (e: Exception) {
-                    try { java.time.Instant.parse(s).toEpochMilli() } catch (e2: Exception) { null }
+                    try {
+                        (if (s.contains(".")) fmtInMs.parse(s) else fmtIn.parse(s))?.time
+                    } catch (e2: Exception) { null }
                 }
             }
 
