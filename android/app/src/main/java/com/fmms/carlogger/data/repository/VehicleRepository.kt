@@ -27,7 +27,37 @@ class VehicleRepository(
 
     suspend fun getAll(): List<VehicleEntity> = vehicleDao.getAll()
 
-    suspend fun getActive(): VehicleEntity? = vehicleDao.getActive()
+    suspend fun getActive(): VehicleEntity? {
+        val current = vehicleDao.getActive()
+        if (current != null) return current
+        val defaultMazdaId = com.fmms.carlogger.BuildConfig.MAZDA2_ASSET_ID
+        val defaultMazda = vehicleDao.getById(defaultMazdaId)
+        if (defaultMazda != null) {
+            vehicleDao.setActive(defaultMazdaId)
+            return defaultMazda.copy(active = true)
+        }
+        val now = System.currentTimeMillis()
+        val seeded = VehicleEntity(
+            id = defaultMazdaId,
+            fleetId = null,
+            vin = "JM1DJ1010102026",
+            name = "Mazda 2AT 2026",
+            licensePlate = "19B-213.87",
+            make = "MAZDA",
+            model = "Mazda 2",
+            year = 2026,
+            trim = "1.5L AT",
+            engine = "1.5L SkyActiv-G",
+            fuelType = "PETROL",
+            tankCapacityLiters = 44.0,
+            odometerKm = 2651.0,
+            active = true,
+            createdAt = now,
+            updatedAt = now,
+        )
+        vehicleDao.upsert(seeded)
+        return seeded
+    }
 
     suspend fun getById(id: String): VehicleEntity? = vehicleDao.getById(id)
 

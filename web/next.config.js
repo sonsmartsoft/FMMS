@@ -10,6 +10,11 @@ const nextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'api.dicebear.com' },
+      { protocol: 'https', hostname: '**.edmunds-media.com' },
+      { protocol: 'https', hostname: 'media.ed.edmunds-media.com' },
+      { protocol: 'https', hostname: 'upload.wikimedia.org' },
+      { protocol: 'https', hostname: '**.honda.com.vn' },
+      { protocol: 'https', hostname: 'images.pexels.com' },
     ],
   },
   webpack: (config) => {

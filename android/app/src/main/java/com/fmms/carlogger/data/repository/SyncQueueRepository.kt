@@ -31,9 +31,11 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
 
     suspend fun enqueueTrip(trip: TripEntity) {
         val deviceId = trip.deviceId ?: com.fmms.carlogger.AppContainer.prefs.getDeviceId()
+        val defaultMazdaAssetId = com.fmms.carlogger.BuildConfig.MAZDA2_ASSET_ID
+        val targetAssetId = if (trip.vehicleId.isNotBlank() && trip.vehicleId != deviceId) trip.vehicleId else defaultMazdaAssetId
         val payload = JSONObject().apply {
             put("id", trip.id)
-            put("asset_id", trip.vehicleId)
+            put("asset_id", targetAssetId)
             put("device_id", deviceId)
             put("start_time", iso(trip.startTime))
             put("end_time", iso(trip.endTime))
@@ -71,10 +73,12 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
     /** Enqueue one OBD telemetry sample for cloud sync (web table telemetry_samples). */
     suspend fun enqueueTelemetrySample(sample: TelemetrySampleEntity) {
         val deviceId = sample.deviceId ?: com.fmms.carlogger.AppContainer.prefs.getDeviceId()
+        val defaultMazdaAssetId = com.fmms.carlogger.BuildConfig.MAZDA2_ASSET_ID
+        val targetAssetId = if (sample.vehicleId.isNotBlank() && sample.vehicleId != deviceId) sample.vehicleId else defaultMazdaAssetId
         fun num(v: Double?): Any = v ?: JSONObject.NULL
         val payload = JSONObject().apply {
             put("id", sample.id)
-            put("asset_id", sample.vehicleId)
+            put("asset_id", targetAssetId)
             put("device_id", deviceId)
             put("trip_id", JSONObject.NULL)
             put("timestamp", iso(sample.timestamp))
@@ -103,7 +107,7 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
         syncQueueDao.insert(
             SyncQueueEntity(
                 id = UUID.randomUUID().toString(),
-                vehicleId = sample.vehicleId,
+                vehicleId = targetAssetId,
                 entityType = "telemetry_samples",
                 entityId = sample.id,
                 operation = "UPSERT",
@@ -115,14 +119,19 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
 
     suspend fun enqueueGpsPoints(points: List<com.fmms.carlogger.core.database.entity.GpsTrackPointEntity>) {
         if (points.isEmpty()) return
+        val deviceId = com.fmms.carlogger.AppContainer.prefs.getDeviceId()
         val deviceName = com.fmms.carlogger.AppContainer.prefs.getDeviceName()
+        val defaultMazdaAssetId = com.fmms.carlogger.BuildConfig.MAZDA2_ASSET_ID
         val arr = org.json.JSONArray()
+        var firstTargetAssetId = defaultMazdaAssetId
         points.forEach { p ->
+            val targetAssetId = if (p.vehicleId.isNotBlank() && p.vehicleId != deviceId) p.vehicleId else defaultMazdaAssetId
+            firstTargetAssetId = targetAssetId
             arr.put(
                 JSONObject().apply {
                     put("id", p.id)
                     put("trip_id", p.tripId ?: JSONObject.NULL)
-                    put("vehicle_id", p.vehicleId)
+                    put("vehicle_id", targetAssetId)
                     put("device_id", p.deviceId)
                     put("device_name", deviceName ?: JSONObject.NULL)
                     put("lat", p.lat)
@@ -135,7 +144,7 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
         syncQueueDao.insert(
             SyncQueueEntity(
                 id = UUID.randomUUID().toString(),
-                vehicleId = points.first().vehicleId,
+                vehicleId = firstTargetAssetId,
                 entityType = "gps_track_points",
                 entityId = points.first().id,
                 operation = "UPSERT",
@@ -148,10 +157,12 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
     /** Enqueue một lần đổ xăng lên web (bảng fuel_logs). Idempotent theo UUID client. */
     suspend fun enqueueFuelLog(log: com.fmms.carlogger.core.database.entity.FuelLogEntity) {
         val deviceId = com.fmms.carlogger.AppContainer.prefs.getDeviceId()
+        val defaultMazdaAssetId = com.fmms.carlogger.BuildConfig.MAZDA2_ASSET_ID
+        val targetAssetId = if (log.vehicleId.isNotBlank() && log.vehicleId != deviceId) log.vehicleId else defaultMazdaAssetId
         fun num(v: Double?): Any = v ?: JSONObject.NULL
         val payload = JSONObject().apply {
             put("id", log.id)
-            put("asset_id", log.vehicleId)
+            put("asset_id", targetAssetId)
             put("device_id", deviceId)
             put("timestamp", iso(log.timestamp))
             put("odometer_km", log.odometerKm ?: 0.0)
@@ -339,6 +350,12 @@ class TripRepository(
 
     suspend fun startTrip(trip: TripEntity) {
         tripDao.upsert(trip)
+    }
+
+    /** Ghi đè (REPLACE) danh sách trips pull về từ cloud — dùng khi đồng bộ xuống thiết bị. */
+    suspend fun upsertCloudTrips(trips: List<TripEntity>) {
+        if (trips.isEmpty()) return
+        tripDao.upsertAll(trips)
     }
 
     suspend fun completeAndEnqueue(trip: TripEntity) {

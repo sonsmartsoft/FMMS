@@ -168,6 +168,11 @@ class StatsViewModel : ViewModel() {
     init {
         viewModelScope.launch {
             val vehicle = c.vehicleRepository.getActive() ?: return@launch
+            // Kéo trips từ cloud theo UID asset về local để màn phân tích có dữ liệu
+            // trên bất kỳ thiết bị nào (không phụ thuộc trips cục bộ của device này).
+            withContext(Dispatchers.IO) {
+                runCatching { pullTripsFromCloud(vehicle.id) }
+            }
             val now = Calendar.getInstance()
             val todayStart = now.apply { set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
             val monthStart = now.apply { set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
@@ -270,6 +275,82 @@ class StatsViewModel : ViewModel() {
             }
             _expenseBreakdown.value = withContext(Dispatchers.IO) { fetchExpenseBreakdown(assetId, from, to) }
             android.util.Log.d("StatsVM", "expense breakdown [$mode] asset=$assetId n=${_expenseBreakdown.value.size}")
+        }
+    }
+
+    /**
+     * Đồng bộ trips từ cloud về Room local theo UID asset (asset_id) — để màn phân tích
+     * DAILY/MONTHLY/YEARLY hiển thị dữ liệu di chuyển bất kể thiết bị nào (không phụ thuộc
+     * trips cục bộ của device này). Map cột cloud `asset_id/device_id` → `TripEntity.vehicleId`.
+     */
+    private suspend fun pullTripsFromCloud(assetId: String): Int {
+        return try {
+            val url = "${com.fmms.carlogger.BuildConfig.SUPABASE_URL}/rest/v1/trips" +
+                "?asset_id=eq.${android.net.Uri.encode(assetId)}&select=*&limit=1000"
+            val request = okhttp3.Request.Builder()
+                .url(url)
+                .header("apikey", com.fmms.carlogger.BuildConfig.SUPABASE_PUBLISHABLE_KEY)
+                .header("Authorization", "Bearer ${com.fmms.carlogger.BuildConfig.SUPABASE_PUBLISHABLE_KEY}")
+                .get()
+                .build()
+            val resp = okhttp3.OkHttpClient().newCall(request).execute()
+            if (!resp.isSuccessful) {
+                android.util.Log.d("StatsVM", "pullTrips http=${resp.code}")
+                return 0
+            }
+            val text = resp.body?.string() ?: return 0
+            val arr = try { org.json.JSONArray(text) } catch (e: Exception) { return 0 }
+            val fmtIn = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }
+            val fmtInMs = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }
+
+            fun parseEpoch(s: String?): Long? {
+                if (s.isNullOrBlank()) return null
+                return try {
+                    (if (s.contains(".")) fmtInMs.parse(s) else fmtIn.parse(s))?.time
+                } catch (e: Exception) {
+                    try { java.time.Instant.parse(s).toEpochMilli() } catch (e2: Exception) { null }
+                }
+            }
+
+            val trips = (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val startTime = parseEpoch(o.optString("start_time")) ?: return@mapNotNull null
+                val now = System.currentTimeMillis()
+                TripEntity(
+                    id = o.optString("id"),
+                    vehicleId = o.optString("asset_id").ifBlank { assetId },
+                    deviceId = o.optString("device_id").takeIf { it.isNotBlank() },
+                    startTime = startTime,
+                    endTime = parseEpoch(o.optString("end_time")),
+                    startOdometer = if (o.isNull("start_odometer")) null else o.optDouble("start_odometer", -1.0).takeIf { it >= 0 },
+                    endOdometer = if (o.isNull("end_odometer")) null else o.optDouble("end_odometer", -1.0).takeIf { it >= 0 },
+                    distanceKm = o.optDouble("distance_km", 0.0),
+                    durationSeconds = o.optLong("duration_seconds", 0L),
+                    fuelStartPercent = if (o.isNull("fuel_start_percent")) null else o.optDouble("fuel_start_percent"),
+                    fuelEndPercent = if (o.isNull("fuel_end_percent")) null else o.optDouble("fuel_end_percent"),
+                    fuelUsedLiters = if (o.isNull("fuel_used_liters")) null else o.optDouble("fuel_used_liters"),
+                    averageConsumptionL100km = if (o.isNull("average_consumption_l100km")) null else o.optDouble("average_consumption_l100km"),
+                    averageSpeedKmh = if (o.isNull("average_speed_kmh")) null else o.optDouble("average_speed_kmh"),
+                    maxSpeedKmh = if (o.isNull("max_speed_kmh")) null else o.optDouble("max_speed_kmh"),
+                    startLatitude = if (o.isNull("start_latitude")) null else o.optDouble("start_latitude"),
+                    startLongitude = if (o.isNull("start_longitude")) null else o.optDouble("start_longitude"),
+                    endLatitude = if (o.isNull("end_latitude")) null else o.optDouble("end_latitude"),
+                    endLongitude = if (o.isNull("end_longitude")) null else o.optDouble("end_longitude"),
+                    status = o.optString("status", "COMPLETED"),
+                    createdAt = parseEpoch(o.optString("created_at")) ?: now,
+                    updatedAt = parseEpoch(o.optString("updated_at")) ?: now,
+                )
+            }
+            c.tripRepository.upsertCloudTrips(trips)
+            android.util.Log.d("StatsVM", "pullTrips asset=$assetId n=${trips.size}")
+            trips.size
+        } catch (e: Exception) {
+            android.util.Log.d("StatsVM", "pullTrips EXC", e)
+            0
         }
     }
 
