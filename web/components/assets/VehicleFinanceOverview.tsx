@@ -9,6 +9,7 @@ import { updateAsset } from '@/lib/services/assetService';
 import { createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import { getFuelLogs } from '@/lib/services/fuelService';
 import { getMaintenanceRecords } from '@/lib/services/maintenanceService';
+import { getParts } from '@/lib/services/partService';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 import {
@@ -157,6 +158,28 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
 
   const [internalFuelLogs, setInternalFuelLogs] = useState<any[]>(fuelLogs || []);
   const [internalMaintenance, setInternalMaintenance] = useState<any[]>(maintenance || []);
+  const [internalParts, setInternalParts] = useState<PartItem[]>(parts || []);
+
+  useEffect(() => {
+    if (parts && parts.length > 0) {
+      setInternalParts(parts);
+    } else if (asset?.id) {
+      getParts(asset.id).then(p => {
+        if (p && p.length > 0) {
+          setInternalParts(p.map(item => ({
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            brand: item.brand,
+            cost: item.cost,
+            install_date: item.install_date,
+            odometer_km: item.odometer_km,
+            notes: item.notes,
+          })));
+        }
+      }).catch(() => {});
+    }
+  }, [parts, asset?.id]);
 
   useEffect(() => {
     if (fuelLogs) {
@@ -266,7 +289,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
 
   // 4. Upgrades Total
   const upgradeExpenses = useMemo(() => expenses.filter(isUpgradeExpense), [expenses]);
-  const validParts = useMemo(() => parts.filter(p => !((p.name || '') + (p.category || '')).toLowerCase().includes('máy rửa xe')), [parts]);
+  const validParts = useMemo(() => internalParts.filter(p => !((p.name || '') + (p.category || '')).toLowerCase().includes('máy rửa xe')), [internalParts]);
   const partsCost = useMemo(() => validParts.reduce((s, p) => s + (p.cost || 0), 0), [validParts]);
   const totalUpgradeCost = useMemo(() => {
     if (partsCost > 0) return partsCost;
@@ -932,8 +955,8 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
                 expenseId?: string;
               }> = [];
 
-              if (parts.length > 0) {
-                parts.forEach(p => {
+              if (internalParts.length > 0) {
+                internalParts.forEach(p => {
                   allItems.push({
                     id: p.id || `part_${p.name}`,
                     description: p.name,
@@ -946,7 +969,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
                 // Add any upgrade expenses that are not already in parts
                 upgradeExpenses.forEach(e => {
                   const eDesc = (e.description || '').toLowerCase();
-                  const exists = parts.some(p => {
+                  const exists = internalParts.some(p => {
                     const pName = p.name.toLowerCase();
                     return pName.includes(eDesc) || eDesc.includes(pName) || Math.abs(p.cost - e.amount) < 100;
                   });
