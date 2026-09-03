@@ -1,6 +1,7 @@
 package com.fmms.carlogger.ui.stats
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -20,9 +25,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.graphics.Paint
 import java.util.Locale
 
 /**
@@ -38,15 +46,29 @@ fun DualAxisBarLineChart(
     gridColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    Canvas(modifier = modifier.fillMaxWidth().height(180.dp)) {
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
+
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .pointerInput(data) {
+                detectTapGestures { offset ->
+                    if (data.isEmpty()) return@detectTapGestures
+                    val bw = size.width / data.size
+                    val idx = (offset.x / bw).toInt().coerceIn(0, data.size - 1)
+                    selectedIndex = if (selectedIndex == idx) null else idx
+                    android.util.Log.d("StatsCharts", "tap idx=$idx label=${data.getOrNull(idx)?.label} sel=$selectedIndex")
+                }
+            },
+    ) {
         val maxCost = data.maxOfOrNull { it.fuelCostVnd }?.takeIf { it > 0 } ?: 1.0
         val maxKm = data.maxOfOrNull { it.distanceKm }?.takeIf { it > 0 } ?: 1.0
-        val barW = size.width / data.size.coerceAtLeast(1)
-        val chartTop = 8.dp.toPx()
+        val bw = size.width / data.size.coerceAtLeast(1)
+        val chartTop = 20.dp.toPx()
         val chartBottom = size.height - 2.dp.toPx()
         val chartHeight = chartBottom - chartTop
 
-        // Lưới ngang phụ (đường): 4 mốc
         for (i in 0..4) {
             val y = chartTop + chartHeight * i / 4f
             drawLine(
@@ -57,26 +79,57 @@ fun DualAxisBarLineChart(
             )
         }
 
-        // Cột chi phí (₫) — trục trái
+        val selected = data.getOrNull(selectedIndex ?: -1)
+        val textPaint = Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = 9.sp.toPx()
+            isAntiAlias = true
+        }
+
         data.forEachIndexed { i, stat ->
             val h = (stat.fuelCostVnd / maxCost).toFloat() * chartHeight
-            val left = i * barW + barW * 0.2f
-            val w = barW * 0.6f
+            val left = i * bw + bw * 0.2f
+            val w = bw * 0.6f
+            val isSel = selectedIndex == i
             if (h > 0f) {
                 drawRoundRect(
-                    color = costColor,
+                    color = if (isSel) costColor.copy(alpha = 0.35f) else costColor,
                     topLeft = Offset(left, chartBottom - h),
                     size = Size(w, h),
                     cornerRadius = CornerRadius(6f, 6f),
                 )
             }
+            if (isSel) {
+                val labelCost = formatVnd(stat.fuelCostVnd)
+                val labelKm = String.format(Locale.US, "%.0f km", stat.distanceKm)
+                val label = if (stat.fuelCostVnd > 0 && stat.distanceKm > 0) {
+                    "$labelCost · $labelKm"
+                } else if (stat.fuelCostVnd > 0) labelCost
+                else if (stat.distanceKm > 0) labelKm
+                else "0"
+                val cx = left + w / 2f
+                val labelY = (chartBottom - h - 6.dp.toPx()).coerceAtLeast(12.dp.toPx())
+                val pad = 4.dp.toPx()
+                val textW = textPaint.measureText(label)
+                drawRoundRect(
+                    color = costColor,
+                    topLeft = Offset(cx - textW / 2 - pad, labelY - textPaint.textSize - pad / 2),
+                    size = Size(textW + pad * 2, textPaint.textSize + pad),
+                    cornerRadius = CornerRadius(4f, 4f),
+                )
+                drawContext.canvas.nativeCanvas.drawText(
+                    label,
+                    cx - textW / 2,
+                    labelY,
+                    textPaint,
+                )
+            }
         }
 
-        // Đường quãng đường (km) — trục phải
         val stepX = size.width / (data.size - 1).coerceAtLeast(1)
         val pts = data.mapIndexed { i, stat ->
             Offset(
-                i * stepX + barW / 2f,
+                i * stepX + bw / 2f,
                 chartBottom - (stat.distanceKm / maxKm).toFloat() * chartHeight,
             )
         }
@@ -99,8 +152,6 @@ fun DualAxisBarLineChart(
             }
             pts.forEach { p -> drawCircle(color = kmColor, radius = 3.5.dp.toPx(), center = p) }
         }
-
-        // Nhãn trục phải (km) top/bottom
     }
 
     Row(
