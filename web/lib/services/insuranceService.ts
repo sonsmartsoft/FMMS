@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { resolveAssetId } from './assetService';
 
 export interface InsuranceRow {
   id: string;
@@ -57,9 +58,10 @@ export function mapInsuranceRow(row: any): InsuranceRow {
 
 export async function getInsurancePolicies(assetId?: string): Promise<InsuranceRow[]> {
   const supabase = createClient();
+  const realId = assetId ? resolveAssetId(assetId) : undefined;
   let query = supabase.from('insurance_policies').select('*').order('expiry_date', { ascending: false });
-  if (assetId) {
-    query = query.eq('asset_id', assetId);
+  if (realId) {
+    query = query.or(`asset_id.eq.${realId},asset_id.eq.${assetId}`);
   }
   const { data, error } = await query;
   if (error) throw error;
@@ -67,9 +69,11 @@ export async function getInsurancePolicies(assetId?: string): Promise<InsuranceR
 }
 
 export async function createInsurancePolicy(input: InsuranceInput): Promise<InsuranceRow> {
+  const realId = resolveAssetId(input.asset_id);
   const supabase = createClient();
+  const fullPayload = { ...input, asset_id: realId };
   try {
-    const { data, error } = await supabase.from('insurance_policies').insert([input]).select().single();
+    const { data, error } = await supabase.from('insurance_policies').insert([fullPayload]).select().single();
     if (!error && data) return mapInsuranceRow(data);
     if (error && error.message.includes('column')) throw error;
     if (error) throw error;
@@ -79,7 +83,7 @@ export async function createInsurancePolicy(input: InsuranceInput): Promise<Insu
     if (err?.message?.includes('column') || err?.code === 'PGRST204') {
       // Fallback to core columns if database schema has not been migrated yet
       const basePayload = {
-        asset_id: input.asset_id,
+        asset_id: realId,
         provider: input.provider,
         policy_number: input.policy_number,
         policy_type: input.policy_type,

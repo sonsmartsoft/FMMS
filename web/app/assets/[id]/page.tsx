@@ -289,6 +289,9 @@ export default function AssetDetailPage() {
             expiry_date: r.expiry_date,
             annual_fee: r.cost,
             coverage_amount: r.coverage_amount ?? 0,
+            agent_name: r.agent_name,
+            agent_phone: r.agent_phone,
+            provider_hotline: r.provider_hotline,
             status: 'ACTIVE',
           })),
         );
