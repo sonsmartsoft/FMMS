@@ -726,8 +726,17 @@ export default function AssetDetailPage() {
   const thisYearStart = `${nowD.getFullYear()}-01-01`;
   const thisYearEnd = `${nowD.getFullYear()}-12-31`;
 
+  const purchaseDateStr = asset?.purchase_date ? asset.purchase_date.slice(0, 10) : '';
+  let purchaseLabel = 'Tất cả thời gian';
+  if (purchaseDateStr) {
+    const pDate = new Date(purchaseDateStr);
+    const day = String(pDate.getDate()).padStart(2, '0');
+    const month = String(pDate.getMonth() + 1).padStart(2, '0');
+    purchaseLabel = `Tất cả từ ngày nhận xe (${day}/${month})`;
+  }
+
   const dateFilterPresets = [
-    { label: 'Tất cả từ ngày mua (09/04)', start: '2026-04-09', end: '' },
+    { label: purchaseLabel, start: purchaseDateStr, end: '' },
     { label: 'Tháng 4', start: '2026-04-01', end: '2026-04-30' },
     { label: 'Tháng 5', start: '2026-05-01', end: '2026-05-31' },
     { label: 'Tháng 6', start: '2026-06-01', end: '2026-06-30' },
@@ -867,16 +876,18 @@ export default function AssetDetailPage() {
 
     const events: OdoEvent[] = [];
 
-    // 0. Initial vehicle handover / purchase baseline (e.g. 2026-04-09 lúc 12 km)
-    const initialHandoverDate = asset?.purchase_date ? toLocalDateString(asset.purchase_date) : '2026-04-09';
-    events.push({
-      date: initialHandoverDate,
-      odometer_km: 12,
-      type: 'ODO_LOG',
-      note: 'Bàn giao xe từ Showroom Mazda (Mốc ODO khởi điểm 12 km)',
-      id: `handover_baseline_${asset?.id || 'mazda2'}`,
-      raw: { date: initialHandoverDate, odometer_km: 12 },
-    });
+    // 0. Initial vehicle handover / purchase baseline (if vehicle has purchase_date)
+    if (asset?.purchase_date) {
+      const initialHandoverDate = toLocalDateString(asset.purchase_date);
+      events.push({
+        date: initialHandoverDate,
+        odometer_km: asset.current_odometer_km > 0 ? Math.min(12, asset.current_odometer_km) : 0,
+        type: 'ODO_LOG',
+        note: `Bàn giao xe (${asset.name || 'Khởi điểm'})`,
+        id: `handover_baseline_${asset.id}`,
+        raw: { date: initialHandoverDate, odometer_km: 12 },
+      });
+    }
 
     // Odometer logs
     odometerLogs.forEach(o => {
