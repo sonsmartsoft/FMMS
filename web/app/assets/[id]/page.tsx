@@ -4519,7 +4519,7 @@ export default function AssetDetailPage() {
                     <p className="text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">So sánh Chi Phí Mua Xe &amp; Nuôi Xe</p>
                   </div>
 
-                  <div style={{ height: 230 }}>
+                  <div style={{ height: 240 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={[
@@ -4533,10 +4533,10 @@ export default function AssetDetailPage() {
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
                         <XAxis type="number" tickFormatter={v => `${(v / 1_000_000).toFixed(0)}M`} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
-                        <YAxis type="category" dataKey="name" tick={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 10, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={130} />
+                        <YAxis type="category" dataKey="name" tick={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={130} />
                         <ReTooltip formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }} />
 
-                        <Bar dataKey="amount" name="Số tiền" radius={[0, 4, 4, 0]} barSize={16}>
+                        <Bar dataKey="amount" name="Số tiền" radius={[0, 6, 6, 0]} barSize={24}>
                           {[
                             <Cell key="0" fill="#3B82F6" />,
                             <Cell key="1" fill="#F59E0B" />,
