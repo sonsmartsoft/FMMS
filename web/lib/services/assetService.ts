@@ -211,6 +211,7 @@ export type AssetInput = {
   sales_rep_name?: string;
   sales_rep_phone?: string;
   brand_hotline?: string;
+  next_maintenance_due?: string;
   capabilities?: Partial<AssetCapabilities>;
 };
 
@@ -331,6 +332,7 @@ export async function updateAsset(id: string, data: Partial<AssetInput>): Promis
     if ('sales_rep_name' in data) payload.sales_rep_name = data.sales_rep_name;
     if ('sales_rep_phone' in data) payload.sales_rep_phone = data.sales_rep_phone;
     if ('brand_hotline' in data) payload.brand_hotline = data.brand_hotline;
+    if ('next_maintenance_due' in data) payload.next_maintenance_due = data.next_maintenance_due;
     payload.updated_at = new Date().toISOString();
 
     const { error } = await supabase
