@@ -41,7 +41,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <AIFloatingButton onClick={() => setIsAiOpen(true)} />
+      {!isAiOpen && <AIFloatingButton onClick={() => setIsAiOpen(true)} />}
       <AIChatDrawer isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
       <DisplaySettingsModal
         isOpen={isSettingsOpen}
