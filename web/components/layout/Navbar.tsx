@@ -7,6 +7,7 @@ import { Car, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, X, Save } from 'l
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { createClient } from '@/lib/supabase/client';
+import { getCurrentUserMember } from '@/lib/services/userService';
 import DraggableModal from '@/components/ui/DraggableModal';
 
 interface NavbarProps {
@@ -34,6 +35,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
   useEffect(() => {
     const syncUserData = async () => {
       try {
+        const currentMember = await getCurrentUserMember();
+        if (currentMember) {
+          setUserEmail(currentMember.email);
+          setUserName(currentMember.name || currentMember.email);
+          setUserRole(currentMember.role);
+          localStorage.setItem('fmms_user_role', currentMember.role);
+          localStorage.setItem('fmms_user_name', currentMember.name);
+          return;
+        }
+
         const savedName = localStorage.getItem('fmms_user_name');
         const savedOrg = localStorage.getItem('fmms_org_name');
         const savedRole = localStorage.getItem('fmms_user_role');

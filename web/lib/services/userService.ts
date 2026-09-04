@@ -57,6 +57,21 @@ export const INITIAL_DEFAULT_USERS: UserMember[] = [
 
 const LOCAL_STORAGE_KEY = 'fmms_users_list';
 
+export function parseAssignedAssetIds(val: any): string[] {
+  if (Array.isArray(val)) return val.map(String);
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {}
+    if (val.startsWith('{') && val.endsWith('}')) {
+      // Postgres array format {id1,id2}
+      return val.slice(1, -1).split(',').map(s => s.trim().replace(/"/g, '')).filter(Boolean);
+    }
+  }
+  return [];
+}
+
 export async function getUserMembers(): Promise<UserMember[]> {
   const supabase = createClient();
   let dbUsers: UserMember[] = [];
@@ -75,7 +90,7 @@ export async function getUserMembers(): Promise<UserMember[]> {
         phone: u.phone || '',
         role: (u.role || 'MEMBER').toUpperCase() as 'ADMIN' | 'MEMBER',
         status: (u.status || 'ACTIVE').toUpperCase() as 'ACTIVE' | 'INACTIVE',
-        assigned_asset_ids: Array.isArray(u.assigned_asset_ids) ? u.assigned_asset_ids : [],
+        assigned_asset_ids: parseAssignedAssetIds(u.assigned_asset_ids),
         created_at: u.created_at || new Date().toISOString(),
         updated_at: u.updated_at,
       }));
@@ -240,4 +255,76 @@ export async function deleteUserMember(id: string, email?: string): Promise<bool
   }
 
   return true;
+}
+
+export async function getCurrentUserMember(): Promise<UserMember | null> {
+  const supabase = createClient();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !user.email) return null;
+    const email = user.email.trim().toLowerCase();
+
+    // 1. Query user_members from Supabase directly
+    try {
+      const { data, error } = await supabase
+        .from('user_members')
+        .select('*')
+        .ilike('email', email)
+        .maybeSingle();
+
+      if (!error && data) {
+        return {
+          id: String(data.id),
+          name: data.name || user.user_metadata?.full_name || '',
+          email: (data.email || email).trim().toLowerCase(),
+          phone: data.phone || '',
+          role: (data.role || 'MEMBER').toUpperCase() as 'ADMIN' | 'MEMBER',
+          status: (data.status || 'ACTIVE').toUpperCase() as 'ACTIVE' | 'INACTIVE',
+          assigned_asset_ids: parseAssignedAssetIds(data.assigned_asset_ids),
+          created_at: data.created_at || new Date().toISOString(),
+          updated_at: data.updated_at,
+        };
+      }
+    } catch (e) {
+      console.warn('Supabase query user_members in getCurrentUserMember error:', e);
+    }
+
+    // 2. Query all members (which checks DB then localStorage then defaults)
+    const all = await getUserMembers();
+    const found = all.find(u => u.email.toLowerCase() === email);
+    if (found) {
+      return {
+        ...found,
+        assigned_asset_ids: parseAssignedAssetIds(found.assigned_asset_ids),
+      };
+    }
+
+    // 3. Fallback for admin emails or demo
+    const adminEmails = ['demo@fmms.com', 'son.nt@utivina.com', 'sondtk5@gmail.com', 'son.smartsoft@gmail.com'];
+    if (adminEmails.includes(email) || email.includes('admin')) {
+      return {
+        id: user.id || 'usr-admin',
+        name: user.user_metadata?.full_name || 'Nguyễn Trung Sơn',
+        email: email,
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        assigned_asset_ids: [],
+        created_at: new Date().toISOString(),
+      };
+    }
+
+    // 4. Default fallback as MEMBER with no assigned assets
+    return {
+      id: user.id || 'usr-member',
+      name: user.user_metadata?.full_name || email,
+      email: email,
+      role: 'MEMBER',
+      status: 'ACTIVE',
+      assigned_asset_ids: [],
+      created_at: new Date().toISOString(),
+    };
+  } catch (err) {
+    console.warn('getCurrentUserMember error:', err);
+    return null;
+  }
 }

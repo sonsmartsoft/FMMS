@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Users, Shield, Plus, Search, Key, Trash2, Check, Car, UserPlus, X, RefreshCw, Edit3, Lock, ShieldCheck, Mail, Copy } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getUserMembers, createUserMember, updateUserMember, deleteUserMember, UserMember, INITIAL_DEFAULT_USERS } from '@/lib/services/userService';
-import { getAssets } from '@/lib/services/assetService';
+import { getAllAssets, resolveAssetId } from '@/lib/services/assetService';
 import { getAllowedEmails, saveAllowedEmails, fetchAllowedEmailsFromCloud } from '@/lib/services/authWhitelistService';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
@@ -56,7 +56,7 @@ export default function UsersManagementPage() {
       }
 
       // 3. Load assets and assign to Admin
-      const a = await getAssets();
+      const a = await getAllAssets();
       setAssets(a);
       if (a.length > 0) {
         currentUsers = currentUsers.map(u => u.role === 'ADMIN' ? { ...u, assigned_asset_ids: a.map((x: any) => x.id) } : u);
@@ -418,7 +418,7 @@ export default function UsersManagementPage() {
             </thead>
             <tbody className="divide-y" style={{ borderColor: 'var(--border-subtle)' }}>
               {filteredUsers.map(u => {
-                const assignedAssetNames = assets.filter(a => u.assigned_asset_ids?.includes(a.id)).map(a => a.name);
+                const assignedAssetNames = assets.filter(a => u.assigned_asset_ids?.some(id => id === a.id || resolveAssetId(id) === a.id || id === resolveAssetId(a.id))).map(a => a.name);
 
                 return (
                   <tr key={u.id} className="transition hover:bg-slate-500/5">
@@ -846,7 +846,7 @@ export default function UsersManagementPage() {
               <p style={{ color: 'var(--text-muted)' }}>Chọn các xe trong gia đình mà thành viên này được phép truy cập và theo dõi:</p>
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 {assets.map(a => {
-                  const isChecked = selectedUser.assigned_asset_ids.includes(a.id);
+                  const isChecked = selectedUser.assigned_asset_ids?.some(id => id === a.id || resolveAssetId(id) === a.id || id === resolveAssetId(a.id));
                   return (
                     <label key={a.id} className="flex items-center justify-between p-3 rounded-xl cursor-pointer transition hover:bg-slate-500/10"
                       style={{ background: 'var(--bg-secondary)', border: `1px solid ${isChecked ? 'var(--accent-cyan)' : 'var(--border-default)'}` }}>
@@ -855,9 +855,11 @@ export default function UsersManagementPage() {
                           type="checkbox"
                           checked={isChecked}
                           onChange={(e) => {
-                            const newIds = e.target.checked
-                              ? [...selectedUser.assigned_asset_ids, a.id]
-                              : selectedUser.assigned_asset_ids.filter(id => id !== a.id);
+                            const isCheckedNow = e.target.checked;
+                            const currentIds = selectedUser.assigned_asset_ids || [];
+                            const newIds = isCheckedNow
+                              ? [...currentIds.filter(id => id !== a.id && resolveAssetId(id) !== a.id), a.id]
+                              : currentIds.filter(id => id !== a.id && resolveAssetId(id) !== a.id && id !== resolveAssetId(a.id));
                             setSelectedUser({ ...selectedUser, assigned_asset_ids: newIds });
                           }}
                           className="rounded border-slate-600 text-cyan-500 focus:ring-cyan-400"

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { Asset, AssetCapabilities, AssetType } from '@/types/mobility';
 import { addSyncLog } from './syncLogger';
+import { getCurrentUserMember } from './userService';
 
 export type AssetCapabilitiesRow = AssetCapabilities;
 
@@ -95,7 +96,7 @@ export async function getUserContext(): Promise<{ userId: string | null; fleetId
   return { userId, fleetId: created?.id ?? null };
 }
 
-export async function getAssets(): Promise<Asset[]> {
+export async function getAssets(options?: { includeAll?: boolean }): Promise<Asset[]> {
   let customMap: Record<string, any> = {};
   if (typeof window !== 'undefined') {
     try {
@@ -124,7 +125,33 @@ export async function getAssets(): Promise<Asset[]> {
     return custom ? { ...a, ...custom } : a;
   });
 
+  if (options?.includeAll) {
+    return allAssets;
+  }
+
+  // Filter based on member permission if logged in as MEMBER
+  try {
+    const currentMember = await getCurrentUserMember();
+    if (currentMember && currentMember.role === 'MEMBER') {
+      const assignedIds = new Set<string>();
+      (currentMember.assigned_asset_ids || []).forEach(id => {
+        if (id) {
+          assignedIds.add(id);
+          assignedIds.add(resolveAssetId(id));
+        }
+      });
+
+      return allAssets.filter(a => assignedIds.has(a.id) || assignedIds.has(resolveAssetId(a.id)));
+    }
+  } catch (err) {
+    console.warn('Filter assets by user permission failed:', err);
+  }
+
   return allAssets;
+}
+
+export async function getAllAssets(): Promise<Asset[]> {
+  return getAssets({ includeAll: true });
 }
 
 export function isValidUuid(id?: string): boolean {
