@@ -654,3 +654,35 @@ Dữ liệu chuẩn hoá từ ngày nhận xe đến hiện tại:
 ### 15.6. Quy trình triển khai 1-Click OpenCode
 - Cung cấp cú pháp lệnh tóm tắt để OpenCode chỉ cần 1 thao tác kéo code `main` và xuất file APK Release/Debug hoàn chỉnh (`cd android && ./gradlew assembleRelease`).
 
+---
+
+## 16. CẬP NHẬT 2026-09-04: HỆ THỐNG CHẨN ĐOÁN LỖI OBD (DTC), BẢO MẬT SUPABASE & DESIGN SYSTEM
+
+### 16.1. Hệ thống Chẩn đoán & Quản lý Mã lỗi OBD (DTC)
+- **Supabase Migration (`0017_vehicle_diagnostic_dtc_logs.sql`):**
+  - Tạo bảng `vehicle_diagnostic_scans` (lưu phiên quét lỗi, số lượng lỗi MIL/DTC).
+  - Tạo bảng `vehicle_dtc_logs` (lưu chi tiết từng mã lỗi như P0300, P0420, trạng thái `ACTIVE` / `RESOLVED`, khuyến nghị sửa chữa).
+  - Tạo từ điển mã lỗi `obd_dtc_dictionary` (tiêu chuẩn SAE J2012 / ISO 15031-6) và trigger tự động làm giàu ý nghĩa tiếng Việt khi Android đẩy dữ liệu lên.
+- **Web Dashboard:**
+  - Tích hợp tab **Chẩn đoán** trong trang chi tiết xe (`/assets/[id]`).
+  - Hỗ trợ tra cứu nhanh toàn bộ thư viện mã lỗi OBD tiêu chuẩn không cần popup che màn hình.
+  - Tích hợp tính năng đánh dấu xử lý mã lỗi đã khắc phục (`Mark Resolved`).
+
+### 16.2. Sửa lỗi Supabase Advisor (Security Definer Views)
+- **Supabase Migration (`0018_fix_security_invoker_views.sql`):**
+  - Kích hoạt `security_invoker = true` trên 3 View: `public.vehicles`, `public.vehicle_latest_positions`, `public.device_latest_positions`.
+  - Đảm bảo các View tuân thủ 100% chính sách phân quyền dòng Row Level Security (RLS) của Supabase mà không làm thay đổi cấu trúc bảng hay ảnh hưởng đến Android APK.
+
+### 16.3. Tối ưu Giao diện Web Chi tiết Xe & Khoản vay
+- **Phát hiện trạng thái OBD thực tế:** Tính toán thời gian thực (trong vòng 120s và RPM > 0) để hiển thị `🔌 OBD Chế độ chờ (Tự kết nối khi nổ máy)` khi xe tắt máy ở nhà, và `OBD Live (Đang kết nối)` khi xe vận hành.
+- **Cấu hình khoản vay 2 giai đoạn:**
+  - Thêm nút `✏️ Cấu hình khoản vay (Lãi 2 Giai Đoạn)` và `+ Cấu hình khoản vay (Lãi 2 Giai Đoạn)` ngay trong tab **Khoản vay** (`finance`).
+  - Modal cung cấp công cụ chọn nhanh % vay trên giá xe (70-85%), lãi suất ưu đãi, thời gian ưu đãi, lãi thả nổi và thông tin liên hệ cán bộ ngân hàng.
+
+### 16.4. Chuẩn hóa Bộ quy chuẩn Thiết kế UI/UX (FMMS Design System)
+- Tạo tài liệu [`docs/UI_UX_DESIGN_SYSTEM_GUIDELINES.md`](../docs/UI_UX_DESIGN_SYSTEM_GUIDELINES.md) bao gồm:
+  - Bảng màu nhận diện thương hiệu (Emerald, Cyan, Amber, Rose, Purple, Dark Slate).
+  - Quy chuẩn thiết kế thẻ Card Glassmorphism, đổ bóng mờ có màu, phân cấp thị giác chữ in hoa & số đo đậm.
+  - Bộ linh kiện Jetpack Compose mẫu hoàn chỉnh (Thẻ KPI `FmmsStatCard`, Dấu tích xanh `FmmsVerifiedBadgeIcon`, Thẻ an toàn `FmmsAllGoodCard`, Chip trạng thái `FmmsStatusBadge`, Nút bấm Gradient `FmmsGradientButton`).
+
+
