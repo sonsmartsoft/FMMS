@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getAssets, createAsset, deleteAsset } from '@/lib/services/assetService';
-import { Asset, AssetType } from '@/types/mobility';
+import { getMaintenanceRecords } from '@/lib/services/maintenanceService';
+import { Asset, AssetType, MaintenanceRecord } from '@/types/mobility';
 import { Car, Bike, Zap, Plus, Search, Filter, ChevronRight, X, Trash2 } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
@@ -25,6 +26,7 @@ export default function AssetsPage() {
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [maintenanceList, setMaintenanceList] = useState<MaintenanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openAddModal, setOpenAddModal] = useState(false);
@@ -97,8 +99,14 @@ export default function AssetsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const a = await getAssets();
-        if (!cancelled) setAssets(a);
+        const [a, m] = await Promise.all([
+          getAssets(),
+          getMaintenanceRecords(),
+        ]);
+        if (!cancelled) {
+          setAssets(a);
+          setMaintenanceList(m);
+        }
       } catch (err: any) {
         if (!cancelled) setError(err?.message ?? 'Không tải được dữ liệu');
       } finally {
@@ -235,8 +243,70 @@ export default function AssetsPage() {
                   <td className="px-4 py-3 font-semibold" style={{ color: 'var(--text-secondary)' }}>
                     {(asset.purchase_price / 1_000_000).toFixed(0)}M ₫
                   </td>
-                  <td className="px-4 py-3" style={{ color: 'var(--status-amber)' }}>
-                    {asset.next_maintenance_due || '—'}
+                  <td className="px-4 py-3 text-xs">
+                    {(() => {
+                      // Tìm các record bảo dưỡng của xe này
+                      const assetMaints = maintenanceList.filter(m => m.asset_id === asset.id);
+                      const futureMaints = assetMaints
+                        .filter(m => m.next_due_date || m.next_due_km)
+                        .sort((a, b) => (a.next_due_date || '').localeCompare(b.next_due_date || ''));
+
+                      const nextMaint = futureMaints[0];
+                      const dateStr = nextMaint?.next_due_date || asset.next_maintenance_due;
+                      const dueKm = nextMaint?.next_due_km;
+
+                      if (!dateStr && !dueKm) {
+                        return <span className="font-normal" style={{ color: 'var(--text-muted)' }}>Chưa lên lịch</span>;
+                      }
+
+                      if (dateStr) {
+                        const maintDate = new Date(dateStr);
+                        const today = new Date();
+                        const diffDays = Math.ceil((maintDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                        const fmtDateStr = maintDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+                        if (diffDays < 0) {
+                          return (
+                            <div>
+                              <span className="font-bold text-rose-400 block">{fmtDateStr}</span>
+                              <span className="text-[10px] text-rose-400 font-medium">⚠️ Quá hạn {Math.abs(diffDays)} ngày</span>
+                            </div>
+                          );
+                        } else if (diffDays <= 7) {
+                          return (
+                            <div>
+                              <span className="font-bold text-amber-400 block">{fmtDateStr}</span>
+                              <span className="text-[10px] text-amber-400 font-medium">🟠 Còn {diffDays} ngày</span>
+                            </div>
+                          );
+                        } else if (diffDays <= 30) {
+                          return (
+                            <div>
+                              <span className="font-bold text-amber-400 block">{fmtDateStr}</span>
+                              <span className="text-[10px] text-amber-400">🟡 Còn {diffDays} ngày</span>
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <div>
+                              <span className="font-semibold text-emerald-400 block">{fmtDateStr}</span>
+                              <span className="text-[10px] text-emerald-400 font-medium">✅ Còn {diffDays} ngày</span>
+                            </div>
+                          );
+                        }
+                      }
+
+                      if (dueKm) {
+                        return (
+                          <div>
+                            <span className="font-bold text-cyan-400 block">Kỳ {dueKm.toLocaleString('vi-VN')} km</span>
+                            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Theo mốc ODO</span>
+                          </div>
+                        );
+                      }
+
+                      return <span className="font-normal" style={{ color: 'var(--text-muted)' }}>Chưa lên lịch</span>;
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end space-x-2">
