@@ -2272,9 +2272,9 @@ export default function AssetDetailPage() {
       {/* ── Header ── */}
       <div className="glass-panel p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div className="flex items-center space-x-4">
-          <div className="relative w-20 h-20 rounded-2xl overflow-hidden border shrink-0" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
+          <div className="relative w-28 h-20 rounded-2xl overflow-hidden border shrink-0 flex items-center justify-center shadow-inner" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-secondary)' }}>
             {asset.image_url
-              ? <img src={asset.image_url} alt={asset.name} className="w-full h-full object-cover" />
+              ? <img src={asset.image_url} alt={asset.name} className="w-full h-full object-cover object-center" />
               : <Car className="w-8 h-8 m-auto" style={{ color: 'var(--text-muted)' }} />}
           </div>
           <div>
