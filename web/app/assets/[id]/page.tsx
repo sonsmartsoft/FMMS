@@ -316,6 +316,8 @@ export default function AssetDetailPage() {
   }, [assetId]);
 
   /* ── Realtime subscription: live OBD gauges from Android ── */
+  const [isObdLive, setIsObdLive] = useState<boolean>(false);
+
   useEffect(() => {
     if (!assetId) return;
     const sb = createClient();
@@ -331,12 +333,16 @@ export default function AssetDetailPage() {
           .limit(1);
         if (data && data.length > 0) {
           const r = data[0];
+          const isRecentlyActive = r.timestamp && (Date.now() - new Date(r.timestamp).getTime()) < 120 * 1000 && Number(r.rpm || 0) > 0;
+          setIsObdLive(Boolean(isRecentlyActive));
           setLive({
             speed: r.speed_kmh != null ? Number(r.speed_kmh) : null,
             rpm: r.rpm != null ? Number(r.rpm) : null,
             coolant: r.coolant_temp_c != null ? Number(r.coolant_temp_c) : null,
             voltage: r.battery_voltage != null ? Number(r.battery_voltage) : null,
           });
+        } else {
+          setIsObdLive(false);
         }
       } catch {}
     })();
@@ -348,6 +354,8 @@ export default function AssetDetailPage() {
         { event: 'INSERT', schema: 'public', table: 'telemetry_samples', filter: `asset_id=eq.${assetId}` },
         (payload) => {
           const r = payload.new as any;
+          const isRecent = r.timestamp && (Date.now() - new Date(r.timestamp).getTime()) < 120 * 1000 && Number(r.rpm || 0) > 0;
+          setIsObdLive(Boolean(isRecent));
           setLive({
             speed: r.speed_kmh != null ? Number(r.speed_kmh) : null,
             rpm: r.rpm != null ? Number(r.rpm) : null,
@@ -376,12 +384,19 @@ export default function AssetDetailPage() {
     lender: 'Ngân hàng Techcombank',
     principal: '400000000',
     down_payment: '100000000',
+    loan_ratio_percent: '80',
     interest_rate_percent: '8.5',
+    preferred_rate_percent: '7.5',
+    preferred_months: '12',
+    floating_rate_percent: '11.5',
     term_months: '36',
     start_date: new Date().toISOString().slice(0, 10),
     monthly_payment: '',
     payment_day: '15',
     notes: '',
+    bank_contact_name: '',
+    bank_contact_phone: '',
+    bank_hotline: '',
   });
 
   const assetLoanSchedule = useMemo(() => generateLoanSchedule(loan, loanPayments), [loan, loanPayments]);
@@ -389,7 +404,8 @@ export default function AssetDetailPage() {
   const handleSaveAssetLoan = async () => {
     if (!assetId) return;
     const p = parseFloat(loanForm.principal) || 0;
-    const r = (parseFloat(loanForm.interest_rate_percent) || 0) / 100 / 12;
+    const prefRate = parseFloat(loanForm.preferred_rate_percent) || parseFloat(loanForm.interest_rate_percent) || 8.5;
+    const r = prefRate / 100 / 12;
     const n = parseInt(loanForm.term_months) || 12;
     const emi = (p > 0 && r > 0 && n > 0) ? Math.round((p * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1)) : 0;
     const m = parseFloat(loanForm.monthly_payment) || emi;
@@ -399,13 +415,20 @@ export default function AssetDetailPage() {
       lender: loanForm.lender || 'Ngân hàng',
       principal: p,
       down_payment: parseFloat(loanForm.down_payment) || 0,
-      interest_rate_percent: parseFloat(loanForm.interest_rate_percent) || 8.5,
+      loan_ratio_percent: parseFloat(loanForm.loan_ratio_percent) || ((asset && asset.purchase_price) ? Math.round((p / asset.purchase_price) * 100) : 80),
+      interest_rate_percent: prefRate,
+      preferred_rate_percent: parseFloat(loanForm.preferred_rate_percent) || undefined,
+      preferred_months: parseInt(loanForm.preferred_months) || undefined,
+      floating_rate_percent: parseFloat(loanForm.floating_rate_percent) || undefined,
       term_months: n,
       start_date: loanForm.start_date || new Date().toISOString().slice(0, 10),
       monthly_payment: m,
       payment_day: parseInt(loanForm.payment_day) || 15,
       current_balance: editingLoan ? editingLoan.current_balance : p,
       notes: loanForm.notes || undefined,
+      bank_contact_name: loanForm.bank_contact_name || undefined,
+      bank_contact_phone: loanForm.bank_contact_phone || undefined,
+      bank_hotline: loanForm.bank_hotline || undefined,
     };
 
     try {
@@ -2665,12 +2688,12 @@ export default function AssetDetailPage() {
           <div className="space-y-5">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Vận hành &amp; OBD</h3>
-              {hasLive
+              {isObdLive
                 ? <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1.5" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /><span>🟢 OBD Live (Đang kết nối)</span>
+                    <span>OBD Live (Đang kết nối)</span>
                   </span>
                 : <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1.5" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
-                    <span className="w-2 h-2 rounded-full" style={{ background: 'var(--text-faint)' }} /><span>🔌 OBD Chế độ chờ (Tự bắt khi nổ máy)</span>
+                    <span>🔌 OBD Chế độ chờ (Tự kết nối khi nổ máy)</span>
                   </span>
               }
             </div>
@@ -4197,19 +4220,26 @@ export default function AssetDetailPage() {
                   <button onClick={() => {
                     setEditingLoan(loan);
                     setLoanForm({
-                      lender: loan.lender || 'Ngân hàng',
+                      lender: loan.lender || 'Ngân hàng Techcombank',
                       principal: String(loan.principal || 0),
                       down_payment: String(loan.down_payment || 0),
+                      loan_ratio_percent: String(loan.loan_ratio_percent || (asset.purchase_price ? Math.round((loan.principal / asset.purchase_price) * 100) : 80)),
                       interest_rate_percent: String(loan.interest_rate_percent || 8.5),
+                      preferred_rate_percent: String(loan.preferred_rate_percent || loan.interest_rate_percent || 7.5),
+                      preferred_months: String(loan.preferred_months || 12),
+                      floating_rate_percent: String(loan.floating_rate_percent || 11.5),
                       term_months: String(loan.term_months || 36),
                       start_date: loan.start_date ? loan.start_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
                       monthly_payment: String(loan.monthly_payment || ''),
                       payment_day: String(loan.payment_day || 15),
                       notes: loan.notes || '',
+                      bank_contact_name: loan.bank_contact_name || '',
+                      bank_contact_phone: loan.bank_contact_phone || '',
+                      bank_hotline: loan.bank_hotline || '',
                     });
                     setOpenLoanModal(true);
-                  }} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-white hover:opacity-90 transition shadow-sm">
-                    ✏️ Điều chỉnh khoản vay
+                  }} className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-white hover:opacity-90 transition shadow-sm flex items-center gap-1.5">
+                    <span>✏️ Cấu hình khoản vay (Lãi 2 Giai Đoạn)</span>
                   </button>
                   <button onClick={() => handleDeleteAssetLoan(loan.id)} className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500/15 text-rose-400 hover:bg-rose-500/25 transition">
                     ❌ Xóa khoản vay
@@ -4218,20 +4248,29 @@ export default function AssetDetailPage() {
               ) : (
                 <button onClick={() => {
                   setEditingLoan(null);
+                  const initialPrincipal = asset.purchase_price ? Math.round(asset.purchase_price * 0.8) : 400000000;
+                  const initialDown = asset.purchase_price ? Math.round(asset.purchase_price * 0.2) : 100000000;
                   setLoanForm({
                     lender: 'Ngân hàng Techcombank',
-                    principal: String(asset.purchase_price ? Math.round(asset.purchase_price * 0.8) : 400000000),
-                    down_payment: String(asset.purchase_price ? Math.round(asset.purchase_price * 0.2) : 100000000),
-                    interest_rate_percent: '8.5',
+                    principal: String(initialPrincipal),
+                    down_payment: String(initialDown),
+                    loan_ratio_percent: '80',
+                    interest_rate_percent: '7.5',
+                    preferred_rate_percent: '7.5',
+                    preferred_months: '12',
+                    floating_rate_percent: '11.5',
                     term_months: '36',
                     start_date: new Date().toISOString().slice(0, 10),
                     monthly_payment: '',
                     payment_day: '15',
                     notes: '',
+                    bank_contact_name: '',
+                    bank_contact_phone: '',
+                    bank_hotline: '',
                   });
                   setOpenLoanModal(true);
                 }} className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-white text-xs font-bold shadow-md transition hover:opacity-90" style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}>
-                  <Plus className="w-4 h-4" /><span>+ Thêm khoản vay cho xe này</span>
+                  <Plus className="w-4 h-4" /><span>+ Cấu hình khoản vay (Lãi 2 Giai Đoạn)</span>
                 </button>
               )}
             </div>
@@ -4243,20 +4282,29 @@ export default function AssetDetailPage() {
                 <p className="max-w-md mx-auto">Tạo khoản vay mua xe trả góp để theo dõi dư nợ giảm dần, tính toán bảng chia gốc lãi 2 giai đoạn và theo dõi từng tháng đóng tiền.</p>
                 <button onClick={() => {
                   setEditingLoan(null);
+                  const initialPrincipal = asset.purchase_price ? Math.round(asset.purchase_price * 0.8) : 400000000;
+                  const initialDown = asset.purchase_price ? Math.round(asset.purchase_price * 0.2) : 100000000;
                   setLoanForm({
                     lender: 'Ngân hàng Techcombank',
-                    principal: String(asset.purchase_price ? Math.round(asset.purchase_price * 0.8) : 400000000),
-                    down_payment: String(asset.purchase_price ? Math.round(asset.purchase_price * 0.2) : 100000000),
-                    interest_rate_percent: '8.5',
+                    principal: String(initialPrincipal),
+                    down_payment: String(initialDown),
+                    loan_ratio_percent: '80',
+                    interest_rate_percent: '7.5',
+                    preferred_rate_percent: '7.5',
+                    preferred_months: '12',
+                    floating_rate_percent: '11.5',
                     term_months: '36',
                     start_date: new Date().toISOString().slice(0, 10),
                     monthly_payment: '',
                     payment_day: '15',
                     notes: '',
+                    bank_contact_name: '',
+                    bank_contact_phone: '',
+                    bank_hotline: '',
                   });
                   setOpenLoanModal(true);
                 }} className="px-4 py-2 rounded-xl text-white font-bold text-xs shadow-md" style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}>
-                  + Tạo khoản vay ngay
+                  + Cấu hình khoản vay (Lãi 2 Giai Đoạn)
                 </button>
               </div>
             ) : (
@@ -5506,47 +5554,102 @@ export default function AssetDetailPage() {
         </Modal>
       )}
 
-      {/* Add / Edit Loan Modal */}
+      {/* Add / Edit Loan Modal — Lãi suất 2 giai đoạn */}
       {openLoanModal && (
-        <Modal title={editingLoan ? '✏️ Chỉnh sửa thông tin khoản vay' : '🏦 Thêm khoản vay mua xe mới'} onClose={() => setOpenLoanModal(false)}>
-          <Field label="Tổ chức tín dụng / Ngân hàng *">
-            <input type="text" className="theme-input" placeholder="VD: Techcombank, VPBank..." value={loanForm.lender} onChange={e => setLoanForm(p => ({ ...p, lender: e.target.value }))} />
-          </Field>
-          <Field label="Ghi chú / Tên hợp đồng">
-            <input type="text" className="theme-input" placeholder="VD: Khoản vay trả góp 3 năm" value={loanForm.notes} onChange={e => setLoanForm(p => ({ ...p, notes: e.target.value }))} />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Số tiền gốc vay (₫) *">
-              <input type="number" className="theme-input font-mono font-bold" placeholder="400000000" value={loanForm.principal} onChange={e => setLoanForm(p => ({ ...p, principal: e.target.value }))} />
+        <Modal title={editingLoan ? '✏️ Cấu hình khoản vay & Lãi suất 2 giai đoạn' : '🏦 Thêm khoản vay mua xe (Lãi 2 giai đoạn)'} onClose={() => setOpenLoanModal(false)}>
+          <div className="space-y-4 text-xs">
+            <Field label="Tổ chức tín dụng / Ngân hàng *">
+              <input type="text" className="theme-input" placeholder="VD: Techcombank, VPBank, VIB, Shinhan Bank..." value={loanForm.lender} onChange={e => setLoanForm(p => ({ ...p, lender: e.target.value }))} />
             </Field>
-            <Field label="Số tiền trả trước (₫)">
-              <input type="number" className="theme-input font-mono" placeholder="100000000" value={loanForm.down_payment} onChange={e => setLoanForm(p => ({ ...p, down_payment: e.target.value }))} />
+
+            {/* Quick Loan Ratio % Calculator */}
+            {asset && asset.purchase_price > 0 && (
+              <div className="space-y-2 p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-[11px] uppercase" style={{ color: 'var(--accent-cyan)' }}>Chọn nhanh % Vay (Giá xe: {fmt(asset.purchase_price)} ₫)</span>
+                  <span className="font-mono font-bold text-cyan-400">{loanForm.loan_ratio_percent}% Vay</span>
+                </div>
+                <div className="flex space-x-2">
+                  {[70, 75, 80, 85].map(r => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => {
+                        const pr = Math.round(asset.purchase_price * (r / 100));
+                        const down = asset.purchase_price - pr;
+                        setLoanForm(p => ({ ...p, principal: String(pr), down_payment: String(down), loan_ratio_percent: String(r) }));
+                      }}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-bold transition"
+                      style={parseFloat(loanForm.loan_ratio_percent) === r
+                        ? { background: 'var(--accent-cyan)', color: 'white' }
+                        : { background: 'var(--bg-primary)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
+                    >
+                      {r}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Số tiền gốc vay (₫) *">
+                <input type="number" className="theme-input font-mono font-bold text-cyan-400" placeholder="400000000" value={loanForm.principal} onChange={e => setLoanForm(p => ({ ...p, principal: e.target.value }))} />
+              </Field>
+              <Field label="Số tiền trả trước (₫)">
+                <input type="number" className="theme-input font-mono font-bold" placeholder="100000000" value={loanForm.down_payment} onChange={e => setLoanForm(p => ({ ...p, down_payment: e.target.value }))} />
+              </Field>
+            </div>
+
+            {/* 2-Tier Rate Config Card */}
+            <div className="grid grid-cols-3 gap-2 p-3 rounded-xl" style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.25)' }}>
+              <div className="space-y-1">
+                <label className="font-bold text-[10px] uppercase text-emerald-400">Lãi ưu đãi %/năm *</label>
+                <input type="number" step="0.1" className="theme-input font-mono font-bold" placeholder="7.5" value={loanForm.preferred_rate_percent} onChange={e => setLoanForm(p => ({ ...p, preferred_rate_percent: e.target.value, interest_rate_percent: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-[10px] uppercase text-emerald-400">Số tháng ưu đãi</label>
+                <input type="number" className="theme-input font-mono" placeholder="12" value={loanForm.preferred_months} onChange={e => setLoanForm(p => ({ ...p, preferred_months: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-[10px] uppercase text-amber-400">Lãi thả nổi %/năm</label>
+                <input type="number" step="0.1" className="theme-input font-mono font-bold" placeholder="11.5" value={loanForm.floating_rate_percent} onChange={e => setLoanForm(p => ({ ...p, floating_rate_percent: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Kỳ hạn (tháng) *">
+                <input type="number" className="theme-input font-mono" placeholder="36" value={loanForm.term_months} onChange={e => setLoanForm(p => ({ ...p, term_months: e.target.value }))} />
+              </Field>
+              <Field label="Ngày bắt đầu vay *">
+                <input type="date" className="theme-input" value={loanForm.start_date} onChange={e => setLoanForm(p => ({ ...p, start_date: e.target.value }))} />
+              </Field>
+              <Field label="Hạn đóng (ngày hàng tháng)">
+                <input type="number" min="1" max="31" className="theme-input font-mono" placeholder="15" value={loanForm.payment_day} onChange={e => setLoanForm(p => ({ ...p, payment_day: e.target.value }))} />
+              </Field>
+            </div>
+
+            {/* Bank Officer Contact Card */}
+            <div className="p-3 rounded-xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+              <span className="font-bold text-[11px] uppercase flex items-center gap-1.5" style={{ color: 'var(--accent-cyan)' }}>
+                📞 Liên hệ Cán bộ tín dụng &amp; Hotline Ngân hàng
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="text" placeholder="Tên cán bộ tín dụng (VD: Anh Nam)..." className="theme-input text-xs" value={loanForm.bank_contact_name} onChange={e => setLoanForm(p => ({ ...p, bank_contact_name: e.target.value }))} />
+                <input type="tel" placeholder="SĐT cán bộ tín dụng..." className="theme-input text-xs font-mono font-bold" value={loanForm.bank_contact_phone} onChange={e => setLoanForm(p => ({ ...p, bank_contact_phone: e.target.value }))} />
+                <input type="tel" placeholder="Hotline ngân hàng..." className="theme-input text-xs font-mono col-span-2" value={loanForm.bank_hotline} onChange={e => setLoanForm(p => ({ ...p, bank_hotline: e.target.value }))} />
+              </div>
+            </div>
+
+            <Field label="Ghi chú hợp đồng">
+              <input type="text" className="theme-input" placeholder="VD: Khoản vay trả góp 3 năm - Gói vay ưu đãi Techcombank..." value={loanForm.notes} onChange={e => setLoanForm(p => ({ ...p, notes: e.target.value }))} />
             </Field>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Lãi suất (%/năm) *">
-              <input type="number" step="0.1" className="theme-input font-mono" placeholder="8.5" value={loanForm.interest_rate_percent} onChange={e => setLoanForm(p => ({ ...p, interest_rate_percent: e.target.value }))} />
-            </Field>
-            <Field label="Kỳ hạn (tháng) *">
-              <input type="number" className="theme-input font-mono" placeholder="36" value={loanForm.term_months} onChange={e => setLoanForm(p => ({ ...p, term_months: e.target.value }))} />
-            </Field>
-            <Field label="Hạn đóng (ngày)">
-              <input type="number" min="1" max="31" className="theme-input font-mono" placeholder="15" value={loanForm.payment_day} onChange={e => setLoanForm(p => ({ ...p, payment_day: e.target.value }))} />
-            </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Ngày bắt đầu vay *">
-              <input type="date" className="theme-input" value={loanForm.start_date} onChange={e => setLoanForm(p => ({ ...p, start_date: e.target.value }))} />
-            </Field>
-            <Field label="Trả hàng tháng (₫)">
-              <input type="number" className="theme-input font-mono font-bold" placeholder="Tự động tính" value={loanForm.monthly_payment} onChange={e => setLoanForm(p => ({ ...p, monthly_payment: e.target.value }))} />
-            </Field>
-          </div>
-          <div className="flex space-x-2 pt-2">
-            <button onClick={handleSaveAssetLoan} className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-white font-bold text-xs hover:opacity-90 transition shadow-md">
-              {editingLoan ? 'Cập nhật khoản vay' : 'Lưu khoản vay mới'}
-            </button>
-            <button onClick={() => setOpenLoanModal(false)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+
+            <div className="flex space-x-2 pt-2">
+              <button onClick={handleSaveAssetLoan} className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-white font-bold text-xs hover:opacity-90 transition shadow-md">
+                {editingLoan ? 'Lưu cấu hình khoản vay' : 'Tạo khoản vay mới'}
+              </button>
+              <button onClick={() => setOpenLoanModal(false)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
+            </div>
           </div>
         </Modal>
       )}
