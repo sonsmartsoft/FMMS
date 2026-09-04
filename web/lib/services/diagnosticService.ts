@@ -44,6 +44,8 @@ export interface ObdDtcDictionaryEntry {
   severity: string;
 }
 
+import { LOCAL_OBD_DICTIONARY, parseObdCodeDynamically } from '@/lib/data/obdDictionary';
+
 export const diagnosticService = {
   async getDtcLogs(assetId: string, isActiveOnly: boolean = false) {
     const supabase = createClient();
@@ -90,24 +92,62 @@ export const diagnosticService = {
   },
 
   async lookupDtcCode(code: string) {
-    const supabase = createClient();
     const cleanCode = code.trim().toUpperCase();
-    const { data, error } = await supabase
-      .from('obd_dtc_dictionary')
-      .select('*')
-      .eq('code', cleanCode)
-      .maybeSingle();
+    if (!cleanCode) return { data: null, error: null };
 
-    return { data: (data as ObdDtcDictionaryEntry | null), error };
+    // 1. Thử lấy từ Cloud Supabase nếu có
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('obd_dtc_dictionary')
+        .select('*')
+        .eq('code', cleanCode)
+        .maybeSingle();
+
+      if (data && !error) {
+        return { data: (data as ObdDtcDictionaryEntry), error: null };
+      }
+    } catch {
+      // Supabase table chưa tạo hoặc offline -> dùng từ điển local
+    }
+
+    // 2. Tra cứu Từ điển Offline Local tích hợp sẵn
+    const localEntry = LOCAL_OBD_DICTIONARY[cleanCode];
+    if (localEntry) {
+      return { data: (localEntry as ObdDtcDictionaryEntry), error: null };
+    }
+
+    // 3. Phân tích tự động cấu trúc mã SAE J2012
+    const dynamicEntry = parseObdCodeDynamically(cleanCode);
+    if (dynamicEntry) {
+      return { data: (dynamicEntry as ObdDtcDictionaryEntry), error: null };
+    }
+
+    return { data: null, error: null };
   },
 
   async getAllDictionary() {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('obd_dtc_dictionary')
-      .select('*')
-      .order('code', { ascending: true });
+    let cloudData: ObdDtcDictionaryEntry[] = [];
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('obd_dtc_dictionary')
+        .select('*')
+        .order('code', { ascending: true });
+      if (data) cloudData = data as ObdDtcDictionaryEntry[];
+    } catch {
+      // Ignore
+    }
 
-    return { data: (data as ObdDtcDictionaryEntry[]) || [], error };
+    const dictMap = new Map<string, ObdDtcDictionaryEntry>();
+    Object.values(LOCAL_OBD_DICTIONARY).forEach(item => {
+      dictMap.set(item.code, item as ObdDtcDictionaryEntry);
+    });
+    cloudData.forEach(item => {
+      dictMap.set(item.code, item);
+    });
+
+    const combined = Array.from(dictMap.values()).sort((a, b) => a.code.localeCompare(b.code));
+    return { data: combined, error: null };
   }
 };

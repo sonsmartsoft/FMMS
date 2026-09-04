@@ -260,9 +260,16 @@ export default function VehicleDiagnosticsTab({
                   >
                     {/* Mã lỗi */}
                     <td className="px-3.5 py-2.5 font-mono font-bold" style={{ color: item.is_active ? 'var(--status-rose)' : 'var(--text-primary)' }}>
-                      <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10">
+                      <button
+                        onClick={() => {
+                          setSearchCode(item.dtc_code);
+                          handleLookup(item.dtc_code);
+                        }}
+                        title="Bấm để tra cứu chi tiết mã lỗi này"
+                        className="px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:border-cyan-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition cursor-pointer"
+                      >
                         {item.dtc_code}
-                      </span>
+                      </button>
                     </td>
 
                     {/* Mô tả */}
@@ -370,7 +377,7 @@ export default function VehicleDiagnosticsTab({
         </table>
       </div>
 
-      {/* ── Inline Tra cứu Mã Lỗi (Không dùng popup backdrop) ── */}
+      {/* ── Inline Tra cứu Mã Lỗi (Tích hợp Offline & Dynamic Parser) ── */}
       {showLookupModal && (
         <div 
           className="p-4 rounded-2xl border space-y-3 transition-all"
@@ -382,7 +389,7 @@ export default function VehicleDiagnosticsTab({
           <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
             <h4 className="text-xs font-bold uppercase tracking-wide flex items-center space-x-1.5" style={{ color: 'var(--text-primary)' }}>
               <Search className="w-3.5 h-3.5 text-cyan-500" />
-              <span>Tra cứu Từ điển Mã lỗi OBD</span>
+              <span>Tra cứu Từ điển Mã lỗi OBD (Offline & Cloud)</span>
             </h4>
             <button 
               onClick={() => setShowLookupModal(false)} 
@@ -399,8 +406,8 @@ export default function VehicleDiagnosticsTab({
               value={searchCode}
               onChange={e => setSearchCode(e.target.value.toUpperCase())}
               onKeyDown={e => e.key === 'Enter' && handleLookup()}
-              placeholder="Nhập mã lỗi (VD: P0300, P0171, C0035...)"
-              className="theme-input text-xs flex-1 py-1.5 px-3"
+              placeholder="Nhập mã lỗi (VD: P007E, B1024, B0024, P0300...)"
+              className="theme-input text-xs flex-1 py-1.5 px-3 uppercase font-mono"
             />
             <button
               onClick={() => handleLookup()}
@@ -411,29 +418,103 @@ export default function VehicleDiagnosticsTab({
             </button>
           </div>
 
+          {/* Quick Suggestion Chips */}
+          <div className="flex items-center space-x-1.5 flex-wrap gap-1 text-[11px]">
+            <span style={{ color: 'var(--text-muted)' }}>Mã phổ biến:</span>
+            {['P007E', 'B1024', 'B0024', 'P0300', 'P0171', 'P0420', 'U0100', 'C0035'].map(c => (
+              <button
+                key={c}
+                onClick={() => {
+                  setSearchCode(c);
+                  handleLookup(c);
+                }}
+                className="px-2 py-0.5 rounded-lg border font-mono font-semibold transition hover:border-cyan-500 hover:text-cyan-400"
+                style={{
+                  background: searchCode === c ? 'rgba(6,182,212,0.15)' : 'var(--bg-primary)',
+                  borderColor: searchCode === c ? 'var(--accent-cyan)' : 'var(--border-subtle)',
+                  color: searchCode === c ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                }}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+
           {lookupResult ? (
             <div className="p-3.5 rounded-xl space-y-2 text-xs" style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)' }}>
               <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
-                <span className="font-mono font-bold text-sm text-cyan-500">{lookupResult.code}</span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-500">{lookupResult.severity}</span>
+                <div className="flex items-center space-x-2">
+                  <span className="font-mono font-bold text-sm text-cyan-500">{lookupResult.code}</span>
+                  <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+                    {lookupResult.category === 'POWERTRAIN' && '⚙️ Động cơ (P)'}
+                    {lookupResult.category === 'CHASSIS' && '🛞 Khung gầm (C)'}
+                    {lookupResult.category === 'BODY' && '🚗 Thân vỏ (B)'}
+                    {lookupResult.category === 'NETWORK' && '🌐 Mạng CAN (U)'}
+                  </span>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  lookupResult.severity === 'CRITICAL' ? 'bg-rose-500/20 text-rose-500' :
+                  lookupResult.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-500' :
+                  'bg-blue-500/20 text-blue-500'
+                }`}>
+                  {lookupResult.severity === 'CRITICAL' ? 'Nghiêm trọng' : lookupResult.severity === 'MEDIUM' ? 'Cần kiểm tra' : 'Nhẹ'}
+                </span>
               </div>
-              <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{lookupResult.title_vi}</p>
+              <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{lookupResult.title_vi}</p>
               <p style={{ color: 'var(--text-secondary)' }}>{lookupResult.description_vi}</p>
+              {lookupResult.description_en && (
+                <p className="text-[11px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                  Standard: {lookupResult.description_en}
+                </p>
+              )}
               {lookupResult.symptoms_vi && (
-                <p className="text-amber-500"><strong>Triệu chứng:</strong> {lookupResult.symptoms_vi}</p>
+                <p className="text-amber-500"><strong>Triệu chứng nhận biết:</strong> {lookupResult.symptoms_vi}</p>
               )}
               {lookupResult.possible_causes_vi && lookupResult.possible_causes_vi.length > 0 && (
                 <div>
-                  <strong style={{ color: 'var(--text-primary)' }}>Nguyên nhân phổ biến:</strong>
+                  <strong style={{ color: 'var(--text-primary)' }}>Nguyên nhân phổ biến & Hướng xử lý:</strong>
                   <ul className="list-disc list-inside mt-1 space-y-0.5" style={{ color: 'var(--text-secondary)' }}>
                     {lookupResult.possible_causes_vi.map((c, idx) => <li key={idx}>{c}</li>)}
                   </ul>
                 </div>
               )}
+
+              {onAskAi && (
+                <div className="pt-2 border-t flex items-center justify-between" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <button
+                    onClick={() => onAskAi(`Xe ${assetName} của tôi báo mã lỗi OBD ${lookupResult.code} (${lookupResult.title_vi} - ${lookupResult.description_vi}). Vui lòng hướng dẫn cách xử lý và khắc phục chi tiết.`)}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border border-purple-500/30 transition"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Hỏi AI Gemini về mã lỗi này</span>
+                  </button>
+
+                  {onNavigateToMaintenance && (
+                    <button
+                      onClick={() => onNavigateToMaintenance(`Kiểm tra và sửa chữa mã lỗi OBD: ${lookupResult.code} - ${lookupResult.title_vi}`)}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 transition"
+                    >
+                      <Wrench className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Tạo phiếu bảo dưỡng/sửa</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ) : searchCode && !lookupLoading ? (
-            <div className="p-3 rounded-xl text-xs text-center" style={{ color: 'var(--text-muted)' }}>
-              Chưa có dữ liệu từ điển cho mã <strong>{searchCode}</strong>.
+            <div className="p-3.5 rounded-xl text-xs space-y-2 text-center" style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)' }}>
+              <p style={{ color: 'var(--text-muted)' }}>
+                Chưa có dữ liệu từ điển cho mã <strong>{searchCode}</strong>.
+              </p>
+              {onAskAi && (
+                <button
+                  onClick={() => onAskAi(`Xe ${assetName} của tôi báo mã lỗi OBD ${searchCode}. Vui lòng giải thích ý nghĩa mã lỗi này và hướng dẫn cách khắc phục.`)}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border border-purple-500/30 transition"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Hỏi AI Gemini giải nghĩa mã {searchCode}</span>
+                </button>
+              )}
             </div>
           ) : null}
         </div>
