@@ -88,8 +88,47 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
           getExpenses(),
           getLoans(),
         ]);
+        const enrichedAssets = a.map(asset => {
+          const assetLogs = (f || []).filter((l: any) => l.asset_id === asset.id || l.vehicle_id === asset.id);
+          const assetTrips = (t || []).filter((tr: any) => tr.asset_id === asset.id);
+          
+          let fuelPct = asset.fuel_level_percent;
+          let consumption = asset.avg_consumption_l100km;
+          let rangeKm = asset.estimated_range_km;
+          const ridesCount = assetTrips.length;
+
+          if (assetLogs.length > 0) {
+            const latest = assetLogs[0];
+            if (latest.fuel_level_after_pct != null) {
+              fuelPct = Number(latest.fuel_level_after_pct);
+            } else if (fuelPct === undefined && (asset.capabilities.has_fuel || asset.capabilities.has_battery || asset.asset_type === 'CAR')) {
+              fuelPct = 85;
+            }
+            if (!consumption) {
+              const logsWithConsumption = assetLogs.filter((l: any) => l.consumption_l100km || l.calculated_consumption_l100km);
+              if (logsWithConsumption.length > 0) {
+                consumption = Number(logsWithConsumption[0].consumption_l100km || logsWithConsumption[0].calculated_consumption_l100km);
+              } else {
+                consumption = 6.8;
+              }
+            }
+            if (fuelPct !== undefined && !rangeKm) {
+              const tank = asset.tank_capacity_liters || 45;
+              rangeKm = Math.round((fuelPct / 100) * tank * (100 / (consumption || 7)));
+            }
+          }
+
+          return {
+            ...asset,
+            fuel_level_percent: fuelPct,
+            avg_consumption_l100km: consumption,
+            estimated_range_km: rangeKm,
+            total_rides: asset.asset_type === 'BICYCLE' ? ridesCount : asset.total_rides,
+          };
+        });
+
         if (cancelled) return;
-        setAssets(a);
+        setAssets(enrichedAssets);
         setTrips(t);
         setFuelLogs(f);
         setExpenses(e);
@@ -151,11 +190,26 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       .filter(t => (t.start_time || '').startsWith(currentMonth))
       .reduce((s, t) => s + Number(t.distance_km || 0), 0),
   );
+  const totalDistanceAllTime = Math.round(
+    trips.reduce((s, t) => s + Number(t.distance_km || 0), 0),
+  );
+
   const totalFuelCostThisMonth = Math.round(
     fuelLogs
-      .filter((f: any) => (f.date || '').startsWith(currentMonth))
-      .reduce((s: number, f: any) => s + Number(f.total_cost || 0), 0),
+      .filter((f: any) => (f.date || f.timestamp || '').slice(0, 7) === currentMonth)
+      .reduce((s: number, f: any) => s + (Number(f.total_cost) || (Number(f.fuel_liters ?? f.liters ?? 0) * Number(f.price_per_liter ?? 0))), 0),
   );
+  const totalFuelCostAllTime = Math.round(
+    fuelLogs.reduce(
+      (s: number, f: any) => s + (Number(f.total_cost) || (Number(f.fuel_liters ?? f.liters ?? 0) * Number(f.price_per_liter ?? 0))),
+      0,
+    ),
+  );
+  const totalFuelLitersAllTime = fuelLogs.reduce(
+    (s: number, f: any) => s + Number(f.fuel_liters ?? f.liters ?? 0),
+    0,
+  );
+
   const totalLoanBalance = loans.reduce((s, l) => s + Number(l.current_balance || 0), 0);
   const totalLoanMonthly = loans.reduce((s, l) => s + Number(l.monthly_payment || 0), 0);
 
@@ -173,10 +227,18 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       valueColor: 'var(--text-primary)',
     },
     {
-      label: isEn ? 'This Month Mileage' : 'Quãng đường tháng này',
+      label: isEn ? 'Mileage & Distance' : 'Quãng đường di chuyển',
       href: '/analytics',
-      value: `${totalDistanceThisMonth.toLocaleString(isEn ? 'en-US' : 'vi-VN')} km`,
-      sub: trips.length > 0 ? (isEn ? `${trips.length} trips logged` : `${trips.length} chuyến ghi nhận`) : (isEn ? 'No trips logged' : 'Chưa có chuyến đi'),
+      value: totalDistanceThisMonth > 0
+        ? `${totalDistanceThisMonth.toLocaleString(isEn ? 'en-US' : 'vi-VN')} km`
+        : totalDistanceAllTime > 0
+          ? `${totalDistanceAllTime.toLocaleString(isEn ? 'en-US' : 'vi-VN')} km`
+          : '0 km',
+      sub: totalDistanceThisMonth > 0
+        ? (isEn ? `This month · Total: ${totalDistanceAllTime.toLocaleString()} km (${trips.length} trips)` : `Tháng ${now.getMonth() + 1} · Tổng: ${totalDistanceAllTime.toLocaleString('vi-VN')} km (${trips.length} chuyến)`)
+        : trips.length > 0
+          ? (isEn ? `Total cumulative · ${trips.length} trips logged` : `Tổng tích lũy · ${trips.length} chuyến ghi nhận`)
+          : (isEn ? 'No trips logged' : 'Chưa có chuyến đi'),
       subColor: 'var(--accent-cyan)',
       icon: Gauge,
       iconBg: 'rgba(59,130,246,0.12)',
@@ -185,10 +247,14 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
       valueColor: 'var(--text-primary)',
     },
     {
-      label: isEn ? 'Fuel & Energy Cost' : 'Tốn nhiên liệu / Pin',
+      label: isEn ? 'Total Fuel & Energy' : 'Tổng nhiên liệu & Pin',
       href: '/fuel',
-      value: `${totalFuelCostThisMonth.toLocaleString(isEn ? 'en-US' : 'vi-VN')} ₫`,
-      sub: isEn ? `${fuelLogs.length} logs recorded` : `${fuelLogs.length} lần ghi nhận`,
+      value: totalFuelCostAllTime > 0
+        ? `${totalFuelCostAllTime.toLocaleString(isEn ? 'en-US' : 'vi-VN')} ₫`
+        : '0 ₫',
+      sub: totalFuelCostThisMonth > 0
+        ? (isEn ? `This month: ${totalFuelCostThisMonth.toLocaleString()} ₫ (${fuelLogs.length} logs)` : `Tháng ${now.getMonth() + 1}: ${totalFuelCostThisMonth.toLocaleString('vi-VN')} ₫ · ${fuelLogs.length} lần`)
+        : (isEn ? `Total ${fuelLogs.length} logs · ${totalFuelLitersAllTime.toFixed(1)}L` : `Tổng ${fuelLogs.length} lần ghi nhận · ${totalFuelLitersAllTime.toFixed(1)}L`),
       subColor: 'var(--text-muted)',
       icon: Fuel,
       iconBg: 'rgba(245,158,11,0.12)',
