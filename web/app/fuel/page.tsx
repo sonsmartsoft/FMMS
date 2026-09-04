@@ -44,6 +44,11 @@ export default function FuelPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [chartMode, setChartMode] = useState<'COMBINED' | 'PRICE_TREND'>('COMBINED');
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  };
+
   const reload = async () => {
     try {
       const [a, f] = await Promise.all([getAssets(), getFuelLogs()]);
