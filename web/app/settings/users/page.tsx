@@ -4,64 +4,11 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Users, Shield, Plus, Search, Key, Trash2, Check, Car, UserPlus, X, RefreshCw, Edit3, Lock, ShieldCheck, Mail, Copy } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { getUserMembers, createUserMember, updateUserMember, deleteUserMember, UserMember, INITIAL_DEFAULT_USERS } from '@/lib/services/userService';
 import { getAssets } from '@/lib/services/assetService';
 import { getAllowedEmails, saveAllowedEmails } from '@/lib/services/authWhitelistService';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
-
-interface UserMember {
-  id: string;
-  name: string;
-  email: string;
-  phone?: string;
-  role: 'ADMIN' | 'MEMBER';
-  status: 'ACTIVE' | 'INACTIVE';
-  assigned_asset_ids: string[];
-  created_at: string;
-}
-
-const INITIAL_DEFAULT_USERS: UserMember[] = [
-  {
-    id: 'usr-1',
-    name: 'Nguyễn Trung Sơn',
-    email: 'son.nt@utivina.com',
-    phone: '0901234567',
-    role: 'ADMIN',
-    status: 'ACTIVE',
-    assigned_asset_ids: [],
-    created_at: '2026-01-01',
-  },
-  {
-    id: 'usr-2',
-    name: 'Nguyễn Trung Sơn (Gmail)',
-    email: 'sondtk5@gmail.com',
-    phone: '0988888888',
-    role: 'ADMIN',
-    status: 'ACTIVE',
-    assigned_asset_ids: [],
-    created_at: '2026-01-15',
-  },
-  {
-    id: 'usr-smartsoft',
-    name: 'Nguyễn Trung Sơn (SmartSoft)',
-    email: 'son.smartsoft@gmail.com',
-    phone: '0901234567',
-    role: 'ADMIN',
-    status: 'ACTIVE',
-    assigned_asset_ids: [],
-    created_at: '2026-01-16',
-  },
-  {
-    id: 'usr-3',
-    name: 'Trần Văn A (Thành viên)',
-    email: 'thanhvien@utivina.com',
-    phone: '0912345678',
-    role: 'MEMBER',
-    status: 'ACTIVE',
-    assigned_asset_ids: [],
-    created_at: '2026-02-10',
-  },
-];
 
 export default function UsersManagementPage() {
   const [users, setUsers] = useState<UserMember[]>(INITIAL_DEFAULT_USERS);
@@ -70,6 +17,7 @@ export default function UsersManagementPage() {
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'MEMBER'>('ALL');
   const [openModal, setOpenModal] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<UserMember | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Form states
   const [newUser, setNewUser] = useState({ name: '', email: '', phone: '', role: 'MEMBER' as 'ADMIN' | 'MEMBER', assigned_asset_ids: [] as string[] });
@@ -83,60 +31,50 @@ export default function UsersManagementPage() {
 
   const supabase = createClient();
 
-  const saveUsers = (newUsers: UserMember[]) => {
-    setUsers(newUsers);
+  const loadAllData = async () => {
     try {
-      localStorage.setItem('fmms_users_list', JSON.stringify(newUsers));
-      window.dispatchEvent(new Event('fmms_users_updated'));
-    } catch {}
+      setIsLoading(true);
+      // 1. Fetch user members directly from Supabase (with fallback)
+      let currentUsers = await getUserMembers();
+
+      // 2. Sync with current Supabase Auth user metadata
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && user.email) {
+        const userEmail = user.email.toLowerCase();
+        const fullName = user.user_metadata?.full_name || user.user_metadata?.name;
+        const userPhone = user.user_metadata?.phone || user.phone;
+        currentUsers = currentUsers.map(u => {
+          if (u.email.toLowerCase() === userEmail) {
+            return {
+              ...u,
+              name: fullName || u.name,
+              phone: userPhone || u.phone || 'Chưa cập nhật',
+            };
+          }
+          return u;
+        });
+      }
+
+      // 3. Load assets and assign to Admin
+      const a = await getAssets();
+      setAssets(a);
+      if (a.length > 0) {
+        currentUsers = currentUsers.map(u => u.role === 'ADMIN' ? { ...u, assigned_asset_ids: a.map((x: any) => x.id) } : u);
+      }
+
+      setUsers(currentUsers);
+
+      // 4. Load whitelist
+      setAllowedEmailsList(getAllowedEmails());
+    } catch (err) {
+      console.error('Error loading users data:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
-    (async () => {
-      try {
-        // 1. Load users from localStorage or default
-        let currentUsers = INITIAL_DEFAULT_USERS;
-        const saved = localStorage.getItem('fmms_users_list');
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              currentUsers = parsed;
-            }
-          } catch {}
-        }
-
-        // 2. Sync with current Supabase Auth user
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user && user.email) {
-          const userEmail = user.email.toLowerCase();
-          const fullName = user.user_metadata?.full_name || user.user_metadata?.name;
-          const userPhone = user.user_metadata?.phone || user.phone;
-          currentUsers = currentUsers.map(u => {
-            if (u.email.toLowerCase() === userEmail) {
-              return {
-                ...u,
-                name: fullName || u.name,
-                phone: userPhone || u.phone || 'Chưa cập nhật',
-              };
-            }
-            return u;
-          });
-        }
-
-        // 3. Load assets and assign to Admin
-        const a = await getAssets();
-        setAssets(a);
-        if (a.length > 0) {
-          currentUsers = currentUsers.map(u => u.role === 'ADMIN' ? { ...u, assigned_asset_ids: a.map((x: any) => x.id) } : u);
-        }
-
-        saveUsers(currentUsers);
-
-        // 4. Load whitelist
-        setAllowedEmailsList(getAllowedEmails());
-      } catch {}
-    })();
+    loadAllData();
   }, []);
 
   const showToast = (msg: string) => {
@@ -162,24 +100,23 @@ export default function UsersManagementPage() {
       return;
     }
     const cleanEmail = editUserForm.email.trim().toLowerCase();
-    const updatedUsers = users.map(u => u.id === selectedUser.id ? {
-      ...u,
+
+    // 1. Persist to Supabase Database
+    await updateUserMember(selectedUser.id, {
       name: editUserForm.name.trim(),
       phone: editUserForm.phone.trim() || 'Chưa cập nhật',
-      email: cleanEmail || u.email,
+      email: cleanEmail || selectedUser.email,
       role: editUserForm.role,
-    } : u);
+    });
 
-    saveUsers(updatedUsers);
-
-    // Update whitelist if email is changed
+    // 2. Update whitelist if email changed
     if (cleanEmail && cleanEmail !== selectedUser.email) {
       const updatedWhitelist = Array.from(new Set([...allowedEmailsList.filter(e => e !== selectedUser.email), cleanEmail]));
       setAllowedEmailsList(updatedWhitelist);
       saveAllowedEmails(updatedWhitelist);
     }
 
-    // Sync to Supabase auth metadata if currently logged in as this user
+    // 3. Sync to Supabase auth metadata if currently logged in as this user
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user && (user.email?.toLowerCase() === selectedUser.email.toLowerCase() || user.email?.toLowerCase() === cleanEmail)) {
@@ -189,36 +126,37 @@ export default function UsersManagementPage() {
       }
     } catch {}
 
+    await loadAllData();
     setOpenModal(null);
-    showToast(`✅ Đã lưu và cập nhật thông tin thành viên "${editUserForm.name}" thành công!`);
+    showToast(`Đã lưu và cập nhật thông tin thành viên "${editUserForm.name}" vào cơ sở dữ liệu thành công!`);
   };
 
-  const handleCreateUser = () => {
+  const handleCreateUser = async () => {
     if (!newUser.email || !newUser.name) {
       alert('Vui lòng nhập họ tên và email người dùng');
       return;
     }
     const cleanEmail = newUser.email.trim().toLowerCase();
-    const created: UserMember = {
-      id: `usr-${Date.now()}`,
-      name: newUser.name,
+
+    // 1. Persist to Supabase Database
+    const created = await createUserMember({
+      name: newUser.name.trim(),
       email: cleanEmail,
-      phone: newUser.phone || 'Chưa có',
+      phone: newUser.phone?.trim() || 'Chưa có',
       role: newUser.role,
       status: 'ACTIVE',
       assigned_asset_ids: newUser.assigned_asset_ids,
-      created_at: new Date().toISOString().split('T')[0],
-    };
-    saveUsers([...users, created]);
+    });
     
-    // Auto add to whitelist
+    // 2. Auto add to whitelist
     const updatedWhitelist = Array.from(new Set([...allowedEmailsList, cleanEmail]));
     setAllowedEmailsList(updatedWhitelist);
     saveAllowedEmails(updatedWhitelist);
 
+    await loadAllData();
     setOpenModal(null);
     setNewUser({ name: '', email: '', phone: '', role: 'MEMBER', assigned_asset_ids: [] });
-    showToast(`Đã thêm thành viên (${created.name}) và cấp quyền đăng nhập cho ${cleanEmail}!`);
+    showToast(`Đã thêm thành viên (${created.name}) và lưu vĩnh viễn vào hệ thống!`);
   };
 
   const handleOpenResetPassword = (user: UserMember) => {
@@ -257,13 +195,13 @@ export default function UsersManagementPage() {
       }
 
       if (data.mode === 'DIRECT_SET') {
-        showToast(`🎉 Đã đổi mật khẩu trực tiếp cho ${selectedUser.name}!`);
-        alert(`✅ THÀNH CÔNG: Mật khẩu mới cho tài khoản ${selectedUser.email} đã được cập nhật trực tiếp thành: ${pwd}\n\nMật khẩu đã được sao chép vào Clipboard để bạn gửi trực tiếp cho thành viên.`);
+        showToast(`Đã đổi mật khẩu trực tiếp cho ${selectedUser.name}!`);
+        alert(`THÀNH CÔNG: Mật khẩu mới cho tài khoản ${selectedUser.email} đã được cập nhật trực tiếp thành: ${pwd}\n\nMật khẩu đã được sao chép vào Clipboard để bạn gửi trực tiếp cho thành viên.`);
       } else {
-        showToast(data.message || `✅ Mật khẩu "${pwd}" đã được tạo và sao chép vào Clipboard!`);
+        showToast(data.message || `Mật khẩu "${pwd}" đã được tạo và sao chép vào Clipboard!`);
       }
     } catch (err: any) {
-      showToast(`✅ Đã tạo & sao chép mật khẩu "${pwd}" vào Clipboard!`);
+      showToast(`Đã tạo & sao chép mật khẩu "${pwd}" vào Clipboard!`);
     }
 
     setOpenModal(null);
@@ -288,7 +226,7 @@ export default function UsersManagementPage() {
         password: myPasswordForm.newPassword,
       });
       if (error) throw error;
-      showToast('🎉 Đã đổi mật khẩu cá nhân thành công! Bạn có thể dùng mật khẩu mới từ lần đăng nhập sau.');
+      showToast('Đã đổi mật khẩu cá nhân thành công! Bạn có thể dùng mật khẩu mới từ lần đăng nhập sau.');
       setOpenModal(null);
       setMyPasswordForm({ newPassword: '', confirmPassword: '' });
     } catch (err: any) {
@@ -319,46 +257,58 @@ export default function UsersManagementPage() {
         const updated = allowedEmailsList.filter(e => e !== emailToRemove);
         setAllowedEmailsList(updated);
         saveAllowedEmails(updated);
-        showToast(`✅ Đã xóa ${emailToRemove} khỏi danh sách được phép đăng nhập.`);
+        showToast(`Đã xóa ${emailToRemove} khỏi danh sách được phép đăng nhập.`);
       },
     });
   };
 
-  const handleToggleRole = (user: UserMember) => {
+  const handleToggleRole = async (user: UserMember) => {
     const nextRole: 'ADMIN' | 'MEMBER' = user.role === 'ADMIN' ? 'MEMBER' : 'ADMIN';
-    const updatedUsers: UserMember[] = users.map(u => u.id === user.id ? { ...u, role: nextRole } : u);
-    saveUsers(updatedUsers);
+    
+    // 1. Persist to Supabase Database
+    await updateUserMember(user.id, { role: nextRole });
 
     if (user.id === 'usr-1') {
       localStorage.setItem('fmms_user_role', nextRole);
       window.dispatchEvent(new Event('fmms_user_updated'));
     }
 
-    showToast(`Đã đổi vai trò của ${user.name} thành ${nextRole}`);
+    await loadAllData();
+    showToast(`Đã cập nhật vai trò của ${user.name} thành ${nextRole} trên cơ sở dữ liệu`);
   };
 
   const handleDeleteUser = (user: UserMember) => {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Thành Viên (Admin PIN)',
-      description: `CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn thành viên "${user.name}" (${user.email}) và thu hồi toàn bộ phân quyền quản lý xe. Vui lòng nhập mã PIN Admin (0075) để xác nhận.`,
+      description: `CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn thành viên "${user.name}" (${user.email}) khỏi cơ sở dữ liệu và thu hồi toàn bộ phân quyền quản lý xe. Vui lòng nhập mã PIN Admin (0075) để xác nhận.`,
       actionName: 'Xác nhận xóa thành viên',
-      onConfirm: () => {
-        saveUsers(users.filter(u => u.id !== user.id));
+      onConfirm: async () => {
+        // 1. Delete from Supabase Database
+        await deleteUserMember(user.id, user.email);
+
+        // 2. Remove from whitelist
         const updatedWhitelist = allowedEmailsList.filter(e => e !== user.email);
         setAllowedEmailsList(updatedWhitelist);
         saveAllowedEmails(updatedWhitelist);
-        showToast(`✅ Đã xóa thành viên ${user.name} và thu hồi quyền đăng nhập.`);
+
+        await loadAllData();
+        showToast(`Đã xóa vĩnh viễn thành viên ${user.name} khỏi cơ sở dữ liệu và thu hồi quyền đăng nhập.`);
       },
     });
   };
 
-  const handleSaveAssignedAssets = () => {
+  const handleSaveAssignedAssets = async () => {
     if (!selectedUser) return;
-    const updatedUsers = users.map(u => u.id === selectedUser.id ? { ...u, assigned_asset_ids: selectedUser.assigned_asset_ids } : u);
-    saveUsers(updatedUsers);
+    
+    // 1. Persist to Supabase Database
+    await updateUserMember(selectedUser.id, {
+      assigned_asset_ids: selectedUser.assigned_asset_ids,
+    });
+
+    await loadAllData();
     setOpenModal(null);
-    showToast(`Đã cập nhật danh sách xe quản lý cho ${selectedUser.name}`);
+    showToast(`Đã lưu phân quyền xe cho ${selectedUser.name} vào cơ sở dữ liệu`);
   };
 
   const filteredUsers = users.filter(u => {

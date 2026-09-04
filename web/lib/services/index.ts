@@ -11,3 +11,4 @@ export * from './registrationService';
 export * from './documentService';
 export * from './warrantyService';
 export * from './odometerService';
+export * from './userService';
