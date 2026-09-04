@@ -3,6 +3,8 @@ package com.fmms.carlogger.data.repository
 import com.fmms.carlogger.core.database.dao.SyncQueueDao
 import com.fmms.carlogger.core.database.dao.TelemetryDao
 import com.fmms.carlogger.core.database.dao.TripDao
+import com.fmms.carlogger.core.database.entity.DiagnosticScanEntity
+import com.fmms.carlogger.core.database.entity.DtcLogEntity
 import com.fmms.carlogger.core.database.entity.SyncQueueEntity
 import com.fmms.carlogger.core.database.entity.TelemetrySampleEntity
 import com.fmms.carlogger.core.database.entity.TripEntity
@@ -204,6 +206,72 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
         syncQueueDao.markStatus(id, "PENDING", error.take(200), null)
     }
 
+    /** Enqueue một phiên quét chẩn đoán lên web (bảng vehicle_diagnostic_scans). Idempotent theo UUID. */
+    suspend fun enqueueDiagnosticScan(scan: DiagnosticScanEntity) {
+        val deviceId = scan.deviceId ?: com.fmms.carlogger.AppContainer.prefs.getDeviceId()
+        val defaultMazdaAssetId = com.fmms.carlogger.BuildConfig.MAZDA2_ASSET_ID
+        val targetAssetId = if (scan.vehicleId.isNotBlank() && scan.vehicleId != deviceId && scan.vehicleId.contains("-")) scan.vehicleId else defaultMazdaAssetId
+        val payload = JSONObject().apply {
+            put("id", scan.id)
+            put("asset_id", targetAssetId)
+            put("device_id", deviceId)
+            put("scanned_at", iso(scan.scannedAt))
+            put("odometer_km", num(scan.odometerKm))
+            put("mil_status", scan.milStatus)
+            put("dtc_count", scan.dtcCount)
+            put("scan_type", scan.scanType)
+            put("source", scan.source)
+        }.toString()
+        syncQueueDao.insert(
+            SyncQueueEntity(
+                id = UUID.randomUUID().toString(),
+                vehicleId = targetAssetId,
+                entityType = "vehicle_diagnostic_scans",
+                entityId = scan.id,
+                operation = "UPSERT",
+                payload = payload,
+                createdAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
+    /** Enqueue một mã lỗi lên web (bảng vehicle_dtc_logs). Idempotent theo UUID. */
+    suspend fun enqueueDtcLog(log: DtcLogEntity) {
+        val deviceId = log.deviceId ?: com.fmms.carlogger.AppContainer.prefs.getDeviceId()
+        val defaultMazdaAssetId = com.fmms.carlogger.BuildConfig.MAZDA2_ASSET_ID
+        val targetAssetId = if (log.vehicleId.isNotBlank() && log.vehicleId != deviceId && log.vehicleId.contains("-")) log.vehicleId else defaultMazdaAssetId
+        val payload = JSONObject().apply {
+            put("id", log.id)
+            put("scan_id", log.scanId ?: JSONObject.NULL)
+            put("asset_id", targetAssetId)
+            put("device_id", deviceId)
+            put("dtc_code", log.dtcCode)
+            put("status", log.status)
+            put("system_category", log.systemCategory ?: JSONObject.NULL)
+            put("severity", log.severity ?: JSONObject.NULL)
+            put("description_vi", log.descriptionVi ?: JSONObject.NULL)
+            if (log.freezeFrame != null) put("freeze_frame", org.json.JSONObject(log.freezeFrame)) else put("freeze_frame", JSONObject.NULL)
+            put("is_active", log.isActive)
+            put("source", log.source)
+            put("first_detected_at", if (log.firstDetectedAt != null) iso(log.firstDetectedAt) else JSONObject.NULL)
+            put("last_detected_at", if (log.lastDetectedAt != null) iso(log.lastDetectedAt) else JSONObject.NULL)
+            put("cleared_at", if (log.clearedAt != null) iso(log.clearedAt) else JSONObject.NULL)
+        }.toString()
+        syncQueueDao.insert(
+            SyncQueueEntity(
+                id = UUID.randomUUID().toString(),
+                vehicleId = targetAssetId,
+                entityType = "vehicle_dtc_logs",
+                entityId = log.id,
+                operation = "UPSERT",
+                payload = payload,
+                createdAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
+    private fun num(v: Double?): Any = v ?: JSONObject.NULL
+
     /**
      * Tự sửa payload cũ bị lỗi code 22008: các cột timestamptz trước đây được
      * lưu dưới dạng epoch millis thô (vd 1787112128597) khiến Postgres fail parse.
@@ -251,6 +319,9 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
                     // Định dạng cũ sai schema (vehicle_id) -> coi như mồ côi để purge.
                     if (o.has("vehicle_id")) "\u0000stale" else o.optString("asset_id").ifEmpty { null }
                 }
+                "vehicle_diagnostic_scans", "vehicle_dtc_logs", "telemetry_samples" -> {
+                    JSONObject(payload).optString("asset_id").ifEmpty { null }
+                }
                 else -> {
                     val arr = org.json.JSONArray(payload)
                     var owner: String? = null
@@ -294,13 +365,21 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
         }
     }
 
-    /** Sửa các cột timestamp về ISO nếu đang là epoch millis 13 chữ số. */
+    /** Sửa các cột timestamp về ISO nếu đang là epoch millis 13 chữ số, và sửa asset_id nếu không phải UUID hợp lệ. */
     private fun repairObject(o: JSONObject): Boolean {
         var changed = false
         TIMESTAMP_FIELDS.forEach { key ->
             val v = o.opt(key)
             if (v is Long && v >= 1_000_000_000_000L && v <= 9_999_999_999_999L) {
                 o.put(key, iso(v))
+                changed = true
+            }
+        }
+        if (o.has("asset_id")) {
+            val aId = o.optString("asset_id")
+            val defaultMazdaAssetId = com.fmms.carlogger.BuildConfig.MAZDA2_ASSET_ID
+            if (aId.isEmpty() || !aId.contains("-")) {
+                o.put("asset_id", defaultMazdaAssetId)
                 changed = true
             }
         }
