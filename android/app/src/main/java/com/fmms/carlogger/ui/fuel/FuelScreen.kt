@@ -48,7 +48,29 @@ class FuelViewModel : ViewModel() {
     init {
         viewModelScope.launch {
             c.vehicleRepository.getActive()?.let { vehicle ->
-                c.fuelLogRepository.observeByVehicle(vehicle.id).collect { _logs.value = it }
+                c.fuelLogRepository.observeByVehicle(vehicle.id).collect { rawList ->
+                    // Auto-enrich historical logs with delta ODO & consumption so all existing logs display detailed badges
+                    val sortedAsc = rawList.sortedBy { it.odometerKm ?: 0.0 }
+                    val enriched = sortedAsc.mapIndexed { index, cur ->
+                        if (index > 0) {
+                            val prev = sortedAsc[index - 1]
+                            val prevOdo = prev.odometerKm ?: 0.0
+                            val curOdo = cur.odometerKm ?: 0.0
+                            val delta = curOdo - prevOdo
+                            val prevOdometer = cur.prevOdometerKm ?: if (prevOdo > 0 && delta > 0) prevOdo else null
+                            val consumption = cur.calculatedConsumptionL100km ?: if (delta > 0 && cur.fuelLiters > 0) ((cur.fuelLiters / delta) * 100.0) else null
+                            val fuelConsumed = cur.fuelConsumedLiters ?: if (consumption != null) cur.fuelLiters else null
+                            cur.copy(
+                                prevOdometerKm = prevOdometer,
+                                calculatedConsumptionL100km = consumption,
+                                fuelConsumedLiters = fuelConsumed
+                            )
+                        } else {
+                            cur
+                        }
+                    }.sortedByDescending { it.timestamp }
+                    _logs.value = enriched
+                }
             }
         }
     }
@@ -226,7 +248,7 @@ fun FuelScreen(vm: FuelViewModel = viewModel()) {
                         }
 
                         // OBD Level & Precision Consumption Breakdown
-                        if (log.fuelLevelBeforePct != null || log.calculatedConsumptionL100km != null) {
+                        if (log.fuelLevelBeforePct != null || log.calculatedConsumptionL100km != null || (log.odometerKm ?: 0.0) <= 20.0) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Divider(color = colors.surfaceVariant, thickness = 0.5.dp)
                             Spacer(modifier = Modifier.height(6.dp))
@@ -241,7 +263,14 @@ fun FuelScreen(vm: FuelViewModel = viewModel()) {
                                         color = colors.textSecondary,
                                         fontSize = 11.sp,
                                     )
+                                } else {
+                                    Text(
+                                        "Bơm: +${String.format(Locale.US, "%.1f", log.fuelLiters)}L",
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp,
+                                    )
                                 }
+
                                 if (log.calculatedConsumptionL100km != null && log.fuelConsumedLiters != null) {
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
@@ -250,6 +279,19 @@ fun FuelScreen(vm: FuelViewModel = viewModel()) {
                                         Text(
                                             "Tiêu hao: ${String.format(Locale.US, "%.1f", log.calculatedConsumptionL100km)} L/100km (-${String.format(Locale.US, "%.1fL", log.fuelConsumedLiters)})",
                                             color = colors.cyan,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        )
+                                    }
+                                } else if ((log.odometerKm ?: 0.0) <= 20.0) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = colors.amber.copy(alpha = 0.15f),
+                                    ) {
+                                        Text(
+                                            "🌱 Mốc nhận xe & Đầy bình",
+                                            color = colors.amber,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -371,6 +413,19 @@ private fun AddRefuelBar(vm: FuelViewModel) {
                             color = colors.amber,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                } else {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = colors.cyan.copy(alpha = 0.12f),
+                    ) {
+                        Text(
+                            "🔌 OBD: Tự động bắt khi nổ máy",
+                            color = colors.cyan,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         )
                     }
