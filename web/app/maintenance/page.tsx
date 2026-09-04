@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { getAssets } from '@/lib/services/assetService';
 import { getMaintenanceRecords, createMaintenanceRecord, updateMaintenanceRecord, deleteMaintenanceRecord } from '@/lib/services/maintenanceService';
+import { getMasterMaintenanceCategories } from '@/lib/services/masterDataService';
 import { Asset, MaintenanceRecord } from '@/types/mobility';
 import { Wrench, Plus, X, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
@@ -146,14 +147,13 @@ export default function MaintenancePage() {
       }
     })();
 
-    const loadMasterCategories = () => {
-      const sMaint = localStorage.getItem('fmms_master_maint');
-      if (sMaint) {
-        try {
-          const parsed = JSON.parse(sMaint);
-          if (Array.isArray(parsed) && parsed.length > 0) setCategories(parsed);
-        } catch {}
-      }
+    const loadMasterCategories = async () => {
+      try {
+        const list = await getMasterMaintenanceCategories();
+        if (!cancelled && list && list.length > 0) {
+          setCategories(list);
+        }
+      } catch {}
     };
 
     loadMasterCategories();

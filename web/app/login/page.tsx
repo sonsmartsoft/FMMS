@@ -117,7 +117,7 @@ export default function LoginPage() {
     }
 
     if (resetPin !== '0075') {
-      setResetError('Mã PIN Admin không chính xác (Mã chuẩn là 0075)');
+      setResetError('Mã PIN Quản trị viên (Admin PIN) không chính xác.');
       return;
     }
 

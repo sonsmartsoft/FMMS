@@ -10,6 +10,7 @@ import { createExpense, updateExpense, deleteExpense } from '@/lib/services/expe
 import { getFuelLogs } from '@/lib/services/fuelService';
 import { getMaintenanceRecords } from '@/lib/services/maintenanceService';
 import { getParts } from '@/lib/services/partService';
+import { getMasterBanks } from '@/lib/services/masterDataService';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
@@ -262,14 +263,10 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
   };
 
   useEffect(() => {
-    // Load Master Banks
-    try {
-      const saved = localStorage.getItem('fmms_master_banks');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) setBankList(parsed);
-      }
-    } catch {}
+    // Load Master Banks from Supabase Cloud
+    getMasterBanks().then(list => {
+      if (list && list.length > 0) setBankList(list);
+    }).catch(() => {});
 
     if (loan) {
       getLoanPayments(loan.id).then(setPayments).catch(() => {});

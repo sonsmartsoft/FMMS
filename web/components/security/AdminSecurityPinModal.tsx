@@ -74,7 +74,7 @@ export default function AdminSecurityPinModal({
               <h3 className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>
                 {title}
               </h3>
-              <p className="text-[10px] text-rose-400 font-semibold">Bảo mật cấp cao • Yêu cầu mã PIN 0075</p>
+              <p className="text-[10px] text-rose-400 font-semibold">Bảo mật cấp cao • Yêu cầu mã PIN Quản trị viên</p>
             </div>
           </div>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/10" style={{ color: 'var(--text-muted)' }}>

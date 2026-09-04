@@ -21,6 +21,7 @@ import { getLoadByAsset, cleanupDuplicateLoanExpenses } from '@/lib/services/loa
 import { createOdometerAdjustment, getOdometerLogs, createOdometerLog, updateOdometerLog, deleteOdometerLog, OdometerLogRecord } from '@/lib/services/odometerService';
 import { getDailySummaries, DailySummary } from '@/lib/services/analyticsService';
 import { getWarranties, createWarranty, updateWarranty, deleteWarranty, createWarrantyClaim } from '@/lib/services/warrantyService';
+import { getMasterMaintenanceCategories } from '@/lib/services/masterDataService';
 
 import { createClient } from '@/lib/supabase/client';
 import { useTheme } from '@/lib/theme/ThemeContext';
@@ -428,7 +429,7 @@ export default function AssetDetailPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Khoản Vay (Admin PIN)',
-      description: 'CẢNH BÁO: Toàn bộ cấu hình khoản vay, bảng phân bổ các kỳ và các chi phí liên quan đến khoản vay của xe này sẽ bị xóa vĩnh viễn. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      description: 'CẢNH BÁO: Toàn bộ cấu hình khoản vay, bảng phân bổ các kỳ và các chi phí liên quan đến khoản vay của xe này sẽ bị xóa vĩnh viễn. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.',
       actionName: 'Xóa vĩnh viễn khoản vay',
       onConfirm: async () => {
         try {
@@ -618,23 +619,24 @@ export default function AssetDetailPage() {
   ]);
 
   useEffect(() => {
-    const loadMasterCategories = () => {
+    let cancelled = false;
+    const loadMasterCategories = async () => {
       try {
-        const saved = localStorage.getItem('fmms_master_maint');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setCategories(parsed.map((c: any) => typeof c === 'string' ? c : c.name));
-            return;
-          }
+        const list = await getMasterMaintenanceCategories();
+        if (!cancelled && list && list.length > 0) {
+          setCategories(list.map((c: any) => typeof c === 'string' ? c : c.name));
+          return;
         }
       } catch {}
-      setCategories(DEFAULT_MAINT_CATEGORIES);
+      if (!cancelled) setCategories(DEFAULT_MAINT_CATEGORIES);
     };
 
     loadMasterCategories();
     window.addEventListener('fmms_master_updated', loadMasterCategories);
-    return () => window.removeEventListener('fmms_master_updated', loadMasterCategories);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('fmms_master_updated', loadMasterCategories);
+    };
   }, []);
 
   const addServiceItem = () => setServiceItems(p => [...p, { name: categories[0] || 'Thay dầu máy', cost: '' }]);
@@ -1279,13 +1281,13 @@ export default function AssetDetailPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Mốc ODO (Admin PIN)',
-      description: 'Xác nhận xóa mốc Odometer này khỏi lịch sử đo lường của xe. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      description: 'Xác nhận xóa mốc Odometer này khỏi lịch sử đo lường của xe. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.',
       actionName: 'Xác nhận xóa ODO',
       onConfirm: async () => {
         try {
           await deleteOdometerLog(id);
           setOdometerLogs(prev => prev.filter(o => o.id !== id));
-          showToast('✅ Đã xóa mốc Odometer');
+          showToast('Đã xóa mốc Odometer');
         } catch (err: any) {
           alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
         }
@@ -1398,13 +1400,13 @@ export default function AssetDetailPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Chi Phí (Admin PIN)',
-      description: 'Xác nhận xóa vĩnh viễn khoản chi phí này khỏi sổ chi tiêu của xe. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      description: 'Xác nhận xóa vĩnh viễn khoản chi phí này khỏi sổ chi tiêu của xe. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.',
       actionName: 'Xác nhận xóa chi phí',
       onConfirm: async () => {
         try {
           await deleteExpense(id);
           setExpenses(prev => prev.filter(e => e.id !== id));
-          showToast('✅ Đã xóa chi phí thành công');
+          showToast('Đã xóa chi phí thành công');
         } catch (err: any) {
           alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
         }
@@ -1505,13 +1507,13 @@ export default function AssetDetailPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Bản Ghi Bảo Dưỡng (Admin PIN)',
-      description: 'Xác nhận xóa bản ghi lịch sử bảo dưỡng này khỏi hồ sơ phương tiện. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      description: 'Xác nhận xóa bản ghi lịch sử bảo dưỡng này khỏi hồ sơ phương tiện. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.',
       actionName: 'Xác nhận xóa bảo dưỡng',
       onConfirm: async () => {
         try {
           await deleteMaintenanceRecord(id);
           setMaintenance(prev => prev.filter(m => m.id !== id));
-          showToast('✅ Đã xóa lịch sử bảo dưỡng');
+          showToast('Đã xóa lịch sử bảo dưỡng');
         } catch (err: any) {
           alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
         }
@@ -1537,13 +1539,13 @@ export default function AssetDetailPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Nhật Ký Nhiên Liệu (Admin PIN)',
-      description: 'Xác nhận xóa lượt đổ xăng này khỏi lịch sử tiêu thụ nhiên liệu của xe. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      description: 'Xác nhận xóa lượt đổ xăng này khỏi lịch sử tiêu thụ nhiên liệu của xe. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.',
       actionName: 'Xác nhận xóa đổ xăng',
       onConfirm: async () => {
         try {
           await deleteFuelLog(id);
           setFuelLogs(prev => prev.filter(f => f.id !== id));
-          showToast('✅ Đã xóa nhật ký đổ xăng');
+          showToast('Đã xóa nhật ký đổ xăng');
         } catch (err: any) {
           alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
         }
@@ -1572,13 +1574,13 @@ export default function AssetDetailPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Phụ Tùng / Nâng Cấp (Admin PIN)',
-      description: 'Xác nhận xóa phụ tùng / đồ chơi nâng cấp này khỏi danh sách trang bị của xe. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      description: 'Xác nhận xóa phụ tùng / đồ chơi nâng cấp này khỏi danh sách trang bị của xe. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.',
       actionName: 'Xác nhận xóa phụ tùng',
       onConfirm: async () => {
         try {
           await deletePart(id);
           setParts(prev => prev.filter(p => p.id !== id));
-          showToast('✅ Đã xóa phụ tùng nâng cấp');
+          showToast('Đã xóa phụ tùng nâng cấp');
         } catch (err: any) {
           alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
         }

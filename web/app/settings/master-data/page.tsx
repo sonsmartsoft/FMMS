@@ -5,6 +5,22 @@ import Link from 'next/link';
 import { ArrowLeft, Database, Plus, Trash2, Check, Pencil, Sliders, X, Save, Wrench } from 'lucide-react';
 
 import { TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
+import {
+  getMasterMaintenanceCategories,
+  saveMasterMaintenanceCategories,
+  getMasterExpenseCategories,
+  saveMasterExpenseCategories,
+  getMasterVendors,
+  saveMasterVendors,
+  getMasterBanks,
+  saveMasterBanks,
+  getMasterTaxonomy,
+  saveMasterTaxonomy,
+  DEFAULT_MAINT_CATEGORIES,
+  DEFAULT_EXP_CATEGORIES,
+  DEFAULT_VENDORS,
+  DEFAULT_BANKS,
+} from '@/lib/services/masterDataService';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 
@@ -17,25 +33,10 @@ export default function MasterDataPage() {
   const [newCatLabel, setNewCatLabel] = useState('');
   const [editingSub, setEditingSub] = useState<{ catKey: string; subKey: string; oldLabel: string; newLabel: string } | null>(null);
 
-  const [maintCategories, setMaintCategories] = useState<string[]>([
-    'Thay dầu máy', 'Thay lọc dầu / Lọc nhớt', 'Thay lọc gió động cơ', 'Thay lọc gió điều hòa',
-    'Thay bugi đánh lửa', 'Thay lốp xe', 'Kiểm tra & Thay má phanh', 'Thay ắc-quy', 'Nước làm mát', 'Thay dầu hộp số', 'Sửa chữa & Khác'
-  ]);
-
-  const [expCategories, setExpCategories] = useState<string[]>([
-    'Nhiên liệu', 'Bảo dưỡng & Sửa chữa', 'Phí cầu đường (BOT)', 'Gửi xe & Bãi đỗ',
-    'Rửa xe & Chăm sóc', 'Bảo hiểm vật chất', 'Bảo hiểm TNDS', 'Nâng cấp & Phụ kiện', 'Phạt vi phạm', 'Khác'
-  ]);
-
-  const [vendors, setVendors] = useState<string[]>([
-    'Mazda Hà Đông', 'Honda Tây Hồ', 'Zestech Việt Nam', 'Bảo hiểm Quân Đội (MIC)', 'Bảo Việt Insurance', 'PV OIL', 'Petrolimex', 'Garage Chuyên Nghiệp'
-  ]);
-
-  const [banks, setBanks] = useState<string[]>([
-    'Techcombank (TCB)', 'VPBank', 'VIB (Ngân hàng Quốc Tế)', 'TPBank (Tiên Phong)',
-    'Shinhan Bank Việt Nam', 'Vietcombank (VCB)', 'BIDV', 'VietinBank',
-    'MB Bank (Quân Đội)', 'Sacombank', 'ACB (Á Châu)', 'HDBank', 'MSB (Hàng Hải)', 'Woori Bank / Standard Chartered / HSBC'
-  ]);
+  const [maintCategories, setMaintCategories] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
+  const [expCategories, setExpCategories] = useState<string[]>(DEFAULT_EXP_CATEGORIES);
+  const [vendors, setVendors] = useState<string[]>(DEFAULT_VENDORS);
+  const [banks, setBanks] = useState<string[]>(DEFAULT_BANKS);
 
   // Edit inline modal / state
   const [editingCategory, setEditingCategory] = useState<{ listKey: string; oldVal: string; newVal: string } | null>(null);
@@ -47,17 +48,27 @@ export default function MasterDataPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; title?: string; description?: string; actionName?: string; onConfirm?: () => void }>({ isOpen: false });
 
-  useEffect(() => {
-    setTaxonomy(getDynamicTaxonomy());
-    const sMaint = localStorage.getItem('fmms_master_maint');
-    const sExp = localStorage.getItem('fmms_master_exp');
-    const sVendor = localStorage.getItem('fmms_master_vendors');
-    const sBank = localStorage.getItem('fmms_master_banks');
+  const loadAllMasterData = async () => {
+    try {
+      const [maint, exp, vend, bnk, tax] = await Promise.all([
+        getMasterMaintenanceCategories(),
+        getMasterExpenseCategories(),
+        getMasterVendors(),
+        getMasterBanks(),
+        getMasterTaxonomy(),
+      ]);
+      setMaintCategories(maint);
+      setExpCategories(exp);
+      setVendors(vend);
+      setBanks(bnk);
+      setTaxonomy(tax);
+    } catch (err) {
+      console.error('Error loading master data:', err);
+    }
+  };
 
-    if (sMaint) try { setMaintCategories(JSON.parse(sMaint)); } catch {}
-    if (sExp) try { setExpCategories(JSON.parse(sExp)); } catch {}
-    if (sVendor) try { setVendors(JSON.parse(sVendor)); } catch {}
-    if (sBank) try { setBanks(JSON.parse(sBank)); } catch {}
+  useEffect(() => {
+    loadAllMasterData();
   }, []);
 
   const showToast = (msg: string) => {
@@ -65,109 +76,104 @@ export default function MasterDataPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const saveToStorage = (key: string, data: any) => {
-    localStorage.setItem(key, JSON.stringify(data));
-    window.dispatchEvent(new Event('fmms_master_updated'));
-  };
-
   // Category Add / Delete / Edit handlers
-  const addMaint = () => {
+  const addMaint = async () => {
     if (!newMaint.trim()) return;
     const updated = [...maintCategories, newMaint.trim()];
     setMaintCategories(updated);
-    saveToStorage('fmms_master_maint', updated);
+    await saveMasterMaintenanceCategories(updated);
     setNewMaint('');
-    showToast('Đã thêm danh mục bảo dưỡng mới!');
+    showToast('Đã thêm danh mục bảo dưỡng mới và lưu lên Cloud!');
   };
 
   const deleteMaint = (cat: string) => {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Danh Mục Bảo Dưỡng (Admin PIN)',
-      description: `Xác nhận xóa danh mục bảo dưỡng "${cat}" khỏi hệ thống dữ liệu dùng chung. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.`,
+      description: `Xác nhận xóa danh mục bảo dưỡng "${cat}" khỏi hệ thống dữ liệu dùng chung. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.`,
       actionName: 'Xóa danh mục',
-      onConfirm: () => {
+      onConfirm: async () => {
         const updated = maintCategories.filter(c => c !== cat);
         setMaintCategories(updated);
-        saveToStorage('fmms_master_maint', updated);
-        showToast('✅ Đã xóa danh mục bảo dưỡng!');
+        await saveMasterMaintenanceCategories(updated);
+        showToast('Đã xóa danh mục bảo dưỡng khỏi hệ thống!');
       },
     });
   };
 
-  const addExp = () => {
+  const addExp = async () => {
     if (!newExp.trim()) return;
     const updated = [...expCategories, newExp.trim()];
     setExpCategories(updated);
-    saveToStorage('fmms_master_exp', updated);
+    await saveMasterExpenseCategories(updated);
     setNewExp('');
-    showToast('Đã thêm danh mục chi phí mới!');
+    showToast('Đã thêm danh mục chi phí mới và lưu lên Cloud!');
   };
 
   const deleteExp = (cat: string) => {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Danh Mục Chi Phí (Admin PIN)',
-      description: `Xác nhận xóa danh mục chi phí "${cat}" khỏi hệ thống dữ liệu dùng chung. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.`,
+      description: `Xác nhận xóa danh mục chi phí "${cat}" khỏi hệ thống dữ liệu dùng chung. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.`,
       actionName: 'Xóa danh mục',
-      onConfirm: () => {
+      onConfirm: async () => {
         const updated = expCategories.filter(c => c !== cat);
         setExpCategories(updated);
-        saveToStorage('fmms_master_exp', updated);
-        showToast('✅ Đã xóa danh mục chi phí!');
+        await saveMasterExpenseCategories(updated);
+        showToast('Đã xóa danh mục chi phí khỏi hệ thống!');
       },
     });
   };
 
-  const addVendor = () => {
+  const addVendor = async () => {
     if (!newVendor.trim()) return;
     const updated = [...vendors, newVendor.trim()];
     setVendors(updated);
-    saveToStorage('fmms_master_vendors', updated);
+    await saveMasterVendors(updated);
     setNewVendor('');
-    showToast('Đã thêm nhà cung cấp mới!');
+    showToast('Đã thêm nhà cung cấp mới và lưu lên Cloud!');
   };
 
   const deleteVendor = (v: string) => {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Nhà Cung Cấp / Garage (Admin PIN)',
-      description: `Xác nhận xóa nhà cung cấp / đối tác "${v}". Vui lòng nhập mã PIN Admin (0075) để tiếp tục.`,
+      description: `Xác nhận xóa nhà cung cấp / đối tác "${v}". Vui lòng nhập mã PIN Quản trị viên để tiếp tục.`,
       actionName: 'Xóa nhà cung cấp',
-      onConfirm: () => {
+      onConfirm: async () => {
         const updated = vendors.filter(x => x !== v);
         setVendors(updated);
-        saveToStorage('fmms_master_vendors', updated);
-        showToast('✅ Đã xóa nhà cung cấp!');
+        await saveMasterVendors(updated);
+        showToast('Đã xóa nhà cung cấp khỏi hệ thống!');
       },
     });
   };
 
-  const addBank = () => {
+  const addBank = async () => {
     if (!newBank.trim()) return;
     const updated = [...banks, newBank.trim()];
     setBanks(updated);
-    saveToStorage('fmms_master_banks', updated);
+    await saveMasterBanks(updated);
     setNewBank('');
-    showToast('Đã thêm ngân hàng mới!');
+    showToast('Đã thêm ngân hàng mới và lưu lên Cloud!');
   };
 
   const deleteBank = (b: string) => {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Ngân Hàng Đối Tác (Admin PIN)',
-      description: `Xác nhận xóa ngân hàng đối tác "${b}". Vui lòng nhập mã PIN Admin (0075) để tiếp tục.`,
+      description: `Xác nhận xóa ngân hàng đối tác "${b}". Vui lòng nhập mã PIN Quản trị viên để tiếp tục.`,
       actionName: 'Xóa ngân hàng',
-      onConfirm: () => {
+      onConfirm: async () => {
         const updated = banks.filter(x => x !== b);
         setBanks(updated);
-        saveToStorage('fmms_master_banks', updated);
-        showToast('✅ Đã xóa ngân hàng!');
+        await saveMasterBanks(updated);
+        showToast('Đã xóa ngân hàng khỏi hệ thống!');
       },
     });
   };
 
-  const handleSaveInlineEdit = () => {
+  const handleSaveInlineEdit = async () => {
     if (!editingCategory || !editingCategory.newVal.trim()) return;
     const { listKey, oldVal, newVal } = editingCategory;
     const val = newVal.trim();
@@ -175,29 +181,29 @@ export default function MasterDataPage() {
     if (listKey === 'maint') {
       const updated = maintCategories.map(c => c === oldVal ? val : c);
       setMaintCategories(updated);
-      saveToStorage('fmms_master_maint', updated);
+      await saveMasterMaintenanceCategories(updated);
     } else if (listKey === 'exp') {
       const updated = expCategories.map(c => c === oldVal ? val : c);
       setExpCategories(updated);
-      saveToStorage('fmms_master_exp', updated);
+      await saveMasterExpenseCategories(updated);
     } else if (listKey === 'vendor') {
       const updated = vendors.map(c => c === oldVal ? val : c);
       setVendors(updated);
-      saveToStorage('fmms_master_vendors', updated);
+      await saveMasterVendors(updated);
     } else if (listKey === 'bank') {
       const updated = banks.map(c => c === oldVal ? val : c);
       setBanks(updated);
-      saveToStorage('fmms_master_banks', updated);
+      await saveMasterBanks(updated);
     }
 
     setEditingCategory(null);
     showToast('Đã cập nhật tên danh mục thành công!');
   };
 
-  const saveTaxonomy = (updatedTax: typeof taxonomy) => {
+  const saveTaxonomy = async (updatedTax: typeof taxonomy) => {
     setTaxonomy(updatedTax);
-    saveToStorage('fmms_master_taxonomy', updatedTax);
-    showToast('Đã cập nhật cấu hình danh mục 2 tầng thành công!');
+    await saveMasterTaxonomy(updatedTax);
+    showToast('Đã cập nhật cấu hình danh mục 2 tầng lên Cloud thành công!');
   };
 
   const handleAddCategory = () => {
@@ -225,14 +231,14 @@ export default function MasterDataPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Danh Mục Chính (Admin PIN)',
-      description: `CẢNH BÁO: Bạn đang chuẩn bị xóa toàn bộ danh mục chính "${catLabel}" cùng các phân loại con bên trong. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.`,
+      description: `CẢNH BÁO: Bạn đang chuẩn bị xóa toàn bộ danh mục chính "${catLabel}" cùng các phân loại con bên trong. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.`,
       actionName: 'Xóa danh mục chính',
       onConfirm: () => {
         const updated = { ...taxonomy };
         delete updated[catKey];
         saveTaxonomy(updated);
         setSelectedCatKey(Object.keys(updated)[0]);
-        showToast(`✅ Đã xóa danh mục chính ${catLabel}!`);
+        showToast(`Đã xóa danh mục chính ${catLabel}!`);
       },
     });
   };
@@ -266,7 +272,7 @@ export default function MasterDataPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Phân Loại Con (Admin PIN)',
-      description: `Xác nhận xóa phân loại con "${subLabel}" khỏi danh mục "${catObj.label}". Vui lòng nhập mã PIN Admin (0075) để tiếp tục.`,
+      description: `Xác nhận xóa phân loại con "${subLabel}" khỏi danh mục "${catObj.label}". Vui lòng nhập mã PIN Quản trị viên để tiếp tục.`,
       actionName: 'Xóa phân loại con',
       onConfirm: () => {
         const newSubMap = { ...catObj.subcategories };

@@ -251,7 +251,7 @@ export default function UsersManagementPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Thu Hồi Quyền Đăng Nhập (Admin PIN)',
-      description: `CẢNH BÁO: Xác nhận thu hồi quyền đăng nhập của Email "${emailToRemove}". Vui lòng nhập mã PIN Quản trị viên (0075) để tiếp tục.`,
+      description: `CẢNH BÁO: Xác nhận thu hồi quyền đăng nhập của Email "${emailToRemove}". Vui lòng nhập mã PIN Quản trị viên để tiếp tục.`,
       actionName: 'Thu hồi quyền truy cập',
       onConfirm: () => {
         const updated = allowedEmailsList.filter(e => e !== emailToRemove);
@@ -281,7 +281,7 @@ export default function UsersManagementPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Thành Viên (Admin PIN)',
-      description: `CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn thành viên "${user.name}" (${user.email}) khỏi cơ sở dữ liệu và thu hồi toàn bộ phân quyền quản lý xe. Vui lòng nhập mã PIN Admin (0075) để xác nhận.`,
+      description: `CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn thành viên "${user.name}" (${user.email}) khỏi cơ sở dữ liệu và thu hồi toàn bộ phân quyền quản lý xe. Vui lòng nhập mã PIN Quản trị viên để xác nhận.`,
       actionName: 'Xác nhận xóa thành viên',
       onConfirm: async () => {
         // 1. Delete from Supabase Database

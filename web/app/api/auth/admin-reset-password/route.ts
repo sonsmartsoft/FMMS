@@ -18,9 +18,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Mật khẩu phải có ít nhất 6 ký tự' }, { status: 400 });
     }
 
-    // 🔒 Verify Admin PIN 0075
+    // 🔒 Verify Admin PIN
     if (adminPin !== '0075') {
-      return NextResponse.json({ error: 'Mã PIN Admin không chính xác (0075)' }, { status: 403 });
+      return NextResponse.json({ error: 'Mã PIN Quản trị viên không chính xác.' }, { status: 403 });
     }
 
     const cleanEmail = email.trim().toLowerCase();
