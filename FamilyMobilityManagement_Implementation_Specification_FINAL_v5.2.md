@@ -6739,3 +6739,116 @@ data + backend layer** (`gps_track_points`, trips, sync protocol) so that an iOS
 app plugs in with zero backend changes. The map and theme features must not require
 network to function for the vehicle-owner's core use (local map + live route on
 ZESTECH), consistent with the offline-first philosophy.
+
+---
+
+# PHẦN BỔ SUNG v6.0 — ĐỊNH HƯỚNG VẬN HÀNH THỰC TẾ & NÂNG CẤP TOÀN DIỆN (09/2026)
+
+## 243. OBD FUEL INTELLIGENCE & CƠ CHẾ TÍNH TOÁN TIÊU THỤ NHIÊN LIỆU CHÍNH XÁC (v6.0)
+
+### 243.1. Bối cảnh & Vấn đề thực tế
+Phương pháp truyền thống chỉ ghi nhận: *Số lít đổ vào*, *Số tiền*, *Có đầy bình hay không (is_full_tank)*. Phương pháp này có các hạn chế lớn:
+1. Không biết trước khi đổ bình xăng còn bao nhiêu lít.
+2. Không biết sau khi đổ bình xăng thực tế đạt bao nhiêu lít (nhất là các lần đổ lẻ không đầy bình).
+3. Không đủ cơ sở toán học để tính chính xác mức tiêu hao nhiên liệu thực tế ($L/100\text{km}$) giữa 2 lần đổ lẻ.
+
+### 243.2. Giải pháp OBD-II Tự động kết hợp (PID 012F + PID 01A6)
+- **PID `012F` (Fuel Tank Level %):** Đọc trực tiếp mức nhiên liệu hiện tại từ phao xăng ECU xe theo tỷ lệ $\%$ ($0.0\% - 100.0\%$).
+- **PID `01A6` (Odometer km):** Đọc số km công tơ mét chính xác của xe.
+- **Dung tích bình xăng xe (Mazda2 Base 2026):** Tổng dung tích $44.0\text{ L}$ (vùng sử dụng thực tế tính toán chuẩn $40.0\text{ L}$).
+- **Quy đổi số lít trước/sau:**
+  $$\text{Số lít trong bình} = \frac{\text{Fuel Level (\%)} \times 40.0}{100}$$
+
+### 243.3. Mô hình toán học tính mức tiêu hao thực tế
+- **Mốc nhận xe ban đầu (Baseline Fill):** Ngày 09/04/2026 tại ODO $12\text{ km}$, xe được hãng đổ sẵn $10\text{ L}$ và đổ tiếp $37.7\text{ L}$ để đầy bình ($100\%$). Đây là mốc zero-point chuẩn để tính toán.
+- **Công thức lượng tiêu thụ giữa lần $N$ và $N-1$:**
+  $$\text{Nhiên liệu đã đốt (L)} = \text{Lượng xăng sau lần } (N-1) + \text{Lượng xăng đổ mới tại } N - \text{Lượng xăng còn lại trước khi đổ tại } N$$
+- **Nếu cả 2 lần đều đổ đầy bình ($100\%$):**
+  $$\text{Nhiên liệu đã đốt (L)} = \text{Lượng xăng đổ mới tại } N$$
+- **Mức tiêu hao trung bình ($L/100\text{km}$):**
+  $$\text{Consumption } (L/100\text{km}) = \frac{\text{Nhiên liệu đã đốt (L)}}{\text{ODO}(N) - \text{ODO}(N-1)} \times 100$$
+
+### 243.4. Nâng cấp Database & Cơ chế On-the-fly Enrichment
+- **Supabase Migration (`0016_fuel_obd_enhancement.sql`):** Bổ sung các trường `fuel_level_before_pct`, `fuel_liters_before`, `fuel_level_after_pct`, `fuel_liters_after`, `calculated_consumption_l100km`, `prev_odometer_km`, `fuel_consumed_liters`.
+- **Android Room Migration v5 (`MIGRATION_4_5`):** Bổ sung các cột tương ứng vào bảng `fuel_logs` trong `AppDatabase.kt`.
+- **Dynamic Auto-Enrichment:** `FuelViewModel` trên Android và `fuelService.ts` / `fuel/page.tsx` trên Web tự động tính toán lũy kế $+\Delta\text{km}$, $L/100\text{km}$, và số lít xăng tiêu thụ cho toàn bộ lịch sử các lần đổ cũ ngay khi tải dữ liệu.
+- **Trạng thái OBD trên UI:**
+  - Khi xe nổ máy & kết nối: `⛽ OBD: XX.X% (~X.XL) | ODO: X,XXX km`.
+  - Khi xe tắt máy / ở nhà: `🔌 OBD: Tự động bắt khi nổ máy`.
+  - Mốc nhận xe $12\text{ km}$: `🌱 Mốc nhận xe & Đầy bình (12 km)`.
+
+---
+
+## 244. ANDROID CAR UI REFACTOR & NỀN TẢNG MEDIA BỀN VỮNG (ZESTECH 9 INCH)
+
+### 244.1. Tinh gọn khung Media (3-Chip Frame)
+- Loại bỏ tab Camera 360 riêng do firmware đầu ZESTECH khoá camera độc quyền cho ứng dụng AVM (`com.ivicar.avm`), không cho phép VirtualDisplay/Camera2 can thiệp.
+- Loại bỏ tab YouTube riêng để thống nhất luồng media qua trình duyệt Web nhúng.
+- Chuẩn hoá khung Media thành **3 Chip điều hướng:** `App` | `Web` | `Map (Bản đồ & TPMS)`.
+
+### 244.2. Khắc phục triệt để lỗi dừng video YouTube (`WebOverlayLayer` Zero-Resize)
+- Trình phát YouTube HTML5 tự động pause khi WebView bị thay đổi kích thước container.
+- Cơ chế mới: Giữ WebView ở kích thước cố định $2000 \times 1200\text{ px}$, không bao giờ thay đổi layout size.
+- Khi thu nhỏ về khung chia nửa hoặc ô widget: sử dụng Compose `graphicsLayer { scaleX, scaleY }` để biến đổi ma trận thị giác.
+- Kết quả: Video chạy liên tục không bị ngắt quãng khi chuyển đổi giữa toàn màn hình và chia đôi màn hình.
+
+### 244.3. Nâng cấp Bản đồ Lái xe Chuyên dụng
+- **Lớp bản đồ đêm High-Contrast:** Áp dụng bộ lọc `ColorMatrix` dịch chuyển nhẹ sang tông xám than xanh (#2C313D) và đường phụ (#777F96), tạo độ tương phản rõ nét khi lái ban đêm tương tự Google Maps.
+- **Chỉ đường nhanh (OSRM Offline/Free Routing):** Chạm vào bản đồ để chọn đích $\to$ vẽ Polyline màu hổ phách $\to$ hiển thị khoảng cách và thời gian ước tính kèm nút huỷ nhanh.
+- **Live Telemetry Push:** Đẩy dữ liệu `telemetry_samples` ngầm lên Supabase mỗi 15 giây khi có mạng 4G/WiFi thay vì chờ 15 phút.
+
+---
+
+## 245. WEB APP NEXT.JS 14 UPGRADE & TƯƠNG TÁC TÀI CHÍNH ĐA PHƯƠNG TIỆN
+
+### 245.1. Kiến trúc Bảo mật & SSR Auth
+- Chuyển đổi toàn bộ xác thực sang `@supabase/ssr` với Next.js Middleware route guard.
+- Bảo vệ toàn diện các tuyến đường quản trị, tự động chuyển hướng đăng nhập và đồng bộ cookie phiên làm việc giữa Client và Server.
+
+### 245.2. Bảng điều khiển Tổng quan Phương tiện (Vehicle Finance Drill-Down)
+- **Modal Chi tiết mở rộng $2\times$:** `DrillDownModal` được mở rộng kích thước lên $1200\text{px}$ (`w-[95vw] md:w-[1200px]`), cung cấp không gian rộng rãi để phân tích đa chiều: Giá trị mua, Khấu hao thực tế, Chi phí vận hành, Quản lý khoản vay.
+- **Điều hướng thông minh thẻ Usage:** Nhấp chuột vào thẻ *Usage / Odometer* tự động chuyển trực tiếp sang tab `Trips` (Hành trình) của xe.
+- **Cảnh báo Thông minh Hạn Bảo dưỡng Tiếp theo:** Tự động đếm ngược số ngày còn lại đến kỳ bảo dưỡng với mã màu trực quan:
+  - Quá hạn: `⚠️ Đã quá hạn X ngày!` (Đỏ)
+  - Hôm nay: `🔴 Hôm nay là ngày bảo dưỡng!` (Đỏ)
+  - Sắp đến ($\le 7\text{ ngày}$): `🟠 Còn X ngày (sắp đến!)` (Cam)
+  - Sắp tới ($\le 30\text{ ngày}$): `🟡 Còn X ngày` (Vàng)
+  - An toàn ($> 30\text{ ngày}$): `✅ Còn X ngày` (Xanh lá)
+
+### 245.3. Biểu đồ Nhiên liệu Tương tác Hiện đại
+- Hỗ trợ chuyển đổi linh hoạt giữa 2 chế độ: `📊 Chi phí & Lít` và `📈 Xu hướng Giá`.
+- Tách biệt trục tung (Dual-Axis) giúp đường giá xăng/lít không bị kéo phẳng khi hiển thị cùng số tiền chi phí lớn.
+- Bảng lịch sử đổ xăng tích hợp đầy đủ các chỉ số OBD, hiệu suất $L/100\text{km}$, và chi phí trên mỗi km lăn bánh.
+
+---
+
+## 246. QUY TRÌNH BUILD & TRIỂN KHAI TỰ ĐỘNG VỚI OPENCODE
+
+### 246.1. Quy trình 1-Click Xuất APK cho Android Head Unit
+- Mã nguồn Android được chuẩn hoá để OpenCode / Gradle CI có thể build trực tiếp:
+  ```bash
+  cd android && ./gradlew assembleRelease
+  ```
+- APK sau khi build được xuất ra thư mục `android/releases/` và tự động gắn nhãn version `FMMS_revXX.apk`.
+
+### 246.2. Cơ chế Đồng bộ 3 Lớp (Offline-First Sync Protocol)
+1. **Lớp 1 (Local Room Database):** Ghi nhận tức thời mọi mẫu telemetry (GPS, RPM, Speed, Fuel %) và sự kiện chuyến đi vào SQLite cục bộ mà không phụ thuộc vào kết nối mạng.
+2. **Lớp 2 (Background Sync Worker & Live Push):** Hàng đợi `sync_queue` tự động đẩy dữ liệu lên Supabase theo cơ chế Batch khi có mạng.
+3. **Lớp 3 (Web Realtime & Cloud Analytics):** Web Dashboard tự động lắng nghe thay đổi qua Supabase Realtime và phân tích dữ liệu đa phương tiện.
+
+---
+
+## 247. BẢNG MA TRẬN TIÊU CHÍ HOÀN THÀNH (ACCEPTANCE MATRIX v6.0)
+
+| Tiêu chí | Trạng thái | Nơi thực thi |
+| :--- | :---: | :--- |
+| Đọc OBD PID `012F` (% Xăng) & `01A6` (ODO) | ✅ Đã hoàn thành | Android `core/obd` & `FuelScreen.kt` |
+| Tính toán chính xác $L/100\text{km}$ & số lít tiêu thụ | ✅ Đã hoàn thành | Android `FuelViewModel` & Web `fuelService.ts` |
+| Làm giàu dữ liệu 10 lần đổ xăng lịch sử (Mazda2) | ✅ Đã hoàn thành | Android APK & Web `/fuel` |
+| Khung Media 3 Chip & WebView Zero-Resize trên ZESTECH | ✅ Đã hoàn thành | Android `CarUiScreen.kt` |
+| Bản đồ Night High-Contrast & Chỉ đường OSRM | ✅ Đã hoàn thành | Android `MapHolder.kt` & `CarUiScreen.kt` |
+| DrillDown Modal $1200\text{px}$ & Điều hướng Trips | ✅ Đã hoàn thành | Web `VehicleFinanceOverview.tsx` |
+| Cảnh báo hạn bảo dưỡng thông minh đếm ngược | ✅ Đã hoàn thành | Web `assets/[id]/page.tsx` |
+| Biểu đồ Nhiên liệu Tab Switcher & Dual Axis | ✅ Đã hoàn thành | Web `fuel/page.tsx` |
+| Bảo vệ tuyến đường Next.js SSR Middleware | ✅ Đã hoàn thành | Web `middleware.ts` & `lib/supabase/` |
+

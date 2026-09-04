@@ -299,8 +299,20 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
   - 🚗 **Xóa Phương Tiện / Xe:** Khóa nút xóa xe ở cả màn hình Danh sách xe (`/assets`) và màn hình Chi tiết phương tiện (`/assets/[id]`). Yêu cầu nhập đúng mã PIN `0075` mới thực hiện xóa.
   - 💰 **Xóa Khoản Vay & Chi Phí Tài Chính:** Khóa hành động xóa cấu hình khoản vay, xóa các kỳ trả nợ và xóa chi phí lăn bánh / nâng cấp / vận hành (`/finance` & `VehicleFinanceOverview`).
   - 👤 **Xóa & Thu Hồi Quyền Thành Viên:** Khóa chức năng xóa tài khoản thành viên và thu hồi quyền truy cập Email Whitelist (`/settings/users`).
-  - 🔧 **Xóa Lịch Sử Vận Hành:** Khóa xóa hồ sơ bảo dưỡng, nhật ký đổ xăng, phụ tùng nâng cấp, bảo hiểm, sổ bảo hành và mốc Odometer (`/assets/[id]`).
-  - ⚙️ **Xóa Dữ Liệu Danh Mục Master Data:** Khóa xóa danh mục chính, danh mục con, nhà cung cấp và ngân hàng đối tác (`/settings/master-data`).
+### Đợt 13 (04/09/2026): Tích Hợp Đầy Đủ OBD Fuel Intelligence, Nâng Cấp DrillDown 1200px, Đếm Ngược Bảo Dưỡng Thông Minh & Biểu Đồ Nhiên Liệu Đa Chiều
+- **Tích Hợp OBD Fuel Intelligence Toàn Diện:**
+  - Kết nối Supabase Schema `0016_fuel_obd_enhancement.sql` hỗ trợ các trường: `%` phao xăng trước/sau (`fuel_level_before/after_pct`), số lít trước/sau (`fuel_liters_before/after`), mức tiêu hao thực tế (`calculated_consumption_l100km`), số lít đã đốt (`fuel_consumed_liters`).
+  - Tự động làm giàu dữ liệu lịch sử (Auto-Enrichment) cho 10 lần đổ xăng của xe Mazda2 Base 2026 (từ 09/04/2026 ODO 12 km đến 23/08/2026 ODO 2,646 km), hiển thị đầy đủ badge $L/100\text{km}$ và $+\Delta\text{km}$.
+- **Mở Rộng Modal Tài Chính & Vận Hành (`VehicleFinanceOverview`):**
+  - Mở rộng `DrillDownModal` gấp đôi lên chiều rộng $1200\text{px}$ (`w-[95vw] sm:w-[90vw] md:w-[1200px] max-w-[1200px]`).
+  - Thẻ *Usage / Odometer* hỗ trợ nhấp chuột để chuyển ngay sang tab `Trips` (Hành trình) của xe (`onNavigateTab('trips')`).
+- **Cảnh Báo Thông Minh Hạn Bảo Dưỡng Tiếp Theo (`/assets/[id]`):**
+  - Tự động tính toán số ngày chênh lệch giữa ngày bảo dưỡng dự kiến và ngày hiện tại.
+  - Hiển thị badge màu thông minh: Đã quá hạn (Đỏ), Hôm nay (Đỏ), Sắp đến $\le 7$ ngày (Cam), Sắp tới $\le 30$ ngày (Vàng), An toàn $> 30$ ngày (Xanh lá).
+- **Hiện Đại Hóa Biểu Đồ Nhiên Liệu (`/fuel`):**
+  - Hỗ trợ Tab Switcher linh hoạt: `📊 Chi phí & Lít` vs `📈 Xu hướng Giá`.
+  - Tách biệt thang đo trục tung (Dual-Axis) ngăn đường giá xăng bị méo tỷ lệ.
+  - Sửa lỗi runtime `showToast` khi build Vercel.
 
 ---
 
@@ -311,4 +323,5 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
 3. **Không kết hợp `flex items-center` và `overflow-y-auto` trên cùng một div**: Luôn dùng mô hình 2 lớp div (`overflow-y-auto` ở lớp ngoài và `flex min-h-full items-center justify-center pt-20` ở lớp trong).
 4. **Thêm style inline với CSS Variable cho màu sắc**: Giúp đảm bảo tương thích 100% khi chuyển đổi Light Mode và Dark Mode mà không bị phụ thuộc vào class cố định của Tailwind.
 5. **Mọi thay đổi giao diện phải kiểm tra đồng thời trên cả 9 màn hình**: `/dashboard`, `/assets`, `/assets/[id]`, `/fuel`, `/maintenance`, `/finance`, `/documents`, `/warranties`, `/settings/*`.
+
 

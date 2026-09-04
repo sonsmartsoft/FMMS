@@ -3,7 +3,7 @@
 > **Mục đích:** Tài liệu bàn giao (handoff) — giúp AI/kỹ sư mới đọc hiểu toàn bộ dự án,
 > các quyết định kỹ thuật, lỗi đã gặp và cách xử lý mà không cần đào lại git history.
 >
-> **Cập nhật lần cuối:** 2026-08-31 (APK rev89 — Car UI: bỏ camera 360, WebView không resize để video chạy liên tục, hiển thị IP, live sync telemetry_samples)
+> **Cập nhật lần cuối:** 2026-09-04 (OBD Fuel Intelligence PID 012F/01A6, Room Migration v5, Supabase 0016, Web DrillDown Modal 1200px, Smart Maintenance Alert, OpenCode 1-click APK)
 
 ---
 
@@ -602,3 +602,55 @@ màu PNG bằng PIL (nền sáng #e0e9f3, số tốc độ xanh #1a73e8).
 - **Chưa verify**: YouTube tự play lại khi phóng/thu trên xe thật (user tắt máy trước khi test rev89).
 - **APK**: `android/releases/FMMS_rev88.apk`, `FMMS_rev89.apk` (APK cuối cài là rev88; rev89 build
   xong chưa cài được vì xe tắt).
+
+---
+
+## 15. THÁNG 09/2026 — ĐỘT PHÁ QUẢN LÝ NHIÊN LIỆU OBD, MIGRATION ROOM V5, NÂNG CẤP WEB APP & OPENCODE PIPELINE (2026-09-01 → 2026-09-04)
+
+### 15.1. Bối cảnh & Yêu cầu mới từ thực tế vận hành xe
+- **Vấn đề cốt lõi:** Người dùng phản ánh rằng việc chỉ ghi nhận *số lít đổ vào, số tiền và đổ đầy bình* là không đủ cơ sở để tính chính xác lượng nhiên liệu xe thực sự đã tiêu thụ giữa 2 lần đổ (giữa 2 số ODO). Nhất là khi xe có những lần đổ lẻ không đầy bình hoặc muốn biết chính xác mức hao phí thực tế.
+- **Giải pháp:** Cần đọc trực tiếp lượng xăng còn lại trong bình thông qua thiết bị **OBD-II (PID `012F` - Fuel Tank Level %)** kết hợp số công tơ mét chính xác (**PID `01A6` - Odometer km**) trước và sau mỗi lần đổ.
+
+### 15.2. Hồ sơ 10 lần đổ xăng thực tế của xe Mazda2 Base 2026
+Dữ liệu chuẩn hoá từ ngày nhận xe đến hiện tại:
+1. **09/04/2026 (12 km):** Mốc nhận xe ban đầu — Hãng đổ sẵn 10L, đổ tiếp 37.7L (100% đầy bình) $\to$ Mốc Baseline tính toán.
+2. **24/04/2026 (288 km, +276 km):** Đổ 31.81L $\to$ Tiêu hao: $11.53\text{ L/100km}$.
+3. **08/05/2026 (582 km, +294 km):** Đổ 32.55L $\to$ Tiêu hao: $11.07\text{ L/100km}$.
+4. **22/05/2026 (862 km, +280 km):** Đổ 33.72L $\to$ Tiêu hao: $12.04\text{ L/100km}$.
+5. **07/06/2026 (1,154 km, +292 km):** Đổ 34.02L $\to$ Tiêu hao: $11.65\text{ L/100km}$.
+6. **23/06/2026 (1,489 km, +335 km):** Đổ 31.54L $\to$ Tiêu hao: $9.41\text{ L/100km}$.
+7. **09/07/2026 (1,798 km, +309 km):** Đổ 31.06L $\to$ Tiêu hao: $10.05\text{ L/100km}$.
+8. **25/07/2026 (2,084 km, +286 km):** Đổ 21.03L $\to$ Tiêu hao: $7.35\text{ L/100km}$.
+9. **09/08/2026 (2,377 km, +293 km):** Đổ 22.09L $\to$ Tiêu hao: $7.54\text{ L/100km}$.
+10. **23/08/2026 (2,646 km, +269 km):** Đổ 22.75L $\to$ Tiêu hao: $8.46\text{ L/100km}$.
+- **Tổng kết:** Đi $+2,634\text{ km}$, tổng tiêu thụ $260.57\text{ L}$ xăng, mức tiêu thụ trung bình toàn bộ: **$9.89\text{ L/100km}$**.
+
+### 15.3. Nâng cấp Database & Schema Migrations
+- **Supabase PostgreSQL (`0016_fuel_obd_enhancement.sql`):**
+  - Thêm các cột: `fuel_level_before_pct`, `fuel_liters_before`, `fuel_level_after_pct`, `fuel_liters_after`, `calculated_consumption_l100km`, `prev_odometer_km`, `fuel_consumed_liters`.
+- **Android Room Database (`AppDatabase.kt` & `AppContainer.kt`):**
+  - Nâng `version = 5`.
+  - Đăng ký `MIGRATION_4_5` thêm 7 cột OBD vào bảng `fuel_logs`.
+  - Cập nhật `FuelLogEntity.kt` và `SyncQueueRepository.kt` để đồng bộ 2 chiều với Supabase.
+
+### 15.4. Cải tiến Giao diện & Trải nghiệm Android APK (`FuelScreen.kt`)
+- **Tự động làm giàu dữ liệu cũ (Dynamic Enrichment):** `FuelViewModel` tự động tính lũy kế $+\Delta\text{km}$, $L/100\text{km}$, và số lít xăng tiêu thụ cho 10 lần đổ lịch sử trong SQLite mà không yêu cầu người dùng nhập lại từ đầu.
+- **Badge đặc biệt mốc nhận xe:** Gán nhãn `🌱 Mốc nhận xe & Đầy bình (12 km)` tại mốc 12 km ngày 09/04/2026.
+- **Thanh trạng thái OBD thông minh (AddRefuelBar):**
+  - Khi xe nổ máy & kết nối: `⛽ OBD: XX.X% (~X.XL) | ODO: X,XXX km`.
+  - Khi xe tắt máy / ở nhà: `🔌 OBD: Tự động bắt khi nổ máy`.
+
+### 15.5. Nâng cấp Web App (Next.js 14 & Supabase SSR)
+- **Bảo mật:** Tích hợp `@supabase/ssr` và `middleware.ts` bảo vệ toàn bộ route nội bộ, chuyển hướng đăng nhập mượt mà.
+- **Chi tiết Xe (`/assets/[id]`):**
+  - Mở rộng `DrillDownModal` lên kích thước $1200\text{px}$ ($2\times$ so với trước).
+  - Thẻ *Usage / Odometer* hỗ trợ nhấp chuột để chuyển ngay sang tab *Trips*.
+  - Cảnh báo bảo dưỡng thông minh đếm ngược từng ngày (quá hạn, hôm nay, còn $\le 7$ ngày, còn $\le 30$ ngày, an toàn).
+- **Quản lý Nhiên liệu (`/fuel`):**
+  - Biểu đồ tương tác tab switcher: `📊 Chi phí & Lít` vs `📈 Xu hướng Giá`.
+  - Tách trục tung để đường giá xăng (VNĐ/L) không bị bẹp méo.
+  - Sửa lỗi Vercel build (`showToast` runtime error).
+
+### 15.6. Quy trình triển khai 1-Click OpenCode
+- Cung cấp cú pháp lệnh tóm tắt để OpenCode chỉ cần 1 thao tác kéo code `main` và xuất file APK Release/Debug hoàn chỉnh (`cd android && ./gradlew assembleRelease`).
+
