@@ -346,73 +346,72 @@ export default function VehicleDiagnosticsTab({
         </table>
       </div>
 
-      {/* ── Modal Tra cứu Mã Lỗi ── */}
+      {/* ── Inline Tra cứu Mã Lỗi (Không dùng popup backdrop) ── */}
       {showLookupModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div 
-            className="w-full max-w-lg rounded-2xl p-6 space-y-4 shadow-2xl border"
-            style={{
-              background: 'var(--surface-card)',
-              borderColor: 'var(--border-default)',
-            }}
-          >
-            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border-subtle)' }}>
-              <h4 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--text-primary)' }}>
-                Tra cứu Từ điển Mã lỗi OBD
-              </h4>
-              <button onClick={() => setShowLookupModal(false)} className="text-gray-400 hover:text-white text-base">✕</button>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                value={searchCode}
-                onChange={e => setSearchCode(e.target.value.toUpperCase())}
-                onKeyDown={e => e.key === 'Enter' && handleLookup()}
-                placeholder="Nhập mã lỗi (VD: P0300, P0171, C0035...)"
-                className="theme-input text-xs flex-1 py-2 px-3"
-              />
-              <button
-                onClick={() => handleLookup()}
-                disabled={lookupLoading}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-cyan-500 hover:bg-cyan-400 transition shadow"
-              >
-                {lookupLoading ? 'Đang tra...' : 'Tra cứu'}
-              </button>
-            </div>
-
-            {lookupResult ? (
-              <div className="p-4 rounded-xl space-y-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
-                <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
-                  <span className="font-mono font-bold text-base text-cyan-400">{lookupResult.code}</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400">{lookupResult.severity}</span>
-                </div>
-                <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{lookupResult.title_vi}</p>
-                <p style={{ color: 'var(--text-secondary)' }}>{lookupResult.description_vi}</p>
-                {lookupResult.symptoms_vi && (
-                  <p className="text-amber-500"><strong>Triệu chứng:</strong> {lookupResult.symptoms_vi}</p>
-                )}
-                {lookupResult.possible_causes_vi && lookupResult.possible_causes_vi.length > 0 && (
-                  <div>
-                    <strong style={{ color: 'var(--text-primary)' }}>Nguyên nhân phổ biến:</strong>
-                    <ul className="list-disc list-inside mt-1 space-y-0.5" style={{ color: 'var(--text-secondary)' }}>
-                      {lookupResult.possible_causes_vi.map((c, idx) => <li key={idx}>{c}</li>)}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : searchCode && !lookupLoading ? (
-              <div className="p-4 rounded-xl text-xs text-center" style={{ color: 'var(--text-muted)' }}>
-                Chưa có dữ liệu từ điển cho mã <strong>{searchCode}</strong>.
-              </div>
-            ) : null}
-
-            <div className="flex justify-end pt-2">
-              <button onClick={() => setShowLookupModal(false)} className="px-4 py-1.5 rounded-xl text-xs font-semibold" style={{ background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
-                Đóng
-              </button>
-            </div>
+        <div 
+          className="p-4 rounded-2xl border space-y-3 transition-all"
+          style={{
+            background: 'var(--bg-secondary)',
+            borderColor: 'var(--border-default)',
+          }}
+        >
+          <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
+            <h4 className="text-xs font-bold uppercase tracking-wide flex items-center space-x-1.5" style={{ color: 'var(--text-primary)' }}>
+              <Search className="w-3.5 h-3.5 text-cyan-500" />
+              <span>Tra cứu Từ điển Mã lỗi OBD</span>
+            </h4>
+            <button 
+              onClick={() => setShowLookupModal(false)} 
+              className="text-xs px-2 py-0.5 rounded hover:bg-white/10 font-bold"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              ✕ Đóng
+            </button>
           </div>
+
+          <div className="flex items-center space-x-2 max-w-md">
+            <input
+              type="text"
+              value={searchCode}
+              onChange={e => setSearchCode(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === 'Enter' && handleLookup()}
+              placeholder="Nhập mã lỗi (VD: P0300, P0171, C0035...)"
+              className="theme-input text-xs flex-1 py-1.5 px-3"
+            />
+            <button
+              onClick={() => handleLookup()}
+              disabled={lookupLoading}
+              className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-cyan-500 hover:bg-cyan-400 transition shadow"
+            >
+              {lookupLoading ? 'Đang tra...' : 'Tra cứu'}
+            </button>
+          </div>
+
+          {lookupResult ? (
+            <div className="p-3.5 rounded-xl space-y-2 text-xs" style={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)' }}>
+              <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="font-mono font-bold text-sm text-cyan-500">{lookupResult.code}</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-500">{lookupResult.severity}</span>
+              </div>
+              <p className="font-bold" style={{ color: 'var(--text-primary)' }}>{lookupResult.title_vi}</p>
+              <p style={{ color: 'var(--text-secondary)' }}>{lookupResult.description_vi}</p>
+              {lookupResult.symptoms_vi && (
+                <p className="text-amber-500"><strong>Triệu chứng:</strong> {lookupResult.symptoms_vi}</p>
+              )}
+              {lookupResult.possible_causes_vi && lookupResult.possible_causes_vi.length > 0 && (
+                <div>
+                  <strong style={{ color: 'var(--text-primary)' }}>Nguyên nhân phổ biến:</strong>
+                  <ul className="list-disc list-inside mt-1 space-y-0.5" style={{ color: 'var(--text-secondary)' }}>
+                    {lookupResult.possible_causes_vi.map((c, idx) => <li key={idx}>{c}</li>)}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : searchCode && !lookupLoading ? (
+            <div className="p-3 rounded-xl text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+              Chưa có dữ liệu từ điển cho mã <strong>{searchCode}</strong>.
+            </div>
+          ) : null}
         </div>
       )}
     </div>

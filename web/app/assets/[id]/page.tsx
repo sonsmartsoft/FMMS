@@ -613,6 +613,7 @@ export default function AssetDetailPage() {
 
   /* ── Form states ── */
   const [odoViewMode, setOdoViewMode] = useState<'daily' | 'monthly' | 'yearly'>('daily');
+  const [fuelChartMode, setFuelChartMode] = useState<'COMBINED' | 'PRICE_TREND'>('COMBINED');
   const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
   const [maintForm, setMaintForm] = useState({ date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', discount: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
   const [categories, setCategories] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
@@ -857,6 +858,50 @@ export default function AssetDetailPage() {
         : String(valB).localeCompare(String(valA), 'vi');
     });
   }, [fuelLogs, tabStartDate, tabEndDate, fuelSortCol, fuelSortDir]);
+
+  const assetMonthlyFuelData = useMemo(() => {
+    interface MonthlyFuelAgg {
+      month: string;
+      liters: number;
+      cost: number;
+      count: number;
+      prices: number[];
+    }
+    const map = new Map<string, MonthlyFuelAgg>();
+    
+    displayedFuelLogs.forEach(l => {
+      const d = l.date || '';
+      if (!d) return;
+      const mKey = d.slice(0, 7); // YYYY-MM
+      const liters = Number(l.liters) || 0;
+      const price = Number(l.price_per_liter) || 0;
+      const cost = l.total_cost != null ? Number(l.total_cost) : (liters * price);
+
+      const prev: MonthlyFuelAgg = map.get(mKey) || { month: mKey, liters: 0, cost: 0, count: 0, prices: [] };
+      prev.liters += liters;
+      prev.cost += cost;
+      prev.count += 1;
+      if (price > 0) prev.prices.push(price);
+      map.set(mKey, prev);
+    });
+
+    const sortedKeys = Array.from(map.keys()).sort();
+    return sortedKeys.map(k => {
+      const item = map.get(k)!;
+      const avgPrice = item.liters > 0 
+        ? Math.round(item.cost / item.liters) 
+        : (item.prices.length > 0 ? Math.round(item.prices.reduce((a, b) => a + b, 0) / item.prices.length) : 0);
+      const [y, m] = k.split('-');
+      return {
+        key: k,
+        label: `T${parseInt(m)}/${y.slice(2)}`,
+        liters: Math.round(item.liters * 10) / 10,
+        cost: item.cost,
+        avgPrice: avgPrice,
+        count: item.count,
+      };
+    });
+  }, [displayedFuelLogs]);
 
   const displayedMaintenance = useMemo(() => {
     let list = maintenance;
@@ -2620,12 +2665,12 @@ export default function AssetDetailPage() {
           <div className="space-y-5">
             <div className="flex items-center justify-between flex-wrap gap-3">
               <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Vận hành &amp; OBD</h3>
-              {hasLive || asset.capabilities.has_obd
+              {hasLive
                 ? <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1.5" style={{ background: 'rgba(52,211,153,0.15)', color: 'var(--status-green)', border: '1px solid rgba(52,211,153,0.3)' }}>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /><span>OBD Connected</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" /><span>🟢 OBD Live (Đang kết nối)</span>
                   </span>
                 : <span className="px-3 py-1 rounded-full text-xs font-semibold flex items-center space-x-1.5" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>
-                    <span className="w-2 h-2 rounded-full" style={{ background: 'var(--text-faint)' }} /><span>OBD chưa kết nối</span>
+                    <span className="w-2 h-2 rounded-full" style={{ background: 'var(--text-faint)' }} /><span>🔌 OBD Chế độ chờ (Tự bắt khi nổ máy)</span>
                   </span>
               }
             </div>
@@ -3459,6 +3504,89 @@ export default function AssetDetailPage() {
                 </div>
               ))}
             </div>
+
+            {/* 📊 Biểu đồ Phân tích Nhiên liệu Đa chiều */}
+            {assetMonthlyFuelData.length > 0 && (
+              <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shadow-sm" style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
+                      <Fuel className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
+                        Phân Tích Nhiên Liệu &amp; Chi Phí Theo Tháng
+                      </h4>
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        {fuelChartMode === 'COMBINED'
+                          ? 'So sánh tổng chi phí nhiên liệu (₫) và số lít (L) tiêu thụ từng tháng'
+                          : 'Xu hướng đơn giá trung bình (₫/L) qua các chu kỳ đổ xăng'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center p-0.5 rounded-xl text-xs" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)' }}>
+                    <button
+                      onClick={() => setFuelChartMode('COMBINED')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 ${fuelChartMode === 'COMBINED' ? 'bg-amber-500/20 text-amber-500 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      <BarChart3 className="w-3 h-3" /> Chi phí &amp; Lít
+                    </button>
+                    <button
+                      onClick={() => setFuelChartMode('PRICE_TREND')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 ${fuelChartMode === 'PRICE_TREND' ? 'bg-emerald-500/20 text-emerald-500 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                    >
+                      <TrendingDown className="w-3 h-3" /> Xu hướng Giá
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ height: 230 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    {fuelChartMode === 'COMBINED' ? (
+                      <ComposedChart data={assetMonthlyFuelData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} barGap={6}>
+                        <defs>
+                          <linearGradient id="assetFuelCostGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.8} />
+                            <stop offset="100%" stopColor="#D97706" stopOpacity={0.3} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" opacity={0.6} />
+                        <XAxis dataKey="label" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
+                        <YAxis yAxisId="cost" stroke="#F59E0B" fontSize={10} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} tickLine={false} axisLine={false} />
+                        <YAxis yAxisId="liters" orientation="right" stroke="#06B6D4" fontSize={10} tickFormatter={(v) => `${v}L`} tickLine={false} axisLine={false} />
+                        <ReTooltip
+                          contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: '12px', fontSize: '11px', color: 'var(--text-primary)' }}
+                          formatter={(val: any, name: any) => {
+                            if (name === 'cost') return [`${fmt(Number(val))} ₫`, 'Tổng chi phí'];
+                            if (name === 'liters') return [`${val} Lít`, 'Tổng nhiên liệu'];
+                            return [val, name];
+                          }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} formatter={(val) => val === 'cost' ? 'Chi phí (₫)' : 'Số lít (L)'} />
+                        <Bar yAxisId="cost" dataKey="cost" name="cost" fill="url(#assetFuelCostGrad)" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                        <Line yAxisId="liters" type="monotone" dataKey="liters" name="liters" stroke="#06B6D4" strokeWidth={2.5} dot={{ r: 3, fill: '#06B6D4' }} />
+                      </ComposedChart>
+                    ) : (
+                      <ComposedChart data={assetMonthlyFuelData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" opacity={0.6} />
+                        <XAxis dataKey="label" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
+                        <YAxis yAxisId="price" stroke="#10B981" fontSize={10} domain={['auto', 'auto']} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tickLine={false} axisLine={false} />
+                        <ReTooltip
+                          contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: '12px', fontSize: '11px', color: 'var(--text-primary)' }}
+                          formatter={(val: any, name: any) => {
+                            if (name === 'avgPrice') return [`${fmt(Number(val))} ₫/L`, 'Đơn giá TB'];
+                            return [val, name];
+                          }}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} formatter={(val) => val === 'avgPrice' ? 'Đơn giá trung bình (₫/L)' : val} />
+                        <Line yAxisId="price" type="monotone" dataKey="avgPrice" name="avgPrice" stroke="#10B981" strokeWidth={2.5} dot={{ r: 4, fill: '#10B981' }} />
+                      </ComposedChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
 
             <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--border-default)' }}>
               <table className="w-full text-xs">

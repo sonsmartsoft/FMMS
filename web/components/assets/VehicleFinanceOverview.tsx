@@ -780,14 +780,6 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
             Click vào từng thẻ để chuyển thẳng màn hình chi tiết hoặc chỉnh sửa thông số
           </p>
         </div>
-        <button
-          onClick={() => setActiveModal('loan_config')}
-          className="flex items-center space-x-2 px-3.5 py-2 rounded-xl text-white text-xs font-bold shadow-md transition hover:opacity-90"
-          style={{ background: 'linear-gradient(135deg, #10B981, #059669)' }}
-        >
-          <Landmark className="w-4 h-4" />
-          <span>{loan ? 'Cấu hình khoản vay (Lãi 2 Giai Đoạn)' : '+ Thêm khoản vay mới'}</span>
-        </button>
       </div>
 
       {/* 9 Summary Cards Grid */}
