@@ -6,7 +6,7 @@ import { ArrowLeft, Users, Shield, Plus, Search, Key, Trash2, Check, Car, UserPl
 import { createClient } from '@/lib/supabase/client';
 import { getUserMembers, createUserMember, updateUserMember, deleteUserMember, UserMember, INITIAL_DEFAULT_USERS } from '@/lib/services/userService';
 import { getAssets } from '@/lib/services/assetService';
-import { getAllowedEmails, saveAllowedEmails } from '@/lib/services/authWhitelistService';
+import { getAllowedEmails, saveAllowedEmails, fetchAllowedEmailsFromCloud } from '@/lib/services/authWhitelistService';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 
@@ -64,8 +64,9 @@ export default function UsersManagementPage() {
 
       setUsers(currentUsers);
 
-      // 4. Load whitelist
-      setAllowedEmailsList(getAllowedEmails());
+      // 4. Load whitelist directly from cloud
+      const cloudWl = await fetchAllowedEmailsFromCloud();
+      setAllowedEmailsList(cloudWl);
     } catch (err) {
       console.error('Error loading users data:', err);
     } finally {
@@ -234,7 +235,7 @@ export default function UsersManagementPage() {
     }
   };
 
-  const handleAddWhitelistEmail = () => {
+  const handleAddWhitelistEmail = async () => {
     if (!newWhitelistEmail || !newWhitelistEmail.includes('@')) {
       alert('Vui lòng nhập địa chỉ Email hợp lệ');
       return;
@@ -242,7 +243,7 @@ export default function UsersManagementPage() {
     const cleanEmail = newWhitelistEmail.trim().toLowerCase();
     const updated = Array.from(new Set([...allowedEmailsList, cleanEmail]));
     setAllowedEmailsList(updated);
-    saveAllowedEmails(updated);
+    await saveAllowedEmails(updated);
     setNewWhitelistEmail('');
     showToast(`Đã thêm ${cleanEmail} vào danh sách Email được phép đăng nhập!`);
   };
@@ -253,10 +254,11 @@ export default function UsersManagementPage() {
       title: 'Xác thực Thu Hồi Quyền Đăng Nhập (Admin PIN)',
       description: `CẢNH BÁO: Xác nhận thu hồi quyền đăng nhập của Email "${emailToRemove}". Vui lòng nhập mã PIN Quản trị viên để tiếp tục.`,
       actionName: 'Thu hồi quyền truy cập',
-      onConfirm: () => {
-        const updated = allowedEmailsList.filter(e => e !== emailToRemove);
+      onConfirm: async () => {
+        const cleanRemove = emailToRemove.trim().toLowerCase();
+        const updated = allowedEmailsList.filter(e => e.trim().toLowerCase() !== cleanRemove);
         setAllowedEmailsList(updated);
-        saveAllowedEmails(updated);
+        await saveAllowedEmails(updated);
         showToast(`Đã xóa ${emailToRemove} khỏi danh sách được phép đăng nhập.`);
       },
     });
@@ -288,9 +290,10 @@ export default function UsersManagementPage() {
         await deleteUserMember(user.id, user.email);
 
         // 2. Remove from whitelist
-        const updatedWhitelist = allowedEmailsList.filter(e => e !== user.email);
+        const cleanEmail = user.email.trim().toLowerCase();
+        const updatedWhitelist = allowedEmailsList.filter(e => e.trim().toLowerCase() !== cleanEmail);
         setAllowedEmailsList(updatedWhitelist);
-        saveAllowedEmails(updatedWhitelist);
+        await saveAllowedEmails(updatedWhitelist);
 
         await loadAllData();
         showToast(`Đã xóa vĩnh viễn thành viên ${user.name} khỏi cơ sở dữ liệu và thu hồi quyền đăng nhập.`);
