@@ -35,7 +35,7 @@ import com.fmms.carlogger.core.database.entity.VehicleEntity
         DailySummaryEntity::class,
         GpsTrackPointEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -78,6 +78,18 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `vehicles` ADD COLUMN `image_url` TEXT")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `fuel_logs` ADD COLUMN `fuel_level_before_pct` REAL")
+                db.execSQL("ALTER TABLE `fuel_logs` ADD COLUMN `fuel_liters_before` REAL")
+                db.execSQL("ALTER TABLE `fuel_logs` ADD COLUMN `fuel_level_after_pct` REAL")
+                db.execSQL("ALTER TABLE `fuel_logs` ADD COLUMN `fuel_liters_after` REAL")
+                db.execSQL("ALTER TABLE `fuel_logs` ADD COLUMN `calculated_consumption_l100km` REAL")
+                db.execSQL("ALTER TABLE `fuel_logs` ADD COLUMN `prev_odometer_km` REAL")
+                db.execSQL("ALTER TABLE `fuel_logs` ADD COLUMN `fuel_consumed_liters` REAL")
             }
         }
     }

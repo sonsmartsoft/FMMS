@@ -57,11 +57,60 @@ class FuelViewModel : ViewModel() {
         viewModelScope.launch {
             _saving.value = true
             val vehicle = c.vehicleRepository.getActive() ?: return@launch
-            // ODO thật từ ECU (01A6) đã đồng bộ vào vehicle.odometerKm; chỉ dùng
-            // virtual khi chưa có số thật.
+            // ODO thật từ ECU (01A6) đã đồng bộ vào vehicle.odometerKm; chỉ dùng virtual khi chưa có số thật.
             val odo = vehicle.odometerKm.takeIf { it > 0 }
                 ?: c.odometerEngine.state.value.virtualOdoKm
             val now = System.currentTimeMillis()
+
+            // Dung tích bình (mặc định Mazda 2 là 44L nếu chưa khai báo)
+            val tankCapacity = if (vehicle.tankCapacityLiters > 0) vehicle.tankCapacityLiters else 44.0
+
+            // 1. Mức xăng trước khi đổ từ OBD PID 012F
+            val currentEstimate = c.fuelEngine.estimate.value
+            val fuelLevelBeforePct = currentEstimate.levelPercent
+            val fuelLitersBefore = fuelLevelBeforePct?.let { (it * tankCapacity / 100.0) }
+                ?: currentEstimate.estimatedLiters
+
+            // 2. Mức xăng sau khi đổ
+            val fuelLitersAfter = if (tankFull) {
+                tankCapacity
+            } else if (fuelLitersBefore != null) {
+                (fuelLitersBefore + fuelLiters).coerceAtMost(tankCapacity)
+            } else {
+                null
+            }
+            val fuelLevelAfterPct = if (tankFull) {
+                100.0
+            } else if (fuelLitersAfter != null) {
+                (fuelLitersAfter / tankCapacity * 100.0).coerceAtMost(100.0)
+            } else {
+                null
+            }
+
+            // 3. Tính toán chính xác lượng nhiên liệu tiêu thụ và mức L/100km từ lần đổ trước
+            val prevLogs = c.fuelLogRepository.getByVehicle(vehicle.id)
+            val prevLog = prevLogs.firstOrNull()
+
+            var prevOdometerKm: Double? = null
+            var fuelConsumedLiters: Double? = null
+            var calculatedConsumptionL100km: Double? = null
+
+            if (prevLog != null && prevLog.odometerKm != null && odo > prevLog.odometerKm) {
+                prevOdometerKm = prevLog.odometerKm
+                val deltaDistanceKm = odo - prevLog.odometerKm
+
+                val prevLitersAfter = prevLog.fuelLitersAfter
+                    ?: (if (prevLog.tankFull) tankCapacity else (prevLog.fuelLitersBefore?.plus(prevLog.fuelLiters))?.coerceAtMost(tankCapacity))
+
+                if (prevLitersAfter != null && fuelLitersBefore != null) {
+                    val consumed = prevLitersAfter - fuelLitersBefore
+                    if (consumed > 0 && deltaDistanceKm > 0) {
+                        fuelConsumedLiters = consumed
+                        calculatedConsumptionL100km = (consumed / deltaDistanceKm) * 100.0
+                    }
+                }
+            }
+
             val log = FuelLogEntity(
                 id = java.util.UUID.randomUUID().toString(),
                 vehicleId = vehicle.id,
@@ -76,6 +125,13 @@ class FuelViewModel : ViewModel() {
                 notes = null,
                 createdAt = now,
                 updatedAt = now,
+                fuelLevelBeforePct = fuelLevelBeforePct,
+                fuelLitersBefore = fuelLitersBefore,
+                fuelLevelAfterPct = fuelLevelAfterPct,
+                fuelLitersAfter = fuelLitersAfter,
+                calculatedConsumptionL100km = calculatedConsumptionL100km,
+                prevOdometerKm = prevOdometerKm,
+                fuelConsumedLiters = fuelConsumedLiters,
             )
             c.fuelLogRepository.upsert(log)
             _saving.value = false
@@ -123,7 +179,7 @@ fun FuelScreen(vm: FuelViewModel = viewModel()) {
                     ) {
                         FuelStatRow(strings.range, estimate.rangeKm?.let { "${it.toInt()} km" } ?: strings.learning, colors.cyan)
                         Spacer(modifier = Modifier.height(8.dp))
-                        FuelStatRow(strings.per100km, estimate.consumptionL100km?.let { String.format(Locale.US, "%.1f", it) } ?: strings.learning, colors.textPrimary)
+                        FuelStatRow(strings.per100km, estimate.consumptionL100km?.let { String.format(Locale.US, "%.1f L/100km", it) } ?: strings.learning, colors.textPrimary)
                     }
                 }
             }
@@ -141,29 +197,65 @@ fun FuelScreen(vm: FuelViewModel = viewModel()) {
             }
         } else {
             items(logs) { log ->
-                val fmt = SimpleDateFormat("dd MMM yyyy", Locale.US)
+                val fmt = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.US)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = colors.surface),
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column {
-                            Text(fmt.format(Date(log.timestamp)), color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "${strings.odoLabel} ${log.odometerKm?.let { "${it.toInt()} km" } ?: "—"} • ${if (log.tankFull) strings.fullTank else "Partial"}",
-                                color = colors.textSecondary,
-                                fontSize = 12.sp,
-                            )
+                    Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                Text(fmt.format(Date(log.timestamp)), color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "${strings.odoLabel} ${log.odometerKm?.let { "${it.toInt()} km" } ?: "—"}${log.prevOdometerKm?.let { " (+${(log.odometerKm!! - it).toInt()} km)" } ?: ""} • ${if (log.tankFull) strings.fullTank else "Đổ lẻ"}",
+                                    color = colors.textSecondary,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(String.format(Locale.US, "+%.1f L", log.fuelLiters), color = colors.cyan, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                log.totalCost?.let {
+                                    Text(String.format(Locale.US, "%,.0f ₫", it), color = colors.textSecondary, fontSize = 11.sp)
+                                }
+                            }
                         }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(String.format(Locale.US, "%.1f L", log.fuelLiters), color = colors.cyan, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            log.totalCost?.let {
-                                Text(String.format(Locale.US, "%,.0f ₫", it), color = colors.textSecondary, fontSize = 11.sp)
+
+                        // OBD Level & Precision Consumption Breakdown
+                        if (log.fuelLevelBeforePct != null || log.calculatedConsumptionL100km != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Divider(color = colors.surfaceVariant, thickness = 0.5.dp)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (log.fuelLevelBeforePct != null) {
+                                    Text(
+                                        "OBD: ${String.format(Locale.US, "%.0f%%", log.fuelLevelBeforePct)} (${String.format(Locale.US, "%.1fL", log.fuelLitersBefore ?: 0.0)}) ➔ ${String.format(Locale.US, "%.0f%%", log.fuelLevelAfterPct ?: 0.0)}",
+                                        color = colors.textSecondary,
+                                        fontSize = 11.sp,
+                                    )
+                                }
+                                if (log.calculatedConsumptionL100km != null && log.fuelConsumedLiters != null) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = colors.cyan.copy(alpha = 0.15f),
+                                    ) {
+                                        Text(
+                                            "Tiêu hao: ${String.format(Locale.US, "%.1f", log.calculatedConsumptionL100km)} L/100km (-${String.format(Locale.US, "%.1fL", log.fuelConsumedLiters)})",
+                                            color = colors.cyan,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -236,7 +328,7 @@ private fun FuelRing(levelPercent: Double?, liters: Double?, modifier: Modifier 
     }
 }
 
-private const val CAPACITY_LITERS = 45.0
+private const val CAPACITY_LITERS = 44.0
 
 @Composable
 private fun FuelStatRow(label: String, value: String, color: Color) {
@@ -251,6 +343,7 @@ private fun FuelStatRow(label: String, value: String, color: Color) {
 private fun AddRefuelBar(vm: FuelViewModel) {
     val colors = LocalFmmsColors.current
     val strings = LocalStrings.current
+    val estimate by vm.estimate.collectAsStateWithLifecycle()
     var liters by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var full by remember { mutableStateOf(true) }
@@ -261,6 +354,29 @@ private fun AddRefuelBar(vm: FuelViewModel) {
         colors = CardDefaults.cardColors(containerColor = colors.surface),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            // Live OBD Indicator
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Ghi nhận đổ xăng", color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                if (estimate.levelPercent != null) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = colors.amber.copy(alpha = 0.15f),
+                    ) {
+                        Text(
+                            "⛽ OBD: ${String.format(Locale.US, "%.1f%%", estimate.levelPercent)} (${String.format(Locale.US, "%.1fL", estimate.estimatedLiters ?: 0.0)})",
+                            color = colors.amber,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = liters,

@@ -23,4 +23,11 @@ data class FuelLogEntity(
     val notes: String?,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "fuel_level_before_pct") val fuelLevelBeforePct: Double? = null,
+    @ColumnInfo(name = "fuel_liters_before") val fuelLitersBefore: Double? = null,
+    @ColumnInfo(name = "fuel_level_after_pct") val fuelLevelAfterPct: Double? = null,
+    @ColumnInfo(name = "fuel_liters_after") val fuelLitersAfter: Double? = null,
+    @ColumnInfo(name = "calculated_consumption_l100km") val calculatedConsumptionL100km: Double? = null,
+    @ColumnInfo(name = "prev_odometer_km") val prevOdometerKm: Double? = null,
+    @ColumnInfo(name = "fuel_consumed_liters") val fuelConsumedLiters: Double? = null,
 )

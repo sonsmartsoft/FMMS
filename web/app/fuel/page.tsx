@@ -493,10 +493,32 @@ export default function FuelPage() {
                   <td className="px-4 py-3 font-bold" style={{ color: 'var(--accent-cyan)' }}>{liters.toFixed(2)}L</td>
                   <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{fmt(price)}₫</td>
                   <td className="px-4 py-3 font-bold" style={{ color: 'var(--status-amber)' }}>{fmt(total)}₫</td>
-                  <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>{fmt(f.odometer_km)} km</td>
+                  <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>
+                    <div>
+                      <span className="font-mono font-medium">{fmt(f.odometer_km)} km</span>
+                      {f.prev_odometer_km != null && f.odometer_km > f.prev_odometer_km && (
+                        <p className="text-[10px] text-cyan-500 font-mono">
+                          +{Math.round(f.odometer_km - f.prev_odometer_km)} km
+                        </p>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{f.station || '—'}</td>
-                  <td className="px-4 py-3 font-semibold" style={{ color: f.consumption_l100km && f.consumption_l100km > 7.5 ? 'var(--status-red)' : 'var(--status-green)' }}>
-                    {f.consumption_l100km ? `${f.consumption_l100km}` : '—'}
+                  <td className="px-4 py-3 font-semibold">
+                    {f.consumption_l100km ? (
+                      <div>
+                        <span style={{ color: f.consumption_l100km > 7.5 ? 'var(--status-amber)' : 'var(--status-green)' }} className="font-bold">
+                          {f.consumption_l100km.toFixed(1)} L/100km
+                        </span>
+                        {f.fuel_consumed_liters != null && (
+                          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                            Dùng {f.fuel_consumed_liters.toFixed(1)}L {f.fuel_level_before_pct != null ? `(${f.fuel_level_before_pct.toFixed(0)}% ➔ ${f.fuel_level_after_pct?.toFixed(0)}%)` : ''}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center space-x-1">

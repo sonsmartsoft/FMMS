@@ -13,6 +13,13 @@ export interface FuelLogRow {
   station?: string;
   tank_full: boolean;
   notes?: string;
+  fuel_level_before_pct?: number;
+  fuel_liters_before?: number;
+  fuel_level_after_pct?: number;
+  fuel_liters_after?: number;
+  calculated_consumption_l100km?: number;
+  prev_odometer_km?: number;
+  fuel_consumed_liters?: number;
 }
 
 export interface FuelLogInput {
@@ -27,6 +34,13 @@ export interface FuelLogInput {
   station?: string;
   tank_full?: boolean;
   notes?: string;
+  fuel_level_before_pct?: number;
+  fuel_liters_before?: number;
+  fuel_level_after_pct?: number;
+  fuel_liters_after?: number;
+  calculated_consumption_l100km?: number;
+  prev_odometer_km?: number;
+  fuel_consumed_liters?: number;
 }
 
 export type FuelLog = {
@@ -38,14 +52,26 @@ export type FuelLog = {
   total_cost: number;
   odometer_km: number;
   station: string;
+  tank_full?: boolean;
   notes?: string;
   consumption_l100km?: number;
+  fuel_level_before_pct?: number;
+  fuel_liters_before?: number;
+  fuel_level_after_pct?: number;
+  fuel_liters_after?: number;
+  calculated_consumption_l100km?: number;
+  prev_odometer_km?: number;
+  fuel_consumed_liters?: number;
 };
 
 /** Map DB row -> shape used by the UI tables */
 export function mapFuelRow(row: any): FuelLog {
   const liters = Number(row.fuel_liters ?? row.liters) || 0;
   const dateStr = (row.timestamp ?? row.date ?? '').slice(0, 10);
+  const consumption = row.calculated_consumption_l100km != null 
+    ? Number(row.calculated_consumption_l100km) 
+    : (row.consumption_l100km != null ? Number(row.consumption_l100km) : undefined);
+
   return {
     id: row.id,
     asset_id: row.asset_id,
@@ -55,8 +81,16 @@ export function mapFuelRow(row: any): FuelLog {
     total_cost: Number(row.total_cost) || 0,
     odometer_km: Number(row.odometer_km) || 0,
     station: row.station ?? '',
+    tank_full: row.tank_full != null ? Boolean(row.tank_full) : true,
     notes: row.notes ?? undefined,
-    consumption_l100km: row.consumption_l100km != null ? Number(row.consumption_l100km) : undefined,
+    consumption_l100km: consumption,
+    fuel_level_before_pct: row.fuel_level_before_pct != null ? Number(row.fuel_level_before_pct) : undefined,
+    fuel_liters_before: row.fuel_liters_before != null ? Number(row.fuel_liters_before) : undefined,
+    fuel_level_after_pct: row.fuel_level_after_pct != null ? Number(row.fuel_level_after_pct) : undefined,
+    fuel_liters_after: row.fuel_liters_after != null ? Number(row.fuel_liters_after) : undefined,
+    calculated_consumption_l100km: row.calculated_consumption_l100km != null ? Number(row.calculated_consumption_l100km) : undefined,
+    prev_odometer_km: row.prev_odometer_km != null ? Number(row.prev_odometer_km) : undefined,
+    fuel_consumed_liters: row.fuel_consumed_liters != null ? Number(row.fuel_consumed_liters) : undefined,
   };
 }
 
@@ -115,6 +149,13 @@ export async function createFuelLog(input: {
   station?: string;
   tank_full?: boolean;
   notes?: string;
+  fuel_level_before_pct?: number;
+  fuel_liters_before?: number;
+  fuel_level_after_pct?: number;
+  fuel_liters_after?: number;
+  calculated_consumption_l100km?: number;
+  prev_odometer_km?: number;
+  fuel_consumed_liters?: number;
 }) {
   const liters = Number(input.liters ?? input.fuel_liters) || 0;
   const price = Number(input.price_per_liter) || 0;
@@ -140,6 +181,13 @@ export async function createFuelLog(input: {
         station: input.station || null,
         tank_full: input.tank_full ?? true,
         notes: input.notes || null,
+        fuel_level_before_pct: input.fuel_level_before_pct,
+        fuel_liters_before: input.fuel_liters_before,
+        fuel_level_after_pct: input.fuel_level_after_pct,
+        fuel_liters_after: input.fuel_liters_after,
+        calculated_consumption_l100km: input.calculated_consumption_l100km,
+        prev_odometer_km: input.prev_odometer_km,
+        fuel_consumed_liters: input.fuel_consumed_liters,
       })
       .select()
       .single();
@@ -159,7 +207,16 @@ export async function createFuelLog(input: {
     total_cost: cost,
     odometer_km: input.odometer_km || 0,
     station: input.station || '',
+    tank_full: input.tank_full ?? true,
     notes: input.notes,
+    consumption_l100km: input.calculated_consumption_l100km,
+    fuel_level_before_pct: input.fuel_level_before_pct,
+    fuel_liters_before: input.fuel_liters_before,
+    fuel_level_after_pct: input.fuel_level_after_pct,
+    fuel_liters_after: input.fuel_liters_after,
+    calculated_consumption_l100km: input.calculated_consumption_l100km,
+    prev_odometer_km: input.prev_odometer_km,
+    fuel_consumed_liters: input.fuel_consumed_liters,
   };
 
   if (typeof window !== 'undefined') {
@@ -187,6 +244,13 @@ export async function updateFuelLog(id: string, input: {
   tank_full?: boolean;
   notes?: string;
   consumption_l100km?: number;
+  fuel_level_before_pct?: number;
+  fuel_liters_before?: number;
+  fuel_level_after_pct?: number;
+  fuel_liters_after?: number;
+  calculated_consumption_l100km?: number;
+  prev_odometer_km?: number;
+  fuel_consumed_liters?: number;
 }) {
   const realAssetId = input.asset_id ? resolveAssetId(input.asset_id) : undefined;
   const liters = input.liters != null ? Number(input.liters) : (input.fuel_liters != null ? Number(input.fuel_liters) : undefined);
@@ -205,6 +269,13 @@ export async function updateFuelLog(id: string, input: {
     if (input.station != null) updatePayload.station = input.station;
     if (input.tank_full != null) updatePayload.tank_full = input.tank_full;
     if (input.notes != null) updatePayload.notes = input.notes;
+    if (input.fuel_level_before_pct != null) updatePayload.fuel_level_before_pct = input.fuel_level_before_pct;
+    if (input.fuel_liters_before != null) updatePayload.fuel_liters_before = input.fuel_liters_before;
+    if (input.fuel_level_after_pct != null) updatePayload.fuel_level_after_pct = input.fuel_level_after_pct;
+    if (input.fuel_liters_after != null) updatePayload.fuel_liters_after = input.fuel_liters_after;
+    if (input.calculated_consumption_l100km != null) updatePayload.calculated_consumption_l100km = input.calculated_consumption_l100km;
+    if (input.prev_odometer_km != null) updatePayload.prev_odometer_km = input.prev_odometer_km;
+    if (input.fuel_consumed_liters != null) updatePayload.fuel_consumed_liters = input.fuel_consumed_liters;
 
     if (Object.keys(updatePayload).length > 0) {
       await supabase.from('fuel_logs').update(updatePayload).eq('id', id);
@@ -224,6 +295,8 @@ export async function updateFuelLog(id: string, input: {
         id,
         ...(logDate ? { date: logDate } : {}),
         ...(liters != null ? { liters } : {}),
+        ...(price != null ? { price_per_liter: price } : {}),
+        ...(cost != null ? { total_cost: cost } : {}),
         ...(realAssetId ? { asset_id: realAssetId } : {}),
       };
       localStorage.setItem('fmms_custom_fuel_logs', JSON.stringify(customMap));
