@@ -151,20 +151,44 @@ export default function VehicleDiagnosticsTab({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
         <div className="p-3.5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <p className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>Tình trạng mã lỗi (DTC)</p>
-          <p className="text-lg font-bold mt-0.5" style={{ color: activeDtcLogs.length > 0 ? 'var(--status-rose)' : 'var(--status-green)' }}>
-            {activeDtcLogs.length > 0 ? `⚠️ ${activeDtcLogs.length} mã lỗi active` : '✅ 0 lỗi (Hoàn hảo)'}
-          </p>
-          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex items-center space-x-1.5 mt-1">
+            {activeDtcLogs.length > 0 ? (
+              <div className="flex items-center space-x-1.5 text-rose-500 font-bold text-base">
+                <AlertTriangle className="w-4 h-4 text-rose-500" />
+                <span>{activeDtcLogs.length} mã lỗi active</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1.5 text-emerald-500 dark:text-emerald-400 font-bold text-base">
+                <div className="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center border border-emerald-500/30 shadow-sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                </div>
+                <span>0 lỗi (Hoàn hảo)</span>
+              </div>
+            )}
+          </div>
+          <span className="text-[10px] block mt-1" style={{ color: 'var(--text-muted)' }}>
             {resolvedDtcLogs.length > 0 ? `Đã xử lý ${resolvedDtcLogs.length} lỗi trong lịch sử` : 'Chưa có lỗi nào phát hiện'}
           </span>
         </div>
 
         <div className="p-3.5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <p className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>Đèn Check Engine (MIL)</p>
-          <p className="text-lg font-bold mt-0.5" style={{ color: latestScan?.mil_status ? 'var(--status-rose)' : 'var(--status-green)' }}>
-            {latestScan?.mil_status ? '🔴 MIL ON (Đang sáng)' : '🟢 MIL OFF (Bình thường)'}
-          </p>
-          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex items-center space-x-1.5 mt-1">
+            {latestScan?.mil_status ? (
+              <div className="flex items-center space-x-1.5 text-rose-500 font-bold text-base">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                <span>MIL ON (Đang sáng)</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-1.5 text-emerald-500 dark:text-emerald-400 font-bold text-base">
+                <div className="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center border border-emerald-500/30 shadow-sm">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
+                </div>
+                <span>MIL OFF (Bình thường)</span>
+              </div>
+            )}
+          </div>
+          <span className="text-[10px] block mt-1" style={{ color: 'var(--text-muted)' }}>
             {latestScan ? `Kiểm tra tự động khi nổ máy` : 'Chờ kết nối OBD'}
           </span>
         </div>

@@ -52,7 +52,7 @@ fun StatsScreen(
     val selectedMonth by vm.selectedMonth.collectAsState()
     val expenseBreakdown by vm.expenseBreakdown.collectAsState()
 
-    val border = Color.White.copy(alpha = 0.08f)
+    val border = colors.divider
     val grid = colors.divider.copy(alpha = 0.35f)
 
     Column(
@@ -901,10 +901,11 @@ private fun startVoiceListening(
 
 @Composable
 private fun AiInsightBlock(title: String, body: String, color: Color) {
+    val colors = LocalFmmsColors.current
     Column {
         Text(title, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(2.dp))
-        Text(body, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp, lineHeight = 18.sp)
+        Text(body, color = colors.textSecondary, fontSize = 13.sp, lineHeight = 18.sp)
         Spacer(modifier = Modifier.height(10.dp))
     }
 }

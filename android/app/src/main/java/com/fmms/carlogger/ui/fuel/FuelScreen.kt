@@ -473,7 +473,8 @@ private fun AddRefuelBar(vm: FuelViewModel) {
                             price = ""
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
+                    height = 40.dp,
+                    modifier = Modifier.width(120.dp),
                 )
             }
         }

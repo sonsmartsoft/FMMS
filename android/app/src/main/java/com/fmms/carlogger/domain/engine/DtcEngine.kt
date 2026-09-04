@@ -186,7 +186,7 @@ class DtcEngine(
                             syncQueueRepository.enqueueDtcLog(log)
                         }
                     }
-                    _lastScanSummary.value = if (milOn) "⚠ MIL ON • ${confirmed.size + pending.size} lỗi" else "✅ $now"
+                    _lastScanSummary.value = if (milOn) "⚠ MIL ON • ${confirmed.size + pending.size} lỗi" else "Hệ thống chuẩn ($now)"
                     emitAlert(vehicle.id, allCodes.size)
                 } else {
                     // MIL OFF, không code: đóng các lỗi active cũ.
@@ -213,13 +213,13 @@ class DtcEngine(
                         )
                         diagnosticScanDao.upsert(scan)
                         syncQueueRepository.enqueueDiagnosticScan(scan)
-                        _lastScanSummary.value = "✅ Hết lỗi ($now)"
+                        _lastScanSummary.value = "Hết lỗi ($now)"
                     } else {
-                        _lastScanSummary.value = "✅ 0 lỗi ($now)"
+                        _lastScanSummary.value = "0 lỗi ($now)"
                     }
                 }
             } else if (!auto) {
-                _lastScanSummary.value = if (codes.isEmpty()) "✅ 0 lỗi" else "⚠ ${codes.size} lỗi (không đổi)"
+                _lastScanSummary.value = if (codes.isEmpty()) "0 lỗi (Hoàn hảo)" else "⚠ ${codes.size} lỗi (không đổi)"
             }
 
             lastMilOn = milOn

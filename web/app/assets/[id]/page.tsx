@@ -2752,7 +2752,7 @@ export default function AssetDetailPage() {
                     borderColor: 'rgba(16,185,129,0.25)',
                     gradId: 'grad-coolant',
                     gradColors: live.coolant != null && live.coolant > 100 ? ['#F59E0B', '#EF4444'] as [string, string] : ['#10B981', '#06B6D4'] as [string, string],
-                    subLabel: live.coolant == null ? 'Chờ tín hiệu OBD...' : live.coolant < 60 ? '🔵 Đang làm nóng máy' : live.coolant <= 95 ? '✅ Nhiệt độ tối ưu' : live.coolant <= 105 ? '🟠 Quạt gió làm việc' : '🔴 Cảnh báo quá nhiệt!',
+                    subLabel: live.coolant == null ? 'Chờ tín hiệu OBD...' : live.coolant < 60 ? '🔵 Đang làm nóng máy' : live.coolant <= 95 ? '🟢 Nhiệt độ tối ưu' : live.coolant <= 105 ? '🟠 Quạt gió làm việc' : '🔴 Cảnh báo quá nhiệt!',
                   },
                   {
                     label: 'Điện áp bình ắc quy',
@@ -4585,7 +4585,7 @@ export default function AssetDetailPage() {
                   const formatted = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
                   if (diff < 0) return `${formatted} (⚠️ Quá hạn ${Math.abs(diff)} ngày)`;
                   if (diff <= 30) return `${formatted} (🟡 Còn ${diff} ngày)`;
-                  return `${formatted} (✅ Còn ${diff} ngày)`;
+                  return `${formatted} (🟢 Còn ${diff} ngày)`;
                 })()],
               ] as [string, string][]).map(([k, v], i) => (
                 <div key={i} className="flex justify-between">
@@ -5253,7 +5253,7 @@ export default function AssetDetailPage() {
                   const today = new Date();
                   const diff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                   const color = diff < 0 ? 'var(--status-rose)' : diff <= 7 ? 'var(--status-amber)' : 'var(--status-green)';
-                  const text = diff < 0 ? `⚠️ Quá hạn ${Math.abs(diff)} ngày` : diff === 0 ? '🔴 Hôm nay!' : diff <= 7 ? `🟠 Còn ${diff} ngày` : `✅ Còn ${diff} ngày`;
+                  const text = diff < 0 ? `⚠️ Quá hạn ${Math.abs(diff)} ngày` : diff === 0 ? '🔴 Hôm nay!' : diff <= 7 ? `🟠 Còn ${diff} ngày` : `🟢 Còn ${diff} ngày`;
                   return <p className="text-xs font-bold mt-1" style={{ color }}>{text}</p>;
                 })()}
               </div>

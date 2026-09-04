@@ -30,6 +30,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import android.graphics.Paint
 import java.util.Locale
 
@@ -257,6 +258,7 @@ fun DonutChart(
     centerValue: String,
     modifier: Modifier = Modifier.fillMaxWidth().height(180.dp),
 ) {
+    val colors = LocalFmmsColors.current
     val total = data.sumOf { it.amount }
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -283,8 +285,8 @@ fun DonutChart(
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(centerLabel, color = Color.White.copy(alpha = 0.55f), fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text(centerValue, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black, maxLines = 1)
+            Text(centerLabel, color = colors.textSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(centerValue, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Black, maxLines = 1)
         }
     }
 }
