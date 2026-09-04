@@ -42,11 +42,7 @@ export default function FuelPage() {
   const [loading, setLoading] = useState(true);
   const [assetFilter, setAssetFilter] = useState<string>('ALL');
   const [toast, setToast] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
-  };
+  const [chartMode, setChartMode] = useState<'COMBINED' | 'PRICE_TREND'>('COMBINED');
 
   const reload = async () => {
     try {
@@ -72,7 +68,53 @@ export default function FuelPage() {
   const [sortCol, setSortCol] = useState<string>('date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  const filteredLogs = assetFilter === 'ALL' ? logs : logs.filter(l => l.asset_id === assetFilter || l.vehicle_id === assetFilter);
+  // Enrich logs with computed ODO delta and L/100km for historical entries
+  const enrichedLogs = useMemo(() => {
+    const byAsset: Record<string, any[]> = {};
+    logs.forEach(l => {
+      const key = l.asset_id || l.vehicle_id || 'DEFAULT';
+      if (!byAsset[key]) byAsset[key] = [];
+      byAsset[key].push({ ...l });
+    });
+
+    const flat: any[] = [];
+    Object.values(byAsset).forEach(assetList => {
+      // Sort chronologically ascending
+      assetList.sort((a, b) => {
+        const odoA = Number(a.odometer_km) || 0;
+        const odoB = Number(b.odometer_km) || 0;
+        if (odoA !== odoB) return odoA - odoB;
+        return (a.date || a.timestamp || '').localeCompare(b.date || b.timestamp || '');
+      });
+
+      for (let i = 0; i < assetList.length; i++) {
+        const item = assetList[i];
+        if (i > 0) {
+          const prev = assetList[i - 1];
+          const prevOdo = Number(prev.odometer_km) || 0;
+          const curOdo = Number(item.odometer_km) || 0;
+          const deltaOdo = curOdo - prevOdo;
+
+          if (!item.prev_odometer_km && prevOdo > 0 && deltaOdo > 0) {
+            item.prev_odometer_km = prevOdo;
+          }
+
+          if (item.consumption_l100km == null && deltaOdo > 0) {
+            const liters = Number(item.fuel_liters ?? item.liters) || 0;
+            if (liters > 0) {
+              item.consumption_l100km = Number(((liters / deltaOdo) * 100).toFixed(2));
+              item.fuel_consumed_liters = liters;
+            }
+          }
+        }
+        flat.push(item);
+      }
+    });
+
+    return flat;
+  }, [logs]);
+
+  const filteredLogs = assetFilter === 'ALL' ? enrichedLogs : enrichedLogs.filter(l => l.asset_id === assetFilter || l.vehicle_id === assetFilter);
 
   const displayedLogs = useMemo(() => {
     return [...filteredLogs].sort((a, b) => {
@@ -159,6 +201,7 @@ export default function FuelPage() {
 
   const totalFuel = filteredLogs.reduce((s, f) => s + (f.total_cost || (parseFloat(f.fuel_liters ?? f.liters) * parseFloat(f.price_per_liter))), 0);
   const totalLiters = filteredLogs.reduce((s, f) => s + parseFloat(f.fuel_liters ?? f.liters ?? 0), 0);
+  const avgFuelPrice = totalLiters > 0 ? Math.round(totalFuel / totalLiters) : 0;
 
 
   const sorted = [...filteredLogs].sort((x, y) => new Date(x.date ?? x.timestamp).getTime() - new Date(y.date ?? y.timestamp).getTime());
@@ -366,68 +409,137 @@ export default function FuelPage() {
 
       {/* 📊 BIỂU ĐỒ THEO DÕI NHIÊN LIỆU THEO THÁNG */}
       {monthlyFuelData.length > 0 && (
-        <div className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
+        <div className="p-5 rounded-2xl space-y-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm" style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
                 <Fuel className="w-4 h-4 text-amber-400" />
               </div>
               <div>
-                <h3 className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
-                  Biểu Đồ Nhiên Liệu &amp; Đơn Giá Trung Bình Theo Tháng
+                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Phân Tích Nhiên Liệu &amp; Đơn Giá Theo Tháng
                 </h3>
-                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                  Cột: Tổng Lít (hoặc kWh) • Cột: Tổng Tiền (₫) • Đường: Đơn Giá TB (₫/L hoặc ₫/kWh)
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {chartMode === 'COMBINED'
+                    ? 'So sánh tổng chi phí nhiên liệu (₫) và tổng số lít (L) tiêu thụ mỗi tháng'
+                    : 'Biến động đơn giá trung bình (₫/L) qua từng chu kỳ đổ xăng'}
                 </p>
               </div>
             </div>
-            <div className="text-right">
-              <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>Tổng chi kỳ này: </span>
-              <strong className="text-xs text-amber-500 dark:text-amber-400 font-mono">{fmt(totalFuel)} ₫</strong>
+
+            {/* Mode Switch & Summary Badges */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center p-1 rounded-xl" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)' }}>
+                <button
+                  onClick={() => setChartMode('COMBINED')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${chartMode === 'COMBINED' ? 'bg-amber-500/20 text-amber-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" /> Chi phí &amp; Lít
+                </button>
+                <button
+                  onClick={() => setChartMode('PRICE_TREND')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${chartMode === 'PRICE_TREND' ? 'bg-emerald-500/20 text-emerald-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                >
+                  <TrendingDown className="w-3.5 h-3.5" /> Xu hướng Giá (₫/L)
+                </button>
+              </div>
+
+              <div className="hidden sm:flex items-center gap-2 pl-2 border-l" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--status-amber)' }}>
+                  Tổng: <strong>{fmt(totalFuel)} ₫</strong>
+                </span>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-cyan)' }}>
+                  Tổng: <strong>{totalLiters.toFixed(1)} L</strong>
+                </span>
+                {avgFuelPrice > 0 && (
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--status-green)' }}>
+                    Đơn giá TB: <strong>{fmt(avgFuelPrice)} ₫/L</strong>
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div style={{ height: 260 }}>
+          <div style={{ height: 270 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={monthlyFuelData} margin={{ top: 10, right: 20, left: -5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
-                <YAxis
-                  yAxisId="cost"
-                  tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'}
-                  tick={{ fill: axisColor, fontSize: 10 }}
-                  axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }}
-                  tickLine={false}
-                  width={45}
-                />
-                <YAxis
-                  yAxisId="liters"
-                  orientation="right"
-                  tickFormatter={v => v > 0 ? `${Math.round(v)}L` : '0'}
-                  tick={{ fill: axisColor, fontSize: 10 }}
-                  axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }}
-                  tickLine={false}
-                  width={45}
-                />
-                <ReTooltip
-                  formatter={(v: number, name: string) => {
-                    if (name === 'Tổng tiền') return [`${fmt(v)} ₫`, name];
-                    if (name === 'Số lượng (L/kWh)') return [`${v} L`, name];
-                    if (name === 'Đơn giá TB') return [`${fmt(v)} ₫/L`, name];
-                    return [v, name];
-                  }}
-                  contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
-                />
-                <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-
-                <Bar yAxisId="cost" dataKey="cost" name="Tổng tiền" fill="rgba(245,158,11,0.45)" stroke="#F59E0B" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="liters" dataKey="liters" name="Số lượng (L/kWh)" fill="rgba(6,182,212,0.35)" stroke="#06B6D4" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
-                <Line yAxisId="cost" type="monotone" dataKey="avgPrice" name="Đơn giá TB" stroke="#10B981" strokeWidth={2.5} dot={{ fill: '#10B981', r: 3.5 }} />
-              </ComposedChart>
+              {chartMode === 'COMBINED' ? (
+                <ComposedChart data={monthlyFuelData} margin={{ top: 15, right: 15, left: -5, bottom: 5 }} barGap={6}>
+                  <defs>
+                    <linearGradient id="fuelCostGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#D97706" stopOpacity={0.3} />
+                    </linearGradient>
+                    <linearGradient id="fuelLitersGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#06B6D4" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#0284C7" stopOpacity={0.3} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} tickLine={false} />
+                  <YAxis
+                    yAxisId="cost"
+                    tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'}
+                    tick={{ fill: axisColor, fontSize: 10 }}
+                    axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+                    tickLine={false}
+                    width={45}
+                  />
+                  <YAxis
+                    yAxisId="liters"
+                    orientation="right"
+                    tickFormatter={v => v > 0 ? `${Math.round(v)}L` : '0'}
+                    tick={{ fill: axisColor, fontSize: 10 }}
+                    axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+                    tickLine={false}
+                    width={45}
+                  />
+                  <ReTooltip
+                    formatter={(v: number, name: string) => {
+                      if (name === 'Tổng chi phí') return [`${fmt(v)} ₫`, name];
+                      if (name === 'Tổng số lít') return [`${v} L`, name];
+                      return [v, name];
+                    }}
+                    contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' }}
+                  />
+                  <Legend
+                    formatter={v => <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold px-2">{v}</span>}
+                    wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
+                  />
+                  <Bar yAxisId="cost" dataKey="cost" name="Tổng chi phí" fill="url(#fuelCostGrad)" stroke="#F59E0B" strokeWidth={1} barSize={22} radius={[6, 6, 0, 0]} />
+                  <Bar yAxisId="liters" dataKey="liters" name="Tổng số lít" fill="url(#fuelLitersGrad)" stroke="#06B6D4" strokeWidth={1} barSize={22} radius={[6, 6, 0, 0]} />
+                </ComposedChart>
+              ) : (
+                <ComposedChart data={monthlyFuelData} margin={{ top: 15, right: 20, left: 10, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="priceAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#10B981" stopOpacity={0.4} />
+                      <stop offset="100%" stopColor="#10B981" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }} tickLine={false} />
+                  <YAxis
+                    domain={['dataMin - 1500', 'dataMax + 1500']}
+                    tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                    tick={{ fill: axisColor, fontSize: 10 }}
+                    axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}
+                    tickLine={false}
+                    width={45}
+                  />
+                  <ReTooltip
+                    formatter={(v: number, name: string) => [`${fmt(v)} ₫ / Lít`, 'Đơn giá trung bình']}
+                    contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' }}
+                  />
+                  <Legend
+                    formatter={v => <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold px-2">{v}</span>}
+                    wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
+                  />
+                  <Area type="monotone" dataKey="avgPrice" name="Đơn giá TB (₫/L)" fill="url(#priceAreaGrad)" stroke="#10B981" strokeWidth={3} dot={{ fill: '#10B981', r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} activeDot={{ r: 7 }} />
+                </ComposedChart>
+              )}
             </ResponsiveContainer>
           </div>
         </div>
-
       )}
 
       {/* Fuel Log Table with Edit & Delete */}

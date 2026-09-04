@@ -810,7 +810,38 @@ export default function AssetDetailPage() {
 
 
   const displayedFuelLogs = useMemo(() => {
-    let list = fuelLogs;
+    // 1. Sort ascending to compute historical delta ODO & consumption
+    const sortedAsc = [...fuelLogs].sort((a, b) => {
+      const odoA = Number(a.odometer_km) || 0;
+      const odoB = Number(b.odometer_km) || 0;
+      if (odoA !== odoB) return odoA - odoB;
+      return (a.date || '').localeCompare(b.date || '');
+    });
+
+    const enriched = sortedAsc.map((item, i) => {
+      const cur = { ...item };
+      if (i > 0) {
+        const prev = sortedAsc[i - 1];
+        const prevOdo = Number(prev.odometer_km) || 0;
+        const curOdo = Number(cur.odometer_km) || 0;
+        const deltaOdo = curOdo - prevOdo;
+
+        if (!cur.prev_odometer_km && prevOdo > 0 && deltaOdo > 0) {
+          cur.prev_odometer_km = prevOdo;
+        }
+
+        if (cur.consumption_l100km == null && deltaOdo > 0) {
+          const liters = Number(cur.liters) || 0;
+          if (liters > 0) {
+            cur.consumption_l100km = Number(((liters / deltaOdo) * 100).toFixed(2));
+            cur.fuel_consumed_liters = liters;
+          }
+        }
+      }
+      return cur;
+    });
+
+    let list = enriched;
     if (tabStartDate) list = list.filter(f => f.date && f.date.slice(0, 10) >= tabStartDate);
     if (tabEndDate) list = list.filter(f => f.date && f.date.slice(0, 10) <= tabEndDate);
     return [...list].sort((a, b) => {
@@ -3471,10 +3502,30 @@ export default function AssetDetailPage() {
                       <td className="px-3 py-2.5 font-bold" style={{ color: 'var(--accent-cyan)' }}>{f.liters}L</td>
                       <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)' }}>{fmt(f.price_per_liter)}₫</td>
                       <td className="px-3 py-2.5 font-bold" style={{ color: 'var(--status-amber)' }}>{fmt(f.total_cost)}₫</td>
-                      <td className="px-3 py-2.5" style={{ color: 'var(--text-muted)' }}>{fmt(f.odometer_km)} km</td>
-                      <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)' }}>{f.station}</td>
-                      <td className="px-3 py-2.5" style={{ color: f.consumption_l100km && f.consumption_l100km > 7.5 ? 'var(--status-red)' : 'var(--status-green)' }}>
-                        {f.consumption_l100km ? `${f.consumption_l100km}L` : '—'}
+                      <td className="px-3 py-2.5" style={{ color: 'var(--text-muted)' }}>
+                        <span className="font-mono">{fmt(f.odometer_km)} km</span>
+                        {f.prev_odometer_km != null && f.odometer_km > f.prev_odometer_km && (
+                          <span className="text-[10px] text-cyan-500 font-mono block">
+                            +{Math.round(f.odometer_km - f.prev_odometer_km)} km
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)' }}>{f.station || '—'}</td>
+                      <td className="px-3 py-2.5 font-semibold">
+                        {f.consumption_l100km ? (
+                          <div>
+                            <span style={{ color: f.consumption_l100km > 7.5 ? 'var(--status-amber)' : 'var(--status-green)' }} className="font-bold">
+                              {f.consumption_l100km.toFixed(1)} L/100km
+                            </span>
+                            {f.fuel_consumed_liters != null && (
+                              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                                {f.fuel_consumed_liters.toFixed(1)}L {f.fuel_level_before_pct != null ? `(${f.fuel_level_before_pct.toFixed(0)}% ➔ ${f.fuel_level_after_pct?.toFixed(0)}%)` : ''}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center space-x-1">
