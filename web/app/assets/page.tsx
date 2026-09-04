@@ -122,7 +122,7 @@ export default function AssetsPage() {
     setSecurityModal({
       isOpen: true,
       title: `Xác thực XÓA PHƯƠNG TIỆN "${a.name}" (Admin PIN)`,
-      description: `CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn xe "${a.name}" (${a.license_plate || a.brand}) cùng toàn bộ dữ liệu lịch sử vận hành, bảo dưỡng, chi phí, khoản vay. Hành động này KHÔNG THỂ HOÀN TÁC. Vui lòng nhập mã PIN Admin (0075) để xác nhận.`,
+      description: `CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn xe "${a.name}" (${a.license_plate || a.brand}) cùng toàn bộ dữ liệu lịch sử vận hành, bảo dưỡng, chi phí, khoản vay. Hành động này KHÔNG THỂ HOÀN TÁC. Vui lòng nhập mã PIN Quản trị viên để xác nhận.`,
       actionName: 'Xóa vĩnh viễn xe',
       onConfirm: async () => {
         try {
@@ -329,7 +329,7 @@ export default function AssetsPage() {
                       <button
                         onClick={() => handleDeleteAsset(asset)}
                         className="p-1 rounded-lg text-rose-400 hover:bg-rose-500/15 transition border border-rose-500/20"
-                        title="Xóa phương tiện (Yêu cầu mã PIN 0075)"
+                        title="Xóa phương tiện (Yêu cầu mã PIN Quản trị viên)"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

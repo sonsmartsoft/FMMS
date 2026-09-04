@@ -1957,13 +1957,13 @@ export default function AssetDetailPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Hợp Đồng Bảo Hiểm (Admin PIN)',
-      description: 'Xác nhận xóa hợp đồng bảo hiểm này khỏi hồ sơ phương tiện. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      description: 'Xác nhận xóa hợp đồng bảo hiểm này khỏi hồ sơ phương tiện. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.',
       actionName: 'Xác nhận xóa bảo hiểm',
       onConfirm: async () => {
         try {
           await deleteInsurancePolicy(id);
           setInsurances(prev => prev.filter(i => i.id !== id));
-          showToast('✅ Đã xóa hợp đồng bảo hiểm');
+          showToast('Đã xóa hợp đồng bảo hiểm');
         } catch (err: any) {
           alert(`Lỗi khi xóa: ${err?.message ?? 'Không xóa được'}`);
         }
@@ -1990,13 +1990,13 @@ export default function AssetDetailPage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Sổ Bảo Hành (Admin PIN)',
-      description: 'Xác nhận xóa sổ bảo hành này khỏi danh sách. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      description: 'Xác nhận xóa sổ bảo hành này khỏi danh sách. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.',
       actionName: 'Xác nhận xóa bảo hành',
       onConfirm: async () => {
         try {
           await deleteWarranty(id);
           setWarranties(prev => prev.filter(w => w.id !== id));
-          showToast('✅ Đã xóa sổ bảo hành');
+          showToast('Đã xóa sổ bảo hành');
         } catch (err: any) {
           alert(`Lỗi khi xóa: ${err?.message ?? 'Không xóa được'}`);
         }
@@ -2009,7 +2009,7 @@ export default function AssetDetailPage() {
     setSecurityModal({
       isOpen: true,
       title: `Xác thực XÓA VĨNH VIỄN XE "${asset.name}" (Admin PIN)`,
-      description: `CẢNH BÁO CỰC KỲ NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn xe "${asset.name}" (${asset.license_plate || asset.brand}) cùng toàn bộ dữ liệu lịch sử vận hành, chi phí, khoản vay, bảo dưỡng và bảo hiểm. Hành động này KHÔNG THỂ HOÀN TÁC. Vui lòng nhập mã PIN Admin (0075) để xác nhận.`,
+      description: `CẢNH BÁO CỰC KỲ NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn xe "${asset.name}" (${asset.license_plate || asset.brand}) cùng toàn bộ dữ liệu lịch sử vận hành, chi phí, khoản vay, bảo dưỡng và bảo hiểm. Hành động này KHÔNG THỂ HOÀN TÁC. Vui lòng nhập mã PIN Quản trị viên để xác nhận.`,
       actionName: 'Xóa vĩnh viễn xe này',
       onConfirm: async () => {
         try {
@@ -2323,7 +2323,7 @@ export default function AssetDetailPage() {
           <button onClick={handleDeleteVehicle}
             className="flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition hover:bg-rose-500/20"
             style={{ background: 'rgba(244,63,94,0.12)', color: 'var(--status-rose)', border: '1px solid rgba(244,63,94,0.3)' }}
-            title="Xóa vĩnh viễn phương tiện (Yêu cầu mã PIN 0075)"
+            title="Xóa vĩnh viễn phương tiện (Yêu cầu mã PIN Quản trị viên)"
           >
             <Trash2 className="w-3.5 h-3.5" /><span>Xóa xe</span>
           </button>

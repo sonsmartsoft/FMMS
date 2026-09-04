@@ -544,7 +544,7 @@ export default function FinancePage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Khoản Chi Phí (Admin PIN)',
-      description: 'Hành động này sẽ xóa vĩnh viễn bản ghi chi phí đã chọn khỏi hệ thống sổ sách gia đình. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      description: 'Hành động này sẽ xóa vĩnh viễn bản ghi chi phí đã chọn khỏi hệ thống sổ sách gia đình. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.',
       actionName: 'Xác nhận xóa chi phí',
       onConfirm: async () => {
         try {
@@ -638,7 +638,7 @@ export default function FinancePage() {
     setSecurityModal({
       isOpen: true,
       title: 'Xác thực Xóa Khoản Vay (Admin PIN)',
-      description: 'CẢNH BÁO: Hành động này sẽ xóa vĩnh viễn cấu hình khoản vay, bảng phân bổ 60 kỳ và các chi phí liên quan. Vui lòng nhập mã PIN Admin (0075) để tiếp tục.',
+      description: 'CẢNH BÁO: Hành động này sẽ xóa vĩnh viễn cấu hình khoản vay, bảng phân bổ 60 kỳ và các chi phí liên quan. Vui lòng nhập mã PIN Quản trị viên để tiếp tục.',
       actionName: 'Xóa vĩnh viễn khoản vay',
       onConfirm: async () => {
         try {
