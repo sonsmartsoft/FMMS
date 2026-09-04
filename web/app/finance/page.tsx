@@ -136,7 +136,11 @@ export default function FinancePage() {
     lender: 'Ngân hàng Techcombank',
     principal: '400000000',
     down_payment: '0',
+    loan_ratio_percent: '80',
     interest_rate_percent: '8.5',
+    preferred_rate_percent: '7.5',
+    preferred_months: '12',
+    floating_rate_percent: '11.5',
     term_months: '36',
     start_date: new Date().toISOString().slice(0, 10),
     monthly_payment: '',
@@ -271,14 +275,15 @@ export default function FinancePage() {
   // Auto-calculate monthly payment (EMI formula)
   const calculatedMonthly = useMemo(() => {
     const p = parseFloat(loanForm.principal) || 0;
-    const r = (parseFloat(loanForm.interest_rate_percent) || 0) / 100 / 12;
+    const prefRate = parseFloat(loanForm.preferred_rate_percent) || parseFloat(loanForm.interest_rate_percent) || 8.5;
+    const r = prefRate / 100 / 12;
     const n = parseInt(loanForm.term_months) || 12;
     if (p > 0 && r > 0 && n > 0) {
       const emi = (p * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
       return Math.round(emi);
     }
     return 0;
-  }, [loanForm.principal, loanForm.interest_rate_percent, loanForm.term_months]);
+  }, [loanForm.principal, loanForm.preferred_rate_percent, loanForm.interest_rate_percent, loanForm.term_months]);
 
   const loanSchedule = useMemo(() => {
     const sched = selectedLoan ? generateLoanSchedule(selectedLoan, payments) : [];
@@ -559,12 +564,19 @@ export default function FinancePage() {
 
   const openAddLoan = () => {
     setEditingLoan(null);
+    const firstAsset = assets[0];
+    const initialPrincipal = firstAsset?.purchase_price ? Math.round(firstAsset.purchase_price * 0.8) : 400000000;
+    const initialDown = firstAsset?.purchase_price ? Math.round(firstAsset.purchase_price * 0.2) : 100000000;
     setLoanForm({
-      asset_id: assets[0]?.id || '',
+      asset_id: firstAsset?.id || '',
       lender: 'Ngân hàng Techcombank',
-      principal: '400000000',
-      down_payment: '0',
-      interest_rate_percent: '8.5',
+      principal: String(initialPrincipal),
+      down_payment: String(initialDown),
+      loan_ratio_percent: '80',
+      interest_rate_percent: '7.5',
+      preferred_rate_percent: '7.5',
+      preferred_months: '12',
+      floating_rate_percent: '11.5',
       term_months: '36',
       start_date: new Date().toISOString().slice(0, 10),
       monthly_payment: '',
@@ -579,15 +591,21 @@ export default function FinancePage() {
 
   const openEditLoan = (l: LoanRow) => {
     setEditingLoan(l);
+    const targetAsset = assets.find(a => a.id === l.asset_id);
+    const calculatedRatio = targetAsset?.purchase_price ? Math.round((l.principal / targetAsset.purchase_price) * 100) : 80;
     setLoanForm({
       asset_id: l.asset_id,
-      lender: l.lender || '',
+      lender: l.lender || 'Ngân hàng',
       principal: String(l.principal),
       down_payment: String(l.down_payment ?? 0),
-      interest_rate_percent: String(l.interest_rate_percent),
-      term_months: String(l.term_months),
+      loan_ratio_percent: String(l.loan_ratio_percent || calculatedRatio),
+      interest_rate_percent: String(l.interest_rate_percent || 8.5),
+      preferred_rate_percent: String(l.preferred_rate_percent || l.interest_rate_percent || 7.5),
+      preferred_months: String(l.preferred_months || 12),
+      floating_rate_percent: String(l.floating_rate_percent || 11.5),
+      term_months: String(l.term_months || 36),
       start_date: l.start_date ? l.start_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
-      monthly_payment: String(l.monthly_payment),
+      monthly_payment: String(l.monthly_payment || ''),
       payment_day: String(l.payment_day || 15),
       bank_contact_name: l.bank_contact_name || '',
       bank_contact_phone: l.bank_contact_phone || '',
@@ -601,12 +619,20 @@ export default function FinancePage() {
     const p = parseFloat(loanForm.principal) || 0;
     const m = parseFloat(loanForm.monthly_payment) || calculatedMonthly;
     const dp = loanForm.down_payment !== '' && !isNaN(Number(loanForm.down_payment)) ? Math.max(0, Number(loanForm.down_payment)) : 0;
+    const prefRate = parseFloat(loanForm.preferred_rate_percent) || parseFloat(loanForm.interest_rate_percent) || 8.5;
+    const targetAsset = assets.find(a => a.id === loanForm.asset_id);
+    const calculatedRatio = targetAsset?.purchase_price ? Math.round((p / targetAsset.purchase_price) * 100) : 80;
+
     const input = {
       asset_id: loanForm.asset_id || assets[0]?.id,
       lender: loanForm.lender || 'Ngân hàng',
       principal: p,
       down_payment: dp,
-      interest_rate_percent: parseFloat(loanForm.interest_rate_percent) || 8.5,
+      loan_ratio_percent: parseFloat(loanForm.loan_ratio_percent) || calculatedRatio,
+      interest_rate_percent: prefRate,
+      preferred_rate_percent: parseFloat(loanForm.preferred_rate_percent) || undefined,
+      preferred_months: parseInt(loanForm.preferred_months) || undefined,
+      floating_rate_percent: parseFloat(loanForm.floating_rate_percent) || undefined,
       term_months: parseInt(loanForm.term_months) || 36,
       start_date: loanForm.start_date || new Date().toISOString().slice(0, 10),
       monthly_payment: m,
@@ -1710,10 +1736,44 @@ export default function FinancePage() {
                 </div>
               </div>
 
-              {/* Section 2: Gốc vay & Lãi suất */}
+              {/* Section 2: Gốc vay & Lãi suất 2 giai đoạn */}
               <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">2. Số tiền vay &amp; Lãi suất trả góp</h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">2. Số tiền vay &amp; Lãi suất 2 giai đoạn (Ưu đãi &amp; Thả nổi)</h4>
+
+                {/* Quick % Loan Ratio calculation */}
+                {(() => {
+                  const targetAsset = assets.find(a => a.id === loanForm.asset_id);
+                  if (!targetAsset || !targetAsset.purchase_price || targetAsset.purchase_price <= 0) return null;
+                  return (
+                    <div className="space-y-2 p-3 rounded-xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)' }}>
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-[11px] uppercase text-cyan-400">Chọn nhanh % Vay (Giá xe: {fmt(targetAsset.purchase_price)} ₫)</span>
+                        <span className="font-mono font-bold text-cyan-400">{loanForm.loan_ratio_percent}% Vay</span>
+                      </div>
+                      <div className="flex space-x-2">
+                        {[70, 75, 80, 85].map(r => (
+                          <button
+                            key={r}
+                            type="button"
+                            onClick={() => {
+                              const pr = Math.round(targetAsset.purchase_price * (r / 100));
+                              const down = targetAsset.purchase_price - pr;
+                              setLoanForm(p => ({ ...p, principal: String(pr), down_payment: String(down), loan_ratio_percent: String(r) }));
+                            }}
+                            className="flex-1 py-1.5 rounded-lg text-xs font-bold transition"
+                            style={parseFloat(loanForm.loan_ratio_percent) === r
+                              ? { background: 'var(--accent-cyan)', color: 'white' }
+                              : { background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
+                          >
+                            {r}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Gốc vay (₫) *</label>
                     <input type="number" className="theme-input font-mono font-bold text-cyan-400" placeholder="400000000" value={loanForm.principal} onChange={e => setLoanForm(p => ({ ...p, principal: e.target.value }))} />
@@ -1722,27 +1782,59 @@ export default function FinancePage() {
                     <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Trả trước (₫)</label>
                     <input type="number" className="theme-input font-mono" placeholder="100000000" value={loanForm.down_payment} onChange={e => setLoanForm(p => ({ ...p, down_payment: e.target.value }))} />
                   </div>
+                </div>
+
+                {/* 2-Tier Rate Config Card */}
+                <div className="grid grid-cols-3 gap-2 p-3 rounded-xl" style={{ background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.25)' }}>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Lãi suất (%/năm) *</label>
-                    <input type="number" step="0.1" className="theme-input font-mono" placeholder="8.5" value={loanForm.interest_rate_percent} onChange={e => setLoanForm(p => ({ ...p, interest_rate_percent: e.target.value }))} />
+                    <label className="font-bold text-[10px] uppercase text-emerald-400">Lãi ưu đãi %/năm *</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="theme-input font-mono font-bold"
+                      placeholder="7.5"
+                      value={loanForm.preferred_rate_percent}
+                      onChange={e => setLoanForm(p => ({ ...p, preferred_rate_percent: e.target.value, interest_rate_percent: e.target.value }))}
+                    />
                   </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-[10px] uppercase text-emerald-400">Số tháng ưu đãi</label>
+                    <input
+                      type="number"
+                      className="theme-input font-mono"
+                      placeholder="12"
+                      value={loanForm.preferred_months}
+                      onChange={e => setLoanForm(p => ({ ...p, preferred_months: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="font-bold text-[10px] uppercase text-amber-400">Lãi thả nổi %/năm</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      className="theme-input font-mono font-bold"
+                      placeholder="11.5"
+                      value={loanForm.floating_rate_percent}
+                      onChange={e => setLoanForm(p => ({ ...p, floating_rate_percent: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="space-y-1">
                     <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Kỳ hạn (tháng) *</label>
                     <input type="number" className="theme-input font-mono" placeholder="36" value={loanForm.term_months} onChange={e => setLoanForm(p => ({ ...p, term_months: e.target.value }))} />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                   <div className="space-y-1">
                     <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Ngày bắt đầu vay *</label>
                     <input type="date" className="theme-input" value={loanForm.start_date} onChange={e => setLoanForm(p => ({ ...p, start_date: e.target.value }))} />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Hạn đóng định kỳ (Ngày)</label>
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Hạn đóng (Ngày)</label>
                     <input type="number" min="1" max="31" className="theme-input font-mono" placeholder="15" value={loanForm.payment_day} onChange={e => setLoanForm(p => ({ ...p, payment_day: e.target.value }))} />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Số tiền trả hàng tháng (₫)</label>
+                    <label className="text-[11px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Trả hàng tháng (₫)</label>
                     <input
                       type="number"
                       className="theme-input font-mono font-bold text-emerald-400"

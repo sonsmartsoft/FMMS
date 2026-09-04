@@ -1358,7 +1358,6 @@ export default function AssetDetailPage() {
     { id: 'maintenance', label: 'Bảo dưỡng', show: asset.capabilities.has_maintenance || asset.asset_type === 'CAR', icon: Wrench },
     { id: 'parts', label: 'Phụ tùng & Nâng cấp', show: asset.capabilities.has_parts || asset.asset_type === 'CAR', icon: Layers },
     { id: 'expenses', label: 'Chi phí', show: true, icon: DollarSign },
-    { id: 'finance', label: 'Khoản vay', show: asset.capabilities.has_finance || asset.asset_type === 'CAR', icon: CreditCard },
     { id: 'insurance', label: 'Bảo hiểm & Giấy tờ', show: asset.capabilities.has_documents || asset.asset_type === 'CAR', icon: Shield },
     { id: 'diagnostics', label: 'Chẩn đoán', show: asset.capabilities.has_obd || asset.asset_type === 'CAR' || asset.asset_type === 'MOTORCYCLE' || asset.asset_type === 'MOTORBIKE', icon: ShieldAlert },
     { id: 'warranty', label: 'Bảo hành & Claim', show: true, icon: Award },
@@ -4016,25 +4015,46 @@ export default function AssetDetailPage() {
                 const d = e.date || '';
                 if (!d) return;
                 const mKey = d.slice(0, 7);
-                const cat = (e.category || 'Other').toUpperCase();
                 const prev = map.get(mKey) || {
                   monthKey: mKey,
                   label: `T${parseInt(mKey.slice(5))}/${mKey.slice(2, 4)}`,
+                  purchase: 0,
                   fuel: 0,
                   maint: 0,
                   upgrade: 0,
                   ins: 0,
                   loan: 0,
+                  running: 0,
                   other: 0,
                   total: 0,
                 };
+                const cat = (e.category || 'Other').toUpperCase();
+                const sub = (e.subcategory || '').toUpperCase();
+                const desc = (e.description || '').toUpperCase();
                 const amt = e.amount || 0;
-                if (cat === 'FUEL' || cat === 'RUNNING') prev.fuel += amt;
-                else if (cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR') prev.maint += amt;
-                else if (cat === 'UPGRADE') prev.upgrade += amt;
-                else if (cat === 'INSURANCE' || cat === 'INITIAL' || cat === 'REGISTRATION') prev.ins += amt;
-                else if (cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST') prev.loan += amt;
-                else prev.other += amt;
+
+                // 1. Chi phí mua xe & Lăn bánh ban đầu
+                if (
+                  cat === 'INITIAL' || cat === 'PURCHASE' || cat === 'DOWN_PAYMENT' ||
+                  (sub.includes('REGISTRATION') && (desc.includes('TRƯỚC BẠ') || desc.includes('BIỂN SỐ') || desc.includes('LĂN BÁNH') || desc.includes('MUA XE'))) ||
+                  desc.includes('LĂN BÁNH') || desc.includes('TRẢ TRƯỚC') || desc.includes('TRƯỚC BẠ') || desc.includes('MUA XE') || desc.includes('CẤP BIỂN')
+                ) {
+                  prev.purchase += amt;
+                } else if (cat === 'FUEL' || sub.includes('FUEL') || sub.includes('XĂNG') || sub.includes('PIN')) {
+                  prev.fuel += amt;
+                } else if (cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR' || sub.includes('SERVICE') || sub.includes('BRAKE')) {
+                  prev.maint += amt;
+                } else if (cat === 'UPGRADE' || sub.includes('SCREEN') || sub.includes('TPMS') || sub.includes('ACCESSORIE')) {
+                  prev.upgrade += amt;
+                } else if (cat === 'INSURANCE' || cat === 'REGISTRATION' || sub.includes('REGISTRATION') || sub.includes('INSURANCE') || desc.includes('THÂN VỎ') || desc.includes('TNDS') || desc.includes('ĐĂNG KIỂM')) {
+                  prev.ins += amt;
+                } else if (cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST' || sub.includes('PAYMENT') || sub.includes('INTEREST') || desc.includes('LÃI VAY') || desc.includes('TRẢ GỐC')) {
+                  prev.loan += amt;
+                } else if (cat === 'RUNNING' || cat === 'TOLL' || cat === 'PARKING' || cat === 'CAR_WASH' || sub.includes('WASH') || sub.includes('PARKING') || sub.includes('TOLL') || desc.includes('RỬA XE') || desc.includes('GỬI XE') || desc.includes('EPASS') || desc.includes('BOT')) {
+                  prev.running += amt;
+                } else {
+                  prev.other += amt;
+                }
                 prev.total += amt;
                 map.set(mKey, prev);
               });
@@ -4042,41 +4062,47 @@ export default function AssetDetailPage() {
               const filteredSum = displayedExpenses.reduce((s, e) => s + e.amount, 0);
 
               const seriesDefs = [
+                { key: 'purchase', name: 'Mua xe & Lăn bánh ban đầu', color: '#3B82F6', grad: 'astPurchase' },
                 { key: 'fuel', name: 'Nhiên liệu & Pin', color: '#F59E0B', grad: 'astFuel' },
                 { key: 'maint', name: 'Bảo dưỡng & Phụ tùng', color: '#06B6D4', grad: 'astMaint' },
                 { key: 'upgrade', name: 'Đồ độ / Nâng cấp', color: '#8B5CF6', grad: 'astUpgrade' },
-                { key: 'ins', name: 'Bảo hiểm / Giấy tờ', color: '#10B981', grad: 'astIns' },
+                { key: 'ins', name: 'Bảo hiểm / Đăng kiểm', color: '#10B981', grad: 'astIns' },
                 { key: 'loan', name: 'Khoản vay & Lãi', color: '#EC4899', grad: 'astLoan' },
+                { key: 'running', name: 'Phí đỗ & Cầu đường', color: '#F97316', grad: 'astRunning' },
                 { key: 'other', name: 'Chi phí khác', color: '#64748B', grad: 'astOther' },
               ];
 
               if (chartData.length === 0) return null;
               return (
-                <div className="p-4 rounded-2xl space-y-2" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
-                        <Activity className="w-3.5 h-3.5" />
+                    <div className="flex items-center space-x-2">
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                        <BarChart3 className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400 flex items-center gap-2">
-                          <span>Biểu Đồ Vùng Xếp Chồng Chi Phí Theo Tháng</span>
+                        <h3 className="text-sm font-extrabold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                          <span>Biến Động Chi Phí Theo Tháng</span>
                           <span className="text-[9px] font-normal text-slate-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full lowercase">
                             (Bấm vào chú thích để bật/tắt danh mục)
                           </span>
-                        </p>
-                        <p className="text-[10px] text-slate-500 dark:text-zinc-400">
+                        </h3>
+                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                           Hiển thị {chartData.length} mốc tháng • Tổng chi: <strong className="text-slate-900 dark:text-white font-mono">{fmt(filteredSum)} ₫</strong> ({displayedExpenses.length} khoản chi)
                         </p>
                       </div>
                     </div>
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Đơn vị: Triệu ₫ (M)</span>
+                    <span className="text-[10px] font-mono text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
                   </div>
 
-                  <div style={{ height: 230 }}>
+                  <div style={{ height: 260 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
                         <defs>
+                          <linearGradient id="astPurchase" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.08}/>
+                          </linearGradient>
                           <linearGradient id="astFuel" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.75}/>
                             <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.08}/>
@@ -4097,14 +4123,18 @@ export default function AssetDetailPage() {
                             <stop offset="5%" stopColor="#EC4899" stopOpacity={0.75}/>
                             <stop offset="95%" stopColor="#EC4899" stopOpacity={0.08}/>
                           </linearGradient>
+                          <linearGradient id="astRunning" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#F97316" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#F97316" stopOpacity={0.08}/>
+                          </linearGradient>
                           <linearGradient id="astOther" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#64748B" stopOpacity={0.75}/>
                             <stop offset="95%" stopColor="#64748B" stopOpacity={0.08}/>
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                        <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
-                        <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} width={45} />
+                        <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} />
+                        <YAxis tickFormatter={v => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={45} />
                         <ReTooltip
                           formatter={(v: number, name: string) => [`${fmt(v)} ₫`, name]}
                           contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
@@ -4154,11 +4184,13 @@ export default function AssetDetailPage() {
                           )}
                         />
 
+                        <Area type="monotone" dataKey="purchase" stackId="exp" name="Mua xe & Lăn bánh ban đầu" stroke="#3B82F6" fill="url(#astPurchase)" strokeWidth={1.5} hide={hiddenExpKeys.includes('purchase')} />
                         <Area type="monotone" dataKey="fuel" stackId="exp" name="Nhiên liệu & Pin" stroke="#F59E0B" fill="url(#astFuel)" strokeWidth={1.5} hide={hiddenExpKeys.includes('fuel')} />
                         <Area type="monotone" dataKey="maint" stackId="exp" name="Bảo dưỡng & Phụ tùng" stroke="#06B6D4" fill="url(#astMaint)" strokeWidth={1.5} hide={hiddenExpKeys.includes('maint')} />
                         <Area type="monotone" dataKey="upgrade" stackId="exp" name="Đồ độ / Nâng cấp" stroke="#8B5CF6" fill="url(#astUpgrade)" strokeWidth={1.5} hide={hiddenExpKeys.includes('upgrade')} />
-                        <Area type="monotone" dataKey="ins" stackId="exp" name="Bảo hiểm / Giấy tờ" stroke="#10B981" fill="url(#astIns)" strokeWidth={1.5} hide={hiddenExpKeys.includes('ins')} />
+                        <Area type="monotone" dataKey="ins" stackId="exp" name="Bảo hiểm / Đăng kiểm" stroke="#10B981" fill="url(#astIns)" strokeWidth={1.5} hide={hiddenExpKeys.includes('ins')} />
                         <Area type="monotone" dataKey="loan" stackId="exp" name="Khoản vay & Lãi" stroke="#EC4899" fill="url(#astLoan)" strokeWidth={1.5} hide={hiddenExpKeys.includes('loan')} />
+                        <Area type="monotone" dataKey="running" stackId="exp" name="Phí đỗ & Cầu đường" stroke="#F97316" fill="url(#astRunning)" strokeWidth={1.5} hide={hiddenExpKeys.includes('running')} />
                         <Area type="monotone" dataKey="other" stackId="exp" name="Chi phí khác" stroke="#64748B" fill="url(#astOther)" strokeWidth={1.5} hide={hiddenExpKeys.includes('other')} />
                       </AreaChart>
                     </ResponsiveContainer>
