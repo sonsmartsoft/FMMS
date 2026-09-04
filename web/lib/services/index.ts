@@ -13,3 +13,4 @@ export * from './warrantyService';
 export * from './odometerService';
 export * from './userService';
 export * from './masterDataService';
+export * from './diagnosticService';

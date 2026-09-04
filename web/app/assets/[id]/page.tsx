@@ -26,6 +26,7 @@ import { getMasterMaintenanceCategories } from '@/lib/services/masterDataService
 import { createClient } from '@/lib/supabase/client';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
+import VehicleDiagnosticsTab from '@/components/assets/VehicleDiagnosticsTab';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 
@@ -34,6 +35,7 @@ import {
   Cpu, CheckCircle2, Plus, MapPin, Activity, Layers, Car, X, Pencil,
   Zap, Clock, TrendingDown, Shield, CreditCard, Award, Trash2, Edit2,
   SlidersHorizontal, Calendar, CalendarDays, CalendarRange, Search, Filter,
+  AlertTriangle, ShieldAlert,
 } from 'lucide-react';
 
 
@@ -1290,6 +1292,7 @@ export default function AssetDetailPage() {
     { id: 'expenses', label: 'Chi phí', show: true, icon: DollarSign },
     { id: 'finance', label: 'Khoản vay', show: asset.capabilities.has_finance, icon: CreditCard },
     { id: 'insurance', label: 'Bảo hiểm & Giấy tờ', show: asset.capabilities.has_documents, icon: Shield },
+    { id: 'diagnostics', label: 'Mã lỗi & Chẩn đoán', show: asset.capabilities.has_obd, icon: ShieldAlert },
     { id: 'warranty', label: 'Bảo hành & Claim', show: true, icon: Award },
     { id: 'analytics', label: 'Phân tích TCO', show: true, icon: BarChart3 },
   ].filter((t) => t.show);
@@ -4768,6 +4771,23 @@ export default function AssetDetailPage() {
             </div>
           );
         })()}
+
+        {/* ═══ DIAGNOSTICS & OBD FAULT CODES (CHẨN ĐOÁN MÃ LỖI) ═══ */}
+        {activeTab === 'diagnostics' && (
+          <VehicleDiagnosticsTab
+            assetId={asset.id}
+            assetName={asset.name}
+            currentOdo={asset.current_odometer_km}
+            onNavigateToMaintenance={(note) => {
+              setMaintForm(p => ({ ...p, note: note || '' }));
+              setActiveTab('maintenance');
+              setOpenModal('maintenance');
+            }}
+            onAskAi={(prompt) => {
+              router.push(`/ai-center?q=${encodeURIComponent(prompt)}`);
+            }}
+          />
+        )}
 
       </div>
 
