@@ -36,6 +36,11 @@ android/.idea/
 .idea/
 *.swp
 
+# Temporary & scratch scripts
+*.py
+*.pyc
+__pycache__/
+
 # Log files
 npm-debug.log*
 yarn-debug.log*
