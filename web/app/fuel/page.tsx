@@ -629,7 +629,9 @@ export default function FuelPage() {
                         )}
                       </div>
                     ) : (
-                      <span style={{ color: 'var(--text-muted)' }}>—</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(16,185,129,0.1)', color: 'var(--status-green)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                        🌱 Mốc nhận xe &amp; đầy bình
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3">
