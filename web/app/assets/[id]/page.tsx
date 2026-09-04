@@ -1292,7 +1292,7 @@ export default function AssetDetailPage() {
     { id: 'expenses', label: 'Chi phí', show: true, icon: DollarSign },
     { id: 'finance', label: 'Khoản vay', show: asset.capabilities.has_finance || asset.asset_type === 'CAR', icon: CreditCard },
     { id: 'insurance', label: 'Bảo hiểm & Giấy tờ', show: asset.capabilities.has_documents || asset.asset_type === 'CAR', icon: Shield },
-    { id: 'diagnostics', label: 'Mã lỗi & Chẩn đoán', show: asset.capabilities.has_obd || asset.asset_type === 'CAR' || asset.asset_type === 'MOTORCYCLE' || asset.asset_type === 'MOTORBIKE', icon: ShieldAlert },
+    { id: 'diagnostics', label: 'Chẩn đoán', show: asset.capabilities.has_obd || asset.asset_type === 'CAR' || asset.asset_type === 'MOTORCYCLE' || asset.asset_type === 'MOTORBIKE', icon: ShieldAlert },
     { id: 'warranty', label: 'Bảo hành & Claim', show: true, icon: Award },
     { id: 'analytics', label: 'Phân tích TCO', show: true, icon: BarChart3 },
   ].filter((t) => t.show);
