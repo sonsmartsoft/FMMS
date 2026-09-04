@@ -168,7 +168,7 @@ export default function WarrantiesPage() {
         <div>
           <h1 className="text-2xl font-extrabold flex items-center space-x-2.5" style={{ color: 'var(--text-primary)' }}>
             <Award className="w-6 h-6 text-amber-400" />
-            <span>Sổ Bảo Hành &amp; Claim Toàn Bộ Phương Tiện (§219)</span>
+            <span>Sổ Bảo Hành &amp; Claim Toàn Bộ Phương Tiện</span>
           </h1>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
             Theo dõi thời hạn bảo hành xe, phụ tùng, linh kiện nâng cấp và quản lý các yêu cầu Claim bồi thường

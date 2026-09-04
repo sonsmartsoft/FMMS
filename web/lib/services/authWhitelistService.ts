@@ -48,28 +48,51 @@ export async function saveAllowedEmails(emails: string[]): Promise<void> {
 
 export async function fetchAllowedEmailsFromCloud(): Promise<string[]> {
   const supabase = createClient();
+  const set = new Set<string>();
 
+  // 1. Fetch from user_members
   try {
-    const { data: mData, error } = await supabase
+    const { data: users, error: uErr } = await supabase
+      .from('user_members')
+      .select('email');
+    if (!uErr && users && users.length > 0) {
+      users.forEach((u: any) => {
+        if (u.email) set.add(u.email.trim().toLowerCase());
+      });
+    }
+  } catch (err) {
+    console.warn('Error fetching user_members for whitelist:', err);
+  }
+
+  // 2. Fetch from master_data
+  try {
+    const { data: mData, error: mErr } = await supabase
       .from('master_data')
       .select('data')
       .eq('key', 'fmms_allowed_emails')
       .maybeSingle();
 
-    if (!error && mData && Array.isArray(mData.data)) {
-      const list = mData.data.map((e: string) => e.trim().toLowerCase()).filter(Boolean);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('fmms_allowed_emails', JSON.stringify(list));
-        } catch {}
-      }
-      return list;
+    if (!mErr && mData && Array.isArray(mData.data)) {
+      mData.data.forEach((e: string) => {
+        if (e) set.add(e.trim().toLowerCase());
+      });
     }
   } catch (err) {
-    console.warn('fetchAllowedEmailsFromCloud error:', err);
+    console.warn('Error fetching master_data for whitelist:', err);
   }
 
-  return getAllowedEmails();
+  // Fallback defaults if cloud is empty
+  if (set.size === 0) {
+    DEFAULT_ALLOWED_EMAILS.forEach(e => set.add(e.toLowerCase()));
+  }
+
+  const list = Array.from(set);
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('fmms_allowed_emails', JSON.stringify(list));
+    } catch {}
+  }
+  return list;
 }
 
 export async function isEmailAllowedAsync(email: string): Promise<boolean> {

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { isEmailAllowed } from '@/lib/services/authWhitelistService';
+import { isEmailAllowedAsync } from '@/lib/services/authWhitelistService';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -29,9 +29,12 @@ export default function LoginPage() {
     setError(null);
     setSuccessMsg(null);
 
-    // 🔒 Security Check: Whitelist Enforcement
-    if (!isEmailAllowed(email)) {
-      setError(`🚫 Email "${email}" không nằm trong danh sách thành viên gia đình được cấp quyền truy cập. Vui lòng liên hệ Quản trị viên (Admin).`);
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 🔒 Security Check: Whitelist Enforcement via Cloud & Local
+    const allowed = await isEmailAllowedAsync(cleanEmail);
+    if (!allowed) {
+      setError(`🚫 Email "${cleanEmail}" không nằm trong danh sách thành viên gia đình được cấp quyền truy cập. Vui lòng liên hệ Quản trị viên (Admin).`);
       setLoading(false);
       return;
     }
@@ -111,7 +114,8 @@ export default function LoginPage() {
       return;
     }
 
-    if (!isEmailAllowed(cleanEmail)) {
+    const allowed = await isEmailAllowedAsync(cleanEmail);
+    if (!allowed) {
       setResetError(`Email "${cleanEmail}" không nằm trong danh sách được cấp quyền.`);
       return;
     }
