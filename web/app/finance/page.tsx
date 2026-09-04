@@ -377,28 +377,40 @@ export default function FinancePage() {
       const prev = map.get(mKey) || {
         monthKey: mKey,
         label: `T${parseInt(mKey.slice(5))}/${mKey.slice(2, 4)}`,
+        purchase: 0,
         fuel: 0,
         maint: 0,
         upgrade: 0,
         ins: 0,
         loan: 0,
+        running: 0,
         other: 0,
         total: 0,
       };
       const cat = (e.category || 'Other').toUpperCase();
       const sub = (e.subcategory || '').toUpperCase();
+      const desc = (e.description || '').toUpperCase();
       const amt = e.amount || 0;
 
-      if (cat === 'FUEL' || sub.includes('FUEL') || sub.includes('XĂNG') || sub.includes('PIN')) {
+      // 1. Chi phí mua xe & Lăn bánh ban đầu (Trước bạ, Biển số, Trả trước vốn tự có...)
+      if (
+        cat === 'INITIAL' || cat === 'PURCHASE' || cat === 'DOWN_PAYMENT' ||
+        (sub.includes('REGISTRATION') && (desc.includes('TRƯỚC BẠ') || desc.includes('BIỂN SỐ') || desc.includes('LĂN BÁNH') || desc.includes('MUA XE'))) ||
+        desc.includes('LĂN BÁNH') || desc.includes('TRẢ TRƯỚC') || desc.includes('TRƯỚC BẠ') || desc.includes('MUA XE') || desc.includes('CẤP BIỂN')
+      ) {
+        prev.purchase += amt;
+      } else if (cat === 'FUEL' || sub.includes('FUEL') || sub.includes('XĂNG') || sub.includes('PIN')) {
         prev.fuel += amt;
       } else if (cat === 'MAINTENANCE' || cat === 'PARTS' || cat === 'LABOR' || sub.includes('SERVICE') || sub.includes('BRAKE')) {
         prev.maint += amt;
       } else if (cat === 'UPGRADE' || sub.includes('SCREEN') || sub.includes('TPMS') || sub.includes('ACCESSORIE')) {
         prev.upgrade += amt;
-      } else if (cat === 'INSURANCE' || cat === 'REGISTRATION' || sub.includes('REGISTRATION') || sub.includes('INSURANCE')) {
+      } else if (cat === 'INSURANCE' || cat === 'REGISTRATION' || sub.includes('REGISTRATION') || sub.includes('INSURANCE') || desc.includes('THÂN VỎ') || desc.includes('TNDS') || desc.includes('ĐĂNG KIỂM')) {
         prev.ins += amt;
-      } else if (cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST' || sub.includes('PAYMENT') || sub.includes('INTEREST')) {
+      } else if (cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST' || sub.includes('PAYMENT') || sub.includes('INTEREST') || desc.includes('LÃI VAY') || desc.includes('TRẢ GỐC')) {
         prev.loan += amt;
+      } else if (cat === 'RUNNING' || cat === 'TOLL' || cat === 'PARKING' || cat === 'CAR_WASH' || sub.includes('WASH') || sub.includes('PARKING') || sub.includes('TOLL') || desc.includes('RỬA XE') || desc.includes('GỬI XE') || desc.includes('EPASS') || desc.includes('BOT')) {
+        prev.running += amt;
       } else {
         prev.other += amt;
       }
@@ -1090,12 +1102,14 @@ export default function FinancePage() {
           {/* 📊 Biểu Đồ Chi Phí Theo Tháng & Cơ Cấu Danh Mục */}
           {filteredExpenses.length > 0 && (() => {
             const seriesDefs = [
+              { key: 'purchase', name: 'Mua xe & Lăn bánh ban đầu', color: '#3B82F6', grad: 'finPurchase' },
               { key: 'fuel', name: 'Nhiên liệu & Pin', color: '#F59E0B', grad: 'finFuel' },
               { key: 'maint', name: 'Bảo dưỡng & Phụ tùng', color: '#06B6D4', grad: 'finMaint' },
               { key: 'upgrade', name: 'Nâng cấp & Đồ chơi', color: '#8B5CF6', grad: 'finUpgrade' },
               { key: 'ins', name: 'Bảo hiểm & Giấy tờ', color: '#10B981', grad: 'finIns' },
               { key: 'loan', name: 'Khoản vay & Lãi', color: '#EC4899', grad: 'finLoan' },
-              { key: 'other', name: 'Khác', color: '#64748B', grad: 'finOther' },
+              { key: 'running', name: 'Vận hành (Rửa xe, Bãi đỗ, BOT)', color: '#F97316', grad: 'finRunning' },
+              { key: 'other', name: 'Chi phí khác', color: '#64748B', grad: 'finOther' },
             ];
 
             return (
@@ -1126,6 +1140,10 @@ export default function FinancePage() {
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={monthlyExpensesData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
                         <defs>
+                          <linearGradient id="finPurchase" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0.08}/>
+                          </linearGradient>
                           <linearGradient id="finFuel" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.75}/>
                             <stop offset="95%" stopColor="#F59E0B" stopOpacity={0.08}/>
@@ -1145,6 +1163,10 @@ export default function FinancePage() {
                           <linearGradient id="finLoan" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#EC4899" stopOpacity={0.75}/>
                             <stop offset="95%" stopColor="#EC4899" stopOpacity={0.08}/>
+                          </linearGradient>
+                          <linearGradient id="finRunning" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#F97316" stopOpacity={0.75}/>
+                            <stop offset="95%" stopColor="#F97316" stopOpacity={0.08}/>
                           </linearGradient>
                           <linearGradient id="finOther" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#64748B" stopOpacity={0.75}/>
@@ -1203,12 +1225,14 @@ export default function FinancePage() {
                           )}
                         />
 
+                        <Area type="monotone" dataKey="purchase" stackId="exp" name="Mua xe & Lăn bánh ban đầu" stroke="#3B82F6" fill="url(#finPurchase)" strokeWidth={1.5} hide={hiddenFinKeys.includes('purchase')} />
                         <Area type="monotone" dataKey="fuel" stackId="exp" name="Nhiên liệu & Pin" stroke="#F59E0B" fill="url(#finFuel)" strokeWidth={1.5} hide={hiddenFinKeys.includes('fuel')} />
                         <Area type="monotone" dataKey="maint" stackId="exp" name="Bảo dưỡng & Phụ tùng" stroke="#06B6D4" fill="url(#finMaint)" strokeWidth={1.5} hide={hiddenFinKeys.includes('maint')} />
                         <Area type="monotone" dataKey="upgrade" stackId="exp" name="Nâng cấp & Đồ chơi" stroke="#8B5CF6" fill="url(#finUpgrade)" strokeWidth={1.5} hide={hiddenFinKeys.includes('upgrade')} />
                         <Area type="monotone" dataKey="ins" stackId="exp" name="Bảo hiểm & Giấy tờ" stroke="#10B981" fill="url(#finIns)" strokeWidth={1.5} hide={hiddenFinKeys.includes('ins')} />
                         <Area type="monotone" dataKey="loan" stackId="exp" name="Khoản vay & Lãi" stroke="#EC4899" fill="url(#finLoan)" strokeWidth={1.5} hide={hiddenFinKeys.includes('loan')} />
-                        <Area type="monotone" dataKey="other" stackId="exp" name="Khác" stroke="#64748B" fill="url(#finOther)" strokeWidth={1.5} hide={hiddenFinKeys.includes('other')} />
+                        <Area type="monotone" dataKey="running" stackId="exp" name="Vận hành (Rửa xe, Bãi đỗ, BOT)" stroke="#F97316" fill="url(#finRunning)" strokeWidth={1.5} hide={hiddenFinKeys.includes('running')} />
+                        <Area type="monotone" dataKey="other" stackId="exp" name="Chi phí khác" stroke="#64748B" fill="url(#finOther)" strokeWidth={1.5} hide={hiddenFinKeys.includes('other')} />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
