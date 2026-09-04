@@ -26,7 +26,13 @@ data class FmmsColors(
     val emerald: Color,
     val red: Color,
     val purple: Color,
-)
+) {
+    val cyanGradient: List<Color> get() = listOf(cyan, Color(0xFF0EA5E9))
+    val emeraldGradient: List<Color> get() = listOf(Color(0xFF34D399), Color(0xFF059669))
+    val amberGradient: List<Color> get() = listOf(amber, Color(0xFFD97706))
+    val redGradient: List<Color> get() = listOf(red, Color(0xFFDC2626))
+    val purpleGradient: List<Color> get() = listOf(purple, Color(0xFF6D28D9))
+}
 
 val DarkFmmsColors = FmmsColors(
     background = Color(0xFF0B0F19),

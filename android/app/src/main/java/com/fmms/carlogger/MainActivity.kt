@@ -391,5 +391,8 @@ private fun FmmsNavHost(navController: androidx.navigation.NavHostController, vm
         composable("weather") {
             WeatherScreen(vm = vm)
         }
+        composable("dtc_scan") {
+            com.fmms.carlogger.ui.diagnostics.DiagnosticsScreen()
+        }
     }
 }

@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.data.repository.TripAggregate
+import com.fmms.carlogger.ui.common.FmmsGradientButton
 import com.fmms.carlogger.ui.i18n.FmmsStrings
 import com.fmms.carlogger.ui.i18n.LocalStrings
 import com.fmms.carlogger.ui.theme.FmmsColors

@@ -15,6 +15,7 @@ import com.fmms.carlogger.data.repository.TelemetryRepository
 import com.fmms.carlogger.data.repository.TripRepository
 import com.fmms.carlogger.data.repository.VehicleRepository
 import com.fmms.carlogger.data.sync.SyncWorker
+import com.fmms.carlogger.domain.engine.DtcEngine
 import com.fmms.carlogger.domain.engine.FuelEngine
 import com.fmms.carlogger.domain.engine.FuelLogRepository
 import com.fmms.carlogger.domain.engine.TelemetryEngine
@@ -54,6 +55,7 @@ object AppContainer {
     lateinit var tripEngine: TripEngine
     lateinit var fuelEngine: FuelEngine
     lateinit var odometerEngine: VirtualOdometerEngine
+    lateinit var dtcEngine: DtcEngine
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -105,7 +107,8 @@ object AppContainer {
                 AppDatabase.MIGRATION_1_2,
                 AppDatabase.MIGRATION_2_3,
                 AppDatabase.MIGRATION_3_4,
-                AppDatabase.MIGRATION_4_5
+                AppDatabase.MIGRATION_4_5,
+                AppDatabase.MIGRATION_5_6
             )
             .build()
 
@@ -149,6 +152,16 @@ object AppContainer {
         )
         this.fuelEngine = FuelEngine(vehicleRepository, tripRepository, fuelLogRepository)
         this.tripEngine = TripEngine(vehicleRepository, tripRepository, appScope) { prefs.getTripTimeoutMs() }
+        this.dtcEngine = DtcEngine(
+            elms = obdManager.elms,
+            diagnosticScanDao = db.diagnosticScanDao(),
+            dtcLogDao = db.dtcLogDao(),
+            syncQueueRepository = syncQueueRepository,
+            vehicleRepository = vehicleRepository,
+            prefs = prefs,
+            scope = appScope,
+        )
+        this.dtcEngine.start()
 
         // Backfill: các lần đổ xăng & chuyến đi trước đây chưa từng có đường đồng bộ
         // hoặc lưu local -> đẩy bù toàn bộ log của xe hiện tại lên cloud.

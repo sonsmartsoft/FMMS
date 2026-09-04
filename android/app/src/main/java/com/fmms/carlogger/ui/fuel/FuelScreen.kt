@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +28,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fmms.carlogger.AppContainer
 import com.fmms.carlogger.core.database.entity.FuelLogEntity
 import com.fmms.carlogger.domain.model.FuelEstimate
+import com.fmms.carlogger.ui.common.FmmsGradientButton
 import com.fmms.carlogger.ui.i18n.LocalStrings
 import com.fmms.carlogger.ui.theme.LocalFmmsColors
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -458,17 +461,20 @@ private fun AddRefuelBar(vm: FuelViewModel) {
                     Spacer(modifier = Modifier.width(8.dp))
                     Switch(checked = full, onCheckedChange = { full = it })
                 }
-                Button(onClick = {
-                    val l = liters.toDoubleOrNull()
-                    val p = price.toDoubleOrNull()
-                    if (l != null && p != null) {
-                        vm.addRefuel(l, p, full)
-                        liters = ""
-                        price = ""
-                    }
-                }) {
-                    Text(strings.save)
-                }
+                FmmsGradientButton(
+                    text = strings.save,
+                    icon = Icons.Rounded.Save,
+                    onClick = {
+                        val l = liters.toDoubleOrNull()
+                        val p = price.toDoubleOrNull()
+                        if (l != null && p != null) {
+                            vm.addRefuel(l, p, full)
+                            liters = ""
+                            price = ""
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }
