@@ -133,6 +133,9 @@ ALTER TABLE IF EXISTS public.maintenance_records
   ADD COLUMN IF NOT EXISTS warranty_until DATE;
 
 ALTER TABLE IF EXISTS public.assets
+  ADD COLUMN IF NOT EXISTS inspection_expiry_date DATE,
+  ADD COLUMN IF NOT EXISTS inspection_date DATE,
+  ADD COLUMN IF NOT EXISTS registration_date DATE,
   ADD COLUMN IF NOT EXISTS next_maintenance_due DATE;
 
 -- 8. CẤP QUYỀN TOÀN BỘ DATABASE CHO CÁC ROLE

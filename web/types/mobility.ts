@@ -49,6 +49,10 @@ export interface Asset {
   sales_rep_name?: string;
   sales_rep_phone?: string;
   brand_hotline?: string;
+  inspection_expiry_date?: string;
+  inspection_date?: string;
+  registration_date?: string;
+  next_maintenance_due?: string;
   capabilities: AssetCapabilities;
   // Derived quick stats
   fuel_level_percent?: number;
@@ -56,7 +60,6 @@ export interface Asset {
   avg_consumption_l100km?: number;
   total_rides?: number;
   avg_speed_kmh?: number;
-  next_maintenance_due?: string;
 }
 
 export interface CardDisplaySettings {

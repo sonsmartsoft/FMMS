@@ -212,7 +212,7 @@ export default function AssetDetailPage() {
     vin: '',
     engine: '',
     registration_date: '',
-    next_maintenance_due: '',
+    inspection_expiry_date: '',
     notes: '',
   });
   const [hideRestDays, setHideRestDays] = useState(true);
@@ -1783,6 +1783,7 @@ export default function AssetDetailPage() {
         // Auto-update next_maintenance_due on the asset
         if (maintForm.next_due_date) {
           setAsset(p => p ? { ...p, next_maintenance_due: maintForm.next_due_date } : p);
+          updateAsset(asset.id, { next_maintenance_due: maintForm.next_due_date }).catch(err => console.warn('Update next_maintenance_due failed:', err));
         }
       } else {
         const created = await createMaintenanceRecord({
@@ -1804,6 +1805,7 @@ export default function AssetDetailPage() {
         // Auto-update next_maintenance_due on the asset
         if (maintForm.next_due_date) {
           setAsset(p => p ? { ...p, next_maintenance_due: maintForm.next_due_date } : p);
+          updateAsset(asset.id, { next_maintenance_due: maintForm.next_due_date }).catch(err => console.warn('Update next_maintenance_due failed:', err));
         }
 
         // Auto-create expense record if totalCost > 0
@@ -2233,7 +2235,9 @@ export default function AssetDetailPage() {
         license_plate: docsForm.license_plate || undefined,
         vin: docsForm.vin || undefined,
         engine: docsForm.engine || undefined,
-        next_maintenance_due: docsForm.next_maintenance_due || undefined,
+        registration_date: docsForm.registration_date || undefined,
+        inspection_expiry_date: docsForm.inspection_expiry_date || undefined,
+        description: docsForm.notes || undefined,
       });
       if (updated) {
         setAsset(updated);
@@ -2270,6 +2274,10 @@ export default function AssetDetailPage() {
         sales_rep_name: editForm.sales_rep_name || undefined,
         sales_rep_phone: editForm.sales_rep_phone || undefined,
         brand_hotline: editForm.brand_hotline || undefined,
+        inspection_expiry_date: asset.inspection_expiry_date || undefined,
+        inspection_date: asset.inspection_date || undefined,
+        registration_date: asset.registration_date || undefined,
+        next_maintenance_due: asset.next_maintenance_due || undefined,
       });
       if (updated) setAsset(updated);
 
@@ -4552,8 +4560,8 @@ export default function AssetDetailPage() {
                       license_plate: asset.license_plate || '',
                       vin: asset.vin || '',
                       engine: asset.engine || '',
-                      registration_date: asset.purchase_date || '',
-                      next_maintenance_due: asset.next_maintenance_due || '',
+                      registration_date: asset.registration_date || asset.purchase_date || '',
+                      inspection_expiry_date: asset.inspection_expiry_date || '',
                       notes: asset.description || '',
                     });
                     setOpenModal('vehicle_docs');
@@ -4568,7 +4576,17 @@ export default function AssetDetailPage() {
                 ['Biển số xe', asset.license_plate || 'Chưa có'],
                 ['Năm sản xuất', asset.year?.toString() || '—'],
                 ['Loại phương tiện', asset.asset_type],
-                ['Hạn đăng kiểm', asset.next_maintenance_due || '—'],
+                ['Ngày đăng ký (Cà vẹt)', asset.registration_date ? fmtDate(asset.registration_date) : (asset.purchase_date ? fmtDate(asset.purchase_date) : '—')],
+                ['Hạn đăng kiểm', (() => {
+                  if (!asset.inspection_expiry_date) return '—';
+                  const d = new Date(asset.inspection_expiry_date);
+                  const today = new Date();
+                  const diff = Math.ceil((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                  const formatted = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                  if (diff < 0) return `${formatted} (⚠️ Quá hạn ${Math.abs(diff)} ngày)`;
+                  if (diff <= 30) return `${formatted} (🟡 Còn ${diff} ngày)`;
+                  return `${formatted} (✅ Còn ${diff} ngày)`;
+                })()],
               ] as [string, string][]).map(([k, v], i) => (
                 <div key={i} className="flex justify-between">
                   <span style={{ color: 'var(--text-muted)' }}>{k}</span>
@@ -5459,12 +5477,16 @@ export default function AssetDetailPage() {
             <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
               <h4 className="font-bold text-xs uppercase tracking-wider text-cyan-400">1. Đăng kiểm &amp; Lưu hành xe</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="col-span-2 sm:col-span-1">
+                <div>
                   <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Hạn đăng kiểm tiếp theo *</label>
-                  <input type="date" className="theme-input font-bold text-amber-400" value={docsForm.next_maintenance_due} onChange={e => setDocsForm(p => ({ ...p, next_maintenance_due: e.target.value }))} />
+                  <input type="date" className="theme-input font-bold text-amber-400" value={docsForm.inspection_expiry_date} onChange={e => setDocsForm(p => ({ ...p, inspection_expiry_date: e.target.value }))} />
                   <p className="text-[10px] mt-1" style={{ color: 'var(--text-muted)' }}>Xe mới miễn kiểm định lần đầu (36 tháng)</p>
                 </div>
-                <div className="col-span-2 sm:col-span-1">
+                <div>
+                  <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày đăng ký (Cà vẹt xe)</label>
+                  <input type="date" className="theme-input font-bold text-cyan-400" value={docsForm.registration_date} onChange={e => setDocsForm(p => ({ ...p, registration_date: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
                   <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Biển số đăng ký *</label>
                   <input type="text" className="theme-input font-bold uppercase tracking-wider text-cyan-400" placeholder="VD: 19B-213.87" value={docsForm.license_plate} onChange={e => setDocsForm(p => ({ ...p, license_plate: e.target.value }))} />
                 </div>

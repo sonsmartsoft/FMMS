@@ -131,6 +131,19 @@ export default function DocumentsPage() {
           }
         });
 
+        const hasRegInspection = (regs || []).some(r => r.asset_id === asset.id && r.inspection_expiry);
+        if (!hasRegInspection && asset.inspection_expiry_date) {
+          items.push({
+            id: `asset-insp-${asset.id}`,
+            sourceType: 'REGISTRATION',
+            assetId: asset.id,
+            name: 'Đăng kiểm (Kiểm tra định kỳ)',
+            issuer: 'Cục Đăng kiểm VN',
+            valid_until: asset.inspection_expiry_date,
+            status: docStatus(asset.inspection_expiry_date),
+          });
+        }
+
         (insurance || []).filter(i => i.asset_id === asset.id).forEach(i => {
           items.push({
             id: i.id,

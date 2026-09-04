@@ -67,6 +67,10 @@ export function mapAssetRow(row: any, capsRow?: any): Asset {
     sales_rep_name: row.sales_rep_name ?? undefined,
     sales_rep_phone: row.sales_rep_phone ?? undefined,
     brand_hotline: row.brand_hotline ?? undefined,
+    inspection_expiry_date: row.inspection_expiry_date ?? undefined,
+    inspection_date: row.inspection_date ?? undefined,
+    registration_date: row.registration_date ?? undefined,
+    next_maintenance_due: row.next_maintenance_due ?? undefined,
     capabilities: caps,
   };
 }
@@ -239,6 +243,9 @@ export type AssetInput = {
   sales_rep_name?: string;
   sales_rep_phone?: string;
   brand_hotline?: string;
+  inspection_expiry_date?: string;
+  inspection_date?: string;
+  registration_date?: string;
   next_maintenance_due?: string;
   capabilities?: Partial<AssetCapabilities>;
 };
@@ -285,6 +292,10 @@ export async function createAsset(data: AssetInput) {
       status: data.status ?? 'ACTIVE',
       image_url: data.image_url,
       description: data.description,
+      inspection_expiry_date: data.inspection_expiry_date,
+      inspection_date: data.inspection_date,
+      registration_date: data.registration_date,
+      next_maintenance_due: data.next_maintenance_due,
     })
     .select()
     .single();
@@ -360,6 +371,10 @@ export async function updateAsset(id: string, data: Partial<AssetInput>): Promis
     if ('sales_rep_name' in data) payload.sales_rep_name = data.sales_rep_name;
     if ('sales_rep_phone' in data) payload.sales_rep_phone = data.sales_rep_phone;
     if ('brand_hotline' in data) payload.brand_hotline = data.brand_hotline;
+    if ('inspection_expiry_date' in data) payload.inspection_expiry_date = data.inspection_expiry_date;
+    if ('inspection_date' in data) payload.inspection_date = data.inspection_date;
+    if ('registration_date' in data) payload.registration_date = data.registration_date;
+    if ('next_maintenance_due' in data) payload.next_maintenance_due = data.next_maintenance_due;
     payload.updated_at = new Date().toISOString();
 
     const { error } = await supabase
@@ -381,6 +396,10 @@ export async function updateAsset(id: string, data: Partial<AssetInput>): Promis
         delete payload.sales_rep_name;
         delete payload.sales_rep_phone;
         delete payload.brand_hotline;
+        delete payload.inspection_expiry_date;
+        delete payload.inspection_date;
+        delete payload.registration_date;
+        delete payload.next_maintenance_due;
         await supabase.from('assets').update(payload).or(`id.eq.${realId},id.eq.${id}`);
       }
     } else {
