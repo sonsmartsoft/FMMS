@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { getAssets, createAsset, deleteAsset } from '@/lib/services/assetService';
 import { getMaintenanceRecords } from '@/lib/services/maintenanceService';
 import { Asset, AssetType, MaintenanceRecord } from '@/types/mobility';
-import { Car, Bike, Zap, Plus, Search, Filter, ChevronRight, X, Trash2 } from 'lucide-react';
+import { Car, Bike, Zap, Plus, Search, Filter, ChevronRight, X, Trash2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 
@@ -269,28 +269,40 @@ export default function AssetsPage() {
                           return (
                             <div>
                               <span className="font-bold text-rose-400 block">{fmtDateStr}</span>
-                              <span className="text-[10px] text-rose-400 font-medium">⚠️ Quá hạn {Math.abs(diffDays)} ngày</span>
+                              <span className="text-[10px] text-rose-400 font-medium inline-flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3 text-rose-400 shrink-0" />
+                                <span>Quá hạn {Math.abs(diffDays)} ngày</span>
+                              </span>
                             </div>
                           );
                         } else if (diffDays <= 7) {
                           return (
                             <div>
                               <span className="font-bold text-amber-400 block">{fmtDateStr}</span>
-                              <span className="text-[10px] text-amber-400 font-medium">🟠 Còn {diffDays} ngày</span>
+                              <span className="text-[10px] text-amber-400 font-medium inline-flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                                <span>Còn {diffDays} ngày</span>
+                              </span>
                             </div>
                           );
                         } else if (diffDays <= 30) {
                           return (
                             <div>
                               <span className="font-bold text-amber-400 block">{fmtDateStr}</span>
-                              <span className="text-[10px] text-amber-400">🟡 Còn {diffDays} ngày</span>
+                              <span className="text-[10px] text-amber-400/90 inline-flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                                <span>Còn {diffDays} ngày</span>
+                              </span>
                             </div>
                           );
                         } else {
                           return (
                             <div>
                               <span className="font-semibold text-emerald-400 block">{fmtDateStr}</span>
-                              <span className="text-[10px] text-emerald-400 font-medium">✅ Còn {diffDays} ngày</span>
+                              <span className="text-[10px] text-emerald-400 font-medium inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                                <span>Còn {diffDays} ngày</span>
+                              </span>
                             </div>
                           );
                         }

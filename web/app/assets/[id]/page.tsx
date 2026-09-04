@@ -2431,19 +2431,19 @@ export default function AssetDetailPage() {
                   const fmtMaintDate = maintDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
                   maintValue = fmtMaintDate;
                   if (diffDays < 0) {
-                    maintSub = `⚠️ Đã quá hạn ${Math.abs(diffDays)} ngày!`;
+                    maintSub = `Đã quá hạn ${Math.abs(diffDays)} ngày`;
                     maintColor = 'var(--status-rose)';
                   } else if (diffDays === 0) {
-                    maintSub = '🔴 Hôm nay là ngày bảo dưỡng!';
+                    maintSub = 'Hôm nay là ngày bảo dưỡng';
                     maintColor = 'var(--status-rose)';
                   } else if (diffDays <= 7) {
-                    maintSub = `🟠 Còn ${diffDays} ngày (sắp đến!)`;
+                    maintSub = `Còn ${diffDays} ngày (sắp đến)`;
                     maintColor = 'var(--status-amber)';
                   } else if (diffDays <= 30) {
-                    maintSub = `🟡 Còn ${diffDays} ngày`;
+                    maintSub = `Còn ${diffDays} ngày`;
                     maintColor = 'var(--status-amber)';
                   } else {
-                    maintSub = `✅ Còn ${diffDays} ngày`;
+                    maintSub = `Còn ${diffDays} ngày`;
                     maintColor = 'var(--status-green)';
                   }
                 }
