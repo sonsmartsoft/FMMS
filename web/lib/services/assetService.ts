@@ -21,20 +21,21 @@ function toNum(v: unknown): number | undefined {
 
 /** Map a raw `assets` row (+ embedded `asset_capabilities`) into the UI Asset shape */
 export function mapAssetRow(row: any, capsRow?: any): Asset {
+  const isCar = row.asset_type === 'CAR';
   const caps: AssetCapabilities = {
-    has_mileage: toBoolean(capsRow?.has_mileage, DEFAULT_CAPS.has_mileage),
-    has_gps: toBoolean(capsRow?.has_gps, DEFAULT_CAPS.has_gps),
-    has_fuel: toBoolean(capsRow?.has_fuel, DEFAULT_CAPS.has_fuel),
-    has_obd: toBoolean(capsRow?.has_obd, DEFAULT_CAPS.has_obd),
-    has_engine: toBoolean(capsRow?.has_engine, DEFAULT_CAPS.has_engine),
-    has_battery: toBoolean(capsRow?.has_battery, DEFAULT_CAPS.has_battery),
-    has_ride: toBoolean(capsRow?.has_ride, DEFAULT_CAPS.has_ride),
-    has_maintenance: toBoolean(capsRow?.has_maintenance, DEFAULT_CAPS.has_maintenance),
-    has_parts: toBoolean(capsRow?.has_parts, DEFAULT_CAPS.has_parts),
-    has_upgrades: toBoolean(capsRow?.has_upgrades, DEFAULT_CAPS.has_upgrades),
-    has_finance: toBoolean(capsRow?.has_finance, DEFAULT_CAPS.has_finance),
-    has_insurance: toBoolean(capsRow?.has_insurance, DEFAULT_CAPS.has_insurance),
-    has_documents: toBoolean(capsRow?.has_documents, DEFAULT_CAPS.has_documents),
+    has_mileage: toBoolean(capsRow?.has_mileage, true),
+    has_gps: toBoolean(capsRow?.has_gps, isCar),
+    has_fuel: toBoolean(capsRow?.has_fuel, isCar),
+    has_obd: toBoolean(capsRow?.has_obd, isCar),
+    has_engine: toBoolean(capsRow?.has_engine, isCar),
+    has_battery: toBoolean(capsRow?.has_battery, false),
+    has_ride: toBoolean(capsRow?.has_ride, !isCar),
+    has_maintenance: toBoolean(capsRow?.has_maintenance, true),
+    has_parts: toBoolean(capsRow?.has_parts, true),
+    has_upgrades: toBoolean(capsRow?.has_upgrades, true),
+    has_finance: toBoolean(capsRow?.has_finance, isCar),
+    has_insurance: toBoolean(capsRow?.has_insurance, isCar),
+    has_documents: toBoolean(capsRow?.has_documents, true),
   };
   return {
     id: row.id,
