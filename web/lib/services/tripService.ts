@@ -103,8 +103,10 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
     return tAssetId === realId || t.asset_id === assetId;
   });
 
-  // Seed trips + Supabase live trips + local user entries
-  const baseTrips = [...seedTrips, ...supabaseTrips, ...localTrips];
+  // Ưu tiên 100% dữ liệu thực từ Supabase. Chỉ fallback về seedTrips nếu Supabase rỗng
+  const baseTrips = supabaseTrips.length > 0
+    ? [...supabaseTrips, ...localTrips]
+    : [...seedTrips, ...localTrips];
 
   const map = new Map<string, TripRecord>();
   baseTrips.forEach(item => {
