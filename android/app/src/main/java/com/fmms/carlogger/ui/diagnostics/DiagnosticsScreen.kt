@@ -52,7 +52,7 @@ fun DiagnosticsScreen(onBack: (() -> Unit)? = null, vm: DiagnosticsViewModel = a
                 TextButton(onClick = { onBack() }) { Text(strings.backChip, color = colors.cyan) }
                 Spacer(Modifier.width(8.dp))
             }
-            Text("Chẩn đoán mã lỗi (DTC)", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("Chẩn đoán mã lỗi (DTC)", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colors.textPrimary)
         }
         Spacer(Modifier.height(8.dp))
 

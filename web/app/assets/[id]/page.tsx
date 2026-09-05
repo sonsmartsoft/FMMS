@@ -2752,7 +2752,7 @@ export default function AssetDetailPage() {
                     borderColor: 'rgba(16,185,129,0.25)',
                     gradId: 'grad-coolant',
                     gradColors: live.coolant != null && live.coolant > 100 ? ['#F59E0B', '#EF4444'] as [string, string] : ['#10B981', '#06B6D4'] as [string, string],
-                    subLabel: live.coolant == null ? 'Chờ tín hiệu OBD...' : live.coolant < 60 ? '🔵 Đang làm nóng máy' : live.coolant <= 95 ? '🟢 Nhiệt độ tối ưu' : live.coolant <= 105 ? '🟠 Quạt gió làm việc' : '🔴 Cảnh báo quá nhiệt!',
+                    subLabel: live.coolant == null ? 'Chờ tín hiệu OBD...' : !isObdLive ? `Lưu lúc tắt máy (${Math.round(live.coolant)}°C)` : live.coolant < 60 ? '🔵 Đang làm nóng máy' : live.coolant <= 95 ? '🟢 Nhiệt độ tối ưu' : live.coolant <= 105 ? '🟠 Quạt gió làm việc' : '🔴 Cảnh báo quá nhiệt!',
                   },
                   {
                     label: 'Điện áp bình ắc quy',
@@ -2767,7 +2767,7 @@ export default function AssetDetailPage() {
                     borderColor: 'rgba(168,85,247,0.25)',
                     gradId: 'grad-voltage',
                     gradColors: ['#A855F7', '#6366F1'] as [string, string],
-                    subLabel: live.voltage == null ? 'Chờ tín hiệu OBD...' : live.voltage < 11.8 ? '🔴 Bình yếu, cần sạc' : live.voltage <= 12.8 ? '🟡 Điện áp bình tốt' : live.voltage <= 14.8 ? '⚡ Máy phát đang sạc tốt' : '⚠️ Quá áp máy phát',
+                    subLabel: live.voltage == null ? 'Chờ tín hiệu OBD...' : !isObdLive ? `Điện áp ắc quy lúc tắt máy (${live.voltage.toFixed(1)}V)` : live.voltage < 11.8 ? '🔴 Bình yếu, cần sạc' : live.voltage <= 12.8 ? '🟡 Điện áp bình tốt' : live.voltage <= 14.8 ? '⚡ Máy phát đang sạc tốt' : '⚠️ Quá áp máy phát',
                   },
                 ];
 
@@ -2783,7 +2783,7 @@ export default function AssetDetailPage() {
                   return (
                     <div
                       key={idx}
-                      className="relative p-5 rounded-2xl flex flex-col items-center justify-between transition-all duration-300 hover:scale-[1.02] shadow-lg overflow-hidden group"
+                      className={`relative p-5 rounded-2xl flex flex-col items-center justify-between transition-all duration-300 hover:scale-[1.02] shadow-lg overflow-hidden group ${!isObdLive ? 'opacity-90' : ''}`}
                       style={{
                         background: 'var(--bg-secondary)',
                         border: `1px solid ${g.borderColor}`,
@@ -2872,10 +2872,17 @@ export default function AssetDetailPage() {
               })()}
             </div>
 
-            {hasLive ? (
+            {isObdLive ? (
               <div className="p-4 rounded-xl text-xs" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.25)' }}>
                 <p className="font-semibold mb-1" style={{ color: 'var(--status-green)' }}>⚡ Dữ liệu OBD thời gian thực từ Android app (ZESTECH + KW906)</p>
                 <p style={{ color: 'var(--text-muted)' }}>Đang cập nhật qua Supabase Realtime mỗi giây từ ứng dụng Android.</p>
+              </div>
+            ) : hasLive ? (
+              <div className="p-4 rounded-xl text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <p className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>🔌 Xe đang tắt máy / OBD ở chế độ chờ</p>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  Hệ thống đang hiển thị <strong>ảnh chụp trạng thái cuối cùng</strong> (Nhiệt độ nước làm mát {Math.round(live.coolant || 0)}°C, Điện áp ắc quy {(live.voltage || 0).toFixed(1)}V) được lưu vào DB trước khi tắt máy. Khi bạn nổ máy xe, app Android sẽ tự động kết nối và truyền dữ liệu trực tiếp (Realtime).
+                </p>
               </div>
             ) : (
               <div className="p-4 rounded-xl text-xs" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)' }}>
