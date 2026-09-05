@@ -15,9 +15,28 @@ import { LanguageProvider } from '@/lib/i18n/LanguageContext';
 function AppShell({ children }: { children: React.ReactNode }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAiOpen, setIsAiOpen] = useState(false);
+  const [initialAiPrompt, setInitialAiPrompt] = useState<string | null>(null);
+  const [targetAssetId, setTargetAssetId] = useState<string | undefined>(undefined);
   const [cardSettings, setCardSettings] = useState<CardDisplaySettings>(DEFAULT_CARD_SETTINGS);
   const pathname = usePathname();
   const isStandalone = pathname === '/login';
+
+  React.useEffect(() => {
+    const handleOpenAi = (e: any) => {
+      setIsAiOpen(true);
+      if (e.detail?.prompt) {
+        setInitialAiPrompt(e.detail.prompt);
+      }
+      if (e.detail?.assetId) {
+        setTargetAssetId(e.detail.assetId);
+      }
+    };
+
+    window.addEventListener('fmms:open-ai-chat', handleOpenAi);
+    return () => {
+      window.removeEventListener('fmms:open-ai-chat', handleOpenAi);
+    };
+  }, []);
 
   if (isStandalone) {
     return (
@@ -42,7 +61,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {!isAiOpen && <AIFloatingButton onClick={() => setIsAiOpen(true)} />}
-      <AIChatDrawer isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
+      <AIChatDrawer
+        isOpen={isAiOpen}
+        onClose={() => setIsAiOpen(false)}
+        currentAssetId={targetAssetId}
+        initialPrompt={initialAiPrompt}
+        onClearInitialPrompt={() => setInitialAiPrompt(null)}
+      />
       <DisplaySettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}

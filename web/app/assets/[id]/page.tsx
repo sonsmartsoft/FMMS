@@ -5017,7 +5017,7 @@ export default function AssetDetailPage() {
               setOpenModal('maintenance');
             }}
             onAskAi={(prompt) => {
-              router.push(`/ai-center?q=${encodeURIComponent(prompt)}`);
+              window.dispatchEvent(new CustomEvent('fmms:open-ai-chat', { detail: { prompt, assetId: asset.id } }));
             }}
           />
         )}

@@ -12,6 +12,8 @@ interface AIChatDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   currentAssetId?: string;
+  initialPrompt?: string | null;
+  onClearInitialPrompt?: () => void;
 }
 
 // Dynamic prompt catalog organized by context
@@ -52,7 +54,13 @@ const PROMPT_CATALOG: Record<string, string[]> = {
   ],
 };
 
-export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, currentAssetId }) => {
+export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
+  isOpen,
+  onClose,
+  currentAssetId,
+  initialPrompt,
+  onClearInitialPrompt,
+}) => {
   const pathname = usePathname();
   const [input, setInput] = useState('');
   const [activeProvider, setActiveProvider] = useState('gemini');
@@ -67,8 +75,15 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({ isOpen, onClose, cur
       const active = getActiveAISettings();
       setActiveProvider(active.provider);
       setTimeout(() => inputRef.current?.focus(), 150);
+
+      // Tự động gửi câu hỏi nếu có initialPrompt từ nút thao tác Hỏi AI
+      if (initialPrompt && initialPrompt.trim()) {
+        const p = initialPrompt;
+        if (onClearInitialPrompt) onClearInitialPrompt();
+        sendMessage(p, currentAssetId, active.provider);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialPrompt]);
 
   useEffect(() => {
     if (isOpen) {
