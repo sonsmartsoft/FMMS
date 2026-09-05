@@ -355,8 +355,8 @@ export default function AnalyticsPage() {
             <ComposedChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
               <defs>
                 <linearGradient id="kmBarGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10B981" stopOpacity={0.95} />
-                  <stop offset="100%" stopColor="#059669" stopOpacity={0.7} />
+                  <stop offset="0%" stopColor="#34D399" stopOpacity={0.65} />
+                  <stop offset="100%" stopColor="#10B981" stopOpacity={0.45} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
@@ -366,10 +366,10 @@ export default function AnalyticsPage() {
                 yAxisId="right"
                 orientation="right"
                 tickFormatter={v => v > 0 ? `${fmt(Math.round(v))} km` : '0'}
-                tick={{ fill: '#10B981', fontSize: 11, fontWeight: 700 }}
-                axisLine={{ stroke: '#10B981', strokeWidth: 1.5 }}
-                tickLine={{ stroke: '#10B981' }}
-                width={74}
+                tick={{ fill: isDark ? '#34D399' : '#059669', fontSize: 10, fontWeight: 600 }}
+                axisLine={{ stroke: isDark ? 'rgba(52,211,153,0.3)' : 'rgba(16,185,129,0.3)', strokeWidth: 1 }}
+                tickLine={false}
+                width={70}
               />
               <ReTooltip
                 contentStyle={{
@@ -383,7 +383,7 @@ export default function AnalyticsPage() {
                 }}
                 formatter={(v: number, name: string) => {
                   if (name === 'Km di chuyển' || name.includes('Km')) {
-                    return [`${fmt(Math.round(v))} km`, '📊 Quãng đường'];
+                    return [`${fmt(Math.round(v))} km`, 'Quãng đường'];
                   }
                   return [`${fmt(v)} ₫`, name];
                 }}
@@ -391,11 +391,7 @@ export default function AnalyticsPage() {
               <Legend
                 formatter={(v) => {
                   if (v === 'Km di chuyển') {
-                    return (
-                      <span className="inline-flex items-center gap-1 font-extrabold text-xs px-2 py-0.5 rounded-md text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-950/80 border border-emerald-500/40">
-                        📊 {v} (Trục phải)
-                      </span>
-                    );
+                    return <span className="text-emerald-600 dark:text-emerald-400 font-semibold text-xs">{v}</span>;
                   }
                   return <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>;
                 }}
@@ -407,7 +403,7 @@ export default function AnalyticsPage() {
               <Area yAxisId="left" type="monotone" dataKey="ins" stackId="cost" name="Bảo hiểm/Giấy tờ" fill="#10B98140" stroke="#10B981" strokeWidth={2} />
               <Area yAxisId="left" type="monotone" dataKey="loan" stackId="cost" name="Khoản vay" fill="#EC489940" stroke="#EC4899" strokeWidth={2} />
               <Area yAxisId="left" type="monotone" dataKey="other" stackId="cost" name="Chi phí khác" fill="#64748B40" stroke="#64748B" strokeWidth={2} />
-              <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="url(#kmBarGrad)" stroke="#059669" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="url(#kmBarGrad)" stroke="#10B981" strokeWidth={1} radius={[4, 4, 0, 0]} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
