@@ -40,8 +40,10 @@ import {
 
 
 
-/* ── Helpers ─────────────────────────────────────────────────── */
-const fmt = (n: number) => n.toLocaleString('vi-VN');
+const fmt = (n: number | string | undefined | null) => {
+  if (n == null || isNaN(Number(n))) return '0';
+  return Math.round(Number(n)).toLocaleString('vi-VN');
+};
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
 const durFmt = (s: number) => `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
 
@@ -637,7 +639,7 @@ export default function AssetDetailPage() {
   /* ── Form states ── */
   const [odoViewMode, setOdoViewMode] = useState<'daily' | 'monthly' | 'yearly'>('daily');
   const [fuelChartMode, setFuelChartMode] = useState<'COMBINED' | 'PRICE_TREND'>('COMBINED');
-  const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
+  const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', total_cost: '', odometer_km: '', station: '', notes: '' });
   const [maintForm, setMaintForm] = useState({ date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', discount: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
   const [categories, setCategories] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
   const [serviceItems, setServiceItems] = useState<{ name: string; cost: string }[]>([
@@ -1625,10 +1627,14 @@ export default function AssetDetailPage() {
   /* ── Edit & Delete Handlers for Fuel ── */
   const handleOpenEditFuel = (item: FuelLog) => {
     setEditingFuel(item);
+    const p = Math.round(Number(item.price_per_liter) || 0);
+    const l = Number(item.liters) || 0;
+    const t = Math.round(Number(item.total_cost) || (l * p));
     setFuelForm({
       date: item.date ? item.date.slice(0, 10) : '',
-      liters: String(item.liters || ''),
-      price_per_liter: String(item.price_per_liter || ''),
+      liters: String(l || ''),
+      price_per_liter: String(p || ''),
+      total_cost: String(t || ''),
       odometer_km: item.odometer_km ? String(item.odometer_km) : '',
       station: item.station || '',
       notes: item.notes || '',
@@ -1691,14 +1697,30 @@ export default function AssetDetailPage() {
 
   const saveFuel = async () => {
     const l = parseFloat(fuelForm.liters) || 0;
-    const p = parseFloat(fuelForm.price_per_liter) || 0;
+    let p = parseFloat(fuelForm.price_per_liter) || 0;
+    let total = parseFloat(fuelForm.total_cost) || (l * p);
+
+    // Chuẩn hóa và làm tròn tiền nguyên VND
+    total = Math.round(total);
+    if (l > 0 && p === 0 && total > 0) {
+      p = Math.round(total / l);
+    } else if (l > 0 && p > 0 && (!fuelForm.total_cost || fuelForm.total_cost === '')) {
+      total = Math.round(l * p);
+    }
+    p = Math.round(p);
+
+    // Chống tràn số hoặc lỡ gõ thừa số 0
+    if (total > 50000000 && l > 0 && l < 100) {
+      total = Math.round(l * (p > 100000 ? 25000 : p));
+    }
+
     try {
       if (editingFuel) {
         const updated = await updateFuelLog(editingFuel.id, {
           date: fuelForm.date || new Date().toISOString().slice(0, 10),
           liters: l,
           price_per_liter: p,
-          total_cost: l * p,
+          total_cost: total,
           odometer_km: parseFloat(fuelForm.odometer_km) || 0,
           station: fuelForm.station || undefined,
           notes: fuelForm.notes || undefined,
@@ -1715,7 +1737,7 @@ export default function AssetDetailPage() {
           odometer_km: parseFloat(fuelForm.odometer_km) || 0,
           liters: l,
           price_per_liter: p,
-          total_cost: l * p,
+          total_cost: total,
           station: fuelForm.station || undefined,
           notes: fuelForm.notes || undefined,
         });
@@ -1733,7 +1755,7 @@ export default function AssetDetailPage() {
     }
     setOpenModal(null);
     setEditingFuel(null);
-    setFuelForm({ date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '' });
+    setFuelForm({ date: '', liters: '', price_per_liter: '', total_cost: '', odometer_km: '', station: '', notes: '' });
   };
 
   const saveTrip = async () => {
@@ -5084,19 +5106,120 @@ export default function AssetDetailPage() {
 
       {openModal === 'fuel' && (
         <Modal title="Ghi nhận đổ nhiên liệu" onClose={() => setOpenModal(null)}>
-          <Field label="Ngày đổ xăng"><input type="date" className="theme-input" value={fuelForm.date} onChange={e => setFuelForm(p => ({ ...p, date: e.target.value }))} /></Field>
-          <Field label="Số lít (L)"><input type="number" className="theme-input" placeholder="VD: 35.0" value={fuelForm.liters} onChange={e => setFuelForm(p => ({ ...p, liters: e.target.value }))} /></Field>
-          <Field label="Đơn giá (₫/L)"><input type="number" className="theme-input" placeholder="VD: 23100" value={fuelForm.price_per_liter} onChange={e => setFuelForm(p => ({ ...p, price_per_liter: e.target.value }))} /></Field>
-          {fuelForm.liters && fuelForm.price_per_liter && (
-            <div className="px-3 py-2 rounded-lg text-xs font-bold" style={{ background: 'var(--accent-cyan-bg)', color: 'var(--accent-cyan)' }}>
-              Tổng: {fmt(parseFloat(fuelForm.liters) * parseFloat(fuelForm.price_per_liter))} ₫
+          <div className="space-y-3">
+            <Field label="Ngày đổ xăng"><input type="date" className="theme-input" value={fuelForm.date} onChange={e => setFuelForm(p => ({ ...p, date: e.target.value }))} /></Field>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Field label="Số lít (L) *">
+                <input
+                  type="number"
+                  step="0.01"
+                  className="theme-input font-mono font-bold text-cyan-400"
+                  placeholder="VD: 35.0"
+                  value={fuelForm.liters}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const l = parseFloat(val) || 0;
+                    const p = parseFloat(fuelForm.price_per_liter) || 0;
+                    setFuelForm(prev => ({
+                      ...prev,
+                      liters: val,
+                      total_cost: l > 0 && p > 0 ? String(Math.round(l * p)) : prev.total_cost,
+                    }));
+                  }}
+                />
+              </Field>
+
+              <Field label="Đơn giá (₫/L)">
+                <input
+                  type="number"
+                  className="theme-input font-mono font-bold"
+                  placeholder="VD: 23100"
+                  value={fuelForm.price_per_liter}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const p = parseFloat(val) || 0;
+                    const l = parseFloat(fuelForm.liters) || 0;
+                    setFuelForm(prev => ({
+                      ...prev,
+                      price_per_liter: val,
+                      total_cost: l > 0 && p > 0 ? String(Math.round(l * p)) : prev.total_cost,
+                    }));
+                  }}
+                />
+              </Field>
             </div>
-          )}
-          <Field label="Odometer (km)"><input type="number" className="theme-input" placeholder="VD: 12846" value={fuelForm.odometer_km} onChange={e => setFuelForm(p => ({ ...p, odometer_km: e.target.value }))} /></Field>
-          <Field label="Cây xăng"><input type="text" className="theme-input" placeholder="VD: PV OIL Cầu Giấy" value={fuelForm.station} onChange={e => setFuelForm(p => ({ ...p, station: e.target.value }))} /></Field>
-          <Field label="Ghi chú (tuỳ chọn)"><input type="text" className="theme-input" value={fuelForm.notes} onChange={e => setFuelForm(p => ({ ...p, notes: e.target.value }))} /></Field>
-          <div className="flex space-x-2 pt-2">
-            <button onClick={saveFuel} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 transition">Lưu</button>
+
+            <Field label="Tổng tiền thanh toán (₫) *">
+              <input
+                type="number"
+                className="theme-input font-mono font-extrabold text-amber-400 text-sm"
+                placeholder="VD: 800000"
+                value={fuelForm.total_cost}
+                onChange={e => {
+                  const val = e.target.value;
+                  const t = parseFloat(val) || 0;
+                  const l = parseFloat(fuelForm.liters) || 0;
+                  setFuelForm(prev => ({
+                    ...prev,
+                    total_cost: val,
+                    price_per_liter: l > 0 && t > 0 ? String(Math.round(t / l)) : prev.price_per_liter,
+                  }));
+                }}
+              />
+            </Field>
+
+            {/* Quick Rounding Toolbar */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              <span className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Làm tròn nhanh:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const t = parseFloat(fuelForm.total_cost) || 0;
+                  const l = parseFloat(fuelForm.liters) || 0;
+                  if (t > 0) {
+                    const roundedTotal = Math.round(t / 1000) * 1000;
+                    setFuelForm(prev => ({
+                      ...prev,
+                      total_cost: String(roundedTotal),
+                      price_per_liter: l > 0 ? String(Math.round(roundedTotal / l)) : prev.price_per_liter,
+                    }));
+                  }
+                }}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition hover:border-cyan-500 hover:text-cyan-400"
+                style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+              >
+                ⚡ Chẵn 1.000₫ ({fmt(Math.round((parseFloat(fuelForm.total_cost) || 0) / 1000) * 1000)}₫)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const p = parseFloat(fuelForm.price_per_liter) || 0;
+                  const l = parseFloat(fuelForm.liters) || 0;
+                  if (p > 0) {
+                    const roundedPrice = Math.round(p / 10) * 10;
+                    setFuelForm(prev => ({
+                      ...prev,
+                      price_per_liter: String(roundedPrice),
+                      total_cost: l > 0 ? String(Math.round(l * roundedPrice)) : prev.total_cost,
+                    }));
+                  }
+                }}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition hover:border-emerald-500 hover:text-emerald-400"
+                style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+              >
+                ⚡ Chẵn Đơn giá ({fmt(Math.round((parseFloat(fuelForm.price_per_liter) || 0) / 10) * 10)}₫/L)
+              </button>
+            </div>
+
+            <Field label="Odometer (km)"><input type="number" className="theme-input font-mono" placeholder="VD: 12846" value={fuelForm.odometer_km} onChange={e => setFuelForm(p => ({ ...p, odometer_km: e.target.value }))} /></Field>
+            <Field label="Cây xăng"><input type="text" className="theme-input" placeholder="VD: PV OIL Cầu Giấy, Petrolimex..." value={fuelForm.station} onChange={e => setFuelForm(p => ({ ...p, station: e.target.value }))} /></Field>
+            <Field label="Ghi chú (tuỳ chọn)"><input type="text" className="theme-input" value={fuelForm.notes} onChange={e => setFuelForm(p => ({ ...p, notes: e.target.value }))} /></Field>
+          </div>
+
+          <div className="flex space-x-2 pt-3 border-t mt-3" style={{ borderColor: 'var(--border-default)' }}>
+            <button onClick={saveFuel} className="flex-1 py-2.5 rounded-xl bg-cyan-500 text-white font-bold text-xs hover:opacity-90 shadow-md transition">Lưu</button>
             <button onClick={() => setOpenModal(null)} className="px-4 py-2.5 rounded-xl text-xs font-semibold transition" style={{ background: 'var(--bg-hover)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}>Hủy</button>
           </div>
         </Modal>

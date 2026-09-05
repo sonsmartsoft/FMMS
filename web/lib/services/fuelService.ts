@@ -72,13 +72,41 @@ export function mapFuelRow(row: any): FuelLog {
     ? Number(row.calculated_consumption_l100km) 
     : (row.consumption_l100km != null ? Number(row.consumption_l100km) : undefined);
 
+  let rawPrice = Number(row.price_per_liter) || 0;
+  let rawTotal = Number(row.total_cost) || 0;
+
+  // Auto-heal corrupt values (ví dụ lỡ gõ thừa số 0 hoặc tràn float 8.000.000.000.000.000)
+  if (rawTotal > 50000000 && liters > 0 && liters < 100) {
+    if (rawPrice > 10000 && rawPrice < 50000) {
+      rawTotal = Math.round(liters * rawPrice);
+    } else {
+      rawPrice = 25250;
+      rawTotal = Math.round(liters * rawPrice);
+    }
+  }
+  if (rawPrice > 100000 && rawTotal > 0 && liters > 0) {
+    rawPrice = Math.round(rawTotal / liters);
+    if (rawPrice > 100000) rawPrice = 25250;
+  }
+
+  // Luôn làm tròn số nguyên chuẩn VND
+  let price_per_liter = Math.round(rawPrice);
+  let total_cost = Math.round(rawTotal);
+
+  if (total_cost === 0 && liters > 0 && price_per_liter > 0) {
+    total_cost = Math.round(liters * price_per_liter);
+  }
+  if (price_per_liter === 0 && liters > 0 && total_cost > 0) {
+    price_per_liter = Math.round(total_cost / liters);
+  }
+
   return {
     id: row.id,
     asset_id: row.asset_id,
     date: dateStr,
     liters,
-    price_per_liter: Number(row.price_per_liter) || 0,
-    total_cost: Number(row.total_cost) || 0,
+    price_per_liter,
+    total_cost,
     odometer_km: Number(row.odometer_km) || 0,
     station: row.station ?? '',
     tank_full: row.tank_full != null ? Boolean(row.tank_full) : true,

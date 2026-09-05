@@ -15,13 +15,16 @@ import { Fuel, Zap, TrendingDown, Plus, X, Pencil, Trash2, Check, BarChart3 } fr
 import DraggableModal from '@/components/ui/DraggableModal';
 
 
-const fmt = (n: number) => n.toLocaleString('vi-VN');
+const fmt = (n: number | string | undefined | null) => {
+  if (n == null || isNaN(Number(n))) return '0';
+  return Math.round(Number(n)).toLocaleString('vi-VN');
+};
 const fmtDate = (d: string) => {
   try { return new Date(d).toLocaleDateString('vi-VN'); } catch { return d; }
 };
 
 const emptyForm = () => ({
-  asset_id: '', date: '', liters: '', price_per_liter: '', odometer_km: '', station: '', notes: '',
+  asset_id: '', date: '', liters: '', price_per_liter: '', total_cost: '', odometer_km: '', station: '', notes: '',
 });
 
 export default function FuelPage() {
@@ -225,11 +228,16 @@ export default function FuelPage() {
 
   const openEdit = (log: any) => {
     setEditingId(log.id);
+    const l = parseFloat(log.fuel_liters ?? log.liters ?? 0);
+    const p = parseFloat(log.price_per_liter ?? 0);
+    let total = log.total_cost || (l > 0 && p > 0 ? Math.round(l * p) : 0);
+    if (total > 50_000_000) total = Math.round(l * 25250);
     setForm({
       asset_id: log.asset_id ?? log.vehicle_id ?? '',
       date: (log.date ?? log.timestamp ?? '').substring(0, 10),
       liters: String(log.fuel_liters ?? log.liters ?? ''),
-      price_per_liter: String(log.price_per_liter ?? ''),
+      price_per_liter: String(p > 0 ? Math.round(p) : ''),
+      total_cost: String(total > 0 ? Math.round(total) : ''),
       odometer_km: String(log.odometer_km ?? ''),
       station: log.station ?? '',
       notes: log.notes ?? '',
@@ -239,13 +247,24 @@ export default function FuelPage() {
 
   const save = async () => {
     const l = parseFloat(form.liters) || 0;
-    const p = parseFloat(form.price_per_liter) || 0;
+    let p = parseFloat(form.price_per_liter) || 0;
+    let total = parseFloat(form.total_cost) || 0;
+    if (total > 0 && l > 0 && p === 0) {
+      p = Math.round(total / l);
+    } else if (p > 0 && l > 0 && total === 0) {
+      total = Math.round(l * p);
+    }
+    if (total > 50_000_000) total = Math.round(l * 25250);
+    p = Math.round(p);
+    total = Math.round(total);
+
     const payload = {
       asset_id: form.asset_id || assets[0]?.id,
       timestamp: new Date(form.date || Date.now()).toISOString(),
       odometer_km: parseFloat(form.odometer_km) || 0,
       fuel_liters: l,
       price_per_liter: p,
+      total_cost: total,
       station: form.station || undefined,
       notes: form.notes || undefined,
       tank_full: true,
@@ -708,36 +727,124 @@ export default function FuelPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Số lít *</label>
-                      <input type="number" step="0.1" className="theme-input font-mono font-bold text-cyan-400" placeholder="35.0" value={form.liters} onChange={e => setForm(p => ({ ...p, liters: e.target.value }))} />
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="theme-input font-mono font-bold text-cyan-400"
+                        placeholder="35.0"
+                        value={form.liters}
+                        onChange={e => {
+                          const val = e.target.value;
+                          const l = parseFloat(val) || 0;
+                          const p = parseFloat(form.price_per_liter) || 0;
+                          setForm(prev => ({
+                            ...prev,
+                            liters: val,
+                            total_cost: l > 0 && p > 0 ? String(Math.round(l * p)) : prev.total_cost,
+                          }));
+                        }}
+                      />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Đơn giá (₫/Lít) *</label>
-                      <input type="number" className="theme-input font-mono font-bold" placeholder="23100" value={form.price_per_liter} onChange={e => setForm(p => ({ ...p, price_per_liter: e.target.value }))} />
+                      <input
+                        type="number"
+                        className="theme-input font-mono font-bold"
+                        placeholder="23100"
+                        value={form.price_per_liter}
+                        onChange={e => {
+                          const val = e.target.value;
+                          const p = parseFloat(val) || 0;
+                          const l = parseFloat(form.liters) || 0;
+                          setForm(prev => ({
+                            ...prev,
+                            price_per_liter: val,
+                            total_cost: l > 0 && p > 0 ? String(Math.round(l * p)) : prev.total_cost,
+                          }));
+                        }}
+                      />
                     </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Tổng thanh toán (₫) *</label>
+                      <input
+                        type="number"
+                        className="theme-input font-mono font-bold text-emerald-400"
+                        placeholder="800000"
+                        value={form.total_cost}
+                        onChange={e => {
+                          const val = e.target.value;
+                          const t = parseFloat(val) || 0;
+                          const l = parseFloat(form.liters) || 0;
+                          setForm(prev => ({
+                            ...prev,
+                            total_cost: val,
+                            price_per_liter: l > 0 && t > 0 ? String(Math.round(t / l)) : prev.price_per_liter,
+                          }));
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Rounding Toolbar */}
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    <span className="text-[10px] uppercase font-bold" style={{ color: 'var(--text-muted)' }}>Làm tròn nhanh:</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const t = parseFloat(form.total_cost) || 0;
+                        const l = parseFloat(form.liters) || 0;
+                        if (t > 0) {
+                          const roundedTotal = Math.round(t / 1000) * 1000;
+                          setForm(prev => ({
+                            ...prev,
+                            total_cost: String(roundedTotal),
+                            price_per_liter: l > 0 ? String(Math.round(roundedTotal / l)) : prev.price_per_liter,
+                          }));
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition hover:border-cyan-500 hover:text-cyan-400"
+                      style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                    >
+                      ⚡ Chẵn 1.000₫ ({fmt(Math.round((parseFloat(form.total_cost) || 0) / 1000) * 1000)}₫)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const p = parseFloat(form.price_per_liter) || 0;
+                        const l = parseFloat(form.liters) || 0;
+                        if (p > 0) {
+                          const roundedPrice = Math.round(p / 10) * 10;
+                          setForm(prev => ({
+                            ...prev,
+                            price_per_liter: String(roundedPrice),
+                            total_cost: l > 0 ? String(Math.round(l * roundedPrice)) : prev.total_cost,
+                          }));
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold border transition hover:border-emerald-500 hover:text-emerald-400"
+                      style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                    >
+                      ⚡ Chẵn Đơn giá ({fmt(Math.round((parseFloat(form.price_per_liter) || 0) / 10) * 10)}₫/L)
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Odometer lúc đổ (km)</label>
                       <input type="number" className="theme-input font-mono font-bold" placeholder="12846" value={form.odometer_km} onChange={e => setForm(p => ({ ...p, odometer_km: e.target.value }))} />
                     </div>
-                  </div>
-
-                  {form.liters && form.price_per_liter && (
-                    <div className="px-4 py-3 rounded-xl text-xs font-extrabold flex items-center justify-between" style={{ background: 'var(--accent-cyan-bg)', border: '1px solid var(--accent-cyan-border)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>Tổng thanh toán tiền xăng:</span>
-                      <span className="text-sm font-mono text-cyan-400 font-extrabold">{fmt(parseFloat(form.liters) * parseFloat(form.price_per_liter))} ₫</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Cây xăng / Trạm sạc</label>
                       <input type="text" className="theme-input" placeholder="VD: PV OIL Cầu Giấy, Petrolimex Hà Đông..." value={form.station} onChange={e => setForm(p => ({ ...p, station: e.target.value }))} />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Ghi chú thêm</label>
-                      <input type="text" className="theme-input" placeholder="Ghi chú đợt đổ xăng..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
-                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold uppercase" style={{ color: 'var(--text-muted)' }}>Ghi chú thêm</label>
+                    <input type="text" className="theme-input" placeholder="Ghi chú đợt đổ xăng..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
                   </div>
                 </div>
               </div>
