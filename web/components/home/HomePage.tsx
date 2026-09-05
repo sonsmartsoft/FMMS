@@ -11,6 +11,7 @@ import { getTrips } from '@/lib/services/tripService';
 import { getFuelLogs } from '@/lib/services/fuelService';
 import { getExpenses } from '@/lib/services/expenseService';
 import { getLoans } from '@/lib/services/loanService';
+import { createClient } from '@/lib/supabase/client';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { Plus, Car, Bike, Zap, Gauge, DollarSign, Fuel, Sparkles, Search, X, Download, Sliders } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
@@ -560,7 +561,7 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
                 { key: 'showPrice', label: 'Giá mua ban đầu' },
                 { key: 'showLicensePlate', label: 'Biển số xe' },
                 { key: 'showOdometer', label: 'Quãng đường / Odometer (km)' },
-                { key: 'showFuel', label: 'Mức nhiên liệu / Pin (%)' },
+                { key: 'showFuelLevel', label: 'Mức nhiên liệu / Pin (%)' },
               ].map(({ key, label }) => (
                 <label key={key} className="flex items-center justify-between p-3 rounded-xl cursor-pointer transition"
                   style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
