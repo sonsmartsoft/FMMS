@@ -280,6 +280,42 @@ export default function AssetDetailPage() {
         setParts(p);
         setOdometerLogs(odo);
         if (w?.data) setWarranties(w.data);
+
+        // Tính toán mức xăng % và số lít còn lại từ dữ liệu mới nhất
+        const tank = a.tank_capacity_liters || 45;
+        let fuelPct = a.fuel_level_percent;
+        let consumption = a.avg_consumption_l100km;
+        if (f && f.length > 0) {
+          const sortedF = [...f].sort((x, y) => new Date(y.timestamp || y.date || 0).getTime() - new Date(x.timestamp || x.date || 0).getTime());
+          const latest = sortedF[0];
+          if (!consumption) {
+            const logsWithConsumption = sortedF.filter((l: any) => l.consumption_l100km || l.calculated_consumption_l100km);
+            if (logsWithConsumption.length > 0) {
+              consumption = Number(logsWithConsumption[0].consumption_l100km || logsWithConsumption[0].calculated_consumption_l100km);
+            } else {
+              consumption = 6.8;
+            }
+          }
+          if (latest.fuel_level_after_pct != null) {
+            fuelPct = Number(latest.fuel_level_after_pct);
+          } else if (latest.odometer_km && a.current_odometer_km) {
+            const deltaKm = Math.max(0, Number(a.current_odometer_km) - Number(latest.odometer_km));
+            const fuelConsumedLiters = deltaKm * ((consumption || 6.8) / 100);
+            const remaining = Math.max(0, tank - fuelConsumedLiters);
+            fuelPct = Math.max(5, Math.min(100, Math.round((remaining / tank) * 100)));
+          }
+        }
+        const remainingLiters = fuelPct != null ? Math.round((fuelPct / 100) * tank * 10) / 10 : undefined;
+        const rangeKm = fuelPct != null ? Math.round((fuelPct / 100) * tank * (100 / (consumption || 6.8))) : a.estimated_range_km;
+
+        setAsset({
+          ...a,
+          fuel_level_percent: fuelPct,
+          remaining_fuel_liters: remainingLiters,
+          avg_consumption_l100km: consumption,
+          estimated_range_km: rangeKm,
+        });
+
         setInsurances(
           i.map((r: InsuranceRow) => ({
             id: r.id,
@@ -2472,7 +2508,12 @@ export default function AssetDetailPage() {
               {(asset.fuel_level_percent !== undefined) && (
                 <div className="border-l pl-4" style={{ borderColor: 'var(--border-default)' }}>
                   <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>{asset.capabilities.has_battery ? 'Pin' : 'Nhiên liệu'}</p>
-                  <p className="text-lg font-bold mt-0.5" style={{ color: 'var(--status-amber)' }}>{asset.fuel_level_percent}%</p>
+                  <div className="flex items-baseline space-x-1.5 mt-0.5">
+                    <p className="text-lg font-bold" style={{ color: 'var(--status-amber)' }}>{asset.fuel_level_percent}%</p>
+                    {asset.remaining_fuel_liters != null && (
+                      <span className="text-xs font-semibold text-amber-400">({asset.remaining_fuel_liters.toFixed(1)}L)</span>
+                    )}
+                  </div>
                   <span className="text-[9px]" style={{ color: 'var(--text-muted)' }}>~{asset.estimated_range_km} km</span>
                 </div>
               )}

@@ -131,7 +131,12 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
                   <span>{isEn ? 'Fuel Level' : 'Mức xăng'}</span>
                 </div>
                 <div className="flex items-center justify-between mt-0.5">
-                  <span className="font-bold" style={{ color: 'var(--status-amber)' }}>{asset.fuel_level_percent}%</span>
+                  <div className="flex items-baseline space-x-1">
+                    <span className="font-bold" style={{ color: 'var(--status-amber)' }}>{asset.fuel_level_percent}%</span>
+                    {asset.remaining_fuel_liters != null && (
+                      <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>({asset.remaining_fuel_liters.toFixed(1)}L)</span>
+                    )}
+                  </div>
                   <div className="w-12 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
                     <div className="h-full rounded-full" style={{ width: `${asset.fuel_level_percent}%`, background: 'var(--status-amber)' }} />
                   </div>

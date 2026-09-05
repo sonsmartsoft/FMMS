@@ -56,6 +56,7 @@ export interface Asset {
   capabilities: AssetCapabilities;
   // Derived quick stats
   fuel_level_percent?: number;
+  remaining_fuel_liters?: number;
   estimated_range_km?: number;
   avg_consumption_l100km?: number;
   total_rides?: number;

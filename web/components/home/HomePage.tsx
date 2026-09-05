@@ -81,46 +81,81 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
     let cancelled = false;
     (async () => {
       try {
-        const [a, t, f, e, l] = await Promise.all([
+        const [a, t, f, e, l, tele] = await Promise.all([
           getAssets(),
           getTrips(),
           getFuelLogs(),
           getExpenses(),
           getLoans(),
+          (async () => {
+            try {
+              const sb = createClient();
+              const { data } = await sb
+                .from('telemetry_samples')
+                .select('asset_id, fuel_level_percent, timestamp')
+                .not('fuel_level_percent', 'is', null)
+                .order('timestamp', { ascending: false })
+                .limit(50);
+              return data || [];
+            } catch {
+              return [];
+            }
+          })(),
         ]);
         const enrichedAssets = a.map(asset => {
           const assetLogs = (f || []).filter((l: any) => l.asset_id === asset.id || l.vehicle_id === asset.id);
           const assetTrips = (t || []).filter((tr: any) => tr.asset_id === asset.id);
+          const latestTele = (tele || []).find((s: any) => s.asset_id === asset.id && s.fuel_level_percent != null);
           
           let fuelPct = asset.fuel_level_percent;
           let consumption = asset.avg_consumption_l100km;
           let rangeKm = asset.estimated_range_km;
           const ridesCount = assetTrips.length;
+          const tank = asset.tank_capacity_liters || 45;
 
-          if (assetLogs.length > 0) {
-            const latest = assetLogs[0];
-            if (latest.fuel_level_after_pct != null) {
-              fuelPct = Number(latest.fuel_level_after_pct);
-            } else if (fuelPct === undefined && (asset.capabilities.has_fuel || asset.capabilities.has_battery || asset.asset_type === 'CAR')) {
-              fuelPct = 85;
-            }
+          // 1. Ưu tiên dữ liệu cảm biến phao xăng thực tế từ OBD gửi về gần nhất
+          if (latestTele && latestTele.fuel_level_percent != null && Number(latestTele.fuel_level_percent) > 0) {
+            fuelPct = Math.round(Number(latestTele.fuel_level_percent));
+          } else if (assetLogs.length > 0) {
+            // Sắp xếp nhật ký đổ xăng mới nhất
+            const sortedLogs = [...assetLogs].sort((x, y) =>
+              new Date(y.timestamp || y.date || 0).getTime() - new Date(x.timestamp || x.date || 0).getTime()
+            );
+            const latest = sortedLogs[0];
+
+            // Xác định mức tiêu thụ thực tế
             if (!consumption) {
-              const logsWithConsumption = assetLogs.filter((l: any) => l.consumption_l100km || l.calculated_consumption_l100km);
+              const logsWithConsumption = sortedLogs.filter((l: any) => l.consumption_l100km || l.calculated_consumption_l100km);
               if (logsWithConsumption.length > 0) {
                 consumption = Number(logsWithConsumption[0].consumption_l100km || logsWithConsumption[0].calculated_consumption_l100km);
               } else {
                 consumption = 6.8;
               }
             }
-            if (fuelPct !== undefined && !rangeKm) {
-              const tank = asset.tank_capacity_liters || 45;
-              rangeKm = Math.round((fuelPct / 100) * tank * (100 / (consumption || 7)));
+
+            if (latest.fuel_level_after_pct != null) {
+              fuelPct = Number(latest.fuel_level_after_pct);
+            } else if (latest.odometer_km && asset.current_odometer_km) {
+              // Tính mức xăng động theo quãng đường đã chạy từ lần đổ gần nhất
+              const deltaKm = Math.max(0, Number(asset.current_odometer_km) - Number(latest.odometer_km));
+              const fuelConsumedLiters = deltaKm * ((consumption || 6.8) / 100);
+              const remainingLiters = Math.max(0, tank - fuelConsumedLiters);
+              fuelPct = Math.max(5, Math.min(100, Math.round((remainingLiters / tank) * 100)));
+            } else if (fuelPct === undefined && (asset.capabilities.has_fuel || asset.asset_type === 'CAR')) {
+              fuelPct = 70;
             }
           }
+
+          if (fuelPct !== undefined && !rangeKm) {
+            rangeKm = Math.round((fuelPct / 100) * tank * (100 / (consumption || 6.8)));
+          }
+
+          const remainingLiters = fuelPct != null ? Math.round((fuelPct / 100) * tank * 10) / 10 : undefined;
 
           return {
             ...asset,
             fuel_level_percent: fuelPct,
+            remaining_fuel_liters: remainingLiters,
             avg_consumption_l100km: consumption,
             estimated_range_km: rangeKm,
             total_rides: asset.asset_type === 'BICYCLE' ? ridesCount : asset.total_rides,
