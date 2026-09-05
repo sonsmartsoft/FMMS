@@ -14,7 +14,7 @@ import { getFuelLogs } from '@/lib/services/fuelService';
 import { getMaintenanceRecords } from '@/lib/services/maintenanceService';
 import { getTrips } from '@/lib/services/tripService';
 import { useTheme } from '@/lib/theme/ThemeContext';
-import { BarChart3, TrendingDown, TrendingUp, Car, DollarSign, Gauge, Fuel, Wrench, Activity } from 'lucide-react';
+import { BarChart3, TrendingDown, TrendingUp, Car, DollarSign, Gauge, Fuel, Wrench, Activity, Calendar } from 'lucide-react';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
@@ -142,30 +142,61 @@ export default function AnalyticsPage() {
     return Array.from(map.values()).filter(d => d.value > 0).sort((a, b) => b.value - a.value);
   }, [filteredExpenses]);
 
-  const allYears = Array.from(new Set([
-    ...filteredExpenses.map(e => (e.date || '').slice(0, 4)),
-    ...filteredFuelLogs.map(f => (f.date || '').slice(0, 4)),
-    ...filteredMaintRecords.map(m => (m.date || '').slice(0, 4)),
-  ])).filter(Boolean).sort();
-  const chartYear = allYears[allYears.length - 1] || String(new Date().getFullYear());
+  const currentYear = new Date().getFullYear();
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<string>();
+    expenses.forEach(e => { if (e.date) yearsSet.add(e.date.slice(0, 4)); });
+    fuelLogs.forEach(f => { if (f.date || f.timestamp) yearsSet.add((f.date || f.timestamp).slice(0, 4)); });
+    maintRecords.forEach(m => { if (m.date) yearsSet.add(m.date.slice(0, 4)); });
+    trips.forEach(t => { if (t.start_time) yearsSet.add(t.start_time.slice(0, 4)); });
+    yearsSet.add(String(currentYear));
+    return Array.from(yearsSet).filter(y => /^\d{4}$/.test(y)).sort();
+  }, [expenses, fuelLogs, maintRecords, trips, currentYear]);
 
-  const monthlyData = MONTHS.map((label, i) => {
-    const m = (i + 1).toString().padStart(2, '0');
-    const prefix = `${chartYear}-${m}`;
-    let fuel = 0, maint = 0, upgrade = 0, ins = 0, loan = 0, other = 0;
-    filteredExpenses.filter(e => (e.date || '').startsWith(prefix)).forEach(e => {
-      const c = (e.category || '').toUpperCase();
-      const amt = e.amount || 0;
-      if (c === 'FUEL' || c === 'RUNNING') fuel += amt;
-      else if (c === 'MAINTENANCE' || c === 'PARTS' || c === 'LABOR') maint += amt;
-      else if (c === 'UPGRADE') upgrade += amt;
-      else if (c === 'INSURANCE' || c === 'INITIAL' || c === 'REGISTRATION') ins += amt;
-      else if (c === 'LOAN' || c === 'LOAN_PAYMENT' || c === 'LOAN_INTEREST') loan += amt;
-      else other += amt;
+  const [selectedYear, setSelectedYear] = useState<string>(String(currentYear));
+  const chartTitleYear = selectedYear === 'ALL' ? 'Tất cả các năm' : `Năm ${selectedYear}`;
+
+  const monthlyData = useMemo(() => {
+    return MONTHS.map((label, i) => {
+      const m = (i + 1).toString().padStart(2, '0');
+      let fuel = 0, maint = 0, upgrade = 0, ins = 0, loan = 0, other = 0;
+      
+      const matchMonth = (dateStr?: string) => {
+        if (!dateStr) return false;
+        if (selectedYear === 'ALL') {
+          return dateStr.slice(5, 7) === m;
+        }
+        return dateStr.startsWith(`${selectedYear}-${m}`);
+      };
+
+      filteredExpenses.filter(e => matchMonth(e.date)).forEach(e => {
+        const c = (e.category || '').toUpperCase();
+        const amt = e.amount || 0;
+        if (c === 'FUEL' || c === 'RUNNING') fuel += amt;
+        else if (c === 'MAINTENANCE' || c === 'PARTS' || c === 'LABOR') maint += amt;
+        else if (c === 'UPGRADE') upgrade += amt;
+        else if (c === 'INSURANCE' || c === 'INITIAL' || c === 'REGISTRATION') ins += amt;
+        else if (c === 'LOAN' || c === 'LOAN_PAYMENT' || c === 'LOAN_INTEREST') loan += amt;
+        else other += amt;
+      });
+
+      const km = filteredTrips
+        .filter(t => matchMonth(t.start_time))
+        .reduce((s, t) => s + (Number(t.distance_km) || 0), 0);
+
+      return {
+        label,
+        fuel,
+        maint,
+        upgrade,
+        ins,
+        loan,
+        other,
+        km,
+        total: fuel + maint + upgrade + ins + loan + other,
+      };
     });
-    const km = filteredTrips.filter(t => (t.start_time || '').startsWith(prefix)).reduce((s, t) => s + (t.distance_km || 0), 0);
-    return { label, fuel, maint, upgrade, ins, loan, other, km, total: fuel + maint + upgrade + ins + loan + other };
-  });
+  }, [selectedYear, filteredExpenses, filteredTrips]);
 
   const assetBarData = filteredAssets.map(a => {
     const totalExp = expenses.filter(e => isSameAsset(e.asset_id, a.id)).reduce((s, e) => s + e.amount, 0);
@@ -206,9 +237,28 @@ export default function AnalyticsPage() {
             }
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs font-bold px-3.5 py-1.5 rounded-xl" style={{ background: 'rgba(56,189,248,0.12)', color: 'var(--accent-cyan)', border: '1px solid rgba(56,189,248,0.25)' }}>
-          <BarChart3 className="w-3.5 h-3.5" />
-          <span>Năm phân tích: {chartYear}</span>
+        <div className="flex items-center gap-1.5 p-1 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <div className="flex items-center gap-1.5 px-2 text-xs font-bold" style={{ color: 'var(--accent-cyan)' }}>
+            <Calendar className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Năm:</span>
+          </div>
+          <button
+            onClick={() => setSelectedYear('ALL')}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${selectedYear === 'ALL' ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
+            style={selectedYear === 'ALL' ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
+          >
+            Tất cả
+          </button>
+          {availableYears.map(yr => (
+            <button
+              key={yr}
+              onClick={() => setSelectedYear(yr)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${selectedYear === yr ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
+              style={selectedYear === yr ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
+            >
+              {yr}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -273,23 +323,91 @@ export default function AnalyticsPage() {
 
       {/* Composed Chart: Multi-category stack + Km bar */}
       <div className="p-5 rounded-2xl space-y-4 shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-        <SectionHeader icon={Activity} title={`Xu hướng chi phí & quãng đường theo tháng — Năm ${chartYear}`} sub="Biểu đồ kết hợp: Cột (Km) + Vùng xếp chồng (Chi phí theo nhóm)" color="#38BDF8" />
-        <div style={{ height: 300 }}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <SectionHeader
+            icon={Activity}
+            title={`Xu hướng chi phí & quãng đường theo tháng — ${chartTitleYear}`}
+            sub="Biểu đồ kết hợp: Cột (Km) + Vùng xếp chồng (Chi phí theo nhóm)"
+            color="#38BDF8"
+          />
+          <div className="flex items-center gap-1.5 p-1 rounded-xl self-start sm:self-center shrink-0" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+            <button
+              onClick={() => setSelectedYear('ALL')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${selectedYear === 'ALL' ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
+              style={selectedYear === 'ALL' ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
+            >
+              Tất cả các năm
+            </button>
+            {availableYears.map(yr => (
+              <button
+                key={yr}
+                onClick={() => setSelectedYear(yr)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${selectedYear === yr ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
+                style={selectedYear === yr ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
+              >
+                {yr}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ height: 320 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+              <defs>
+                <linearGradient id="kmBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10B981" stopOpacity={0.95} />
+                  <stop offset="100%" stopColor="#059669" stopOpacity={0.7} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-              <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} />
+              <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
               <YAxis yAxisId="left" tickFormatter={v => v > 0 ? fmtM(v) : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={48} />
-              <YAxis yAxisId="right" orientation="right" tickFormatter={v => v > 0 ? `${fmt(Math.round(v))}km` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={65} />
-              <ReTooltip contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0,0,0,0.6)' : '0 10px 25px -5px rgba(0,0,0,0.1)' }} formatter={(v: number, name: string) => [name.includes('Km') ? `${fmt(Math.round(v))} km` : `${fmt(v)} ₫`, name]} />
-              <Legend formatter={(v) => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ paddingTop: 10 }} />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tickFormatter={v => v > 0 ? `${fmt(Math.round(v))} km` : '0'}
+                tick={{ fill: '#10B981', fontSize: 11, fontWeight: 700 }}
+                axisLine={{ stroke: '#10B981', strokeWidth: 1.5 }}
+                tickLine={{ stroke: '#10B981' }}
+                width={74}
+              />
+              <ReTooltip
+                contentStyle={{
+                  background: tooltipBg,
+                  border: `1px solid ${tooltipBorder}`,
+                  borderRadius: 12,
+                  fontSize: 12,
+                  color: tooltipText,
+                  boxShadow: isDark ? '0 10px 25px -5px rgba(0,0,0,0.6)' : '0 10px 25px -5px rgba(0,0,0,0.1)',
+                  padding: '10px 14px',
+                }}
+                formatter={(v: number, name: string) => {
+                  if (name === 'Km di chuyển' || name.includes('Km')) {
+                    return [`${fmt(Math.round(v))} km`, '📊 Quãng đường'];
+                  }
+                  return [`${fmt(v)} ₫`, name];
+                }}
+              />
+              <Legend
+                formatter={(v) => {
+                  if (v === 'Km di chuyển') {
+                    return (
+                      <span className="inline-flex items-center gap-1 font-extrabold text-xs px-2 py-0.5 rounded-md text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-950/80 border border-emerald-500/40">
+                        📊 {v} (Trục phải)
+                      </span>
+                    );
+                  }
+                  return <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>;
+                }}
+                wrapperStyle={{ paddingTop: 12 }}
+              />
               <Area yAxisId="left" type="monotone" dataKey="fuel" stackId="cost" name="Nhiên liệu" fill="#F59E0B40" stroke="#F59E0B" strokeWidth={2} />
               <Area yAxisId="left" type="monotone" dataKey="maint" stackId="cost" name="Bảo dưỡng" fill="#06B6D440" stroke="#06B6D4" strokeWidth={2} />
               <Area yAxisId="left" type="monotone" dataKey="upgrade" stackId="cost" name="Nâng cấp" fill="#8B5CF640" stroke="#8B5CF6" strokeWidth={2} />
               <Area yAxisId="left" type="monotone" dataKey="ins" stackId="cost" name="Bảo hiểm/Giấy tờ" fill="#10B98140" stroke="#10B981" strokeWidth={2} />
               <Area yAxisId="left" type="monotone" dataKey="loan" stackId="cost" name="Khoản vay" fill="#EC489940" stroke="#EC4899" strokeWidth={2} />
               <Area yAxisId="left" type="monotone" dataKey="other" stackId="cost" name="Chi phí khác" fill="#64748B40" stroke="#64748B" strokeWidth={2} />
-              <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#10B98135" stroke="#10B981" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="url(#kmBarGrad)" stroke="#059669" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -366,7 +484,7 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <SectionHeader icon={Fuel} title="Chi phí nhiên liệu theo tháng" sub={`Biểu đồ cột — Năm ${chartYear}`} color="#F59E0B" />
+          <SectionHeader icon={Fuel} title="Chi phí nhiên liệu theo tháng" sub={`Biểu đồ cột — ${chartTitleYear}`} color="#F59E0B" />
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
@@ -383,7 +501,7 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <SectionHeader icon={Gauge} title="Quãng đường di chuyển theo tháng" sub={`Từ dữ liệu nhật ký chuyến đi — Năm ${chartYear}`} color="#10B981" />
+          <SectionHeader icon={Gauge} title="Quãng đường di chuyển theo tháng" sub={`Từ dữ liệu nhật ký chuyến đi — ${chartTitleYear}`} color="#10B981" />
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={monthlyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
