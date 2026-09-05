@@ -286,8 +286,8 @@ export default function AssetDetailPage() {
         let fuelPct = a.fuel_level_percent;
         let consumption = a.avg_consumption_l100km;
         if (f && f.length > 0) {
-          const sortedF = [...f].sort((x, y) => new Date(y.timestamp || y.date || 0).getTime() - new Date(x.timestamp || x.date || 0).getTime());
-          const latest = sortedF[0];
+          const sortedF = [...f].sort((x: any, y: any) => new Date(y.timestamp || y.date || 0).getTime() - new Date(x.timestamp || x.date || 0).getTime());
+          const latest: any = sortedF[0];
           if (!consumption) {
             const logsWithConsumption = sortedF.filter((l: any) => l.consumption_l100km || l.calculated_consumption_l100km);
             if (logsWithConsumption.length > 0) {

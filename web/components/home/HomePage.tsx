@@ -119,10 +119,10 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
             fuelPct = Math.round(Number(latestTele.fuel_level_percent));
           } else if (assetLogs.length > 0) {
             // Sắp xếp nhật ký đổ xăng mới nhất
-            const sortedLogs = [...assetLogs].sort((x, y) =>
+            const sortedLogs = [...assetLogs].sort((x: any, y: any) =>
               new Date(y.timestamp || y.date || 0).getTime() - new Date(x.timestamp || x.date || 0).getTime()
             );
-            const latest = sortedLogs[0];
+            const latest: any = sortedLogs[0];
 
             // Xác định mức tiêu thụ thực tế
             if (!consumption) {
