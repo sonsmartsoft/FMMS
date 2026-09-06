@@ -105,7 +105,7 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
 
   // Ưu tiên 100% dữ liệu thực từ Supabase. Chỉ fallback về seedTrips nếu Supabase rỗng
   const baseTrips = supabaseTrips.length > 0
-    ? [...supabaseTrips, ...localTrips]
+    ? supabaseTrips
     : [...seedTrips, ...localTrips];
 
   const map = new Map<string, TripRecord>();
