@@ -314,6 +314,16 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
   - Tách biệt thang đo trục tung (Dual-Axis) ngăn đường giá xăng bị méo tỷ lệ.
   - Sửa lỗi runtime `showToast` khi build Vercel.
 
+### Đợt 14 (07/09/2026): Chuẩn Hóa Bộ Lọc Năm Động Analytics & Hoàn Thiện Chuỗi 98 Chuyến Đi 3.030 km
+- **Bộ Lọc Năm Động Thông Minh (`/analytics`):**
+  - Tự động phát hiện toàn bộ các năm có phát sinh dữ liệu (`Tất cả`, `2024`, `2025`, `2026`, `2027`...).
+  - Mặc định khởi tạo theo năm hiện tại (`2026`), tự động chuyển `2027` khi sang năm mới.
+  - Tinh chỉnh màu sắc biểu đồ "Km di chuyển" sang tông `#10B981` ngọc lục bảo sang trọng, dịu mắt, loại bỏ các ký hiệu rườm rà.
+- **Chuẩn Hóa Chuỗi 98 Chuyến Đi Khớp ODO 3.030 km (`/assets/[id]` & `tripService.ts`):**
+  - Đồng bộ 100% dữ liệu Supabase: 1 chặng Showroom + 64 chuyến Excel lịch sử + 33 chuyến OBD CarLogger = 98 chuyến, tổng $3.030,00\text{ km}$.
+  - Giải quyết dứt điểm các trường hợp hiển thị thiếu $1.986\text{ km}$ hoặc cộng lặp $5.162\text{ km}$.
+  - Tạo Trigger `auto_sync_asset_odometer_from_trips` trên Supabase đảm bảo mọi chuyến đi mới tự động đẩy ODO xe lên theo `MAX(end_odometer)` mà không gây drift.
+
 ---
 
 ## 10. CÁC LƯU Ý QUAN TRỌNG CHO ĐỢT PHÁT TRIỂN TIẾP THEO
@@ -323,5 +333,6 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
 3. **Không kết hợp `flex items-center` và `overflow-y-auto` trên cùng một div**: Luôn dùng mô hình 2 lớp div (`overflow-y-auto` ở lớp ngoài và `flex min-h-full items-center justify-center pt-20` ở lớp trong).
 4. **Thêm style inline với CSS Variable cho màu sắc**: Giúp đảm bảo tương thích 100% khi chuyển đổi Light Mode và Dark Mode mà không bị phụ thuộc vào class cố định của Tailwind.
 5. **Mọi thay đổi giao diện phải kiểm tra đồng thời trên cả 9 màn hình**: `/dashboard`, `/assets`, `/assets/[id]`, `/fuel`, `/maintenance`, `/finance`, `/documents`, `/warranties`, `/settings/*`.
+
 
 

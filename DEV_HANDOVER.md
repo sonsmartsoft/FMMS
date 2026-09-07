@@ -123,17 +123,21 @@ Thư mục: `/Users/uti/Documents/FMMS/android/releases/` (+ `CHANGELOG_ANDROID.
 
 ## 8. Việc cần làm SAU KHI cài lại Mac (checklist)
 
-- [ ] Khôi phục `/Users/uti/Documents/FMMS` từ bản sao lưu.
-- [ ] Cài Android SDK (`/Users/uti/Library/Android/sdk`) hoặc Android Studio; tạo lại `android/local.properties` nếu thiếu.
-- [ ] **Xoá override build dir** trong `app/build.gradle.kts` (dòng 13-14) → về mặc định.
-- [ ] Cấu hình ssh key `github-sonsmartsoft` (remote origin) nếu chưa có.
-- [ ] Kiểm tra `git -C /Users/uti/Documents/FMMS status` — có 5 file android đang sửa dang dở + 8 script web chưa commit; commit/đẩy nếu cần.
-- [ ] Build thử: `cd android && ./gradlew :app:assembleDebug --offline`.
+- [ ] Cấu hình ssh key `github-sonsmartsoft` trong `~/.ssh/config` và khôi phục `id_ed25519_sonsmartsoft`.
+- [ ] Clone repo: `git clone git@github-sonsmartsoft:sonsmartsoft/FMMS.git`.
+- [ ] Cài đặt Web: `cd FMMS/web && npm install` (chạy `npm run dev` để test).
+- [ ] Cài đặt Android SDK (`/Users/uti/Library/Android/sdk`) / Android Studio Ladybug; tạo `android/local.properties` (`sdk.dir=/Users/uti/Library/Android/sdk`).
+- [ ] **Xoá override build dir** trong `app/build.gradle.kts` (dòng 13-14) nếu cần về mặc định.
+- [ ] Build Android APK: `cd android && ./gradlew :app:assembleRelease` (hoặc `assembleDebug`).
 
 ---
 
-## 9. Trạng thái hiện tại (lần cuối làm việc)
+## 9. Trạng thái hệ thống hiện tại (07/09/2026)
 
-- Đã cài **rev126** lên `192.168.1.95` → màn LIVE DATA hiển thị bảng 3 cột.
-- User vừa kiểm tra: **mọi giá trị đọc được đều được gửi lên web** (xác nhận bằng code, chưa verify thực tế bảng trên web).
-- Còn dở: 5 file Android chưa commit (PidDefinitions, ELM327ProtocolManager, SpeedometerScreen, Strings, MoreScreen) + script web chưa commit. Nên commit trước khi cài lại máy.
+- **Android App:** Bản mới nhất **rev126** đã build và cài đặt thành công trên xe (`192.168.1.95:5555`). Toàn bộ mã nguồn Android đã được commit sạch lên branch `main`.
+- **Database Supabase Live (`opslebsdmwsnsyfmbynf`):**
+  - **Odometer xe Mazda 2AT:** Đã chuẩn hóa chính xác **3.030 km** (`assets.current_odometer_km = 3030`).
+  - **Chuỗi chuyến đi:** Đầy đủ **98 chuyến** (1 Showroom + 64 Excel + 33 OBD), tổng quãng đường đúng $3.030,00\text{ km}$.
+  - **Trigger ODO tự động (`0021_smart_odometer_trigger.sql`):** Tự động cập nhật ODO xe theo `MAX(end_odometer)` mỗi khi có chuyến đi mới, chống lệch/chống cộng lặp.
+  - **Đồng bộ Đổ xăng (`FIX_FUEL_LOGS_SYNC_AND_SCHEMA.sql`):** Bổ sung 7 cột OBD + RLS mở cho `anon` + trigger tự động ghi nhận vào `expenses`.
+- **Web App (Vercel):** Đang chạy ổn định tại [fmms.vercel.app](https://fmms.vercel.app), hỗ trợ bộ lọc năm động (All / 2024 / 2025 / 2026 / 2027) và biểu đồ tài chính.

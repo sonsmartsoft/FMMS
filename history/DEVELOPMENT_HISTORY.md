@@ -685,4 +685,73 @@ Dữ liệu chuẩn hoá từ ngày nhận xe đến hiện tại:
   - Quy chuẩn thiết kế thẻ Card Glassmorphism, đổ bóng mờ có màu, phân cấp thị giác chữ in hoa & số đo đậm.
   - Bộ linh kiện Jetpack Compose mẫu hoàn chỉnh (Thẻ KPI `FmmsStatCard`, Dấu tích xanh `FmmsVerifiedBadgeIcon`, Thẻ an toàn `FmmsAllGoodCard`, Chip trạng thái `FmmsStatusBadge`, Nút bấm Gradient `FmmsGradientButton`).
 
+---
 
+## 17. CẬP NHẬT 2026-09-06 & 2026-09-07: CHUẨN HÓA ODOMETER 3.030 KM, ĐỒNG BỘ ĐỔ XĂNG TỰ ĐỘNG & BÁO CÁO PHÂN TÍCH
+
+### 17.1. Chuẩn hóa & Khóa Chuỗi 98 Chuyến đi — ODO Mazda 2 Đạt Chuẩn 3.030 km
+- **Hiện tượng & Chẩn đoán lỗi:**
+  - *Lỗi 1 (Cộng trùng 5.162 km):* Do trigger cũ trên Supabase cộng dồn `distance_km` vào `current_odometer_km` mỗi khi có sự kiện `UPDATE` trên bảng `trips`, cộng với dữ liệu chuyến trôi GPS đứng yên (< 200m).
+  - *Lỗi 2 (Hiển thị 1.986 km):* Do trong quá trình dọn dẹp Supabase, các chuyến đi giai đoạn Tháng 4, Tháng 5 và đầu Tháng 6/2026 ($0 \to 1.044\text{ km}$) bị thiếu, chỉ còn các chuyến từ 13/06 ($1.986\text{ km}$).
+- **Giải pháp xử lý triệt để:**
+  - Nạp đầy đủ **98 chuyến đi** liên tục không đứt đoạn:
+    1. **1 Chặng Showroom nhận xe (09/04):** $0.0 \to 12.0\text{ km}$ ($12.0\text{ km}$).
+    2. **64 Chuyến Excel lịch sử (11/04 $\to$ 23/08):** $12.0 \to 2.651.0\text{ km}$ ($2.639.0\text{ km}$).
+    3. **33 Chuyến OBD CarLogger (24/08 $\to$ 06/09):** $2.651.0 \to 3.030.0\text{ km}$ ($379.0\text{ km}$).
+  - **Kết quả:** Tổng số chuyến = **98 chuyến**, Tổng ODO = **3.030,00 km** khớp tuyệt đối với đồng hồ Taplo xe.
+  - Script lưu tại: [`supabase/PERFECT_CHAIN_EXACT_3030_KM.sql`](../supabase/PERFECT_CHAIN_EXACT_3030_KM.sql).
+
+### 17.2. Tự động hóa Odometer Thông minh Không Drift (`0021_smart_odometer_trigger.sql`)
+- Tạo trigger `auto_sync_asset_odometer_from_trips` trên Supabase:
+  - Khi chuyến đi hoàn thành (`status = 'COMPLETED'`), tự động cập nhật ODO xe thành `MAX(end_odometer)` của các chuyến đi thuộc xe đó.
+  - Loại bỏ hoàn toàn lỗi cộng trùng khi bản ghi chuyến đi được cập nhật địa chỉ hoặc chỉ số tiêu hao.
+
+### 17.3. Sửa lỗi Đồng bộ Đổ xăng từ Android sang Web (`FIX_FUEL_LOGS_SYNC_AND_SCHEMA.sql`)
+- **Nguyên nhân:** App Android CarLogger khi đổ xăng gửi kèm 7 thông số OBD (`calculated_consumption_l100km`, `fuel_level_before_pct`, `fuel_liters_before`, `fuel_level_after_pct`, `fuel_liters_after`, `prev_odometer_km`, `fuel_consumed_liters`). Do bảng `public.fuel_logs` trên Supabase thiếu các cột này nên PostgREST trả về `PGRST204` và từ chối lưu.
+- **Khắc phục:**
+  - Thêm đầy đủ 7 cột OBD và `device_id` vào bảng `public.fuel_logs`.
+  - Mở quyền RLS cho phép cả `anon` (app Android) và `authenticated` (Web) ghi và đọc dữ liệu.
+  - Tạo trigger `sync_fuel_log_to_expense` để mỗi khi có lượt đổ xăng mới, hệ thống tự động ghi nhận vào bảng `expenses` (chi phí vận hành) phục vụ phân tích tài chính.
+
+### 17.4. Nâng cấp Màn hình Báo cáo & Phân tích (`/analytics`)
+- **Bộ lọc Năm Động (Dynamic Year Filter):**
+  - Tự động quét toàn bộ các năm có dữ liệu thực tế trong hệ thống (`Tất cả`, `2024`, `2025`, `2026`, `2027`...).
+  - Mặc định chọn năm hiện tại (`2026`), tự động chuyển sang `2027` khi sang năm mới mà không cần sửa code.
+- **Tối ưu Trực quan Hóa:**
+  - Tiêu đề biểu đồ tự động hiển thị theo năm được chọn: `Xu hướng chi phí & quãng đường theo tháng — Năm [Năm]`.
+  - Tinh chỉnh màu cột "Km di chuyển" sang tông ngọc lục bảo dịu mắt (`#10B981`), làm sạch chú thích (loại bỏ icon rườm rà và chữ "Trục phải").
+
+---
+
+## 18. HƯỚNG DẪN THIẾT LẬP LẠI MÔI TRƯỜNG KHI CÀI LẠI MÁY MAC (DISASTER RECOVERY)
+
+Khi cài lại macOS, để tiếp tục phát triển dự án FMMS mà không mất mát cấu hình:
+
+### 18.1. Khôi phục Khóa SSH GitHub
+1. Lưu lại file private key `~/.ssh/id_ed25519_sonsmartsoft` (hoặc tạo khóa mới và add vào GitHub account `Sondtk5`).
+2. Tạo file `~/.ssh/config`:
+```text
+Host github-sonsmartsoft
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519_sonsmartsoft
+```
+3. Phân quyền: `chmod 600 ~/.ssh/id_ed25519_sonsmartsoft && chmod 644 ~/.ssh/config`.
+
+### 18.2. Clone & Chạy Dự án
+```bash
+# Clone toàn bộ mã nguồn
+git clone git@github-sonsmartsoft:sonsmartsoft/FMMS.git
+cd FMMS/web
+
+# Cài đặt thư viện Web
+npm install
+
+# Khởi động Web dev server
+npm run dev
+```
+
+### 18.3. Môi trường Android
+- Cài Android Studio (Ladybug hoặc mới hơn), JDK 17.
+- Mở thư mục `FMMS/android`.
+- Build APK: `./gradlew assembleRelease` (hoặc `assembleDebug`).
