@@ -140,4 +140,20 @@ Thư mục: `/Users/uti/Documents/FMMS/android/releases/` (+ `CHANGELOG_ANDROID.
   - **Chuỗi chuyến đi:** Đầy đủ **98 chuyến** (1 Showroom + 64 Excel + 33 OBD), tổng quãng đường đúng $3.030,00\text{ km}$.
   - **Trigger ODO tự động (`0021_smart_odometer_trigger.sql`):** Tự động cập nhật ODO xe theo `MAX(end_odometer)` mỗi khi có chuyến đi mới, chống lệch/chống cộng lặp.
   - **Đồng bộ Đổ xăng (`FIX_FUEL_LOGS_SYNC_AND_SCHEMA.sql`):** Bổ sung 7 cột OBD + RLS mở cho `anon` + trigger tự động ghi nhận vào `expenses`.
-- **Web App (Vercel):** Đang chạy ổn định tại [fmms.vercel.app](https://fmms.vercel.app), hỗ trợ bộ lọc năm động (All / 2024 / 2025 / 2026 / 2027) và biểu đồ tài chính.
+- **Web App (Vercel):** Đang chạy ổn định tại [fmms.vercel.app](https://fmms.vercel.app), hỗ trợ bộ lọc năm động (All / 2024 / 2025 / 2026 / 2027), biểu đồ ma trận phân bố mã lỗi OBD DTC 12 tháng (DtcDistributionMatrix) và bảng điều khiển tài chính.
+
+---
+
+## 10. Sách mẫu thiết kế UI/UX & AI Hub dùng chung (Design Blueprint)
+
+Để tái sử dụng cho các dự án và hệ thống mới trong tương lai, toàn bộ cấu trúc kiến trúc UI/UX và các thành phần cốt lõi đã được tổng hợp chi tiết tại:
+👉 **[`docs/REUSABLE_SYSTEM_DESIGN_PATTERNS.md`](file:///Users/uti/Documents/FMMS/docs/REUSABLE_SYSTEM_DESIGN_PATTERNS.md)**
+
+Bao gồm 7 modul kiến trúc:
+1. **Thẻ KPI Gradient Glassmorphism & Hover Glow Shadow:** Công thức màu semantic và hiệu ứng hover tỏa sáng.
+2. **Hệ thống Cửa sổ Popup Đa năng (`DraggableModal`):** Kéo thả, thu nhỏ, phóng to, chống dính chuột.
+3. **Trung tâm Cấu hình AI Đa Nhà Cung Cấp (Multi-LLM Hub):** Chuyển đổi linh hoạt Gemini, OpenAI, DeepSeek, Claude, Groq, Ollama.
+4. **Live Chat & AI Assistant Thông minh:** Bơm ngữ cảnh xe tự động (Context Injection) & Gọi Action Button trực tiếp.
+5. **Kiến trúc Quản lý Danh mục Dùng chung (Master Data Hub):** Danh mục 2 tầng, bảo vệ quan hệ khóa ngoại, badge màu.
+6. **Biểu đồ Ma trận Phân bố 12 Tháng & Đa Năm (DTC Matrix Heatmap):** Lưới phân bố theo chu kỳ, gom tổng All-Time, click xem chi tiết.
+7. **Bảng màu Semantic & Biến Theme Tokens:** Bộ biến CSS Variables chuẩn Light/Dark mode.
