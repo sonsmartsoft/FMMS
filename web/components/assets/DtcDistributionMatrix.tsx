@@ -11,7 +11,8 @@ import {
   Wrench, 
   X,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Layers
 } from 'lucide-react';
 import { VehicleDtcLog } from '@/lib/services/diagnosticService';
 
@@ -103,10 +104,13 @@ export default function DtcDistributionMatrix({
   onNavigateToMaintenance,
 }: DtcDistributionMatrixProps) {
   const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  
+  // 'ALL' for All-Time years comparison, or specific year number (2026, 2025, ...)
+  const [timeScope, setTimeScope] = useState<'ALL' | number>(currentYear);
+
   const [selectedCell, setSelectedCell] = useState<{
     category: CategoryConfig;
-    monthIndex: number;
+    columnLabel: string;
     logs: VehicleDtcLog[];
   } | null>(null);
 
@@ -122,49 +126,85 @@ export default function DtcDistributionMatrix({
     return Array.from(years).sort((a, b) => b - a);
   }, [logs, currentYear]);
 
-  // Aggregate matrix data: [category_id][monthIndex 0..11] => VehicleDtcLog[]
+  // Determine Columns based on timeScope:
+  // If 'ALL' -> Columns are sorted ascending years (e.g. [2024, 2025, 2026])
+  // If number -> Columns are 12 months (Jan..Dec)
+  const columns = useMemo(() => {
+    if (timeScope === 'ALL') {
+      const sortedAsc = [...availableYears].sort((a, b) => a - b);
+      return sortedAsc.map(yr => ({
+        key: String(yr),
+        label: String(yr),
+        year: yr,
+        monthIndex: -1,
+      }));
+    } else {
+      return MONTH_NAMES_EN.map((mEn, idx) => ({
+        key: mEn,
+        label: mEn,
+        year: timeScope,
+        monthIndex: idx,
+      }));
+    }
+  }, [timeScope, availableYears]);
+
+  // Aggregate matrix data: [category_id][colIndex] => VehicleDtcLog[]
   const matrixData = useMemo(() => {
     const data: Record<string, VehicleDtcLog[][]> = {};
     DTC_CATEGORIES.forEach(cat => {
-      data[cat.id] = Array.from({ length: 12 }, () => []);
+      data[cat.id] = Array.from({ length: columns.length }, () => []);
     });
 
     logs.forEach(log => {
       const dateStr = log.first_detected_at || log.last_detected_at || log.created_at;
       if (!dateStr) return;
       const date = new Date(dateStr);
-      if (isNaN(date.getTime()) || date.getFullYear() !== selectedYear) return;
+      if (isNaN(date.getTime())) return;
 
-      const m = date.getMonth(); // 0..11
+      const logYear = date.getFullYear();
+      const logMonth = date.getMonth();
 
-      if (log.status === 'PENDING') {
-        data['PENDING_TEMP'][m].push(log);
-        return;
+      let targetColIdx = -1;
+      if (timeScope === 'ALL') {
+        targetColIdx = columns.findIndex(col => col.year === logYear);
+      } else {
+        if (logYear === timeScope) {
+          targetColIdx = logMonth;
+        }
       }
 
-      // Map to category
-      const codeUpper = (log.dtc_code || '').toUpperCase();
-      if (codeUpper.startsWith('P') || log.system_category === 'POWERTRAIN') {
-        data['POWERTRAIN'][m].push(log);
-      } else if (codeUpper.startsWith('C') || log.system_category === 'CHASSIS') {
-        data['CHASSIS'][m].push(log);
-      } else if (codeUpper.startsWith('B') || log.system_category === 'BODY') {
-        data['BODY'][m].push(log);
-      } else if (codeUpper.startsWith('U') || log.system_category === 'NETWORK') {
-        data['NETWORK'][m].push(log);
+      if (targetColIdx === -1) return;
+
+      // Determine category
+      let catId = 'POWERTRAIN';
+      if (log.status === 'PENDING') {
+        catId = 'PENDING_TEMP';
       } else {
-        data['POWERTRAIN'][m].push(log);
+        const codeUpper = (log.dtc_code || '').toUpperCase();
+        if (codeUpper.startsWith('P') || log.system_category === 'POWERTRAIN') {
+          catId = 'POWERTRAIN';
+        } else if (codeUpper.startsWith('C') || log.system_category === 'CHASSIS') {
+          catId = 'CHASSIS';
+        } else if (codeUpper.startsWith('B') || log.system_category === 'BODY') {
+          catId = 'BODY';
+        } else if (codeUpper.startsWith('U') || log.system_category === 'NETWORK') {
+          catId = 'NETWORK';
+        }
+      }
+
+      if (data[catId] && data[catId][targetColIdx]) {
+        data[catId][targetColIdx].push(log);
       }
     });
 
     return data;
-  }, [logs, selectedYear]);
+  }, [logs, timeScope, columns]);
 
-  // Category annual totals
+  // Category totals for current time scope
   const categoryTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     DTC_CATEGORIES.forEach(cat => {
-      const sum = (matrixData[cat.id] || []).reduce((acc, monthLogs) => acc + monthLogs.length, 0);
+      const sum = (matrixData[cat.id] || []).reduce((acc, colLogs) => acc + colLogs.length, 0);
       totals[cat.id] = sum;
     });
     return totals;
@@ -182,8 +222,8 @@ export default function DtcDistributionMatrix({
         border: '1px solid var(--border-default)',
       }}
     >
-      {/* ── Top Header & Year Selector ── */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+      {/* ── Top Header & Advanced Time Scope Filter ── */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
         <div>
           <div className="flex items-center space-x-2">
             <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
@@ -192,39 +232,45 @@ export default function DtcDistributionMatrix({
             </h4>
           </div>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            Biểu đồ ma trận phân bố mã lỗi OBD-II theo hệ thống và chu kỳ 12 tháng
+            {timeScope === 'ALL' 
+              ? 'Ma trận tổng hợp phân bố mã lỗi qua tất cả các năm (Toàn bộ vòng đời xe)'
+              : 'Biểu đồ ma trận phân bố mã lỗi OBD-II theo hệ thống trong năm ' + timeScope + ' (12 tháng)'}
           </p>
         </div>
 
-        {/* Year Selector */}
-        <div className="flex items-center space-x-1.5 self-end sm:self-auto bg-black/15 dark:bg-white/5 p-1 rounded-xl border border-white/10 text-xs">
+        {/* Smart Time Scope Selector */}
+        <div className="flex items-center space-x-1.5 self-stretch sm:self-auto bg-black/15 dark:bg-white/5 p-1 rounded-2xl border border-white/10 text-xs flex-wrap gap-1">
+          {/* All-time option */}
           <button
-            onClick={() => {
-              const idx = availableYears.indexOf(selectedYear);
-              if (idx < availableYears.length - 1) setSelectedYear(availableYears[idx + 1]);
-            }}
-            disabled={availableYears.indexOf(selectedYear) === availableYears.length - 1}
-            className="p-1 rounded-lg hover:bg-white/10 disabled:opacity-30 transition"
-            title="Năm trước"
+            onClick={() => setTimeScope('ALL')}
+            className={
+              'px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center space-x-1 ' +
+              (timeScope === 'ALL'
+                ? 'bg-cyan-500 text-white shadow-sm'
+                : 'hover:bg-white/10 text-muted')
+            }
           >
-            <ChevronLeft className="w-3.5 h-3.5" />
+            <Layers className="w-3 h-3" />
+            <span>Tất cả các năm</span>
           </button>
-          
-          <span className="px-2 font-bold font-mono text-cyan-400">
-            Năm {selectedYear}
-          </span>
 
-          <button
-            onClick={() => {
-              const idx = availableYears.indexOf(selectedYear);
-              if (idx > 0) setSelectedYear(availableYears[idx - 1]);
-            }}
-            disabled={availableYears.indexOf(selectedYear) === 0}
-            className="p-1 rounded-lg hover:bg-white/10 disabled:opacity-30 transition"
-            title="Năm sau"
-          >
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
+          {/* Individual Year Buttons / Dropdown */}
+          <div className="flex items-center space-x-1 pl-1 border-l border-white/10">
+            {availableYears.map(yr => (
+              <button
+                key={yr}
+                onClick={() => setTimeScope(yr)}
+                className={
+                  'px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition ' +
+                  (timeScope === yr
+                    ? 'bg-cyan-500 text-white shadow-sm'
+                    : 'hover:bg-white/10 text-muted')
+                }
+              >
+                {yr}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -263,7 +309,7 @@ export default function DtcDistributionMatrix({
           }}
         >
           <span className="text-[11px] font-semibold" style={{ color: 'var(--text-muted)' }}>
-            Tổng số lỗi
+            {timeScope === 'ALL' ? 'Tổng toàn bộ' : 'Tổng năm ' + timeScope}
           </span>
           <span 
             className="text-xl sm:text-2xl font-black font-mono mt-0.5"
@@ -276,13 +322,21 @@ export default function DtcDistributionMatrix({
 
       {/* ── The Matrix / Heatmap Grid ── */}
       <div className="overflow-x-auto pb-2">
-        <div className="min-w-[620px]">
-          {/* Month Header Column Labels */}
-          <div className="grid grid-cols-[140px_repeat(12,1fr)] gap-1.5 pb-2 text-center text-[11px] font-bold" style={{ color: 'var(--text-muted)' }}>
-            <div className="text-left pl-2">Phân hệ  Tháng</div>
-            {MONTH_NAMES_EN.map((mEn) => (
-              <div key={mEn} className="uppercase font-mono tracking-wider">
-                {mEn}
+        <div className={timeScope === 'ALL' ? 'min-w-[400px]' : 'min-w-[620px]'}>
+          {/* Header Column Labels */}
+          <div 
+            className="grid gap-1.5 pb-2 text-center text-[11px] font-bold"
+            style={{ 
+              gridTemplateColumns: '140px repeat(' + columns.length + ', 1fr)',
+              color: 'var(--text-muted)' 
+            }}
+          >
+            <div className="text-left pl-2">
+              {timeScope === 'ALL' ? 'Phân hệ  Năm' : 'Phân hệ  Tháng'}
+            </div>
+            {columns.map(col => (
+              <div key={col.key} className="uppercase font-mono tracking-wider">
+                {col.label}
               </div>
             ))}
           </div>
@@ -290,14 +344,15 @@ export default function DtcDistributionMatrix({
           {/* Rows */}
           <div className="space-y-1.5">
             {DTC_CATEGORIES.map(cat => {
-              const rowMonths = matrixData[cat.id] || [];
+              const rowData = matrixData[cat.id] || [];
               const rowTotal = categoryTotals[cat.id] || 0;
 
               return (
                 <div 
                   key={cat.id} 
-                  className="grid grid-cols-[140px_repeat(12,1fr)] gap-1.5 items-center p-1 rounded-2xl transition"
+                  className="grid gap-1.5 items-center p-1 rounded-2xl transition"
                   style={{
+                    gridTemplateColumns: '140px repeat(' + columns.length + ', 1fr)',
                     background: rowTotal > 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                   }}
                 >
@@ -316,20 +371,22 @@ export default function DtcDistributionMatrix({
                     </span>
                   </div>
 
-                  {/* 12 Month Cells */}
-                  {rowMonths.map((monthLogs, mIdx) => {
-                    const count = monthLogs.length;
+                  {/* Column Cells */}
+                  {rowData.map((colLogs, cIdx) => {
+                    const count = colLogs.length;
                     const hasErrors = count > 0;
+                    const col = columns[cIdx];
+                    const label = timeScope === 'ALL' ? 'Năm ' + col.label : 'Tháng ' + (cIdx + 1) + '/' + timeScope;
 
                     return (
                       <button
-                        key={mIdx}
+                        key={cIdx}
                         onClick={() => {
                           if (hasErrors) {
                             setSelectedCell({
                               category: cat,
-                              monthIndex: mIdx,
-                              logs: monthLogs,
+                              columnLabel: label,
+                              logs: colLogs,
                             });
                           }
                         }}
@@ -344,7 +401,7 @@ export default function DtcDistributionMatrix({
                           backgroundColor: cat.color,
                           boxShadow: '0 2px 8px ' + cat.color + '40',
                         } : {}}
-                        title={hasErrors ? cat.name + ' - Tháng ' + (mIdx + 1) + ': ' + count + ' mã lỗi (Bấm để xem chi tiết)' : 'Không có lỗi'}
+                        title={hasErrors ? cat.name + ' (' + label + '): ' + count + ' mã lỗi (Bấm để xem chi tiết)' : 'Không có lỗi'}
                       >
                         {hasErrors ? count : ''}
                       </button>
@@ -358,8 +415,8 @@ export default function DtcDistributionMatrix({
       </div>
 
       {/* ── Matrix Footer Info ── */}
-      <div className="flex items-center justify-between text-[11px] pt-3 mt-2 border-t" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
-        <div className="flex items-center space-x-3">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-[11px] pt-3 mt-2 border-t gap-2" style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-muted)' }}>
+        <div className="flex items-center space-x-3 flex-wrap gap-1">
           <div className="flex items-center space-x-1">
             <span className="w-2.5 h-2.5 rounded bg-blue-600 inline-block" />
             <span>P: Động cơ</span>
@@ -406,7 +463,7 @@ export default function DtcDistributionMatrix({
                     Chi tiết lỗi: {selectedCell.category.name}
                   </h4>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Tháng {selectedCell.monthIndex + 1}/{selectedYear} ({selectedCell.logs.length} mã lỗi phát hiện)
+                    {selectedCell.columnLabel} ({selectedCell.logs.length} mã lỗi phát hiện)
                   </p>
                 </div>
               </div>
