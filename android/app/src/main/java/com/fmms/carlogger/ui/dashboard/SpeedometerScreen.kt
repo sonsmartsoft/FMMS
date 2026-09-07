@@ -325,7 +325,7 @@ private fun EngineKpiPanel(telemetry: LiveTelemetry, modifier: Modifier = Modifi
             )
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                KpiCell("RPM", telemetry.rpm?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.0f", it) } ?: "—", "", colors.cyan, Modifier.weight(1f), colors)
+                KpiCell(s.throttleLbl, telemetry.throttlePercent?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.0f", it) } ?: "—", "%", colors.cyan, Modifier.weight(1f), colors)
                 KpiCell(s.coolantLbl, telemetry.coolantTempC?.takeIf { it.isFinite() }?.let { String.format(Locale.US, "%.0f", it) } ?: "—", "°C", colors.amber, Modifier.weight(1f), colors)
             }
             Spacer(modifier = Modifier.height(10.dp))

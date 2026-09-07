@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -183,42 +184,81 @@ private fun LiveDataScreen(vm: DashboardViewModel, onBack: () -> Unit) {
         BackHeader(strings.liveData, onBack)
         Spacer(modifier = Modifier.height(8.dp))
         LiveGrid(
-            "RPM" to (t.rpm?.let { "${it.toInt()}" } ?: "N/A"),
-            "Speed" to (t.speedKmh?.let { "${it.toInt()} km/h" } ?: "N/A"),
-            "Load" to (t.engineLoadPercent?.let { "${it.toInt()}%" } ?: "N/A"),
-            "Throttle" to (t.throttlePercent?.let { "${it.toInt()}%" } ?: "N/A"),
-            "Coolant" to (t.coolantTempC?.let { "${it.toInt()}°C" } ?: "N/A"),
-            "Intake" to (t.intakeTempC?.let { "${it.toInt()}°C" } ?: "N/A"),
-            "MAF" to (t.mafGps?.let { String.format(java.util.Locale.US, "%.1f g/s", it) } ?: "N/A"),
-            "Fuel level" to (t.fuelLevelPercent?.let { "${it.toInt()}%" } ?: "N/A"),
-            "Fuel rate" to (t.fuelRateLph?.let { String.format(java.util.Locale.US, "%.1f L/h", it) } ?: "N/A"),
-            "Battery" to (t.batteryVoltage?.let { String.format(java.util.Locale.US, "%.2f V", it) } ?: "N/A"),
-            "Runtime" to (t.engineRuntimeSeconds?.let { "${it.toInt()} s" } ?: "N/A"),
-            "STFT" to (t.stft?.let { String.format(java.util.Locale.US, "%.1f%%", it) } ?: "N/A"),
-            "LTFT" to (t.ltft?.let { String.format(java.util.Locale.US, "%.1f%%", it) } ?: "N/A"),
-            "Data quality" to (t.dataQuality.name),
-            "Raw source" to (t.rawSource),
+            LiveCell("RPM", "Số vòng quay động cơ", "Tốc độ quay trục khuỷu mỗi phút", t.rpm?.let { "${it.toInt()} rpm" }),
+            LiveCell("Speed", "Tốc độ xe", "Tốc độ hiện tại do ECU báo", t.speedKmh?.let { "${it.toInt()} km/h" }),
+            LiveCell("Engine load", "Tải động cơ", "% công suất đang dùng so với mức tối đa", t.engineLoadPercent?.let { "${it.toInt()}%" }),
+            LiveCell("Throttle", "Vị trí bướm ga", "% mức mở chân ga (0 = nhả, 100 = hết ga)", t.throttlePercent?.let { "${it.toInt()}%" }),
+            LiveCell("Coolant temp", "Nhiệt độ nước làm mát", "Nước mát; bình thường 85–100°C", t.coolantTempC?.let { "${it.toInt()}°C" }),
+            LiveCell("Intake air temp", "Nhiệt độ khí nạp", "Nhiệt độ không khí hút vào động cơ", t.intakeTempC?.let { "${it.toInt()}°C" }),
+            LiveCell("MAF", "Lưu lượng khí nạp", "Khối lượng không khí hút vào (g/s)", t.mafGps?.let { String.format(java.util.Locale.US, "%.1f g/s", it) }),
+            LiveCell("Fuel level", "Mức nhiên liệu", "% xăng còn lại trong bình", t.fuelLevelPercent?.let { "${it.toInt()}%" }),
+            LiveCell("Fuel rate", "Tiêu hao xăng tức thời", "Lượng xăng tiêu thụ ngay lúc này (L/h)", t.fuelRateLph?.let { String.format(java.util.Locale.US, "%.1f L/h", it) }),
+            LiveCell("Battery", "Điện áp ắc quy", "Máy tắt ~12V, máy nổ ~13.5–14.5V", t.batteryVoltage?.let { String.format(java.util.Locale.US, "%.2f V", it) }),
+            LiveCell("Engine runtime", "Thời gian máy đã chạy", "Tổng thời gian động cơ nổ từ lúc đề máy", t.engineRuntimeSeconds?.let { formatRuntime(it) }),
+            LiveCell("STFT", "Hiệu chỉnh nhiên liệu ngắn hạn", "ECU chỉnh phun xăng thời gian thực; bình thường ±10%", t.stft?.let { String.format(java.util.Locale.US, "%.1f%%", it) }),
+            LiveCell("LTFT", "Hiệu chỉnh nhiên liệu dài hạn", "Trung bình hiệu chỉnh lâu dài; ngoài ±15% thường có vấn đề", t.ltft?.let { String.format(java.util.Locale.US, "%.1f%%", it) }),
+            LiveCell("Odometer", "Số km đồng hồ (ECU)", "Tổng quãng đường ghi trong ECU", t.odometerKm?.takeIf { it.isFinite() }?.let { String.format(java.util.Locale.US, "%.1f km", it) }),
+            LiveCell("Data quality", "Chất lượng dữ liệu", "Mức độ tin cậy của dữ liệu hiện tại", t.dataQuality.name),
+            LiveCell("Raw source", "Nguồn dữ liệu", "Nguồn gốc dữ liệu (OBD/GPS)", t.rawSource),
         )
     }
 }
 
+private data class LiveCell(val labelEn: String, val labelVi: String, val meaning: String, val value: String?)
+
+private fun formatRuntime(secs: Double): String {
+    val s = secs.toInt()
+    val h = s / 3600
+    val m = (s % 3600) / 60
+    val r = s % 60
+    return if (h > 0) String.format(java.util.Locale.US, "%d:%02d:%02d", h, m, r)
+    else String.format(java.util.Locale.US, "%02d:%02d", m, r)
+}
+
 @Composable
-private fun LiveGrid(vararg cells: Pair<String, String>) {
+private fun LiveGrid(vararg cells: LiveCell) {
     val colors = LocalFmmsColors.current
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(cells.size) { i ->
-            val (label, value) = cells[i]
+            val c = cells[i]
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
                 colors = CardDefaults.cardColors(containerColor = colors.surface),
             ) {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text(label, color = colors.textSecondary, fontSize = 14.sp)
-                    Text(value, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            c.labelEn,
+                            color = colors.textPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            c.labelVi,
+                            color = colors.textSecondary,
+                            fontSize = 11.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            c.value ?: "N/A",
+                            color = if (c.value == null) colors.amber else colors.cyan,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.weight(1.2f),
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        c.meaning,
+                        color = colors.textSecondary.copy(alpha = 0.7f),
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                    )
                 }
             }
         }

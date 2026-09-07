@@ -131,7 +131,7 @@ object PidDefinitions {
                 bytes.forEachIndexed { byteIndex, byte ->
                     for (bit in 7 downTo 0) {
                         if (byte and (1 shl bit) != 0) {
-                            val pid = (base + byteIndex * 8 + (7 - bit)).toString(16).padStart(2, '0')
+                            val pid = (base + byteIndex * 8 + (8 - bit)).toString(16).padStart(2, '0')
                             supported += "01$pid"
                         }
                     }

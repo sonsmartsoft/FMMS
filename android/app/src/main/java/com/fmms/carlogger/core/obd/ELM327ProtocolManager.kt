@@ -123,13 +123,7 @@ class ELM327ProtocolManager(private val transport: OBDTransport) {
         // answered something. Forcing them onto a silent/dead link would make
         // isInitialised true and mask a dead connection as healthy.
         val adapterAlive = atz.isNotEmpty() || discoveryResponses.isNotEmpty()
-        val known = setOf(
-            PidDefinitions.CMD_RPM,
-            PidDefinitions.CMD_SPEED,
-            PidDefinitions.CMD_FUEL_LEVEL,
-            PidDefinitions.CMD_COOLANT,
-            PidDefinitions.CMD_VOLTAGE,
-        )
+        val known = PidDefinitions.all().map { it.command }.toSet()
         val supported = if (adapterAlive) {
             (supportedByMask - setOf("0101", "0103", "0100", "0120", "0140", "0160", "0180", "01A0")).toMutableSet().apply {
                 addAll(known)
