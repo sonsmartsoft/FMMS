@@ -105,12 +105,13 @@ export default function DtcDistributionMatrix({
 }: DtcDistributionMatrixProps) {
   const currentYear = new Date().getFullYear();
   
-  // 'ALL' for All-Time years comparison, or specific year number (2026, 2025, ...)
+  // 'ALL' for All-Years sum, or specific year number (2026, 2025, ...)
   const [timeScope, setTimeScope] = useState<'ALL' | number>(currentYear);
 
   const [selectedCell, setSelectedCell] = useState<{
     category: CategoryConfig;
-    columnLabel: string;
+    monthIndex: number;
+    monthLabel: string;
     logs: VehicleDtcLog[];
   } | null>(null);
 
@@ -126,33 +127,13 @@ export default function DtcDistributionMatrix({
     return Array.from(years).sort((a, b) => b - a);
   }, [logs, currentYear]);
 
-  // Determine Columns based on timeScope:
-  // If 'ALL' -> Columns are sorted ascending years (e.g. [2024, 2025, 2026])
-  // If number -> Columns are 12 months (Jan..Dec)
-  const columns = useMemo(() => {
-    if (timeScope === 'ALL') {
-      const sortedAsc = [...availableYears].sort((a, b) => a - b);
-      return sortedAsc.map(yr => ({
-        key: String(yr),
-        label: String(yr),
-        year: yr,
-        monthIndex: -1,
-      }));
-    } else {
-      return MONTH_NAMES_EN.map((mEn, idx) => ({
-        key: mEn,
-        label: mEn,
-        year: timeScope,
-        monthIndex: idx,
-      }));
-    }
-  }, [timeScope, availableYears]);
-
-  // Aggregate matrix data: [category_id][colIndex] => VehicleDtcLog[]
+  // Aggregate matrix data: ALWAYS 12 months (0..11) for each category
+  // If timeScope === 'ALL' -> Sums across all years for each month
+  // If timeScope is a number -> Filters logs for that specific year
   const matrixData = useMemo(() => {
     const data: Record<string, VehicleDtcLog[][]> = {};
     DTC_CATEGORIES.forEach(cat => {
-      data[cat.id] = Array.from({ length: columns.length }, () => []);
+      data[cat.id] = Array.from({ length: 12 }, () => []);
     });
 
     logs.forEach(log => {
@@ -162,18 +143,12 @@ export default function DtcDistributionMatrix({
       if (isNaN(date.getTime())) return;
 
       const logYear = date.getFullYear();
-      const logMonth = date.getMonth();
+      const logMonth = date.getMonth(); // 0..11
 
-      let targetColIdx = -1;
-      if (timeScope === 'ALL') {
-        targetColIdx = columns.findIndex(col => col.year === logYear);
-      } else {
-        if (logYear === timeScope) {
-          targetColIdx = logMonth;
-        }
+      // Filter by year if not 'ALL'
+      if (timeScope !== 'ALL' && logYear !== timeScope) {
+        return;
       }
-
-      if (targetColIdx === -1) return;
 
       // Determine category
       let catId = 'POWERTRAIN';
@@ -192,19 +167,19 @@ export default function DtcDistributionMatrix({
         }
       }
 
-      if (data[catId] && data[catId][targetColIdx]) {
-        data[catId][targetColIdx].push(log);
+      if (data[catId] && data[catId][logMonth]) {
+        data[catId][logMonth].push(log);
       }
     });
 
     return data;
-  }, [logs, timeScope, columns]);
+  }, [logs, timeScope]);
 
   // Category totals for current time scope
   const categoryTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     DTC_CATEGORIES.forEach(cat => {
-      const sum = (matrixData[cat.id] || []).reduce((acc, colLogs) => acc + colLogs.length, 0);
+      const sum = (matrixData[cat.id] || []).reduce((acc, monthLogs) => acc + monthLogs.length, 0);
       totals[cat.id] = sum;
     });
     return totals;
@@ -216,7 +191,7 @@ export default function DtcDistributionMatrix({
 
   return (
     <div 
-      className="p-4 sm:p-5 rounded-3xl transition-all shadow-sm"
+      className="p-4 sm:p-5 rounded-2xl transition-all shadow-sm"
       style={{
         background: 'var(--bg-secondary)',
         border: '1px solid var(--border-default)',
@@ -233,39 +208,47 @@ export default function DtcDistributionMatrix({
           </div>
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
             {timeScope === 'ALL' 
-              ? 'Ma trận tổng hợp phân bố mã lỗi qua tất cả các năm (Toàn bộ vòng đời xe)'
+              ? 'Tổng hợp chu kỳ 12 tháng của tất cả các năm (Toàn bộ vòng đời xe)'
               : 'Biểu đồ ma trận phân bố mã lỗi OBD-II theo hệ thống trong năm ' + timeScope + ' (12 tháng)'}
           </p>
         </div>
 
         {/* Smart Time Scope Selector */}
-        <div className="flex items-center space-x-1.5 self-stretch sm:self-auto bg-black/15 dark:bg-white/5 p-1 rounded-2xl border border-white/10 text-xs flex-wrap gap-1">
+        <div 
+          className="flex items-center space-x-1.5 self-stretch sm:self-auto p-1 rounded-xl border text-xs flex-wrap gap-1"
+          style={{
+            background: 'var(--bg-primary)',
+            borderColor: 'var(--border-default)',
+          }}
+        >
           {/* All-time option */}
           <button
             onClick={() => setTimeScope('ALL')}
             className={
-              'px-2.5 py-1 rounded-xl text-xs font-bold transition flex items-center space-x-1 ' +
+              'px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ' +
               (timeScope === 'ALL'
                 ? 'bg-cyan-500 text-white shadow-sm'
-                : 'hover:bg-white/10 text-muted')
+                : 'hover:opacity-80')
             }
+            style={timeScope !== 'ALL' ? { color: 'var(--text-secondary)' } : {}}
           >
-            <Layers className="w-3 h-3" />
+            <Layers className="w-3.5 h-3.5" />
             <span>Tất cả các năm</span>
           </button>
 
-          {/* Individual Year Buttons / Dropdown */}
-          <div className="flex items-center space-x-1 pl-1 border-l border-white/10">
+          {/* Individual Year Buttons */}
+          <div className="flex items-center space-x-1 pl-1 border-l" style={{ borderColor: 'var(--border-subtle)' }}>
             {availableYears.map(yr => (
               <button
                 key={yr}
                 onClick={() => setTimeScope(yr)}
                 className={
-                  'px-2.5 py-1 rounded-xl text-xs font-mono font-bold transition ' +
+                  'px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition ' +
                   (timeScope === yr
                     ? 'bg-cyan-500 text-white shadow-sm'
-                    : 'hover:bg-white/10 text-muted')
+                    : 'hover:opacity-80')
                 }
+                style={timeScope !== yr ? { color: 'var(--text-secondary)' } : {}}
               >
                 {yr}
               </button>
@@ -281,7 +264,7 @@ export default function DtcDistributionMatrix({
           return (
             <div 
               key={cat.id} 
-              className="flex flex-col items-center justify-center p-2.5 rounded-2xl transition-all border text-center"
+              className="flex flex-col items-center justify-center p-2.5 rounded-xl transition-all border text-center"
               style={{
                 background: 'var(--bg-primary)',
                 borderColor: count > 0 ? cat.borderColor : 'var(--border-subtle)',
@@ -302,7 +285,7 @@ export default function DtcDistributionMatrix({
 
         {/* Grand Total */}
         <div 
-          className="flex flex-col items-center justify-center p-2.5 rounded-2xl border text-center"
+          className="flex flex-col items-center justify-center p-2.5 rounded-xl border text-center"
           style={{
             background: 'var(--bg-primary)',
             borderColor: grandTotal > 0 ? 'rgba(6, 182, 212, 0.4)' : 'var(--border-subtle)',
@@ -320,23 +303,18 @@ export default function DtcDistributionMatrix({
         </div>
       </div>
 
-      {/* ── The Matrix / Heatmap Grid ── */}
+      {/* ── The Matrix / Heatmap Grid (Always 12 Months) ── */}
       <div className="overflow-x-auto pb-2">
-        <div className={timeScope === 'ALL' ? 'min-w-[400px]' : 'min-w-[620px]'}>
-          {/* Header Column Labels */}
+        <div className="min-w-[620px]">
+          {/* 12 Month Header Column Labels */}
           <div 
-            className="grid gap-1.5 pb-2 text-center text-[11px] font-bold"
-            style={{ 
-              gridTemplateColumns: '140px repeat(' + columns.length + ', 1fr)',
-              color: 'var(--text-muted)' 
-            }}
+            className="grid grid-cols-[140px_repeat(12,1fr)] gap-1.5 pb-2 text-center text-[11px] font-bold"
+            style={{ color: 'var(--text-muted)' }}
           >
-            <div className="text-left pl-2">
-              {timeScope === 'ALL' ? 'Phân hệ  Năm' : 'Phân hệ  Tháng'}
-            </div>
-            {columns.map(col => (
-              <div key={col.key} className="uppercase font-mono tracking-wider">
-                {col.label}
+            <div className="text-left pl-2">Phân hệ  Tháng</div>
+            {MONTH_NAMES_EN.map((mEn) => (
+              <div key={mEn} className="uppercase font-mono tracking-wider">
+                {mEn}
               </div>
             ))}
           </div>
@@ -344,16 +322,15 @@ export default function DtcDistributionMatrix({
           {/* Rows */}
           <div className="space-y-1.5">
             {DTC_CATEGORIES.map(cat => {
-              const rowData = matrixData[cat.id] || [];
+              const rowMonths = matrixData[cat.id] || [];
               const rowTotal = categoryTotals[cat.id] || 0;
 
               return (
                 <div 
                   key={cat.id} 
-                  className="grid gap-1.5 items-center p-1 rounded-2xl transition"
+                  className="grid grid-cols-[140px_repeat(12,1fr)] gap-1.5 items-center p-1 rounded-xl transition"
                   style={{
-                    gridTemplateColumns: '140px repeat(' + columns.length + ', 1fr)',
-                    background: rowTotal > 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                    background: rowTotal > 0 ? 'var(--bg-hover)' : 'transparent',
                   }}
                 >
                   {/* Category Name Label */}
@@ -371,22 +348,25 @@ export default function DtcDistributionMatrix({
                     </span>
                   </div>
 
-                  {/* Column Cells */}
-                  {rowData.map((colLogs, cIdx) => {
-                    const count = colLogs.length;
+                  {/* 12 Month Cells */}
+                  {rowMonths.map((monthLogs, mIdx) => {
+                    const count = monthLogs.length;
                     const hasErrors = count > 0;
-                    const col = columns[cIdx];
-                    const label = timeScope === 'ALL' ? 'Năm ' + col.label : 'Tháng ' + (cIdx + 1) + '/' + timeScope;
+                    const monthName = MONTH_NAMES_EN[mIdx];
+                    const label = timeScope === 'ALL' 
+                      ? 'Tháng ' + (mIdx + 1) + ' (' + monthName + ') - Tất cả các năm'
+                      : 'Tháng ' + (mIdx + 1) + '/' + timeScope;
 
                     return (
                       <button
-                        key={cIdx}
+                        key={mIdx}
                         onClick={() => {
                           if (hasErrors) {
                             setSelectedCell({
                               category: cat,
-                              columnLabel: label,
-                              logs: colLogs,
+                              monthIndex: mIdx,
+                              monthLabel: label,
+                              logs: monthLogs,
                             });
                           }
                         }}
@@ -395,12 +375,15 @@ export default function DtcDistributionMatrix({
                           'h-9 rounded-xl flex items-center justify-center font-mono text-xs font-bold transition-all duration-150 ' +
                           (hasErrors 
                             ? 'text-white shadow-sm hover:scale-105 hover:brightness-110 active:scale-95 cursor-pointer ring-1 ring-white/20' 
-                            : 'bg-black/10 dark:bg-white/[0.03] border border-white/5 opacity-40 cursor-default')
+                            : 'opacity-30 cursor-default')
                         }
                         style={hasErrors ? {
                           backgroundColor: cat.color,
                           boxShadow: '0 2px 8px ' + cat.color + '40',
-                        } : {}}
+                        } : {
+                          background: 'var(--bg-primary)',
+                          border: '1px solid var(--border-subtle)',
+                        }}
                         title={hasErrors ? cat.name + ' (' + label + '): ' + count + ' mã lỗi (Bấm để xem chi tiết)' : 'Không có lỗi'}
                       >
                         {hasErrors ? count : ''}
@@ -437,17 +420,17 @@ export default function DtcDistributionMatrix({
         <span className="italic">Bấm vào ô có số để xem chi tiết mã lỗi &amp; Freeze Frame</span>
       </div>
 
-      {/* ── Drill-down Modal (When clicking a cell) ── */}
+      {/* ── Drill-down Standard System Modal (Chuẩn giao diện Modal FMMS) ── */}
       {selectedCell && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
           onClick={() => setSelectedCell(null)}
         >
           <div 
-            className="w-full max-w-xl p-5 rounded-3xl shadow-2xl border transition-all animate-scale-up"
+            className="w-full max-w-xl p-5 rounded-2xl shadow-2xl border transition-all animate-scale-up"
             style={{
               background: 'var(--bg-secondary)',
-              borderColor: selectedCell.category.color,
+              borderColor: 'var(--border-default)',
             }}
             onClick={e => e.stopPropagation()}
           >
@@ -455,24 +438,29 @@ export default function DtcDistributionMatrix({
             <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
               <div className="flex items-center space-x-2.5">
                 <span 
-                  className="w-3.5 h-3.5 rounded-full"
+                  className="w-3.5 h-3.5 rounded-full flex-shrink-0"
                   style={{ background: selectedCell.category.color }}
                 />
                 <div>
-                  <h4 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                  <h4 className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--text-primary)' }}>
                     Chi tiết lỗi: {selectedCell.category.name}
                   </h4>
                   <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {selectedCell.columnLabel} ({selectedCell.logs.length} mã lỗi phát hiện)
+                    {selectedCell.monthLabel} ({selectedCell.logs.length} mã lỗi phát hiện)
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={() => setSelectedCell(null)}
-                className="p-1.5 rounded-xl hover:bg-white/10 transition"
+                className="text-xs px-2.5 py-1 rounded-lg hover:opacity-80 transition font-bold border"
+                style={{
+                  background: 'var(--bg-primary)',
+                  borderColor: 'var(--border-default)',
+                  color: 'var(--text-muted)',
+                }}
               >
-                <X className="w-4 h-4" />
+                ✕ Đóng
               </button>
             </div>
 
@@ -481,30 +469,30 @@ export default function DtcDistributionMatrix({
               {selectedCell.logs.map(log => (
                 <div 
                   key={log.id} 
-                  className="p-3.5 rounded-2xl border transition"
+                  className="p-3.5 rounded-xl border transition"
                   style={{
                     background: 'var(--bg-primary)',
                     borderColor: 'var(--border-default)',
                   }}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-mono font-black text-sm px-2.5 py-0.5 rounded-lg bg-white/10 border border-white/10 text-cyan-400">
+                    <div className="flex items-center space-x-2 flex-wrap gap-1">
+                      <span className="font-mono font-black text-sm px-2 py-0.5 rounded-lg border text-cyan-500" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)' }}>
                         {log.dtc_code}
                       </span>
                       <span className={'text-[10px] font-bold px-2 py-0.5 rounded ' + (
-                        log.severity === 'CRITICAL' ? 'bg-rose-500/20 text-rose-400' :
-                        log.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400' :
-                        'bg-blue-500/20 text-blue-400'
+                        log.severity === 'CRITICAL' ? 'bg-rose-500/20 text-rose-500' :
+                        log.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-500' :
+                        'bg-blue-500/20 text-blue-500'
                       )}>
                         {log.severity === 'CRITICAL' ? 'Nghiêm trọng' : log.severity === 'MEDIUM' ? 'Cảnh báo' : 'Nhẹ'}
                       </span>
-                      <span className="text-[10px] font-semibold text-muted">
+                      <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
                         {log.is_active ? '🔴 Active' : '🟢 Đã xử lý'}
                       </span>
                     </div>
 
-                    <span className="text-[10px] text-muted font-mono">
+                    <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
                       {new Date(log.first_detected_at || log.created_at).toLocaleDateString('vi-VN')}
                     </span>
                   </div>
@@ -513,31 +501,43 @@ export default function DtcDistributionMatrix({
                     {log.description_vi || log.dtc_code}
                   </p>
                   {log.description_en && (
-                    <p className="text-[11px] font-mono text-muted mt-0.5">
+                    <p className="text-[11px] font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
                       {log.description_en}
                     </p>
                   )}
 
                   {/* Freeze frame preview if available */}
                   {log.freeze_frame && Object.keys(log.freeze_frame).length > 0 && (
-                    <div className="mt-2.5 p-2 rounded-xl bg-black/20 dark:bg-white/5 text-[10px] font-mono grid grid-cols-2 sm:grid-cols-3 gap-1">
+                    <div 
+                      className="mt-2.5 p-2 rounded-xl text-[10px] font-mono grid grid-cols-2 sm:grid-cols-3 gap-1 border"
+                      style={{
+                        background: 'var(--bg-secondary)',
+                        borderColor: 'var(--border-subtle)',
+                      }}
+                    >
                       {Object.entries(log.freeze_frame).slice(0, 6).map(([k, v]) => (
                         <div key={k}>
-                          <span className="text-muted">{k}:</span> <span className="text-cyan-400 font-bold">{String(v)}</span>
+                          <span style={{ color: 'var(--text-muted)' }}>{k}:</span>{' '}
+                          <span className="text-cyan-500 font-bold">{String(v)}</span>
                         </div>
                       ))}
                     </div>
                   )}
 
                   {/* Quick Action buttons */}
-                  <div className="flex items-center space-x-2 mt-3 pt-2 border-t border-white/5">
+                  <div className="flex items-center space-x-2 mt-3 pt-2 border-t flex-wrap gap-1" style={{ borderColor: 'var(--border-subtle)' }}>
                     {onLookup && (
                       <button
                         onClick={() => {
                           setSelectedCell(null);
                           onLookup(log.dtc_code);
                         }}
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/5 hover:bg-white/10 border border-white/10 transition"
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition border hover:opacity-80"
+                        style={{
+                          background: 'var(--bg-secondary)',
+                          borderColor: 'var(--border-default)',
+                          color: 'var(--text-primary)',
+                        }}
                       >
                         Tra cứu từ điển
                       </button>
@@ -548,7 +548,7 @@ export default function DtcDistributionMatrix({
                           setSelectedCell(null);
                           onAskAi('Xe ' + assetName + ' bị mã lỗi OBD ' + log.dtc_code + ' (' + (log.description_vi || log.description_en) + '). Vui lòng phân tích nguyên nhân và cách khắc phục.');
                         }}
-                        className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/25 transition"
+                        className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-cyan-500/15 text-cyan-500 border border-cyan-500/30 hover:bg-cyan-500/25 transition"
                       >
                         <Sparkles className="w-3 h-3" />
                         <span>Hỏi AI</span>
@@ -560,7 +560,7 @@ export default function DtcDistributionMatrix({
                           setSelectedCell(null);
                           onNavigateToMaintenance('Kiểm tra và sửa chữa mã lỗi: ' + log.dtc_code + ' - ' + (log.description_vi || ''));
                         }}
-                        className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition"
+                        className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 text-amber-500 border border-amber-500/30 hover:bg-amber-500/25 transition"
                       >
                         <Wrench className="w-3 h-3" />
                         <span>Tạo phiếu sửa</span>
@@ -575,7 +575,12 @@ export default function DtcDistributionMatrix({
             <div className="flex justify-end pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
               <button
                 onClick={() => setSelectedCell(null)}
-                className="px-4 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 transition"
+                className="px-4 py-1.5 rounded-xl text-xs font-semibold border hover:opacity-80 transition"
+                style={{
+                  background: 'var(--bg-primary)',
+                  borderColor: 'var(--border-default)',
+                  color: 'var(--text-primary)',
+                }}
               >
                 Đóng
               </button>
