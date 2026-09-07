@@ -15,6 +15,7 @@ import {
   Layers
 } from 'lucide-react';
 import { VehicleDtcLog } from '@/lib/services/diagnosticService';
+import DraggableModal from '@/components/ui/DraggableModal';
 
 interface DtcDistributionMatrixProps {
   logs: VehicleDtcLog[];
@@ -128,8 +129,6 @@ export default function DtcDistributionMatrix({
   }, [logs, currentYear]);
 
   // Aggregate matrix data: ALWAYS 12 months (0..11) for each category
-  // If timeScope === 'ALL' -> Sums across all years for each month
-  // If timeScope is a number -> Filters logs for that specific year
   const matrixData = useMemo(() => {
     const data: Record<string, VehicleDtcLog[][]> = {};
     DTC_CATEGORIES.forEach(cat => {
@@ -303,7 +302,7 @@ export default function DtcDistributionMatrix({
         </div>
       </div>
 
-      {/* ── The Matrix / Heatmap Grid (Always 12 Months) ── */}
+      {/* ── The Matrix / Heatmap Grid (Always 12 Months, All Rows Uniform Background) ── */}
       <div className="overflow-x-auto pb-2">
         <div className="min-w-[620px]">
           {/* 12 Month Header Column Labels */}
@@ -319,19 +318,15 @@ export default function DtcDistributionMatrix({
             ))}
           </div>
 
-          {/* Rows */}
+          {/* Rows: All rows have uniform clean background, NO row-level highlighting */}
           <div className="space-y-1.5">
             {DTC_CATEGORIES.map(cat => {
               const rowMonths = matrixData[cat.id] || [];
-              const rowTotal = categoryTotals[cat.id] || 0;
 
               return (
                 <div 
                   key={cat.id} 
-                  className="grid grid-cols-[140px_repeat(12,1fr)] gap-1.5 items-center p-1 rounded-xl transition"
-                  style={{
-                    background: rowTotal > 0 ? 'var(--bg-hover)' : 'transparent',
-                  }}
+                  className="grid grid-cols-[140px_repeat(12,1fr)] gap-1.5 items-center p-1 rounded-xl transition hover:bg-white/[0.02]"
                 >
                   {/* Category Name Label */}
                   <div className="flex items-center space-x-2 pl-2 overflow-hidden">
@@ -341,7 +336,7 @@ export default function DtcDistributionMatrix({
                     />
                     <span 
                       className="text-xs font-bold truncate"
-                      style={{ color: rowTotal > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}
+                      style={{ color: 'var(--text-primary)' }}
                       title={cat.name + ' - ' + cat.shortName}
                     >
                       {cat.name}
@@ -420,173 +415,120 @@ export default function DtcDistributionMatrix({
         <span className="italic">Bấm vào ô có số để xem chi tiết mã lỗi &amp; Freeze Frame</span>
       </div>
 
-      {/* ── Drill-down Standard System Modal (Chuẩn giao diện Modal FMMS) ── */}
+      {/* ── Drill-down Standard System DraggableModal (Chuẩn 100% Hệ Thống FMMS) ── */}
       {selectedCell && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in"
-          onClick={() => setSelectedCell(null)}
+        <DraggableModal
+          isOpen={true}
+          onClose={() => setSelectedCell(null)}
+          title={'Chi tiết lỗi: ' + selectedCell.category.name + ' — ' + selectedCell.monthLabel + ' (' + selectedCell.logs.length + ' mã lỗi)'}
+          className="w-[95vw] sm:w-[750px] max-w-[750px]"
         >
-          <div 
-            className="w-full max-w-xl p-5 rounded-2xl shadow-2xl border transition-all animate-scale-up"
-            style={{
-              background: 'var(--bg-secondary)',
-              borderColor: 'var(--border-default)',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center space-x-2.5">
-                <span 
-                  className="w-3.5 h-3.5 rounded-full flex-shrink-0"
-                  style={{ background: selectedCell.category.color }}
-                />
-                <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--text-primary)' }}>
-                    Chi tiết lỗi: {selectedCell.category.name}
-                  </h4>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {selectedCell.monthLabel} ({selectedCell.logs.length} mã lỗi phát hiện)
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => setSelectedCell(null)}
-                className="text-xs px-2.5 py-1 rounded-lg hover:opacity-80 transition font-bold border"
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 no-drag space-y-3" style={{ background: 'var(--bg-primary)', cursor: 'auto' }}>
+            {selectedCell.logs.map(log => (
+              <div 
+                key={log.id} 
+                className="p-3.5 rounded-xl border transition"
                 style={{
-                  background: 'var(--bg-primary)',
+                  background: 'var(--bg-secondary)',
                   borderColor: 'var(--border-default)',
-                  color: 'var(--text-muted)',
                 }}
               >
-                ✕ Đóng
-              </button>
-            </div>
-
-            {/* List of DTCs in this cell */}
-            <div className="space-y-3 my-4 max-h-[60vh] overflow-y-auto pr-1">
-              {selectedCell.logs.map(log => (
-                <div 
-                  key={log.id} 
-                  className="p-3.5 rounded-xl border transition"
-                  style={{
-                    background: 'var(--bg-primary)',
-                    borderColor: 'var(--border-default)',
-                  }}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center space-x-2 flex-wrap gap-1">
-                      <span className="font-mono font-black text-sm px-2 py-0.5 rounded-lg border text-cyan-500" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)' }}>
-                        {log.dtc_code}
-                      </span>
-                      <span className={'text-[10px] font-bold px-2 py-0.5 rounded ' + (
-                        log.severity === 'CRITICAL' ? 'bg-rose-500/20 text-rose-500' :
-                        log.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-500' :
-                        'bg-blue-500/20 text-blue-500'
-                      )}>
-                        {log.severity === 'CRITICAL' ? 'Nghiêm trọng' : log.severity === 'MEDIUM' ? 'Cảnh báo' : 'Nhẹ'}
-                      </span>
-                      <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
-                        {log.is_active ? '🔴 Active' : '🟢 Đã xử lý'}
-                      </span>
-                    </div>
-
-                    <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
-                      {new Date(log.first_detected_at || log.created_at).toLocaleDateString('vi-VN')}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center space-x-2 flex-wrap gap-1">
+                    <span className="font-mono font-black text-sm px-2 py-0.5 rounded-lg border text-cyan-500" style={{ background: 'var(--bg-primary)', borderColor: 'var(--border-subtle)' }}>
+                      {log.dtc_code}
+                    </span>
+                    <span className={'text-[10px] font-bold px-2 py-0.5 rounded ' + (
+                      log.severity === 'CRITICAL' ? 'bg-rose-500/20 text-rose-500' :
+                      log.severity === 'MEDIUM' ? 'bg-amber-500/20 text-amber-500' :
+                      'bg-blue-500/20 text-blue-500'
+                    )}>
+                      {log.severity === 'CRITICAL' ? 'Nghiêm trọng' : log.severity === 'MEDIUM' ? 'Cảnh báo' : 'Nhẹ'}
+                    </span>
+                    <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+                      {log.is_active ? '🔴 Active' : '🟢 Đã xử lý'}
                     </span>
                   </div>
 
-                  <p className="text-xs font-semibold mt-2" style={{ color: 'var(--text-primary)' }}>
-                    {log.description_vi || log.dtc_code}
-                  </p>
-                  {log.description_en && (
-                    <p className="text-[11px] font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {log.description_en}
-                    </p>
-                  )}
+                  <span className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+                    {new Date(log.first_detected_at || log.created_at).toLocaleDateString('vi-VN')}
+                  </span>
+                </div>
 
-                  {/* Freeze frame preview if available */}
-                  {log.freeze_frame && Object.keys(log.freeze_frame).length > 0 && (
-                    <div 
-                      className="mt-2.5 p-2 rounded-xl text-[10px] font-mono grid grid-cols-2 sm:grid-cols-3 gap-1 border"
+                <p className="text-xs font-semibold mt-2" style={{ color: 'var(--text-primary)' }}>
+                  {log.description_vi || log.dtc_code}
+                </p>
+                {log.description_en && (
+                  <p className="text-[11px] font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {log.description_en}
+                  </p>
+                )}
+
+                {/* Freeze frame preview if available */}
+                {log.freeze_frame && Object.keys(log.freeze_frame).length > 0 && (
+                  <div 
+                    className="mt-2.5 p-2 rounded-xl text-[10px] font-mono grid grid-cols-2 sm:grid-cols-3 gap-1 border"
+                    style={{
+                      background: 'var(--bg-primary)',
+                      borderColor: 'var(--border-subtle)',
+                    }}
+                  >
+                    {Object.entries(log.freeze_frame).slice(0, 6).map(([k, v]) => (
+                      <div key={k}>
+                        <span style={{ color: 'var(--text-muted)' }}>{k}:</span>{' '}
+                        <span className="text-cyan-500 font-bold">{String(v)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Quick Action buttons */}
+                <div className="flex items-center space-x-2 mt-3 pt-2 border-t flex-wrap gap-1" style={{ borderColor: 'var(--border-subtle)' }}>
+                  {onLookup && (
+                    <button
+                      onClick={() => {
+                        setSelectedCell(null);
+                        onLookup(log.dtc_code);
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition border hover:opacity-80"
                       style={{
-                        background: 'var(--bg-secondary)',
-                        borderColor: 'var(--border-subtle)',
+                        background: 'var(--bg-primary)',
+                        borderColor: 'var(--border-default)',
+                        color: 'var(--text-primary)',
                       }}
                     >
-                      {Object.entries(log.freeze_frame).slice(0, 6).map(([k, v]) => (
-                        <div key={k}>
-                          <span style={{ color: 'var(--text-muted)' }}>{k}:</span>{' '}
-                          <span className="text-cyan-500 font-bold">{String(v)}</span>
-                        </div>
-                      ))}
-                    </div>
+                      Tra cứu từ điển
+                    </button>
                   )}
-
-                  {/* Quick Action buttons */}
-                  <div className="flex items-center space-x-2 mt-3 pt-2 border-t flex-wrap gap-1" style={{ borderColor: 'var(--border-subtle)' }}>
-                    {onLookup && (
-                      <button
-                        onClick={() => {
-                          setSelectedCell(null);
-                          onLookup(log.dtc_code);
-                        }}
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-semibold transition border hover:opacity-80"
-                        style={{
-                          background: 'var(--bg-secondary)',
-                          borderColor: 'var(--border-default)',
-                          color: 'var(--text-primary)',
-                        }}
-                      >
-                        Tra cứu từ điển
-                      </button>
-                    )}
-                    {onAskAi && (
-                      <button
-                        onClick={() => {
-                          setSelectedCell(null);
-                          onAskAi('Xe ' + assetName + ' bị mã lỗi OBD ' + log.dtc_code + ' (' + (log.description_vi || log.description_en) + '). Vui lòng phân tích nguyên nhân và cách khắc phục.');
-                        }}
-                        className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-cyan-500/15 text-cyan-500 border border-cyan-500/30 hover:bg-cyan-500/25 transition"
-                      >
-                        <Sparkles className="w-3 h-3" />
-                        <span>Hỏi AI</span>
-                      </button>
-                    )}
-                    {onNavigateToMaintenance && (
-                      <button
-                        onClick={() => {
-                          setSelectedCell(null);
-                          onNavigateToMaintenance('Kiểm tra và sửa chữa mã lỗi: ' + log.dtc_code + ' - ' + (log.description_vi || ''));
-                        }}
-                        className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 text-amber-500 border border-amber-500/30 hover:bg-amber-500/25 transition"
-                      >
-                        <Wrench className="w-3 h-3" />
-                        <span>Tạo phiếu sửa</span>
-                      </button>
-                    )}
-                  </div>
+                  {onAskAi && (
+                    <button
+                      onClick={() => {
+                        setSelectedCell(null);
+                        onAskAi('Xe ' + assetName + ' bị mã lỗi OBD ' + log.dtc_code + ' (' + (log.description_vi || log.description_en) + '). Vui lòng phân tích nguyên nhân và cách khắc phục.');
+                      }}
+                      className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-cyan-500/15 text-cyan-500 border border-cyan-500/30 hover:bg-cyan-500/25 transition"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Hỏi AI</span>
+                    </button>
+                  )}
+                  {onNavigateToMaintenance && (
+                    <button
+                      onClick={() => {
+                        setSelectedCell(null);
+                        onNavigateToMaintenance('Kiểm tra và sửa chữa mã lỗi: ' + log.dtc_code + ' - ' + (log.description_vi || ''));
+                      }}
+                      className="flex items-center space-x-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 text-amber-500 border border-amber-500/30 hover:bg-amber-500/25 transition"
+                    >
+                      <Wrench className="w-3 h-3" />
+                      <span>Tạo phiếu sửa</span>
+                    </button>
+                  )}
                 </div>
-              ))}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex justify-end pt-2 border-t" style={{ borderColor: 'var(--border-subtle)' }}>
-              <button
-                onClick={() => setSelectedCell(null)}
-                className="px-4 py-1.5 rounded-xl text-xs font-semibold border hover:opacity-80 transition"
-                style={{
-                  background: 'var(--bg-primary)',
-                  borderColor: 'var(--border-default)',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                Đóng
-              </button>
-            </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </DraggableModal>
       )}
     </div>
   );
