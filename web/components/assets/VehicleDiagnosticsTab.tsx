@@ -21,6 +21,7 @@ import {
   VehicleDiagnosticScan, 
   ObdDtcDictionaryEntry 
 } from '@/lib/services/diagnosticService';
+import DtcDistributionMatrix from './DtcDistributionMatrix';
 
 interface VehicleDiagnosticsTabProps {
   assetId: string;
@@ -203,6 +204,18 @@ export default function VehicleDiagnosticsTab({
           </span>
         </div>
       </div>
+
+      {/* ── DTC Distribution Categorical Monthly Heatmap Matrix ── */}
+      <DtcDistributionMatrix
+        logs={dtcLogs}
+        assetName={assetName}
+        onLookup={(code) => {
+          setSearchCode(code);
+          handleLookup(code);
+        }}
+        onAskAi={onAskAi}
+        onNavigateToMaintenance={onNavigateToMaintenance}
+      />
 
       {/* ── Filter Bar ── */}
       <div className="p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
