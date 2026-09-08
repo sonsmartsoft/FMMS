@@ -27,8 +27,12 @@ export const metadata: Metadata = {
   },
   robots: { index: false, follow: false },
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon.ico',
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
   },
 };
 
