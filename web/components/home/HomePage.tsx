@@ -124,31 +124,34 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
             );
             const latest: any = sortedLogs[0];
 
-            // Xác định mức tiêu thụ thực tế
-            if (!consumption) {
-              const logsWithConsumption = sortedLogs.filter((l: any) => l.consumption_l100km || l.calculated_consumption_l100km);
-              if (logsWithConsumption.length > 0) {
-                consumption = Number(logsWithConsumption[0].consumption_l100km || logsWithConsumption[0].calculated_consumption_l100km);
-              } else {
-                consumption = 6.8;
-              }
+            // Xác định mức tiêu thụ thực tế (lọc bỏ các giá trị bất thường < 4.5 L/100km)
+            const logsWithConsumption = sortedLogs.filter((l: any) => {
+              const c = Number(l.consumption_l100km || l.calculated_consumption_l100km || 0);
+              return c >= 4.5 && c <= 15.0;
+            });
+            if (logsWithConsumption.length > 0) {
+              consumption = Number(logsWithConsumption[0].consumption_l100km || logsWithConsumption[0].calculated_consumption_l100km);
+            } else if (!consumption || consumption < 4.5) {
+              consumption = 6.5;
             }
 
-            if (latest.fuel_level_after_pct != null) {
-              fuelPct = Number(latest.fuel_level_after_pct);
-            } else if (latest.odometer_km && asset.current_odometer_km) {
-              // Tính mức xăng động theo quãng đường đã chạy từ lần đổ gần nhất
-              const deltaKm = Math.max(0, Number(asset.current_odometer_km) - Number(latest.odometer_km));
-              const fuelConsumedLiters = deltaKm * ((consumption || 6.8) / 100);
-              const remainingLiters = Math.max(0, tank - fuelConsumedLiters);
-              fuelPct = Math.max(5, Math.min(100, Math.round((remainingLiters / tank) * 100)));
-            } else if (fuelPct === undefined && (asset.capabilities.has_fuel || asset.asset_type === 'CAR')) {
-              fuelPct = 70;
+            let baseLiters = (latest.fuel_level_after_pct != null)
+              ? (Number(latest.fuel_level_after_pct) / 100) * tank
+              : (latest.fuel_liters_after != null ? Number(latest.fuel_liters_after) : tank);
+
+            // Tính mức xăng động theo quãng đường đã chạy từ lần đổ gần nhất
+            if (latest.odometer_km && asset.current_odometer_km && Number(asset.current_odometer_km) > Number(latest.odometer_km)) {
+              const deltaKm = Number(asset.current_odometer_km) - Number(latest.odometer_km);
+              const fuelConsumedLiters = deltaKm * ((consumption || 6.5) / 100);
+              baseLiters = Math.max(0, baseLiters - fuelConsumedLiters);
+              fuelPct = Math.max(5, Math.min(100, Math.round((baseLiters / tank) * 100)));
+            } else if (fuelPct === undefined) {
+              fuelPct = Math.max(5, Math.min(100, Math.round((baseLiters / tank) * 100)));
             }
           }
 
-          if (fuelPct !== undefined && !rangeKm) {
-            rangeKm = Math.round((fuelPct / 100) * tank * (100 / (consumption || 6.8)));
+          if (fuelPct !== undefined) {
+            rangeKm = Math.round((fuelPct / 100) * tank * (100 / (consumption || 6.5)));
           }
 
           const remainingLiters = fuelPct != null ? Math.round((fuelPct / 100) * tank * 10) / 10 : undefined;

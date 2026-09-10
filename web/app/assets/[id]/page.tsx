@@ -10,7 +10,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { Asset, ExpenseRecord, MaintenanceRecord, TripRecord, LoanRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
 import { FuelLog, getFuelLogs, createFuelLog, updateFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
-import { getAsset, getAssets, updateAsset } from '@/lib/services/assetService';
+import { getAsset, getAssets, updateAsset, resolveAssetId } from '@/lib/services/assetService';
 import { getMaintenanceRecords, createMaintenanceRecord, updateMaintenanceRecord, deleteMaintenanceRecord } from '@/lib/services/maintenanceService';
 import { getExpenses, createExpense, updateExpense, deleteExpense } from '@/lib/services/expenseService';
 import { getTrips, createTrip } from '@/lib/services/tripService';
@@ -281,35 +281,76 @@ export default function AssetDetailPage() {
         setOdometerLogs(odo);
         if (w?.data) setWarranties(w.data);
 
-        // Tính toán mức xăng % và số lít còn lại từ dữ liệu mới nhất
+        // Lấy mẫu đo phao xăng thực tế gần nhất từ OBD trên xe
+        let latestObdFuel: { fuel_level_percent: number; timestamp: string; odometer_km?: number } | null = null;
+        try {
+          const sb = createClient();
+          const { data: telemRows } = await sb
+            .from('telemetry_samples')
+            .select('fuel_level_percent, timestamp, odometer_km')
+            .eq('asset_id', resolveAssetId(assetId))
+            .not('fuel_level_percent', 'is', null)
+            .order('timestamp', { ascending: false })
+            .limit(1);
+          if (telemRows && telemRows.length > 0 && telemRows[0].fuel_level_percent != null && Number(telemRows[0].fuel_level_percent) > 0) {
+            latestObdFuel = {
+              fuel_level_percent: Number(telemRows[0].fuel_level_percent),
+              timestamp: telemRows[0].timestamp,
+              odometer_km: telemRows[0].odometer_km != null ? Number(telemRows[0].odometer_km) : undefined,
+            };
+          }
+        } catch {}
+
+        // Tính toán mức xăng % và số lít còn lại
         const tank = a.tank_capacity_liters || 45;
         let fuelPct = a.fuel_level_percent;
         let consumption = a.avg_consumption_l100km;
-        if (f && f.length > 0) {
+        if (consumption == null || isNaN(Number(consumption)) || Number(consumption) < 4.0) {
+          consumption = 6.5;
+        }
+
+        // 1. ƯU TIÊN SỐ 1: Cảm biến phao xăng thực tế từ đầu đọc OBD trong bình xe
+        if (latestObdFuel && latestObdFuel.fuel_level_percent > 0) {
+          fuelPct = Math.round(latestObdFuel.fuel_level_percent);
+          // Nếu sau thời điểm OBD ghi nhận mẫu này, xe có chạy thêm đoạn km nào thì trừ phần tiêu hao phát sinh
+          if (latestObdFuel.odometer_km && a.current_odometer_km && Number(a.current_odometer_km) > Number(latestObdFuel.odometer_km)) {
+            const deltaKm = Number(a.current_odometer_km) - Number(latestObdFuel.odometer_km);
+            const fuelConsumedLiters = deltaKm * ((consumption || 6.5) / 100);
+            const curLiters = Math.max(0, (fuelPct / 100) * tank - fuelConsumedLiters);
+            fuelPct = Math.max(5, Math.min(100, Math.round((curLiters / tank) * 100)));
+          }
+        } else if (f && f.length > 0) {
+          // 2. PHƯƠNG ÁN 2: Đối chiếu từ mốc đổ xăng gần nhất khi chưa có tín hiệu OBD trực tiếp
           const sortedF = [...f].sort((x: any, y: any) => new Date(y.timestamp || y.date || 0).getTime() - new Date(x.timestamp || x.date || 0).getTime());
           const latest: any = sortedF[0];
-          if (!consumption) {
-            const logsWithConsumption = sortedF.filter((l: any) => l.consumption_l100km || l.calculated_consumption_l100km);
-            if (logsWithConsumption.length > 0) {
-              consumption = Number(logsWithConsumption[0].consumption_l100km || logsWithConsumption[0].calculated_consumption_l100km);
-            } else {
-              consumption = 6.8;
-            }
+
+          // Lọc mức tiêu thụ thực tế hợp lý (tránh số lỗi 2.5 L/100km)
+          const logsWithConsumption = sortedF.filter((l: any) => {
+            const c = Number(l.consumption_l100km || l.calculated_consumption_l100km || 0);
+            return c >= 4.5 && c <= 15.0;
+          });
+          if (logsWithConsumption.length > 0) {
+            consumption = Number(logsWithConsumption[0].consumption_l100km || logsWithConsumption[0].calculated_consumption_l100km);
           }
-          if (latest.fuel_level_after_pct != null) {
-            fuelPct = Number(latest.fuel_level_after_pct);
-          } else if (latest.odometer_km && a.current_odometer_km) {
-            const deltaKm = Math.max(0, Number(a.current_odometer_km) - Number(latest.odometer_km));
-            const fuelConsumedLiters = deltaKm * ((consumption || 6.8) / 100);
-            const remaining = Math.max(0, tank - fuelConsumedLiters);
-            fuelPct = Math.max(5, Math.min(100, Math.round((remaining / tank) * 100)));
+
+          let baseLiters = (latest.fuel_level_after_pct != null)
+            ? (Number(latest.fuel_level_after_pct) / 100) * tank
+            : (latest.fuel_liters_after != null ? Number(latest.fuel_liters_after) : tank);
+
+          // Trừ lượng xăng đã tiêu hao theo quãng đường xe đã chạy thêm kể từ lần đổ
+          if (latest.odometer_km && a.current_odometer_km && Number(a.current_odometer_km) > Number(latest.odometer_km)) {
+            const deltaKm = Number(a.current_odometer_km) - Number(latest.odometer_km);
+            const fuelConsumedLiters = deltaKm * ((consumption || 6.5) / 100);
+            baseLiters = Math.max(0, baseLiters - fuelConsumedLiters);
           }
+          fuelPct = Math.max(5, Math.min(100, Math.round((baseLiters / tank) * 100)));
         }
+
         if (consumption != null && !isNaN(Number(consumption))) {
           consumption = Math.round(Number(consumption) * 10) / 10;
         }
         const remainingLiters = fuelPct != null ? Math.round((fuelPct / 100) * tank * 10) / 10 : undefined;
-        const rangeKm = fuelPct != null ? Math.round((fuelPct / 100) * tank * (100 / (consumption || 6.8))) : a.estimated_range_km;
+        const rangeKm = fuelPct != null ? Math.round((fuelPct / 100) * tank * (100 / (consumption || 6.5))) : a.estimated_range_km;
 
         setAsset({
           ...a,
@@ -361,18 +402,20 @@ export default function AssetDetailPage() {
 
   useEffect(() => {
     if (!assetId) return;
+    const realAssetId = resolveAssetId(assetId);
     const sb = createClient();
 
     // Fetch most recent telemetry samples on initial load
     (async () => {
       try {
-        const { data } = await sb
+        const { data, error } = await sb
           .from('telemetry_samples')
           .select('*')
-          .or(`asset_id.eq.${assetId},vehicle_id.eq.${assetId}`)
+          .or(`asset_id.eq.${realAssetId},asset_id.eq.${assetId}`)
           .order('timestamp', { ascending: false })
           .limit(50);
-        if (data && data.length > 0) {
+
+        if (!error && data && data.length > 0) {
           const latest = data[0];
           const isRecentlyActive = latest.timestamp && (Date.now() - new Date(latest.timestamp).getTime()) < 120 * 1000 && Number(latest.rpm || 0) > 0;
           setIsObdLive(Boolean(isRecentlyActive));
@@ -381,6 +424,24 @@ export default function AssetDetailPage() {
           const latestRpm = data.find((r: any) => r.rpm != null && Number(r.rpm) >= 0)?.rpm;
           const latestCoolant = data.find((r: any) => r.coolant_temp_c != null && Number(r.coolant_temp_c) > 0)?.coolant_temp_c;
           const latestVoltage = data.find((r: any) => r.battery_voltage != null && Number(r.battery_voltage) > 0)?.battery_voltage;
+          const latestFuelPct = data.find((r: any) => r.fuel_level_percent != null && Number(r.fuel_level_percent) > 0)?.fuel_level_percent;
+
+          // Nếu có cảm biến phao xăng từ OBD gửi về gần nhất, cập nhật vào asset
+          if (latestFuelPct != null && Number(latestFuelPct) > 0) {
+            setAsset(prev => {
+              if (!prev) return prev;
+              const tankCap = prev.tank_capacity_liters || 45;
+              const pct = Math.round(Number(latestFuelPct));
+              const remL = Math.round((pct / 100) * tankCap * 10) / 10;
+              const estR = Math.round((pct / 100) * tankCap * (100 / (prev.avg_consumption_l100km || 6.5)));
+              return {
+                ...prev,
+                fuel_level_percent: pct,
+                remaining_fuel_liters: remL,
+                estimated_range_km: estR,
+              };
+            });
+          }
 
           setLive({
             speed: isRecentlyActive ? (latestSpeed != null ? Number(latestSpeed) : 0) : 0,
@@ -391,7 +452,9 @@ export default function AssetDetailPage() {
         } else {
           setIsObdLive(false);
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Fetch telemetry samples error:', err);
+      }
     })();
 
     const ch = sb
@@ -401,7 +464,7 @@ export default function AssetDetailPage() {
         { event: 'INSERT', schema: 'public', table: 'telemetry_samples' },
         (payload) => {
           const r = payload.new as any;
-          if (r.asset_id !== assetId && r.vehicle_id !== assetId) return;
+          if (r.asset_id !== assetId && r.asset_id !== realAssetId) return;
           const isRecent = r.timestamp && (Date.now() - new Date(r.timestamp).getTime()) < 120 * 1000 && Number(r.rpm || 0) > 0;
           setIsObdLive(Boolean(isRecent));
           setLive((prev) => ({
