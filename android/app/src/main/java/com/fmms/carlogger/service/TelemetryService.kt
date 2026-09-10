@@ -38,6 +38,7 @@ class TelemetryService : Service() {
     private var runnerJob: Job? = null
     private var gpsJob: Job? = null
     private var pushJob: Job? = null
+    private var finalSampleJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -82,6 +83,7 @@ class TelemetryService : Service() {
             c.obdManager.start()
             c.tripEngine.start()
             c.telemetryEngine.start()
+            startFinalSampleListener()
             runnerJob = serviceScope.launch {
                 var lastOdo = c.vehicleRepository.getActive()?.odometerKm
                 var currentTripId: String? = null
@@ -332,9 +334,8 @@ class TelemetryService : Service() {
         }
     }
 
-    private suspend fun persistSample(vehicleId: String, telemetry: LiveTelemetry, lastOdoKm: Double?) {
-        val c = AppContainer
-        val sample = com.fmms.carlogger.core.database.entity.TelemetrySampleEntity(
+    private fun buildSample(vehicleId: String, telemetry: LiveTelemetry, odometerKm: Double?): com.fmms.carlogger.core.database.entity.TelemetrySampleEntity =
+        com.fmms.carlogger.core.database.entity.TelemetrySampleEntity(
             id = UUID.randomUUID().toString(),
             vehicleId = vehicleId,
             deviceId = null,
@@ -353,7 +354,7 @@ class TelemetryService : Service() {
             engineRuntimeSeconds = telemetry.engineRuntimeSeconds,
             stft = telemetry.stft,
             ltft = telemetry.ltft,
-            odometerKm = lastOdoKm,
+            odometerKm = odometerKm,
             latitude = telemetry.latitude,
             longitude = telemetry.longitude,
             gpsSpeedKmh = telemetry.gpsSpeedKmh,
@@ -362,6 +363,39 @@ class TelemetryService : Service() {
             dataQuality = telemetry.dataQuality.name,
             rawSource = telemetry.rawSource,
         )
+
+    /**
+     * Khi chuyến kết thúc (engine off + đã qua timeout, không bị i-stop đánh lừa),
+     * đẩy 1 mẫu telemetry "chốt cuối" (fuel_level_percent, coolant_temp_c,
+     * battery_voltage, odometer_km...) lên web BẤT KỂ nhịp throttling — để web nắm
+     * trạng thái xe đúng lúc tắt máy.
+     */
+    private fun startFinalSampleListener() {
+        if (finalSampleJob?.isActive == true) return
+        val c = AppContainer
+        finalSampleJob = serviceScope.launch {
+            var wasTripActive = false
+            c.tripEngine.state.collect { state ->
+                val tripped = state.active
+                if (wasTripActive && !tripped) {
+                    val vehicle = c.vehicleRepository.getActive()
+                    if (vehicle != null) {
+                        val last = c.tripEngine.latestTelemetry
+                        val odo = vehicle.odometerKm.takeIf { it > 0 }
+                        val sample = buildSample(vehicle.id, last, odo)
+                            .copy(timestamp = System.currentTimeMillis())
+                        c.telemetryRepository.insertAll(listOf(sample))
+                        c.syncQueueRepository.enqueueTelemetrySample(sample)
+                    }
+                }
+                wasTripActive = tripped
+            }
+        }
+    }
+
+    private suspend fun persistSample(vehicleId: String, telemetry: LiveTelemetry, lastOdoKm: Double?) {
+        val c = AppContainer
+        val sample = buildSample(vehicleId, telemetry, lastOdoKm)
         c.telemetryRepository.insertAll(listOf(sample))
         // Cloud sync: push a sample at most every ~20 s so the web sees live
         // OBD data without flooding the sync queue (poll cycle is ~2.5 s).
@@ -416,6 +450,7 @@ class TelemetryService : Service() {
         runnerJob?.cancel()
         gpsJob?.cancel()
         pushJob?.cancel()
+        finalSampleJob?.cancel()
         serviceScope.cancel()
         super.onDestroy()
     }

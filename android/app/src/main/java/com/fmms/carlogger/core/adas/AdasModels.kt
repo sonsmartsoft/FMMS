@@ -81,6 +81,35 @@ data class AdasAlertState(
 )
 
 /**
+ * Căn chỉnh camera hình thang (QuadCalib) — tương đương LV0 của app lily.
+ * Các tọa độ đều chuẩn hóa 0f..1f; các giá trị refM/horizonY/dashPeriodM/nnScore/camHeightM
+ * lưu riêng nếu có (cờ chưa hiệu chuẩn = NaN).
+ */
+data class CameraCalibration(
+    val topY: Float = 0.62f,        // Vị trí chân trời (hàng trên hình thang)
+    val botY: Float = 0.92f,        // Đáy hình thang (hàng dưới)
+    val topLeftX: Float = 0.40f,    // Góc trên-trái
+    val topRightX: Float = 0.60f,   // Góc trên-phải
+    val botLeftX: Float = 0.08f,    // Góc dưới-trái
+    val botRightX: Float = 0.92f,   // Góc dưới-phải
+    val egoX: Float = 0.50f         // Vị trí xe ở làn giữa
+) {
+    fun toCsv(): String = listOf(topY, botY, topLeftX, topRightX, botLeftX, botRightX, egoX)
+        .joinToString(",") { it.toString() }
+
+    companion object {
+        fun fromCsv(csv: String?): CameraCalibration {
+            val parts = csv?.split(",")?.mapNotNull { it.toFloatOrNull() }.orEmpty()
+            if (parts.size < 7) return CameraCalibration()
+            return CameraCalibration(
+                topY = parts[0], botY = parts[1], topLeftX = parts[2], topRightX = parts[3],
+                botLeftX = parts[4], botRightX = parts[5], egoX = parts[6]
+            )
+        }
+    }
+}
+
+/**
  * Cài đặt tham số ADAS
  */
 data class AdasSettings(
@@ -94,6 +123,7 @@ data class AdasSettings(
     val fcwSensitivity: FcwSensitivity = FcwSensitivity.MEDIUM,
     val cameraMountHeightMeters: Float = 1.35f, // Chiều cao camera gắn kính lái (m)
     val cameraPitchOffsetDegrees: Float = 0f,   // Góc nghiêng camera (độ)
+    val calibration: CameraCalibration = CameraCalibration(), // Hình thang căn chỉnh (QuadCalib lily)
     val useTfliteAi: Boolean = true             // Kích hoạt mô hình TFLite Deep Learning (EDL0)
 )
 

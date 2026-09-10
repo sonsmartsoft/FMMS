@@ -28,15 +28,14 @@ class AdasTfliteDetector(
     private var inputSize = 320
     private var isInputFloat = false
 
-    // Output buffers
-    private val maxDetections = 10
-    private val outputLocations = Array(1) { Array(maxDetections) { FloatArray(4) } }
-    private val outputClasses = Array(1) { FloatArray(maxDetections) }
-    private val outputScores = Array(1) { FloatArray(maxDetections) }
-    private val outputNumDetections = FloatArray(1)
-
     private var inputByteBuffer: ByteBuffer? = null
     private var intValues = IntArray(inputSize * inputSize)
+
+    private var maxDetections = 10
+    private var outputLocations = Array(1) { Array(maxDetections) { FloatArray(4) } }
+    private var outputClasses = Array(1) { FloatArray(maxDetections) }
+    private var outputScores = Array(1) { FloatArray(maxDetections) }
+    private var outputNumDetections = FloatArray(1)
 
     init {
         initModel()
@@ -63,6 +62,22 @@ class AdasTfliteDetector(
                     val bytesPerChannel = if (isInputFloat) 4 else 1
                     inputByteBuffer = ByteBuffer.allocateDirect(1 * inputSize * inputSize * 3 * bytesPerChannel).apply {
                         order(ByteOrder.nativeOrder())
+                    }
+                }
+
+                // Đọc shape output động từ model (boxes/classes/scores/count)
+                // Model lily: [1, N, 4] / [1, N] / [1, N] / [1]
+                interpreter?.let {
+                    val outputCount = it.outputTensorCount
+                    if (outputCount >= 4) {
+                        val boxesShape = it.getOutputTensor(0).shape()
+                        if (boxesShape.size == 3) {
+                            maxDetections = boxesShape[1]
+                        }
+                        outputLocations = Array(1) { Array(maxDetections) { FloatArray(4) } }
+                        outputClasses = Array(1) { FloatArray(maxDetections) }
+                        outputScores = Array(1) { FloatArray(maxDetections) }
+                        outputNumDetections = FloatArray(1)
                     }
                 }
                 isInitialized = true
@@ -166,11 +181,11 @@ class AdasTfliteDetector(
 
     private fun mapClassId(classId: Int): DetectedObjectClass {
         return when (classId) {
-            0 -> DetectedObjectClass.PEDESTRIAN
-            1 -> DetectedObjectClass.BICYCLE
+            0 -> DetectedObjectClass.UNKNOWN
+            1 -> DetectedObjectClass.MOTORCYCLE
             2 -> DetectedObjectClass.CAR
-            3 -> DetectedObjectClass.MOTORCYCLE
-            5 -> DetectedObjectClass.BUS
+            3 -> DetectedObjectClass.BUS
+            5 -> DetectedObjectClass.PEDESTRIAN
             7 -> DetectedObjectClass.TRUCK
             else -> DetectedObjectClass.CAR
         }

@@ -120,14 +120,14 @@ class AdasAlertEngine(
                 candidateAlert = AdasAlertState(
                     type = AdasAlertType.LDW_LEFT,
                     level = AdasAlertLevel.CAUTION,
-                    messageVi = "Lệch làn bên trái!",
+                    messageVi = "⬅ LỆCH LÀN TRÁI",
                     timestamp = now
                 )
             } else if (lane.isDepartingRight) {
                 candidateAlert = AdasAlertState(
                     type = AdasAlertType.LDW_RIGHT,
                     level = AdasAlertLevel.CAUTION,
-                    messageVi = "Lệch làn bên phải!",
+                    messageVi = "LỆCH LÀN PHẢI ➡",
                     timestamp = now
                 )
             }

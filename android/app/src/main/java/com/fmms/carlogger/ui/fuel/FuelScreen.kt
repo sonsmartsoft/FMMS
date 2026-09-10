@@ -92,9 +92,17 @@ class FuelViewModel : ViewModel() {
 
             // 1. Mức xăng trước khi đổ từ OBD PID 012F
             val currentEstimate = c.fuelEngine.estimate.value
-            val fuelLevelBeforePct = currentEstimate.levelPercent
-            val fuelLitersBefore = fuelLevelBeforePct?.let { (it * tankCapacity / 100.0) }
+            var fuelLevelBeforePct = currentEstimate.levelPercent
+            var fuelLitersBefore = fuelLevelBeforePct?.let { (it * tankCapacity / 100.0) }
                 ?: currentEstimate.estimatedLiters
+
+            // Sanity check phao OBD: phao bám thùng/cặn có thể đọc CAO hơn thực tế
+            // (VD đọc 35.7L khi thực còn ~19.6L). Khi đổ đầy, số lít bơm là chuẩn →
+            // nếu "mức trước + số bơm" vượt dung tích bình thì hiệu chỉnh lại mức trước.
+            if (tankFull && fuelLitersBefore != null && fuelLitersBefore + fuelLiters > tankCapacity) {
+                fuelLitersBefore = (tankCapacity - fuelLiters).coerceAtLeast(0.0)
+                fuelLevelBeforePct = fuelLitersBefore / tankCapacity * 100.0
+            }
 
             // 2. Mức xăng sau khi đổ
             val fuelLitersAfter = if (tankFull) {
@@ -127,12 +135,18 @@ class FuelViewModel : ViewModel() {
                 val prevLitersAfter = prevLog.fuelLitersAfter
                     ?: (if (prevLog.tankFull) tankCapacity else (prevLog.fuelLitersBefore?.plus(prevLog.fuelLiters))?.coerceAtMost(tankCapacity))
 
-                if (prevLitersAfter != null && fuelLitersBefore != null) {
-                    val consumed = prevLitersAfter - fuelLitersBefore
-                    if (consumed > 0 && deltaDistanceKm > 0) {
-                        fuelConsumedLiters = consumed
-                        calculatedConsumptionL100km = (consumed / deltaDistanceKm) * 100.0
-                    }
+                // Full-to-Full chuẩn nhất: vòng "ĐẦY → ĐẦY" — số lít đổ hồi trước chính là
+                // lượng tiêu thụ từ hồi trước tới giờ (không phụ thuộc phao OBD sai lệch).
+                val consumed = if (tankFull && prevLog.tankFull && prevLog.fuelLiters > 0) {
+                    prevLog.fuelLiters
+                } else if (prevLitersAfter != null && fuelLitersBefore != null) {
+                    (prevLitersAfter - fuelLitersBefore).takeIf { it > 0 } ?: 0.0
+                } else {
+                    0.0
+                }
+                if (consumed > 0 && deltaDistanceKm > 0) {
+                    fuelConsumedLiters = consumed
+                    calculatedConsumptionL100km = (consumed / deltaDistanceKm) * 100.0
                 }
             }
 
@@ -450,6 +464,36 @@ private fun AddRefuelBar(vm: FuelViewModel) {
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                 )
+            }
+
+            val pumpedL = liters.toDoubleOrNull()
+            val floatL = estimate.estimatedLiters
+            if (pumpedL != null && floatL != null && pumpedL > 0) {
+                val tankSize = CAPACITY_LITERS
+                val totalL = floatL + pumpedL
+                val overTank = totalL > tankSize
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (overTank) colors.amber.copy(alpha = 0.15f) else colors.cyan.copy(alpha = 0.10f),
+                ) {
+                    if (overTank) {
+                        Text(
+                            "⚠ Tổng ${String.format(Locale.US, "%.1f", floatL)} + ${String.format(Locale.US, "%.1f", pumpedL)} = ${String.format(Locale.US, "%.1f", totalL)} L vượt bình ${tankSize.toInt()} L — kiểm tra phao OBD!",
+                            color = colors.amber,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    } else {
+                        Text(
+                            "Bơm ${String.format(Locale.US, "%.1f", pumpedL)} L → sau đổ ~${String.format(Locale.US, "%.1f", totalL)} L (${String.format(Locale.US, "%.0f", (totalL / tankSize * 100).coerceAtMost(100.0))}%)",
+                            color = colors.cyan,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        )
+                    }
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),

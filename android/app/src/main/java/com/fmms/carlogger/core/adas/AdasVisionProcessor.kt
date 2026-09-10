@@ -63,6 +63,89 @@ class AdasVisionProcessor(
         this.settings = newSettings
     }
 
+    // ── Nguồn frame: USB camera ngoài (libuvccamera) ──
+    // Đẩy Bitmap frame vào pipeline ADAS (TFLite + lane + heuristic) giống hệt analyze().
+    @Synchronized
+    fun analyzeBitmap(bitmap: Bitmap) {
+        val now = System.currentTimeMillis()
+        frameCount++
+        if (now - lastFrameTime >= 1000) {
+            currentFps = frameCount * 1000f / (now - lastFrameTime)
+            frameCount = 0
+            lastFrameTime = now
+        }
+
+        try {
+            val width = bitmap.width
+            val height = bitmap.height
+
+            // Chuyển Bitmap → Y (grayscale) để dùng chung các hàm heuristic/lane
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+
+            // Lọc xuống 1/2 nếu ảnh quá to (giảm CPU cho heuristic đường)
+            val yBuffer = ByteBuffer.allocateDirect(max(1, (width * height) / 4))
+            yBuffer.clear()
+            var sum = 0L
+            var count = 0
+            val step = 2
+            for (y in 0 until height step step) {
+                val row = y * width
+                for (x in 0 until width step step) {
+                    val px = pixels[row + x]
+                    val lum = ((px shr 16 and 0xFF) * 0.299f +
+                        (px shr 8 and 0xFF) * 0.587f +
+                        (px and 0xFF) * 0.114f).toInt()
+                    yBuffer.put(lum.toByte())
+                    sum += lum
+                    count++
+                }
+            }
+            yBuffer.flip()
+            val yWidth = (width + step - 1) / step
+            val yHeight = (height + step - 1) / step
+            val meanLuma = if (count > 0) (sum / count).toInt() else 128
+            val isNight = meanLuma < 60
+
+            // Lane detection trên Y downsample
+            val laneResult = detectLaneLines(yBuffer, yWidth, yHeight, yWidth, meanLuma)
+
+            // TFLite AI detect (chạy trên Bitmap gốc)
+            var isAiActive = false
+            var detectedVehicles = emptyList<DetectedVehicle>()
+            if (settings.useTfliteAi && tfliteDetector?.isReady() == true) {
+                try {
+                    val rawDetections = tfliteDetector?.detect(bitmap, minScoreThreshold = 0.38f) ?: emptyList()
+                    if (rawDetections.isNotEmpty()) {
+                        detectedVehicles = processAiDetections(rawDetections, width, height, now)
+                        isAiActive = true
+                    }
+                } catch (e: Exception) {
+                    isAiActive = false
+                }
+            }
+
+            // Heuristic fallback trên Y downsample
+            if (detectedVehicles.isEmpty()) {
+                detectedVehicles = detectLeadVehiclesHeuristic(yBuffer, yWidth, yHeight, yWidth, meanLuma, now)
+            }
+
+            val primaryVehicle = detectedVehicles.firstOrNull { it.isPrimaryTarget }
+            _visionFlow.value = AdasVisionOutput(
+                vehicles = detectedVehicles,
+                primaryVehicle = primaryVehicle,
+                laneResult = laneResult,
+                isAiModelActive = isAiActive,
+                isNightMode = isNight,
+                averageLuminance = meanLuma,
+                fps = currentFps,
+                frameTimestampMs = now
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     @androidx.annotation.OptIn(ExperimentalGetImage::class)
     override fun analyze(image: ImageProxy) {
         val now = System.currentTimeMillis()
@@ -176,8 +259,9 @@ class AdasVisionProcessor(
             val boxBottomNorm = box.bottom
             val boxCenterNormX = box.centerX()
 
-            // Là xe ở làn chính giữa (Ego lane) nếu tâm nằm trong khoảng 0.35..0.65
-            val isCenterLane = boxCenterNormX in 0.32f..0.68f
+            // Là xe ở làn chính giữa (Ego lane) nếu tâm gần vị trí egoX đã căn chỉnh
+            val calib = settings.calibration
+            val isCenterLane = boxCenterNormX in (calib.egoX - 0.18f)..(calib.egoX + 0.18f)
 
             // Tính khoảng cách quang học kết hợp chiều cao thực của phân lớp (Car/Bus/Truck/Bike/Person)
             val mountHeight = settings.cameraMountHeightMeters
@@ -249,10 +333,13 @@ class AdasVisionProcessor(
         rowStride: Int,
         meanLuma: Int
     ): LaneDetectionResult {
-        val horizonY = 0.52f
-        val roiStartY = (height * 0.58f).toInt()
-        val roiEndY = (height * 0.90f).toInt()
-        val scanStepY = (roiEndY - roiStartY) / 4
+        // Hình thang căn chỉnh cam (QuadCalib) — giống lily LV0
+        val c = settings.calibration
+        val horizonY = c.topY.coerceIn(0.0f, 1.0f)
+        val botY = c.botY.coerceIn(0.0f, 1.0f).coerceAtLeast(horizonY + 0.05f)
+        val roiStartY = (height * horizonY).toInt()
+        val roiEndY = (height * botY).toInt()
+        val scanStepY = max(1, (roiEndY - roiStartY) / 4)
 
         // Tự động điều chỉnh ngưỡng biên độ theo độ sáng ngày / đêm
         val edgeThreshold = when {
@@ -298,16 +385,18 @@ class AdasVisionProcessor(
         val hasLeft = leftLaneCount > 0
         val hasRight = rightLaneCount > 0
 
-        val leftStartX = if (hasLeft) (leftLaneSumX / leftLaneCount) else 0.18f
-        val leftEndX = 0.42f
-        val rightStartX = if (hasRight) (rightLaneSumX / rightLaneCount) else 0.82f
-        val rightEndX = 0.58f
+        // Nội suy theo hình thang calib: đáy=botX, đỉnh=topX
+        val leftStartX = if (hasLeft) (leftLaneSumX / leftLaneCount) else c.botLeftX
+        val leftEndX = c.topLeftX
+        val rightStartX = if (hasRight) (rightLaneSumX / rightLaneCount) else c.botRightX
+        val rightEndX = c.topRightX
 
         val laneMidpoint = (leftStartX + rightStartX) / 2f
-        val vehicleOffset = (0.5f - laneMidpoint) * 2f
+        val vehicleOffset = (c.egoX - laneMidpoint) * 2f
 
-        val isDepartingLeft = hasLeft && leftStartX > 0.35f
-        val isDepartingRight = hasRight && rightStartX < 0.65f
+        // Lệch làn khi vạch quét được vượt quá biên hình thang calib
+        val isDepartingLeft = hasLeft && leftStartX > ((c.topLeftX + c.botLeftX) / 2f)
+        val isDepartingRight = hasRight && rightStartX < ((c.topRightX + c.botRightX) / 2f)
 
         return LaneDetectionResult(
             hasLeftLane = hasLeft,
