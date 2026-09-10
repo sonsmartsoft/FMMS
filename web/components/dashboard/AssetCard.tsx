@@ -162,7 +162,7 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
             {settings.showConsumption && asset.capabilities.has_fuel && asset.avg_consumption_l100km && (
               <div className="p-2 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
                 <div className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>{isEn ? 'Avg Economy' : 'Tiêu thụ TB'}</div>
-                <p className="font-bold mt-0.5" style={{ color: 'var(--text-secondary)' }}>{asset.avg_consumption_l100km} L/100km</p>
+                <p className="font-bold mt-0.5" style={{ color: 'var(--text-secondary)' }}>{Number(asset.avg_consumption_l100km).toFixed(1)} L/100km</p>
               </div>
             )}
 

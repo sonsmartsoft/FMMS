@@ -29,22 +29,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
   // Edit form state (separate from live state so user can cancel)
   const [editName, setEditName] = useState('');
   const [editOrg, setEditOrg] = useState('');
+  const [isSavingUser, setIsSavingUser] = useState(false);
 
   const supabase = createClient();
 
   useEffect(() => {
     const syncUserData = async () => {
       try {
-        const currentMember = await getCurrentUserMember();
-        if (currentMember) {
-          setUserEmail(currentMember.email);
-          setUserName(currentMember.name || currentMember.email);
-          setUserRole(currentMember.role);
-          localStorage.setItem('fmms_user_role', currentMember.role);
-          localStorage.setItem('fmms_user_name', currentMember.name);
-          return;
-        }
-
         const savedName = localStorage.getItem('fmms_user_name');
         const savedOrg = localStorage.getItem('fmms_org_name');
         const savedRole = localStorage.getItem('fmms_user_role');
@@ -55,10 +46,29 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
         const { data: { user } } = await supabase.auth.getUser();
         if (user && user.email) {
           setUserEmail(user.email);
-          if (user.user_metadata?.full_name && !savedName) setUserName(user.user_metadata.full_name);
-          if (!savedRole) {
-            setUserRole(user.user_metadata?.role || (user.email.includes('admin') || user.email === 'demo@fmms.com' || user.email === 'son.nt@utivina.com' ? 'ADMIN' : 'MEMBER'));
+          if (user.user_metadata?.org_name) {
+            setOrgName(user.user_metadata.org_name);
+            localStorage.setItem('fmms_org_name', user.user_metadata.org_name);
           }
+          if (user.user_metadata?.full_name) {
+            setUserName(user.user_metadata.full_name);
+            localStorage.setItem('fmms_user_name', user.user_metadata.full_name);
+          }
+        }
+
+        const currentMember = await getCurrentUserMember();
+        if (currentMember) {
+          setUserEmail(currentMember.email);
+          const resolvedName = user?.user_metadata?.full_name || currentMember.name || savedName || currentMember.email;
+          setUserName(resolvedName);
+          setUserRole(currentMember.role);
+          localStorage.setItem('fmms_user_role', currentMember.role);
+          localStorage.setItem('fmms_user_name', resolvedName);
+          return;
+        }
+
+        if (user && user.email && !savedRole) {
+          setUserRole(user.user_metadata?.role || (user.email.includes('admin') || user.email === 'demo@fmms.com' || user.email === 'son.nt@utivina.com' || user.email === 'son.smartsoft@gmail.com' ? 'ADMIN' : 'MEMBER'));
         }
       } catch {}
     };
@@ -75,16 +85,83 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
     setShowEditModal(true);
   };
 
-  const saveEdit = () => {
-    if (editName.trim()) {
-      setUserName(editName.trim());
-      localStorage.setItem('fmms_user_name', editName.trim());
+  const saveEdit = async () => {
+    const trimmedName = editName.trim();
+    const trimmedOrg = editOrg.trim();
+    if (!trimmedName) return;
+
+    setIsSavingUser(true);
+    setUserName(trimmedName);
+    localStorage.setItem('fmms_user_name', trimmedName);
+    if (trimmedOrg) {
+      setOrgName(trimmedOrg);
+      localStorage.setItem('fmms_org_name', trimmedOrg);
     }
-    if (editOrg.trim()) {
-      setOrgName(editOrg.trim());
-      localStorage.setItem('fmms_org_name', editOrg.trim());
+
+    try {
+      // 1. Persist to Supabase Auth metadata (persists permanently across all sessions & deploys)
+      await supabase.auth.updateUser({
+        data: {
+          full_name: trimmedName,
+          ...(trimmedOrg ? { org_name: trimmedOrg } : {}),
+        },
+      });
+
+      // 2. Persist to public.user_members table in Supabase
+      if (userEmail) {
+        const email = userEmail.trim().toLowerCase();
+        const { data: existing } = await supabase
+          .from('user_members')
+          .select('id')
+          .ilike('email', email)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase
+            .from('user_members')
+            .update({
+              name: trimmedName,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id);
+        } else {
+          await supabase
+            .from('user_members')
+            .insert({
+              id: `usr-${Date.now()}`,
+              name: trimmedName,
+              email: email,
+              role: userRole,
+              status: 'ACTIVE',
+              assigned_asset_ids: [],
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+        }
+      }
+
+      // 3. Update local user list cache
+      try {
+        const rawUsers = localStorage.getItem('fmms_users_list');
+        if (rawUsers) {
+          const parsed = JSON.parse(rawUsers);
+          const updated = parsed.map((u: any) =>
+            u.email?.toLowerCase() === userEmail?.toLowerCase()
+              ? { ...u, name: trimmedName, updated_at: new Date().toISOString() }
+              : u
+          );
+          localStorage.setItem('fmms_users_list', JSON.stringify(updated));
+        }
+      } catch {}
+
+      window.dispatchEvent(new Event('fmms_user_updated'));
+      window.dispatchEvent(new Event('fmms_users_updated'));
+    } catch (err) {
+      console.warn('Error persisting profile to Supabase:', err);
+    } finally {
+      setIsSavingUser(false);
+      setShowEditModal(false);
     }
-    setShowEditModal(false);
   };
 
   const handleLogout = async () => {
@@ -335,11 +412,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
               <div className="flex space-x-2 pt-2">
                 <button
                   onClick={saveEdit}
-                  className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 flex items-center justify-center space-x-1.5"
+                  disabled={isSavingUser}
+                  className="flex-1 py-2.5 rounded-xl text-white font-bold text-xs hover:opacity-90 flex items-center justify-center space-x-1.5 disabled:opacity-50"
                   style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
                 >
                   <Save className="w-3.5 h-3.5" />
-                  <span>{isEn ? 'Save Changes' : 'Lưu thay đổi'}</span>
+                  <span>{isSavingUser ? (isEn ? 'Saving to Cloud...' : 'Đang lưu lên hệ thống...') : (isEn ? 'Save Changes' : 'Lưu thay đổi')}</span>
                 </button>
                 <button
                   onClick={() => setShowEditModal(false)}

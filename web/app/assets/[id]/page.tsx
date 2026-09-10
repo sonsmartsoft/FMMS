@@ -305,6 +305,9 @@ export default function AssetDetailPage() {
             fuelPct = Math.max(5, Math.min(100, Math.round((remaining / tank) * 100)));
           }
         }
+        if (consumption != null && !isNaN(Number(consumption))) {
+          consumption = Math.round(Number(consumption) * 10) / 10;
+        }
         const remainingLiters = fuelPct != null ? Math.round((fuelPct / 100) * tank * 10) / 10 : undefined;
         const rangeKm = fuelPct != null ? Math.round((fuelPct / 100) * tank * (100 / (consumption || 6.8))) : a.estimated_range_km;
 
@@ -2654,7 +2657,7 @@ export default function AssetDetailPage() {
                 { label: 'Động cơ', value: asset.engine || '—' },
                 { label: 'Nhiên liệu', value: asset.fuel_type || '—' },
                 { label: 'Dung tích bình', value: asset.tank_capacity_liters ? `${asset.tank_capacity_liters}L` : (asset.battery_capacity_kwh ? `${asset.battery_capacity_kwh} kWh` : '—') },
-                { label: 'TB L/100km', value: asset.avg_consumption_l100km ? `${asset.avg_consumption_l100km} L/100km` : 'N/A' },
+                { label: 'TB L/100km', value: asset.avg_consumption_l100km != null && !isNaN(Number(asset.avg_consumption_l100km)) ? `${Number(asset.avg_consumption_l100km).toFixed(1)} L/100km` : 'N/A' },
               ].map((s, i) => (
                 <div key={i} className="p-3 rounded-xl text-center" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-subtle)' }}>
                   <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
@@ -3585,7 +3588,7 @@ export default function AssetDetailPage() {
               {[
                 { label: 'Tổng chuyến', value: displayedTrips.length },
                 { label: 'Tổng km', value: `${fmt(displayedTrips.reduce((s,t)=>s+(t.distance_km || 0),0).toFixed(0) as any)} km` },
-                { label: 'TB tiêu thụ', value: `${asset.avg_consumption_l100km || '—'} L/100` },
+                { label: 'TB tiêu thụ', value: asset.avg_consumption_l100km != null && !isNaN(Number(asset.avg_consumption_l100km)) ? `${Number(asset.avg_consumption_l100km).toFixed(1)} L/100` : '—' },
               ].map((s, i) => (
                 <div key={i} className="p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <p className="font-extrabold text-base" style={{ color: 'var(--accent-cyan)' }}>{s.value}</p>
@@ -3650,16 +3653,16 @@ export default function AssetDetailPage() {
                           </p>
                         </td>
                         <td className="px-3 py-2.5 font-mono font-bold text-cyan-400 whitespace-nowrap">
-                          {trip.distance_km} km
+                          {trip.distance_km != null ? `${Number(trip.distance_km).toFixed(1)} km` : '0 km'}
                         </td>
                         <td className="px-3 py-2.5 font-mono whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
                           {durFmt(trip.duration_seconds)}
                         </td>
                         <td className="px-3 py-2.5 font-mono whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
-                          {trip.average_speed_kmh ? `${trip.average_speed_kmh} km/h` : '—'}
+                          {trip.average_speed_kmh ? `${Math.round(Number(trip.average_speed_kmh))} km/h` : '—'}
                         </td>
                         <td className="px-3 py-2.5 font-mono whitespace-nowrap">
-                          {trip.fuel_used_liters ? <span className="text-amber-400">{trip.fuel_used_liters} L</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                          {trip.fuel_used_liters ? <span className="text-amber-400">{Number(trip.fuel_used_liters).toFixed(2)} L</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                         </td>
                       </tr>
                     ))
@@ -3707,7 +3710,7 @@ export default function AssetDetailPage() {
             <div className="grid grid-cols-3 gap-3 text-xs text-center">
               {[
                 { label: 'Tổng chi phí xăng', value: `${fmt(totalFuelCost)} ₫`, color: 'var(--status-amber)' },
-                { label: 'TB L/100km', value: `${asset.avg_consumption_l100km || '—'} L`, color: 'var(--accent-cyan)' },
+                { label: 'TB L/100km', value: asset.avg_consumption_l100km != null && !isNaN(Number(asset.avg_consumption_l100km)) ? `${Number(asset.avg_consumption_l100km).toFixed(1)} L` : '—', color: 'var(--accent-cyan)' },
                 { label: 'Số lần đổ', value: displayedFuelLogs.length, color: 'var(--text-primary)' },
               ].map((s, i) => (
                 <div key={i} className="p-3 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>

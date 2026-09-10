@@ -35,7 +35,7 @@ export const INITIAL_DEFAULT_USERS: UserMember[] = [
   },
   {
     id: 'usr-smartsoft',
-    name: 'Nguyễn Trung Sơn (SmartSoft)',
+    name: 'Trung Sơn',
     email: 'son.smartsoft@gmail.com',
     phone: '0901234567',
     role: 'ADMIN',
@@ -304,7 +304,7 @@ export async function getCurrentUserMember(): Promise<UserMember | null> {
     if (adminEmails.includes(email) || email.includes('admin')) {
       return {
         id: user.id || 'usr-admin',
-        name: user.user_metadata?.full_name || 'Nguyễn Trung Sơn',
+        name: user.user_metadata?.full_name || 'Trung Sơn',
         email: email,
         role: 'ADMIN',
         status: 'ACTIVE',

@@ -152,12 +152,13 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
           }
 
           const remainingLiters = fuelPct != null ? Math.round((fuelPct / 100) * tank * 10) / 10 : undefined;
+          const roundedConsumption = consumption != null && !isNaN(Number(consumption)) ? Math.round(Number(consumption) * 10) / 10 : consumption;
 
           return {
             ...asset,
             fuel_level_percent: fuelPct,
             remaining_fuel_liters: remainingLiters,
-            avg_consumption_l100km: consumption,
+            avg_consumption_l100km: roundedConsumption,
             estimated_range_km: rangeKm,
             total_rides: asset.asset_type === 'BICYCLE' ? ridesCount : asset.total_rides,
           };
