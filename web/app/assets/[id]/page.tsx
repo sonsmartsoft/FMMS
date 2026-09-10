@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip as ReTooltip, Legend, BarChart, AreaChart, PieChart, Pie, Cell,
+  Tooltip as ReTooltip, Legend, BarChart, AreaChart, PieChart, Pie, Cell, LabelList,
 } from 'recharts';
 
 
@@ -35,7 +35,7 @@ import {
   Cpu, CheckCircle2, Plus, MapPin, Activity, Layers, Car, X, Pencil,
   Zap, Clock, TrendingDown, Shield, CreditCard, Award, Trash2, Edit2,
   SlidersHorizontal, Calendar, CalendarDays, CalendarRange, Search, Filter,
-  AlertTriangle, ShieldAlert,
+  AlertTriangle, ShieldAlert, Eye, EyeOff,
 } from 'lucide-react';
 
 
@@ -360,24 +360,30 @@ export default function AssetDetailPage() {
     if (!assetId) return;
     const sb = createClient();
 
-    // Fetch most recent telemetry sample on initial load
+    // Fetch most recent telemetry samples on initial load
     (async () => {
       try {
         const { data } = await sb
           .from('telemetry_samples')
           .select('*')
-          .eq('asset_id', assetId)
+          .or(`asset_id.eq.${assetId},vehicle_id.eq.${assetId}`)
           .order('timestamp', { ascending: false })
-          .limit(1);
+          .limit(50);
         if (data && data.length > 0) {
-          const r = data[0];
-          const isRecentlyActive = r.timestamp && (Date.now() - new Date(r.timestamp).getTime()) < 120 * 1000 && Number(r.rpm || 0) > 0;
+          const latest = data[0];
+          const isRecentlyActive = latest.timestamp && (Date.now() - new Date(latest.timestamp).getTime()) < 120 * 1000 && Number(latest.rpm || 0) > 0;
           setIsObdLive(Boolean(isRecentlyActive));
+
+          const latestSpeed = data.find((r: any) => r.speed_kmh != null && Number(r.speed_kmh) >= 0)?.speed_kmh;
+          const latestRpm = data.find((r: any) => r.rpm != null && Number(r.rpm) >= 0)?.rpm;
+          const latestCoolant = data.find((r: any) => r.coolant_temp_c != null && Number(r.coolant_temp_c) > 0)?.coolant_temp_c;
+          const latestVoltage = data.find((r: any) => r.battery_voltage != null && Number(r.battery_voltage) > 0)?.battery_voltage;
+
           setLive({
-            speed: r.speed_kmh != null ? Number(r.speed_kmh) : null,
-            rpm: r.rpm != null ? Number(r.rpm) : null,
-            coolant: r.coolant_temp_c != null ? Number(r.coolant_temp_c) : null,
-            voltage: r.battery_voltage != null ? Number(r.battery_voltage) : null,
+            speed: isRecentlyActive ? (latestSpeed != null ? Number(latestSpeed) : 0) : 0,
+            rpm: isRecentlyActive ? (latestRpm != null ? Number(latestRpm) : 0) : 0,
+            coolant: latestCoolant != null ? Number(latestCoolant) : (latest.coolant_temp_c != null ? Number(latest.coolant_temp_c) : null),
+            voltage: latestVoltage != null ? Number(latestVoltage) : (latest.battery_voltage != null ? Number(latest.battery_voltage) : null),
           });
         } else {
           setIsObdLive(false);
@@ -389,17 +395,18 @@ export default function AssetDetailPage() {
       .channel(`telemetry-${assetId}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'telemetry_samples', filter: `asset_id=eq.${assetId}` },
+        { event: 'INSERT', schema: 'public', table: 'telemetry_samples' },
         (payload) => {
           const r = payload.new as any;
+          if (r.asset_id !== assetId && r.vehicle_id !== assetId) return;
           const isRecent = r.timestamp && (Date.now() - new Date(r.timestamp).getTime()) < 120 * 1000 && Number(r.rpm || 0) > 0;
           setIsObdLive(Boolean(isRecent));
-          setLive({
-            speed: r.speed_kmh != null ? Number(r.speed_kmh) : null,
-            rpm: r.rpm != null ? Number(r.rpm) : null,
-            coolant: r.coolant_temp_c != null ? Number(r.coolant_temp_c) : null,
-            voltage: r.battery_voltage != null ? Number(r.battery_voltage) : null,
-          });
+          setLive((prev) => ({
+            speed: r.speed_kmh != null ? Number(r.speed_kmh) : prev.speed,
+            rpm: r.rpm != null ? Number(r.rpm) : prev.rpm,
+            coolant: r.coolant_temp_c != null && Number(r.coolant_temp_c) > 0 ? Number(r.coolant_temp_c) : prev.coolant,
+            voltage: r.battery_voltage != null && Number(r.battery_voltage) > 0 ? Number(r.battery_voltage) : prev.voltage,
+          }));
         },
       )
       .subscribe();
@@ -408,7 +415,7 @@ export default function AssetDetailPage() {
     };
   }, [assetId]);
 
-  const hasLive = live.speed != null || live.rpm != null || live.coolant != null || live.voltage != null;
+  const hasLive = (live.coolant != null && live.coolant > 0) || (live.voltage != null && live.voltage > 0) || (live.speed != null && live.speed > 0) || (live.rpm != null && live.rpm > 0);
 
   /* ── Modal open states ── */
   const [openModal, setOpenModal] = useState<string | null>(null);
@@ -674,6 +681,7 @@ export default function AssetDetailPage() {
 
   /* ── Form states ── */
   const [odoViewMode, setOdoViewMode] = useState<'daily' | 'monthly' | 'yearly'>('daily');
+  const [showOdoChartLabels, setShowOdoChartLabels] = useState<boolean>(true);
   const [fuelChartMode, setFuelChartMode] = useState<'COMBINED' | 'PRICE_TREND'>('COMBINED');
   const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', total_cost: '', odometer_km: '', station: '', notes: '' });
   const [maintForm, setMaintForm] = useState({ date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', discount: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
@@ -2806,22 +2814,22 @@ export default function AssetDetailPage() {
                     label: 'Nhiệt độ nước làm mát',
                     icon: '🌡️',
                     value: live.coolant,
-                    displayValue: live.coolant != null ? `${Math.round(live.coolant)}` : '0',
+                    displayValue: live.coolant != null && live.coolant > 0 ? `${Math.round(live.coolant)}` : '—',
                     unit: '°C',
                     min: 0,
                     max: 120,
                     color: live.coolant != null && live.coolant > 100 ? 'var(--status-rose)' : live.coolant != null && live.coolant < 60 ? 'var(--accent-cyan)' : 'var(--status-green)',
-                    bgColor: 'rgba(16,185,129,0.12)',
+                    bgColor: 'rgba(165,180,252,0.12)',
                     borderColor: 'rgba(16,185,129,0.25)',
                     gradId: 'grad-coolant',
                     gradColors: live.coolant != null && live.coolant > 100 ? ['#F59E0B', '#EF4444'] as [string, string] : ['#10B981', '#06B6D4'] as [string, string],
-                    subLabel: live.coolant == null ? 'Chờ tín hiệu OBD...' : !isObdLive ? `Lưu lúc tắt máy (${Math.round(live.coolant)}°C)` : live.coolant < 60 ? '🔵 Đang làm nóng máy' : live.coolant <= 95 ? '🟢 Nhiệt độ tối ưu' : live.coolant <= 105 ? '🟠 Quạt gió làm việc' : '🔴 Cảnh báo quá nhiệt!',
+                    subLabel: live.coolant == null || live.coolant <= 0 ? 'Chờ tín hiệu OBD...' : !isObdLive ? `Lưu lúc tắt máy (${Math.round(live.coolant)}°C)` : live.coolant < 60 ? '🔵 Đang làm nóng máy' : live.coolant <= 95 ? '🟢 Nhiệt độ tối ưu' : live.coolant <= 105 ? '🟠 Quạt gió làm việc' : '🔴 Cảnh báo quá nhiệt!',
                   },
                   {
                     label: 'Điện áp bình ắc quy',
                     icon: '🔋',
                     value: live.voltage,
-                    displayValue: live.voltage != null ? live.voltage.toFixed(1) : '0.0',
+                    displayValue: live.voltage != null && live.voltage > 0 ? live.voltage.toFixed(1) : '—',
                     unit: 'V',
                     min: 10,
                     max: 16,
@@ -2830,7 +2838,7 @@ export default function AssetDetailPage() {
                     borderColor: 'rgba(168,85,247,0.25)',
                     gradId: 'grad-voltage',
                     gradColors: ['#A855F7', '#6366F1'] as [string, string],
-                    subLabel: live.voltage == null ? 'Chờ tín hiệu OBD...' : !isObdLive ? `Điện áp ắc quy lúc tắt máy (${live.voltage.toFixed(1)}V)` : live.voltage < 11.8 ? '🔴 Bình yếu, cần sạc' : live.voltage <= 12.8 ? '🟡 Điện áp bình tốt' : live.voltage <= 14.8 ? '⚡ Máy phát đang sạc tốt' : '⚠️ Quá áp máy phát',
+                    subLabel: live.voltage == null || live.voltage <= 0 ? 'Chờ tín hiệu OBD...' : !isObdLive ? `Điện áp ắc quy lúc tắt máy (${live.voltage.toFixed(1)}V)` : live.voltage < 11.8 ? '🔴 Bình yếu, cần sạc' : live.voltage <= 12.8 ? '🟡 Điện áp bình tốt' : live.voltage <= 14.8 ? '⚡ Máy phát đang sạc tốt' : '⚠️ Quá áp máy phát',
                   },
                 ];
 
@@ -2940,11 +2948,16 @@ export default function AssetDetailPage() {
                 <p className="font-semibold mb-1" style={{ color: 'var(--status-green)' }}>⚡ Dữ liệu OBD thời gian thực từ Android app (ZESTECH + KW906)</p>
                 <p style={{ color: 'var(--text-muted)' }}>Đang cập nhật qua Supabase Realtime mỗi giây từ ứng dụng Android.</p>
               </div>
-            ) : hasLive ? (
+            ) : hasLive && (live.coolant || live.voltage) ? (
               <div className="p-4 rounded-xl text-xs" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                 <p className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>🔌 Xe đang tắt máy / OBD ở chế độ chờ</p>
                 <p style={{ color: 'var(--text-muted)' }}>
-                  Hệ thống đang hiển thị <strong>ảnh chụp trạng thái cuối cùng</strong> (Nhiệt độ nước làm mát {Math.round(live.coolant || 0)}°C, Điện áp ắc quy {(live.voltage || 0).toFixed(1)}V) được lưu vào DB trước khi tắt máy. Khi bạn nổ máy xe, app Android sẽ tự động kết nối và truyền dữ liệu trực tiếp (Realtime).
+                  Hệ thống đang hiển thị <strong>ảnh chụp trạng thái cuối cùng</strong> (
+                  {[
+                    live.coolant && live.coolant > 0 ? `Nhiệt độ nước làm mát ${Math.round(live.coolant)}°C` : null,
+                    live.voltage && live.voltage > 0 ? `Điện áp ắc quy ${live.voltage.toFixed(1)}V` : null,
+                  ].filter(Boolean).join(', ')}
+                  ) được lưu vào DB trước khi tắt máy. Khi bạn nổ máy xe, app Android sẽ tự động kết nối và truyền dữ liệu trực tiếp (Realtime).
                 </p>
               </div>
             ) : (
@@ -3054,7 +3067,7 @@ export default function AssetDetailPage() {
                   {/* Daily Km Recharts */}
                   {mileageAnalytics.dailyReport.length > 0 && (
                     <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                      <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
                             <Activity className="w-3.5 h-3.5" />
@@ -3065,6 +3078,19 @@ export default function AssetDetailPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowOdoChartLabels(v => !v)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 ${
+                              showOdoChartLabels
+                                ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/25'
+                                : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                            }`}
+                            title="Bật / tắt hiển thị số Km trực tiếp trên từng cột biểu đồ"
+                          >
+                            {showOdoChartLabels ? <Eye className="w-3 h-3 text-white" /> : <EyeOff className="w-3 h-3 text-slate-400" />}
+                            <span>{showOdoChartLabels ? 'Hiện số Km: BẬT' : 'Hiện số Km: TẮT'}</span>
+                          </button>
                           <button
                             onClick={() => setHideRestDays(p => !p)}
                             className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 ${
@@ -3081,7 +3107,7 @@ export default function AssetDetailPage() {
                           </span>
                         </div>
                       </div>
-                      <div style={{ height: 200 }}>
+                      <div style={{ height: 220 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart
                             data={[...displayedDailyReport]
@@ -3091,7 +3117,7 @@ export default function AssetDetailPage() {
                                 km: d.kmRun,
                                 odo: d.displayOdo,
                               }))}
-                            margin={{ top: 5, right: 15, left: -10, bottom: 5 }}
+                            margin={{ top: showOdoChartLabels ? 20 : 5, right: 15, left: -10, bottom: 5 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                             <XAxis dataKey="date" tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
@@ -3122,7 +3148,25 @@ export default function AssetDetailPage() {
                             />
 
                             <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 6 }} />
-                            <Bar yAxisId="km" dataKey="km" name="Km chạy" fill="rgba(56,189,248,0.4)" stroke="#38BDF8" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                            <Bar yAxisId="km" dataKey="km" name="Km chạy" fill="rgba(56,189,248,0.4)" stroke="#38BDF8" strokeWidth={1.5} radius={[4, 4, 0, 0]}>
+                              {showOdoChartLabels && (
+                                <LabelList
+                                  dataKey="km"
+                                  position="top"
+                                  formatter={(v: any) => {
+                                    const num = Number(v || 0);
+                                    return num > 0 ? `${Math.round(num)}` : '';
+                                  }}
+                                  style={{
+                                    fill: isDark ? '#38BDF8' : '#0284C7',
+                                    fontSize: 9,
+                                    fontWeight: 700,
+                                    fontFamily: 'monospace',
+                                  }}
+                                  offset={5}
+                                />
+                              )}
+                            </Bar>
                             <Line yAxisId="odo" type="monotone" dataKey="odo" name="Mốc ODO" stroke="#10B981" strokeWidth={2.5} dot={{ fill: '#10B981', r: 3 }} />
                           </ComposedChart>
 
@@ -3241,14 +3285,30 @@ export default function AssetDetailPage() {
                   {/* Recharts: ComposedChart km + cost per month */}
                   {mileageAnalytics.monthlyReport.length > 0 && (
                     <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
-                          <BarChart3 className="w-3.5 h-3.5" />
+                      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
+                            <BarChart3 className="w-3.5 h-3.5" />
+                          </div>
+                          <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Biểu đồ Km &amp; Chi phí theo tháng</p>
                         </div>
-                        <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Biểu đồ Km &amp; Chi phí theo tháng</p>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowOdoChartLabels(v => !v)}
+                          className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                            showOdoChartLabels
+                              ? 'bg-emerald-500 text-white shadow-emerald-500/25'
+                              : 'bg-slate-200/80 dark:bg-slate-800/80 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300/50 dark:border-slate-700/50'
+                          }`}
+                          title="Bật / tắt hiển thị số Km trực tiếp trên từng cột biểu đồ"
+                        >
+                          {showOdoChartLabels ? <Eye className="w-3.5 h-3.5 text-white" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
+                          <span>{showOdoChartLabels ? 'Hiện số Km trên cột: BẬT' : 'Hiện số Km trên cột: TẮT'}</span>
+                        </button>
                       </div>
 
-                      <div style={{ height: 240 }}>
+                      <div style={{ height: 260 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart
                             data={mileageAnalytics.monthlyReport.map(m => ({
@@ -3258,7 +3318,7 @@ export default function AssetDetailPage() {
                               maint: m.maintCost,
                               cost: m.totalCost,
                             }))}
-                            margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                            margin={{ top: showOdoChartLabels ? 22 : 8, right: 20, left: 0, bottom: 5 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                             <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
@@ -3275,7 +3335,25 @@ export default function AssetDetailPage() {
                             <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
                             <Area yAxisId="left" type="monotone" dataKey="fuel" stackId="cost" name="Nhiên liệu" fill="#F59E0B40" stroke="#F59E0B" strokeWidth={1.5} />
                             <Area yAxisId="left" type="monotone" dataKey="maint" stackId="cost" name="Bảo dưỡng" fill="#06B6D440" stroke="#06B6D4" strokeWidth={1.5} />
-                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#10B98135" stroke="#10B981" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#10B98135" stroke="#10B981" strokeWidth={1.5} radius={[4, 4, 0, 0]}>
+                              {showOdoChartLabels && (
+                                <LabelList
+                                  dataKey="km"
+                                  position="top"
+                                  formatter={(v: any) => {
+                                    const num = Number(v || 0);
+                                    return num > 0 ? `${Math.round(num).toLocaleString('vi-VN')} km` : '';
+                                  }}
+                                  style={{
+                                    fill: isDark ? '#34D399' : '#059669',
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    fontFamily: 'monospace',
+                                  }}
+                                  offset={6}
+                                />
+                              )}
+                            </Bar>
                             <Line yAxisId="left" type="monotone" dataKey="cost" name="Tổng chi phí" stroke="#F87171" strokeWidth={2} dot={{ fill: '#F87171', r: 3 }} strokeDasharray="4 2" />
                           </ComposedChart>
                         </ResponsiveContainer>
@@ -3362,14 +3440,30 @@ export default function AssetDetailPage() {
                   {/* Recharts: Yearly overview bar chart */}
                   {mileageAnalytics.yearlyReport.length > 0 && (
                     <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
-                          <BarChart3 className="w-3.5 h-3.5" />
+                      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
+                            <BarChart3 className="w-3.5 h-3.5" />
+                          </div>
+                          <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Biểu đồ Km &amp; Chi phí theo năm</p>
                         </div>
-                        <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Biểu đồ Km &amp; Chi phí theo năm</p>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowOdoChartLabels(v => !v)}
+                          className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                            showOdoChartLabels
+                              ? 'bg-emerald-500 text-white shadow-emerald-500/25'
+                              : 'bg-slate-200/80 dark:bg-slate-800/80 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300/50 dark:border-slate-700/50'
+                          }`}
+                          title="Bật / tắt hiển thị số Km trực tiếp trên từng cột biểu đồ"
+                        >
+                          {showOdoChartLabels ? <Eye className="w-3.5 h-3.5 text-white" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
+                          <span>{showOdoChartLabels ? 'Hiện số Km trên cột: BẬT' : 'Hiện số Km trên cột: TẮT'}</span>
+                        </button>
                       </div>
 
-                      <div style={{ height: 220 }}>
+                      <div style={{ height: 250 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart
                             data={mileageAnalytics.yearlyReport.map(y => ({
@@ -3378,7 +3472,7 @@ export default function AssetDetailPage() {
                               cost: y.totalCost,
                               cpkm: y.costPerKm,
                             }))}
-                            margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                            margin={{ top: showOdoChartLabels ? 22 : 8, right: 20, left: 0, bottom: 5 }}
                           >
                             <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                             <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
@@ -3394,7 +3488,25 @@ export default function AssetDetailPage() {
 
                             <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
                             <Bar yAxisId="left" dataKey="cost" name="Tổng chi phí" fill="#F59E0B80" stroke="#F59E0B" strokeWidth={1} radius={[4, 4, 0, 0]} />
-                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#10B98135" stroke="#10B981" strokeWidth={1.5} radius={[4, 4, 0, 0]} />
+                            <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#10B98135" stroke="#10B981" strokeWidth={1.5} radius={[4, 4, 0, 0]}>
+                              {showOdoChartLabels && (
+                                <LabelList
+                                  dataKey="km"
+                                  position="top"
+                                  formatter={(v: any) => {
+                                    const num = Number(v || 0);
+                                    return num > 0 ? `${Math.round(num).toLocaleString('vi-VN')} km` : '';
+                                  }}
+                                  style={{
+                                    fill: isDark ? '#34D399' : '#059669',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    fontFamily: 'monospace',
+                                  }}
+                                  offset={6}
+                                />
+                              )}
+                            </Bar>
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
