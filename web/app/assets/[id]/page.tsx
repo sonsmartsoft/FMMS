@@ -1258,28 +1258,38 @@ export default function AssetDetailPage() {
     const dailyReport = sortedDays.map((day) => {
       let kmRun = 0;
       // 1. Determine kmRun for the day
+      // RULE: Trips (GPS/OBD recorded) are the authoritative km source.
+      // ODO log events (fuel fill-up, maintenance, manual odometer check) are ONLY used to
+      // advance prevOdo tracking. They must NOT generate kmRun by themselves when trip data
+      // already exists — otherwise a single ODO log at 3066km after a baseline of 12km would
+      // add 3054km on top of actual trip distances, inflating total by 2×.
+      // Exception: if a day has ONLY ODO-type events (no trips, no summaries), and the delta
+      // from prevOdo is small enough to be plausible daily driving (≤ 500 km), we accept it.
+      const hasOdoOnlyDay = day.tripDistance === 0 && day.notes.every(n => n.type !== 'TRIP');
       if (day.tripDistance > 0) {
         kmRun = day.tripDistance;
-      } else if (day.maxOdo > 0 && prevOdo > 0 && day.maxOdo > prevOdo) {
-        kmRun = day.maxOdo - prevOdo;
-      } else if (day.maxOdo > 0 && day.minOdo > 0 && day.maxOdo > day.minOdo) {
-        kmRun = day.maxOdo - day.minOdo;
+      } else if (hasOdoOnlyDay && day.maxOdo > 0 && prevOdo > 0 && day.maxOdo > prevOdo) {
+        const delta = day.maxOdo - prevOdo;
+        // Only trust ODO-delta if it looks like real daily driving (≤ 500 km per log entry)
+        // Larger deltas just mean the user hadn't recorded an ODO log in a while, not km driven today.
+        if (delta <= 500) {
+          kmRun = delta;
+        }
+        // If delta > 500 km, the ODO log just brought prevOdo up-to-date; no kmRun credited.
+      } else if (hasOdoOnlyDay && day.maxOdo > 0 && day.minOdo > 0 && day.maxOdo > day.minOdo) {
+        const delta = day.maxOdo - day.minOdo;
+        if (delta <= 500) {
+          kmRun = delta;
+        }
       }
 
-      // 2. Advance prevOdo reliably (trips take precedence over point-in-time manual logs)
-      if (day.tripDistance > 0) {
-        if (prevOdo > 0) {
-          prevOdo += day.tripDistance;
-        } else if (day.maxOdo > 0) {
-          prevOdo = day.maxOdo;
-        }
-        if (day.maxOdo > prevOdo) {
-          prevOdo = day.maxOdo;
-        }
-      } else if (day.maxOdo > 0) {
-        if (day.maxOdo > prevOdo) {
-          prevOdo = day.maxOdo;
-        }
+      // 2. Always advance prevOdo to the highest known ODO reading (regardless of whether kmRun was credited)
+      if (day.maxOdo > prevOdo) {
+        prevOdo = day.maxOdo;
+      } else if (day.tripDistance > 0 && prevOdo + day.tripDistance > prevOdo) {
+        prevOdo += day.tripDistance;
+        // If an ODO log on the same day is higher (e.g. maintenance record), sync up
+        if (day.maxOdo > prevOdo) prevOdo = day.maxOdo;
       }
 
       const dObj = new Date(day.date);
@@ -1462,7 +1472,7 @@ export default function AssetDetailPage() {
       monthlyReport,
       yearlyReport,
       currentMonthKm,
-      totalActiveDays: dailyReport.filter(d => d.kmRun > 0).length,
+      totalActiveDays: dailyReport.filter(d => d.kmRun > 0 && d.notes.some(n => n.type === 'TRIP')).length,
     };
   }, [odometerLogs, fuelLogs, maintenance, trips, dailySummaries, expenses, asset]);
 
