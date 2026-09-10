@@ -684,6 +684,7 @@ export default function AssetDetailPage() {
 
   /* ── Form states ── */
   const [odoViewMode, setOdoViewMode] = useState<'daily' | 'monthly' | 'yearly'>('daily');
+  const [selectedOdoYear, setSelectedOdoYear] = useState<string>('ALL');
   const [showOdoChartLabels, setShowOdoChartLabels] = useState<boolean>(true);
   const [fuelChartMode, setFuelChartMode] = useState<'COMBINED' | 'PRICE_TREND'>('COMBINED');
   const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', total_cost: '', odometer_km: '', station: '', notes: '' });
@@ -1271,12 +1272,24 @@ export default function AssetDetailPage() {
     expenses.forEach(exp => {
       if (exp.date) {
         const mKey = exp.date.slice(0, 7);
-        if (monthlyMap.has(mKey)) {
-          const mData = monthlyMap.get(mKey)!;
-          if (exp.category === 'Running' || exp.category === 'Fuel') mData.fuelCost += exp.amount;
-          else if (exp.category === 'Maintenance') mData.maintCost += exp.amount;
-          else mData.otherCost += exp.amount;
+        if (!monthlyMap.has(mKey)) {
+          const [year, month] = mKey.split('-');
+          const mLabel = `Tháng ${month}/${year}`;
+          monthlyMap.set(mKey, {
+            monthKey: mKey,
+            monthLabel: mLabel,
+            totalKm: 0,
+            activeDays: 0,
+            fuelCost: 0,
+            maintCost: 0,
+            otherCost: 0,
+            dayList: [],
+          });
         }
+        const mData = monthlyMap.get(mKey)!;
+        if (exp.category === 'Running' || exp.category === 'Fuel') mData.fuelCost += exp.amount;
+        else if (exp.category === 'Maintenance') mData.maintCost += exp.amount;
+        else mData.otherCost += exp.amount;
       }
     });
 
@@ -1299,6 +1312,7 @@ export default function AssetDetailPage() {
       totalCost: number;
       fuelCost: number;
       maintCost: number;
+      otherCost: number;
       monthsCount: number;
       activeDays: number;
     }>();
@@ -1312,6 +1326,7 @@ export default function AssetDetailPage() {
           totalCost: 0,
           fuelCost: 0,
           maintCost: 0,
+          otherCost: 0,
           monthsCount: 0,
           activeDays: 0,
         });
@@ -1321,6 +1336,7 @@ export default function AssetDetailPage() {
       yData.totalCost += m.totalCost;
       yData.fuelCost += m.fuelCost;
       yData.maintCost += m.maintCost;
+      yData.otherCost += m.otherCost;
       yData.monthsCount += 1;
       yData.activeDays += m.activeDays;
     });
@@ -1373,6 +1389,21 @@ export default function AssetDetailPage() {
         : String(valB).localeCompare(String(valA), 'vi');
     });
   }, [mileageAnalytics.dailyReport, tabStartDate, tabEndDate, hideRestDays, dailySortCol, dailySortDir]);
+
+  const availableOdoYears = useMemo(() => {
+    const years = new Set<string>();
+    mileageAnalytics.monthlyReport.forEach(m => {
+      const y = m.monthKey.slice(0, 4);
+      if (y) years.add(y);
+    });
+    return Array.from(years).sort().reverse();
+  }, [mileageAnalytics.monthlyReport]);
+
+  const displayMonthlyReport = useMemo(() => {
+    if (selectedOdoYear === 'ALL') return mileageAnalytics.monthlyReport;
+    return mileageAnalytics.monthlyReport.filter(m => m.monthKey.startsWith(selectedOdoYear));
+  }, [mileageAnalytics.monthlyReport, selectedOdoYear]);
+
 
 
   if (loading) {
@@ -3286,39 +3317,75 @@ export default function AssetDetailPage() {
                 <div className="space-y-5">
 
                   {/* Recharts: ComposedChart km + cost per month */}
-                  {mileageAnalytics.monthlyReport.length > 0 && (
+                  {displayMonthlyReport.length > 0 && (
                     <div className="p-4 rounded-2xl" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
                       <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
                             <BarChart3 className="w-3.5 h-3.5" />
                           </div>
-                          <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Biểu đồ Km &amp; Chi phí theo tháng</p>
+                          <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">
+                            Biểu đồ Km &amp; Chi phí theo tháng {selectedOdoYear !== 'ALL' ? `(${selectedOdoYear})` : ''}
+                          </p>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => setShowOdoChartLabels(v => !v)}
-                          className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                            showOdoChartLabels
-                              ? 'bg-emerald-500 text-white shadow-emerald-500/25'
-                              : 'bg-slate-200/80 dark:bg-slate-800/80 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300/50 dark:border-slate-700/50'
-                          }`}
-                          title="Bật / tắt hiển thị số Km trực tiếp trên từng cột biểu đồ"
-                        >
-                          {showOdoChartLabels ? <Eye className="w-3.5 h-3.5 text-white" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
-                          <span>{showOdoChartLabels ? 'Hiện số Km trên cột: BẬT' : 'Hiện số Km trên cột: TẮT'}</span>
-                        </button>
+                        <div className="flex items-center flex-wrap gap-2">
+                          {/* Bộ lọc Năm */}
+                          {availableOdoYears.length > 0 && (
+                            <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedOdoYear('ALL')}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                                  selectedOdoYear === 'ALL'
+                                    ? 'bg-cyan-500 text-white shadow-sm shadow-cyan-500/30'
+                                    : 'text-slate-600 dark:text-slate-400 hover:text-cyan-500'
+                                }`}
+                              >
+                                Tất cả các năm
+                              </button>
+                              {availableOdoYears.map(yr => (
+                                <button
+                                  key={yr}
+                                  type="button"
+                                  onClick={() => setSelectedOdoYear(yr)}
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                                    selectedOdoYear === yr
+                                      ? 'bg-cyan-500 text-white shadow-sm shadow-cyan-500/30'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-cyan-500'
+                                  }`}
+                                >
+                                  Năm {yr}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => setShowOdoChartLabels(v => !v)}
+                            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                              showOdoChartLabels
+                                ? 'bg-emerald-500 text-white shadow-emerald-500/25'
+                                : 'bg-slate-200/80 dark:bg-slate-800/80 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300/50 dark:border-slate-700/50'
+                            }`}
+                            title="Bật / tắt hiển thị số Km trực tiếp trên từng cột biểu đồ"
+                          >
+                            {showOdoChartLabels ? <Eye className="w-3.5 h-3.5 text-white" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
+                            <span>{showOdoChartLabels ? 'Hiện số Km trên cột: BẬT' : 'Hiện số Km trên cột: TẮT'}</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div style={{ height: 260 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <ComposedChart
-                            data={mileageAnalytics.monthlyReport.map(m => ({
+                            data={[...displayMonthlyReport].reverse().map(m => ({
                               label: m.monthLabel.replace('Tháng ', 'T'),
                               km: m.totalKm,
                               fuel: m.fuelCost,
                               maint: m.maintCost,
+                              other: m.otherCost,
                               cost: m.totalCost,
                             }))}
                             margin={{ top: showOdoChartLabels ? 22 : 8, right: 20, left: 0, bottom: 5 }}
@@ -3338,6 +3405,7 @@ export default function AssetDetailPage() {
                             <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
                             <Area yAxisId="left" type="monotone" dataKey="fuel" stackId="cost" name="Nhiên liệu" fill="#F59E0B40" stroke="#F59E0B" strokeWidth={1.5} />
                             <Area yAxisId="left" type="monotone" dataKey="maint" stackId="cost" name="Bảo dưỡng" fill="#06B6D440" stroke="#06B6D4" strokeWidth={1.5} />
+                            <Area yAxisId="left" type="monotone" dataKey="other" stackId="cost" name="Chi phí khác" fill="#A855F740" stroke="#A855F7" strokeWidth={1.5} />
                             <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#10B98135" stroke="#10B981" strokeWidth={1.5} radius={[4, 4, 0, 0]}>
                               {showOdoChartLabels && (
                                 <LabelList
@@ -3366,8 +3434,8 @@ export default function AssetDetailPage() {
 
                   {/* Monthly Summary Cards / Bars */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {mileageAnalytics.monthlyReport.map((m) => {
-                      const maxKmInMonth = Math.max(...mileageAnalytics.monthlyReport.map(x => x.totalKm), 1000);
+                    {displayMonthlyReport.map((m) => {
+                      const maxKmInMonth = Math.max(...displayMonthlyReport.map(x => x.totalKm), 1000);
                       const percent = Math.min(100, (m.totalKm / maxKmInMonth) * 100);
                       return (
                         <div key={m.monthKey} className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
@@ -3389,9 +3457,15 @@ export default function AssetDetailPage() {
                               <p className="font-bold text-xs" style={{ color: 'var(--text-secondary)' }}>{m.activeDays} ngày ({m.avgKmPerActiveDay} km/ngày)</p>
                             </div>
                             <div className="p-2 rounded-lg" style={{ background: 'var(--bg-primary)' }}>
-                              <span style={{ color: 'var(--text-muted)' }}>Chi phí vận hành:</span>
+                              <span style={{ color: 'var(--text-muted)' }}>Tổng chi phí:</span>
                               <p className="font-bold text-xs" style={{ color: 'var(--status-amber)' }}>{fmt(m.totalCost)} ₫</p>
                             </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] px-2 py-1 rounded-lg bg-black/5 dark:bg-white/5 font-mono">
+                            <span title="Nhiên liệu">Xăng: <b className="text-amber-500">{fmt(m.fuelCost)}</b></span>
+                            <span title="Bảo dưỡng & Sửa chữa">B.Dưỡng: <b className="text-cyan-500">{fmt(m.maintCost)}</b></span>
+                            <span title="Trả góp, bảo hiểm, cầu đường, gửi xe...">Khác: <b className="text-purple-400">{fmt(m.otherCost)}</b></span>
                           </div>
 
                           {m.totalKm > 0 && (
@@ -3415,11 +3489,13 @@ export default function AssetDetailPage() {
                           <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">TB Km / Ngày chạy</th>
                           <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Tiền Xăng (₫)</th>
                           <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Bảo Dưỡng (₫)</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]" title="Trả góp ngân hàng, bảo hiểm, phí cầu đường, gửi xe, mua xe...">Chi Phí Khác (₫)</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Tổng Chi Phí (₫)</th>
                           <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Chi phí / Km</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {mileageAnalytics.monthlyReport.map((m, idx) => (
+                        {displayMonthlyReport.map((m, idx) => (
                           <tr key={m.monthKey} style={{ borderBottom: '1px solid var(--border-subtle)', background: idx % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
                             <td className="px-3.5 py-2.5 font-bold whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>{m.monthLabel}</td>
                             <td className="px-3.5 py-2.5 font-mono font-bold text-emerald-400 whitespace-nowrap">{fmt(m.totalKm)} km</td>
@@ -3427,10 +3503,39 @@ export default function AssetDetailPage() {
                             <td className="px-3.5 py-2.5 font-mono" style={{ color: 'var(--accent-cyan)' }}>{m.avgKmPerActiveDay} km/ngày</td>
                             <td className="px-3.5 py-2.5 font-mono text-amber-400">{fmt(m.fuelCost)} ₫</td>
                             <td className="px-3.5 py-2.5 font-mono text-cyan-400">{fmt(m.maintCost)} ₫</td>
+                            <td className="px-3.5 py-2.5 font-mono text-purple-400">{fmt(m.otherCost)} ₫</td>
+                            <td className="px-3.5 py-2.5 font-mono font-bold text-amber-500 dark:text-amber-300">{fmt(m.totalCost)} ₫</td>
                             <td className="px-3.5 py-2.5 font-mono font-bold" style={{ color: 'var(--status-red)' }}>{m.costPerKm > 0 ? `${fmt(m.costPerKm)} ₫` : '—'}</td>
                           </tr>
                         ))}
                       </tbody>
+                      {displayMonthlyReport.length > 0 && (() => {
+                        const sumKm = displayMonthlyReport.reduce((acc, x) => acc + x.totalKm, 0);
+                        const sumDays = displayMonthlyReport.reduce((acc, x) => acc + x.activeDays, 0);
+                        const avgKmDay = sumDays > 0 ? Math.round(sumKm / sumDays) : 0;
+                        const sumFuel = displayMonthlyReport.reduce((acc, x) => acc + x.fuelCost, 0);
+                        const sumMaint = displayMonthlyReport.reduce((acc, x) => acc + x.maintCost, 0);
+                        const sumOther = displayMonthlyReport.reduce((acc, x) => acc + x.otherCost, 0);
+                        const sumTotal = sumFuel + sumMaint + sumOther;
+                        const sumCostPerKm = sumKm > 0 ? Math.round(sumTotal / sumKm) : 0;
+                        const totalTitle = selectedOdoYear === 'ALL' ? 'TỔNG CỘNG' : `TỔNG NĂM ${selectedOdoYear}`;
+
+                        return (
+                          <tfoot style={{ background: 'var(--bg-secondary)', borderTop: '2px solid var(--border-default)' }}>
+                            <tr className="font-extrabold text-[12px]">
+                              <td className="px-3.5 py-3 text-cyan-500 whitespace-nowrap">{totalTitle}</td>
+                              <td className="px-3.5 py-3 font-mono text-emerald-400 whitespace-nowrap">{fmt(sumKm)} km</td>
+                              <td className="px-3.5 py-3 font-mono" style={{ color: 'var(--text-secondary)' }}>{sumDays} ngày</td>
+                              <td className="px-3.5 py-3 font-mono text-cyan-400">{avgKmDay} km/ngày</td>
+                              <td className="px-3.5 py-3 font-mono text-amber-400">{fmt(sumFuel)} ₫</td>
+                              <td className="px-3.5 py-3 font-mono text-cyan-400">{fmt(sumMaint)} ₫</td>
+                              <td className="px-3.5 py-3 font-mono text-purple-400">{fmt(sumOther)} ₫</td>
+                              <td className="px-3.5 py-3 font-mono text-amber-500 dark:text-amber-300">{fmt(sumTotal)} ₫</td>
+                              <td className="px-3.5 py-3 font-mono" style={{ color: 'var(--status-red)' }}>{sumCostPerKm > 0 ? `${fmt(sumCostPerKm)} ₫` : '—'}</td>
+                            </tr>
+                          </tfoot>
+                        );
+                      })()}
                     </table>
                   </div>
                 </div>
