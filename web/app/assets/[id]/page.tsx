@@ -1245,12 +1245,10 @@ export default function AssetDetailPage() {
       dayList: typeof dailyReport;
     }>();
 
-    dailyReport.forEach(day => {
-      const mKey = day.date.slice(0, 7);
-      const [year, month] = mKey.split('-');
-      const mLabel = `Tháng ${month}/${year}`;
-
+    const getOrCreateMonth = (mKey: string) => {
       if (!monthlyMap.has(mKey)) {
+        const [year, month] = mKey.split('-');
+        const mLabel = `Tháng ${month}/${year}`;
         monthlyMap.set(mKey, {
           monthKey: mKey,
           monthLabel: mLabel,
@@ -1262,34 +1260,73 @@ export default function AssetDetailPage() {
           dayList: [],
         });
       }
+      return monthlyMap.get(mKey)!;
+    };
 
-      const mData = monthlyMap.get(mKey)!;
+    dailyReport.forEach(day => {
+      const mKey = day.date.slice(0, 7);
+      const mData = getOrCreateMonth(mKey);
       mData.totalKm += day.kmRun;
       if (day.kmRun > 0 || day.notes.length > 0) mData.activeDays += 1;
       mData.dayList.push(day);
     });
 
+    // 1. Bảo dưỡng từ bảng maintenance_records (Nguồn dữ liệu gốc của Bảo dưỡng)
+    maintenance.forEach(m => {
+      if (m.date && Number(m.cost || 0) > 0) {
+        const mKey = m.date.slice(0, 7);
+        const mData = getOrCreateMonth(mKey);
+        mData.maintCost += Number(m.cost || 0);
+      }
+    });
+
+    // 2. Nhiên liệu từ bảng fuel_logs (Nguồn dữ liệu gốc của Nhật ký đổ xăng)
+    fuelLogs.forEach(f => {
+      const fDate = (f.date || (f as any).timestamp || '').slice(0, 7);
+      const fCost = Number(f.total_cost || 0);
+      if (fDate && fCost > 0) {
+        const mData = getOrCreateMonth(fDate);
+        mData.fuelCost += fCost;
+      }
+    });
+
+    // 3. Chi phí từ bảng expenses (Bao gồm chi phí vận hành khác, trả góp, bảo hiểm, và các chi phí chưa có trong fuel/maint)
     expenses.forEach(exp => {
-      if (exp.date) {
+      if (exp.date && Number(exp.amount || 0) > 0) {
         const mKey = exp.date.slice(0, 7);
-        if (!monthlyMap.has(mKey)) {
-          const [year, month] = mKey.split('-');
-          const mLabel = `Tháng ${month}/${year}`;
-          monthlyMap.set(mKey, {
-            monthKey: mKey,
-            monthLabel: mLabel,
-            totalKm: 0,
-            activeDays: 0,
-            fuelCost: 0,
-            maintCost: 0,
-            otherCost: 0,
-            dayList: [],
+        const mData = getOrCreateMonth(mKey);
+        const cat = (exp.category || '').toUpperCase();
+        const desc = (exp.description || '').toLowerCase();
+        const sub = ((exp as any).subcategory || (exp as any).sub_category || '').toUpperCase();
+        const amt = Number(exp.amount || 0);
+
+        const isFuel = cat === 'FUEL' || (cat === 'RUNNING' && (sub === 'GASOLINE' || sub === 'FUEL' || desc.includes('xăng') || desc.includes('nhiên liệu')));
+        const isMaint = cat === 'MAINTENANCE' || cat === 'REPAIR' || desc.includes('bảo dưỡng') || desc.includes('thay nhớt') || desc.includes('thay dầu');
+
+        if (isFuel) {
+          // Tránh cộng lặp nếu đã có trong bảng fuel_logs của ngày đó
+          const isDuplicateWithFuelLog = fuelLogs.some(f => {
+            const fd = (f.date || (f as any).timestamp || '').slice(0, 10);
+            const fc = Number(f.total_cost || 0);
+            return fd === exp.date.slice(0, 10) && Math.abs(fc - amt) < 100;
           });
+          if (!isDuplicateWithFuelLog) {
+            mData.fuelCost += amt;
+          }
+        } else if (isMaint) {
+          // Tránh cộng lặp nếu đã có trong bảng maintenance_records của ngày đó
+          const isDuplicateWithMaint = maintenance.some(m => {
+            const md = (m.date || '').slice(0, 10);
+            const mc = Number(m.cost || 0);
+            return md === exp.date.slice(0, 10) && Math.abs(mc - amt) < 100;
+          });
+          if (!isDuplicateWithMaint) {
+            mData.maintCost += amt;
+          }
+        } else {
+          // Tất cả chi phí khác: Trả góp ngân hàng, bảo hiểm, phí đường bộ, gửi xe, phụ kiện, mua xe, sửa chữa nhỏ...
+          mData.otherCost += amt;
         }
-        const mData = monthlyMap.get(mKey)!;
-        if (exp.category === 'Running' || exp.category === 'Fuel') mData.fuelCost += exp.amount;
-        else if (exp.category === 'Maintenance') mData.maintCost += exp.amount;
-        else mData.otherCost += exp.amount;
       }
     });
 
@@ -1587,6 +1624,12 @@ export default function AssetDetailPage() {
         try {
           await deleteExpense(id);
           setExpenses(prev => prev.filter(e => e.id !== id));
+          // Nếu chi phí này gắn với bản ghi bảo dưỡng -> đồng bộ xoá bên bảng bảo dưỡng
+          if (id.startsWith('maint_exp_') || id.startsWith('maint_')) {
+            const rawMaintId = id.replace('maint_exp_', '').replace('maint_', '');
+            await deleteMaintenanceRecord(rawMaintId, asset?.id);
+            setMaintenance(prev => prev.filter(m => m.id !== rawMaintId));
+          }
           showToast('Đã xóa chi phí thành công');
         } catch (err: any) {
           alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
@@ -1608,59 +1651,52 @@ export default function AssetDetailPage() {
         userNotes = userNotes.replace(discountMatch[0], '').trim();
       }
 
-      const itemsPrefixMatch = userNotes.match(/Các hạng mục:\s*([^|]+)/i);
-      if (itemsPrefixMatch) {
-        const itemsStr = itemsPrefixMatch[1];
-        const rawParts = itemsStr.split('+');
-        rawParts.forEach(p => {
-          const colonIdx = p.lastIndexOf(':');
-          if (colonIdx > 0) {
-            const name = p.slice(0, colonIdx).trim();
-            const costStr = p.slice(colonIdx + 1).replace(/[^0-9]/g, '');
-            if (name) items.push({ name, cost: costStr });
+      const itemsMatch = userNotes.match(/Các hạng mục:\s*([^|]+)/i);
+      if (itemsMatch) {
+        const rawItemsStr = itemsMatch[1].trim();
+        const parts = rawItemsStr.split('+').map(p => p.trim()).filter(Boolean);
+        items = parts.map(p => {
+          const sepIdx = p.lastIndexOf(':');
+          if (sepIdx !== -1) {
+            const name = p.slice(0, sepIdx).trim();
+            const costStr = p.slice(sepIdx + 1).replace(/[^0-9]/g, '');
+            return { name, cost: costStr };
           }
+          return { name: p, cost: '' };
         });
-        userNotes = userNotes.replace(itemsPrefixMatch[0], '').trim();
-      } else {
-        const itemMatches = Array.from(userNotes.matchAll(/([^,|]+?)\s*\(([0-9.,]+)\s*₫?\)/g));
-        if (itemMatches.length > 0) {
-          itemMatches.forEach(m => {
-            const name = m[1].trim();
-            const costStr = m[2].replace(/[.,]/g, '');
-            if (name && !name.includes('Giảm giá')) {
-              items.push({ name, cost: costStr });
-            }
-          });
-          userNotes = userNotes.replace(/([^,|]+?)\s*\(([0-9.,]+)\s*₫?\)[,\s]*/g, '').trim();
-        }
+        userNotes = userNotes.replace(itemsMatch[0], '').trim();
       }
-
-      userNotes = userNotes.replace(/^[|\s,]+|[|\s,]+$/g, '').trim();
     }
+
+    userNotes = userNotes.replace(/^\|\s*|\s*\|\s*$/g, '').replace(/\|\s*\|/g, '|').trim();
 
     if (items.length === 0) {
-      items = [{ name: defaultType || 'Thay dầu máy', cost: defaultCost ? String(defaultCost) : '' }];
+      items = [{
+        name: defaultType || 'Thay dầu máy',
+        cost: defaultCost && defaultCost > 0 ? String(defaultCost) : '',
+      }];
     }
 
-    return { discount, items, cleanNotes: userNotes };
+    return { discount, items, userNotes, cleanNotes: userNotes };
   };
 
   /* ── Edit & Delete Handlers for Maintenance ── */
   const handleOpenEditMaint = (item: MaintenanceRecord) => {
     setEditingMaint(item);
     const parsed = parseMaintenanceNotes(item.notes, item.cost, item.maintenance_type);
-    setServiceItems(parsed.items);
+
     setMaintForm({
       date: item.date ? item.date.slice(0, 10) : '',
       maintenance_type: item.maintenance_type || parsed.items[0]?.name || 'Thay dầu máy',
-      odometer_km: item.odometer_km ? String(item.odometer_km) : '',
+      odometer_km: String(item.odometer_km || ''),
       cost: String(item.cost || ''),
       discount: parsed.discount,
       vendor: item.vendor || '',
-      notes: parsed.cleanNotes,
+      notes: parsed.userNotes,
       next_due_km: item.next_due_km ? String(item.next_due_km) : '',
       next_due_date: item.next_due_date ? item.next_due_date.slice(0, 10) : '',
     });
+    setServiceItems(parsed.items.length > 0 ? parsed.items : [{ name: 'Thay dầu máy', cost: '' }]);
     setOpenModal('maintenance');
   };
 
@@ -1669,7 +1705,7 @@ export default function AssetDetailPage() {
     setMaintForm({
       date: new Date().toISOString().split('T')[0],
       maintenance_type: 'Thay dầu máy',
-      odometer_km: asset?.current_odometer_km ? String(asset.current_odometer_km) : '',
+      odometer_km: String(asset?.current_odometer_km || ''),
       cost: '',
       discount: '',
       vendor: '',
@@ -1692,9 +1728,11 @@ export default function AssetDetailPage() {
       actionName: 'Xác nhận xóa bảo dưỡng',
       onConfirm: async () => {
         try {
-          await deleteMaintenanceRecord(id);
+          await deleteMaintenanceRecord(id, asset?.id);
           setMaintenance(prev => prev.filter(m => m.id !== id));
-          showToast('Đã xóa lịch sử bảo dưỡng');
+          const refreshedExps = await getExpenses(asset?.id);
+          setExpenses(refreshedExps);
+          showToast('Đã xóa lịch sử bảo dưỡng và chi phí liên quan');
         } catch (err: any) {
           alert(`Lỗi khi xóa: ${err?.message ?? 'Lỗi'}`);
         }
@@ -1866,6 +1904,7 @@ export default function AssetDetailPage() {
 
       if (editingMaint) {
         const updated = await updateMaintenanceRecord(editingMaint.id, {
+          asset_id: asset.id,
           maintenance_type: maintForm.maintenance_type || serviceItems[0]?.name || 'Thay dầu máy',
           date: maintForm.date || new Date().toISOString().split('T')[0],
           odometer_km: parseFloat(maintForm.odometer_km) || 0,
@@ -1907,29 +1946,13 @@ export default function AssetDetailPage() {
           setAsset(p => p ? { ...p, next_maintenance_due: maintForm.next_due_date } : p);
           updateAsset(asset.id, { next_maintenance_due: maintForm.next_due_date }).catch(err => console.warn('Update next_maintenance_due failed:', err));
         }
-
-        // Auto-create expense record if totalCost > 0
-        if (totalCost > 0) {
-          try {
-            const expDate = maintForm.date || new Date().toISOString().split('T')[0];
-            await createExpense({
-              asset_id: asset.id,
-              date: expDate,
-              category: 'Maintenance',
-              subcategory: 'Maintenance',
-              amount: totalCost,
-              currency: 'VND',
-              vendor: maintForm.vendor || undefined,
-              odometer_km: maintForm.odometer_km ? parseFloat(maintForm.odometer_km) : undefined,
-              description: `Bảo dưỡng: ${maintForm.maintenance_type || serviceItems[0]?.name || 'Bảo dưỡng định kỳ'}${discount > 0 ? ` (Giảm -${parseInt(String(discount)).toLocaleString('vi-VN')}₫)` : ''}`,
-            });
-            const refreshedExps = await getExpenses(assetId);
-            setExpenses(refreshedExps);
-          } catch (expErr) {
-            console.warn('Auto expense sync warning:', expErr);
-          }
-        }
       }
+
+      // Làm mới danh sách chi phí sau khi thêm hoặc cập nhật bảo dưỡng
+      try {
+        const refreshedExps = await getExpenses(asset.id);
+        setExpenses(refreshedExps);
+      } catch {}
     } catch (err: any) {
       alert(`Lỗi khi lưu: ${err?.message ?? 'Không lưu được'}`);
     }

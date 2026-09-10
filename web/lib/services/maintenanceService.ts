@@ -166,25 +166,133 @@ export async function createMaintenanceRecord(data: MaintenanceInput, skipExpens
     }
   }
 
-  // 3. Auto-sync to expenses
+  // 3. Auto-sync to expenses (Đồng bộ 2 chiều sang mục Chi Phí)
   if (!skipExpenseSync && (data.cost ?? 0) > 0) {
     try {
-      const { createExpense } = await import('./expenseService');
-      await createExpense({
-        asset_id: realId,
+      await syncMaintenanceExpense({
+        action: 'CREATE',
+        maintId: newMaintObj.id,
+        assetId: realId,
         date: payload.date,
-        category: 'MAINTENANCE',
-        subcategory: data.maintenance_type,
-        amount: data.cost ?? 0,
-        currency: data.currency ?? 'VND',
+        cost: data.cost ?? 0,
+        maintenanceType: data.maintenance_type,
         vendor: data.vendor,
-        odometer_km: data.odometer_km,
-        description: `Bảo dưỡng: ${data.maintenance_type}${data.notes ? ` - ${data.notes}` : ''}`,
-      }, true);
+        odometerKm: data.odometer_km,
+        notes: data.notes,
+      });
     } catch {}
   }
 
   return newMaintObj;
+}
+
+/**
+ * 🔄 Đồng bộ tự động 2 chiều giữa Bảo Dưỡng (Maintenance) và Chi Phí (Expenses)
+ * Khi tạo/sửa/xóa bản ghi bảo dưỡng -> Tự động tạo/sửa/xóa bản ghi chi phí tương ứng
+ */
+export async function syncMaintenanceExpense(params: {
+  action: 'CREATE' | 'UPDATE' | 'DELETE';
+  maintId: string;
+  assetId?: string;
+  date?: string;
+  cost?: number;
+  maintenanceType?: string;
+  vendor?: string;
+  odometerKm?: number;
+  notes?: string;
+}) {
+  const { action, maintId, assetId, date, cost, maintenanceType, vendor, odometerKm, notes } = params;
+  try {
+    const { getExpenses, createExpense, updateExpense, deleteExpense } = await import('./expenseService');
+    const expenses = await getExpenses(assetId);
+
+    // Tag để nhận diện bản ghi chi phí này thuộc về bảo dưỡng nào
+    const refTag = `[MaintRef:${maintId}]`;
+
+    // Tìm các bản ghi chi phí liên quan đến lần bảo dưỡng này
+    const matchingExpenses = expenses.filter(e => {
+      if (e.description && e.description.includes(refTag)) return true;
+      if (e.id === `maint_exp_${maintId}` || e.id === `maint_${maintId}`) return true;
+      // Khớp theo ngày và số tiền nếu chưa gắn refTag
+      if (date && cost && (e.date || '').slice(0, 10) === date.slice(0, 10)) {
+        const cat = (e.category || '').toUpperCase();
+        const desc = (e.description || '').toLowerCase();
+        const isMaint = cat === 'MAINTENANCE' || desc.includes('bảo dưỡng');
+        if (isMaint && Math.abs(Number(e.amount || 0) - cost) < 100) return true;
+      }
+      return false;
+    });
+
+    if (action === 'DELETE') {
+      // Xoá toàn bộ chi phí đi kèm bản ghi bảo dưỡng này
+      for (const exp of matchingExpenses) {
+        await deleteExpense(exp.id);
+      }
+      return;
+    }
+
+    const fullDesc = `Bảo dưỡng: ${maintenanceType || 'Bảo dưỡng định kỳ'}${notes ? ` - ${notes}` : ''} ${refTag}`;
+    const amount = cost !== undefined ? cost : (matchingExpenses[0]?.amount || 0);
+
+    if (action === 'UPDATE') {
+      if (matchingExpenses.length > 0) {
+        await updateExpense(matchingExpenses[0].id, {
+          date: date || matchingExpenses[0].date,
+          category: 'Maintenance',
+          subcategory: maintenanceType || matchingExpenses[0].subcategory,
+          amount: amount,
+          vendor: vendor !== undefined ? vendor : matchingExpenses[0].vendor,
+          odometer_km: odometerKm !== undefined ? odometerKm : matchingExpenses[0].odometer_km,
+          description: fullDesc,
+        });
+        // Dọn dẹp bản ghi trùng lặp (nếu có)
+        for (let i = 1; i < matchingExpenses.length; i++) {
+          await deleteExpense(matchingExpenses[i].id);
+        }
+      } else if (assetId && amount > 0) {
+        await createExpense({
+          asset_id: assetId,
+          date: date || new Date().toISOString().slice(0, 10),
+          category: 'Maintenance',
+          subcategory: maintenanceType || 'Bảo dưỡng định kỳ',
+          amount: amount,
+          currency: 'VND',
+          vendor: vendor,
+          odometer_km: odometerKm,
+          description: fullDesc,
+        }, true);
+      }
+      return;
+    }
+
+    if (action === 'CREATE') {
+      if ((cost ?? 0) <= 0 || !assetId) return;
+
+      if (matchingExpenses.length > 0) {
+        await updateExpense(matchingExpenses[0].id, {
+          date: date,
+          amount: cost,
+          vendor: vendor,
+          odometer_km: odometerKm,
+          description: fullDesc,
+        });
+      } else {
+        await createExpense({
+          asset_id: assetId,
+          date: date || new Date().toISOString().slice(0, 10),
+          category: 'Maintenance',
+          subcategory: maintenanceType || 'Bảo dưỡng định kỳ',
+          amount: cost ?? 0,
+          currency: 'VND',
+          vendor: vendor,
+          odometer_km: odometerKm,
+          description: fullDesc,
+        }, true);
+      }
+    }
+  } catch (err) {
+    console.warn('syncMaintenanceExpense error:', err);
+  }
 }
 
 export async function updateMaintenanceRecord(id: string, data: Partial<MaintenanceInput>): Promise<MaintenanceRecord> {
@@ -225,10 +333,30 @@ export async function updateMaintenanceRecord(id: string, data: Partial<Maintena
     } catch {}
   }
 
+  // Đồng bộ 2 chiều sang bảng chi phí khi sửa bảo dưỡng
+  await syncMaintenanceExpense({
+    action: 'UPDATE',
+    maintId: id,
+    assetId: realAssetId,
+    date: data.date,
+    cost: data.cost,
+    maintenanceType: data.maintenance_type,
+    vendor: data.vendor,
+    odometerKm: data.odometer_km,
+    notes: data.notes,
+  });
+
   return { id, ...data } as MaintenanceRecord;
 }
 
-export async function deleteMaintenanceRecord(id: string): Promise<boolean> {
+export async function deleteMaintenanceRecord(id: string, assetId?: string): Promise<boolean> {
+  // Đồng bộ 2 chiều: Xoá chi phí đi kèm trước khi xoá bản ghi bảo dưỡng
+  await syncMaintenanceExpense({
+    action: 'DELETE',
+    maintId: id,
+    assetId,
+  });
+
   try {
     const supabase = createClient();
     await supabase.from('maintenance_records').delete().eq('id', id);

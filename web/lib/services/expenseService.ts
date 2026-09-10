@@ -50,6 +50,42 @@ export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
     if (!error && data && data.length > 0) {
       dbExpenses = data.map(mapExpenseRow);
     }
+
+    // Tự động gộp các bản ghi từ bảng maintenance_records để mục Chi phí không bao giờ bị thiếu tiền bảo dưỡng
+    try {
+      let maintQuery = supabase.from('maintenance_records').select('*');
+      if (realId) {
+        maintQuery = maintQuery.or(`asset_id.eq.${realId},asset_id.eq.${assetId}`);
+      }
+      const { data: maintData } = await maintQuery;
+      if (maintData && maintData.length > 0) {
+        maintData.forEach((m: any) => {
+          const cost = Number(m.cost || 0);
+          if (cost > 0) {
+            const isAlreadyInExpenses = dbExpenses.some(e => {
+              const sameDate = (e.date || '').slice(0, 10) === (m.date || '').slice(0, 10);
+              const sameAmount = Math.abs(Number(e.amount || 0) - cost) < 100;
+              const isMaint = (e.category || '').toUpperCase() === 'MAINTENANCE' || (e.description || '').toLowerCase().includes('bảo dưỡng');
+              return sameDate && sameAmount && isMaint;
+            });
+            if (!isAlreadyInExpenses) {
+              dbExpenses.push({
+                id: `maint_exp_${m.id}`,
+                asset_id: m.asset_id,
+                date: m.date,
+                category: 'MAINTENANCE',
+                subcategory: m.maintenance_type || 'Bảo dưỡng định kỳ',
+                amount: cost,
+                currency: m.currency || 'VND',
+                vendor: m.vendor || 'Garage bảo dưỡng',
+                odometer_km: m.odometer_km ? Number(m.odometer_km) : undefined,
+                description: `Bảo dưỡng: ${m.maintenance_type || 'Bảo dưỡng xe'}${m.notes ? ` - ${m.notes}` : ''}`,
+              });
+            }
+          }
+        });
+      }
+    } catch {}
   } catch {}
 
   let allExpenses: ExpenseRecord[] = [...dbExpenses];
