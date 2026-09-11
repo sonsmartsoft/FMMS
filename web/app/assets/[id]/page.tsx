@@ -1363,7 +1363,7 @@ export default function AssetDetailPage() {
       }
     });
 
-    // 3. Chi phí từ bảng expenses (Bao gồm chi phí vận hành khác, trả góp, bảo hiểm, và các chi phí chưa có trong fuel/maint)
+    // 3. Chi phí từ bảng expenses — chỉ tính chi phí VẬN HÀNH thực sự
     expenses.forEach(exp => {
       if (exp.date && Number(exp.amount || 0) > 0) {
         const mKey = exp.date.slice(0, 7);
@@ -1376,7 +1376,17 @@ export default function AssetDetailPage() {
         const isFuel = cat === 'FUEL' || (cat === 'RUNNING' && (sub === 'GASOLINE' || sub === 'FUEL' || desc.includes('xăng') || desc.includes('nhiên liệu')));
         const isMaint = cat === 'MAINTENANCE' || cat === 'REPAIR' || desc.includes('bảo dưỡng') || desc.includes('thay nhớt') || desc.includes('thay dầu');
 
-        if (isFuel) {
+        // Các category KHÔNG phải chi phí vận hành: khoản vay, nâng cấp/đồ chơi, vốn mua xe
+        const isNonOperating =
+          cat === 'LOAN' || cat === 'LOAN_PAYMENT' || cat === 'LOAN_INTEREST' ||
+          cat === 'UPGRADE' || cat === 'INITIAL' ||
+          sub.includes('PAYMENT') || sub.includes('INTEREST') ||
+          desc.includes('trả góp') || desc.includes('lãi vay') || desc.includes('trả gốc') ||
+          desc.includes('mua xe') || desc.includes('đặt cọc') || desc.includes('nâng cấp') || desc.includes('độ xe');
+
+        if (isNonOperating) {
+          // Bỏ qua: khoản vay/lãi, nâng cấp, vốn mua xe — không tính vào chi phí vận hành
+        } else if (isFuel) {
           // Tránh cộng lặp nếu đã có trong bảng fuel_logs của ngày đó
           const isDuplicateWithFuelLog = fuelLogs.some(f => {
             const fd = (f.date || (f as any).timestamp || '').slice(0, 10);
@@ -1397,7 +1407,7 @@ export default function AssetDetailPage() {
             mData.maintCost += amt;
           }
         } else {
-          // Tất cả chi phí khác: Trả góp ngân hàng, bảo hiểm, phí đường bộ, gửi xe, phụ kiện, mua xe, sửa chữa nhỏ...
+          // Chi phí vận hành khác hợp lệ: bảo hiểm, đăng kiểm, phí đường bộ, gửi xe, rửa xe, phụ tùng...
           mData.otherCost += amt;
         }
       }
@@ -3561,7 +3571,7 @@ export default function AssetDetailPage() {
                           <div className="flex items-center justify-between text-[10px] px-2 py-1 rounded-lg bg-black/5 dark:bg-white/5 font-mono">
                             <span title="Nhiên liệu">Xăng: <b className="text-amber-500">{fmt(m.fuelCost)}</b></span>
                             <span title="Bảo dưỡng & Sửa chữa">B.Dưỡng: <b className="text-cyan-500">{fmt(m.maintCost)}</b></span>
-                            <span title="Trả góp, bảo hiểm, cầu đường, gửi xe...">Khác: <b className="text-purple-400">{fmt(m.otherCost)}</b></span>
+                            <span title="Bảo hiểm, đăng kiểm, phí đường bộ, cầu đường, gửi xe, rửa xe...">Khác: <b className="text-purple-400">{fmt(m.otherCost)}</b></span>
                           </div>
 
                           {m.totalKm > 0 && (
@@ -3585,7 +3595,7 @@ export default function AssetDetailPage() {
                           <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">TB Km / Ngày chạy</th>
                           <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Tiền Xăng (₫)</th>
                           <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Bảo Dưỡng (₫)</th>
-                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]" title="Trả góp ngân hàng, bảo hiểm, phí cầu đường, gửi xe, mua xe...">Chi Phí Khác (₫)</th>
+                          <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]" title="Bảo hiểm, đăng kiểm, phí đường bộ, gửi xe, rửa xe... (không bao gồm khoản vay, nâng cấp, vốn mua xe)">Chi Phí Khác (₫)</th>
                           <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Tổng Chi Phí (₫)</th>
                           <th className="text-left px-3.5 py-2.5 font-semibold uppercase text-[10px]">Chi phí / Km</th>
                         </tr>
