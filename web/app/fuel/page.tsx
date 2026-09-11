@@ -290,7 +290,7 @@ export default function FuelPage() {
   };
 
   const handleDelete = async (log: any) => {
-    if (!confirm(`Bạn có chắc chắn muốn xóa bản ghi ngày ${fmtDate(log.date ?? log.timestamp)} (${log.fuel_liters ?? log.liters}L)?`)) return;
+    if (!confirm(`Bạn có chắc chắn muốn xóa bản ghi ngày ${fmtDate(log.date ?? log.timestamp)} (${Number(log.fuel_liters ?? log.liters ?? 0).toFixed(2)}L)?`)) return;
     try {
       await deleteFuelLog(log.id);
       showToast('Đã xóa bản ghi nhiên liệu thành công!');

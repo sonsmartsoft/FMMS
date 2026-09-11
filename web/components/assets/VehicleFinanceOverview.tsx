@@ -338,7 +338,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
             currency: 'VND',
             vendor: f.station || 'Cây xăng',
             odometer_km: f.odometer_km,
-            description: f.notes || `Đổ xăng (${f.liters || f.fuel_liters || 0}L)`,
+            description: f.notes || `Đổ xăng (${Number(f.liters || f.fuel_liters || 0).toFixed(2)}L)`,
           });
         }
       });

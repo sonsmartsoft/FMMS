@@ -257,7 +257,7 @@ fun FuelScreen(vm: FuelViewModel = viewModel()) {
                                 )
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(String.format(Locale.US, "+%.1f L", log.fuelLiters), color = colors.cyan, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                Text(String.format(Locale.US, "+%.2f L", log.fuelLiters), color = colors.cyan, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                 log.totalCost?.let {
                                     Text(String.format(Locale.US, "%,.0f ₫", it), color = colors.textSecondary, fontSize = 11.sp)
                                 }
@@ -282,7 +282,7 @@ fun FuelScreen(vm: FuelViewModel = viewModel()) {
                                     )
                                 } else {
                                     Text(
-                                        "Bơm: +${String.format(Locale.US, "%.1f", log.fuelLiters)}L",
+                                        "Bơm: +${String.format(Locale.US, "%.2f", log.fuelLiters)}L",
                                         color = colors.textSecondary,
                                         fontSize = 11.sp,
                                     )
@@ -479,7 +479,7 @@ private fun AddRefuelBar(vm: FuelViewModel) {
                 ) {
                     if (overTank) {
                         Text(
-                            "⚠ Tổng ${String.format(Locale.US, "%.1f", floatL)} + ${String.format(Locale.US, "%.1f", pumpedL)} = ${String.format(Locale.US, "%.1f", totalL)} L vượt bình ${tankSize.toInt()} L — kiểm tra phao OBD!",
+                            "⚠ Tổng ${String.format(Locale.US, "%.1f", floatL)} + ${String.format(Locale.US, "%.2f", pumpedL)} = ${String.format(Locale.US, "%.2f", totalL)} L vượt bình ${tankSize.toInt()} L — kiểm tra phao OBD!",
                             color = colors.amber,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -487,7 +487,7 @@ private fun AddRefuelBar(vm: FuelViewModel) {
                         )
                     } else {
                         Text(
-                            "Bơm ${String.format(Locale.US, "%.1f", pumpedL)} L → sau đổ ~${String.format(Locale.US, "%.1f", totalL)} L (${String.format(Locale.US, "%.0f", (totalL / tankSize * 100).coerceAtMost(100.0))}%)",
+                            "Bơm ${String.format(Locale.US, "%.2f", pumpedL)} L → sau đổ ~${String.format(Locale.US, "%.2f", totalL)} L (${String.format(Locale.US, "%.0f", (totalL / tankSize * 100).coerceAtMost(100.0))}%)",
                             color = colors.cyan,
                             fontSize = 11.sp,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),

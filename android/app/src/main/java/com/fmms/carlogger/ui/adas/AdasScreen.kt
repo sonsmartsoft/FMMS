@@ -140,13 +140,28 @@ fun AdasScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // ── 1. Camera ngoài USB toàn màn hình (dashcam nền) ──
-        AdasUsbCameraPreview(
-            onFrame = { frame ->
-                visionProcessor.analyzeBitmap(frame)
-            },
-            onStatusChange = { /* todo: hiển thị trạng thái truy cập */ }
-        )
+        // ── 1. Nguồn camera: USB dashcam nếu có; nếu không thấy USB thì tự
+        //    dùng camera điện thoại (như lily chuyển giữa USB ↔ cam trong máy). ──
+        var usbActive by remember { mutableStateOf(true) }
+        if (usbActive) {
+            AdasUsbCameraPreview(
+                onFrame = { frame ->
+                    visionProcessor.analyzeBitmap(frame)
+                },
+                onStatusChange = { status ->
+                    // Không thấy USB / rút cáp → chuyển sang camera điện thoại
+                    if (status.contains("Không thấy") || status.contains("rút ra")) {
+                        usbActive = false
+                    }
+                }
+            )
+        } else {
+            var useFront by remember { mutableStateOf(false) }
+            AdasCameraPreview(
+                visionProcessor = visionProcessor,
+                useFrontCamera = useFront
+            )
+        }
 
         // ── 2. Lớp phủ HUD: vạch làn + khung xe + banner cảnh báo ──
         AdasHudOverlay(

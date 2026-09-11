@@ -1131,7 +1131,7 @@ export default function AssetDetailPage() {
           date: toLocalDateString(f.date),
           odometer_km: f.odometer_km,
           type: 'FUEL',
-          note: `Đổ ${f.liters}L xăng${f.station ? ` tại ${f.station}` : ''}${f.notes ? ` (${f.notes})` : ''}`,
+          note: `Đổ ${Number(f.liters || 0).toFixed(2)}L xăng${f.station ? ` tại ${f.station}` : ''}${f.notes ? ` (${f.notes})` : ''}`,
           id: f.id,
           raw: f,
         });
@@ -3985,7 +3985,7 @@ export default function AssetDetailPage() {
                           contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: '12px', fontSize: '11px', color: 'var(--text-primary)' }}
                           formatter={(val: any, name: any) => {
                             if (name === 'cost') return [`${fmt(Number(val))} ₫`, 'Tổng chi phí'];
-                            if (name === 'liters') return [`${val} Lít`, 'Tổng nhiên liệu'];
+                            if (name === 'liters') return [`${Number(val).toFixed(2)} Lít`, 'Tổng nhiên liệu'];
                             return [val, name];
                           }}
                         />
@@ -4056,7 +4056,7 @@ export default function AssetDetailPage() {
                   {displayedFuelLogs.map((f, i) => (
                     <tr key={f.id} className="transition" style={{ borderBottom: '1px solid var(--border-subtle)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-hover)' }}>
                       <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--text-secondary)' }}>{fmtDate(f.date)}</td>
-                      <td className="px-3 py-2.5 font-bold" style={{ color: 'var(--accent-cyan)' }}>{f.liters}L</td>
+                      <td className="px-3 py-2.5 font-bold" style={{ color: 'var(--accent-cyan)' }}>{Number(f.liters || 0).toFixed(2)}L</td>
                       <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)' }}>{fmt(f.price_per_liter)}₫</td>
                       <td className="px-3 py-2.5 font-bold" style={{ color: 'var(--status-amber)' }}>{fmt(f.total_cost)}₫</td>
                       <td className="px-3 py-2.5" style={{ color: 'var(--text-muted)' }}>
@@ -5178,7 +5178,7 @@ export default function AssetDetailPage() {
               name: 'Nhiên liệu (Xăng / Điện)',
               total: totalFuelCost,
               color: '#EF4444',
-              items: fuelLogs.map(f => ({ date: f.date, description: `Đổ nhiên liệu ${f.liters ? `${f.liters}L` : ''}`, vendor: f.station, amount: f.total_cost, odo: f.odometer_km })),
+              items: fuelLogs.map(f => ({ date: f.date, description: `Đổ nhiên liệu ${f.liters ? `${Number(f.liters).toFixed(2)}L` : ''}`, vendor: f.station, amount: f.total_cost, odo: f.odometer_km })),
             },
             {
               id: 'maint',
