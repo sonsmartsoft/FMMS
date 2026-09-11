@@ -177,12 +177,23 @@ object AppContainer {
                         prefs.setFuelBackfillDone(true)
                         android.util.Log.d("FmmsSync", "fuel-log backfill enqueued")
                     }
-                    // Quét toàn bộ chuyến đi COMPLETED để đảm bảo không sót chuyến cũ
-                    // (kể cả chuyến đang PENDING chưa kịp đẩy khi trước tắt máy mất mạng).
-                    // Chỉ nạp vào queue nếu chưa có dòng PENDING cho trip đó (tránh trùng).
+                    // Tự động dọn dẹp các chuyến đi trùng lặp lịch sử nếu còn sót trong local SQLite của máy
+                    val badDuplicateTrips = tripRepository.getAllByVehicle(vehicle.id).filter {
+                        it.id.contains("-0002-") || it.id.matches(Regex(""".*0000000000(3[5-9]|4[13579])$"""))
+                    }
+                    if (badDuplicateTrips.isNotEmpty()) {
+                        val badIds = badDuplicateTrips.map { it.id }
+                        tripRepository.deleteByIds(badIds)
+                        syncQueueRepository.deleteByEntityIds("trips", badIds)
+                        android.util.Log.i("FmmsSync", "Purged ${badIds.size} bad duplicate trips from local SQLite")
+                    }
+
+                    // Quét chuyến đi COMPLETED thực tế được ghi bởi thiết bị này để đẩy bù lên web
+                    // TUYỆT ĐỐI BỎ QUA chuyến lịch sử seed (bắt đầu bằng YYYYMMDD-xxxx-)
                     tripRepository.getAllByVehicle(vehicle.id)
                         .filter {
                             it.status == "COMPLETED" && it.distanceKm > 0.05 &&
+                                !it.id.matches(Regex("""^\d{8}-\d{4}-.*""")) &&
                                 !syncQueueRepository.hasPendingForEntity("trips", it.id)
                         }
                         .forEach { syncQueueRepository.enqueueTrip(it) }
@@ -224,9 +235,19 @@ object AppContainer {
             try {
                 val vehicle = vehicleRepository.getActive()
                 if (vehicle != null) {
+                    val badDuplicateTrips = tripRepository.getAllByVehicle(vehicle.id).filter {
+                        it.id.contains("-0002-") || it.id.matches(Regex(""".*0000000000(3[5-9]|4[13579])$"""))
+                    }
+                    if (badDuplicateTrips.isNotEmpty()) {
+                        val badIds = badDuplicateTrips.map { it.id }
+                        tripRepository.deleteByIds(badIds)
+                        syncQueueRepository.deleteByEntityIds("trips", badIds)
+                    }
+
                     tripRepository.getAllByVehicle(vehicle.id)
                         .filter {
                             it.status == "COMPLETED" && it.distanceKm > 0.05 &&
+                                !it.id.matches(Regex("""^\d{8}-\d{4}-.*""")) &&
                                 !syncQueueRepository.hasPendingForEntity("trips", it.id)
                         }
                         .forEach { syncQueueRepository.enqueueTrip(it) }

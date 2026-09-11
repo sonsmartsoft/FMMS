@@ -73,6 +73,9 @@ interface TripDao {
     @Query("DELETE FROM trips WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    @Query("DELETE FROM trips WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
+
     @Query("SELECT DISTINCT CAST(strftime('%Y', start_time / 1000, 'unixepoch') AS INTEGER) AS y FROM trips WHERE vehicle_id = :vehicleId ORDER BY y DESC")
     suspend fun getYears(vehicleId: String): List<Int>
 }

@@ -206,6 +206,10 @@ class SyncQueueRepository(private val syncQueueDao: SyncQueueDao) {
         syncQueueDao.markStatus(id, "PENDING", error.take(200), null)
     }
 
+    suspend fun deleteByEntityIds(type: String, ids: List<String>) {
+        if (ids.isNotEmpty()) syncQueueDao.deleteByEntityIds(type, ids)
+    }
+
     /** Enqueue một phiên quét chẩn đoán lên web (bảng vehicle_diagnostic_scans). Idempotent theo UUID. */
     suspend fun enqueueDiagnosticScan(scan: DiagnosticScanEntity) {
         val deviceId = scan.deviceId ?: com.fmms.carlogger.AppContainer.prefs.getDeviceId()
@@ -432,6 +436,10 @@ class TripRepository(
     /** Xóa chuyến rác (phantom) — không đồng bộ, chỉ local. */
     suspend fun deleteById(id: String) {
         tripDao.deleteById(id)
+    }
+
+    suspend fun deleteByIds(ids: List<String>) {
+        if (ids.isNotEmpty()) tripDao.deleteByIds(ids)
     }
 
     suspend fun startTrip(trip: TripEntity) {

@@ -52,7 +52,6 @@ class MoreViewModel(private val dashboard: DashboardViewModel) : ViewModel() {
         object Connection : Page()
         object Device : Page()
         object DtcScan : Page()
-        object Adas : Page()
     }
 
     private val _page = MutableStateFlow<Page>(Page.Menu)
@@ -83,7 +82,6 @@ fun MoreScreen(vm: DashboardViewModel) {
         is MoreViewModel.Page.Connection -> ConnectionScreen(onBack = moreVm::back)
         is MoreViewModel.Page.Device -> DeviceConfigScreen(onBack = moreVm::back)
         is MoreViewModel.Page.DtcScan -> com.fmms.carlogger.ui.diagnostics.DiagnosticsScreen(onBack = moreVm::back)
-        is MoreViewModel.Page.Adas -> com.fmms.carlogger.ui.adas.AdasScreen(onNavigateBack = moreVm::back)
     }
 }
 
@@ -105,7 +103,6 @@ private fun MoreMenu(onOpen: (MoreViewModel.Page) -> Unit, vm: DashboardViewMode
         ) {
             Text(strings.more, color = colors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(10.dp))
-            MenuItem("Trợ lái ADAS (AI Vision)", "Cảnh báo va chạm FCW, Lệch làn LDW, Báo xe trước di chuyển") { onOpen(MoreViewModel.Page.Adas) }
             MenuItem(strings.liveData, strings.liveDataDesc) { onOpen(MoreViewModel.Page.Live) }
             MenuItem(strings.vehicles, strings.vehiclesDesc) { onOpen(MoreViewModel.Page.Vehicles) }
             MenuItem(strings.diagnostics, strings.diagnosticsDesc) { onOpen(MoreViewModel.Page.Diagnostics) }

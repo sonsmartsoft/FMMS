@@ -140,18 +140,34 @@ fun AdasScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // ── 1. Nguồn camera: USB dashcam nếu có; nếu không thấy USB thì tự
-        //    dùng camera điện thoại (như lily chuyển giữa USB ↔ cam trong máy). ──
+        // ── 1. Nguồn camera: USB dashcam nếu có; chưa có USB thì dùng camera IP
+        //    đầu xe qua RTSP (như lily); cuối cùng dự phòng camera điện thoại. ──
         var usbActive by remember { mutableStateOf(true) }
+        var ipFallback by remember { mutableStateOf(true) }
         if (usbActive) {
             AdasUsbCameraPreview(
                 onFrame = { frame ->
                     visionProcessor.analyzeBitmap(frame)
                 },
                 onStatusChange = { status ->
-                    // Không thấy USB / rút cáp → chuyển sang camera điện thoại
+                    // Không thấy USB / rút cáp → thử camera IP, rồi camera điện thoại
                     if (status.contains("Không thấy") || status.contains("rút ra")) {
                         usbActive = false
+                    }
+                }
+            )
+        } else if (ipFallback) {
+            var rtspOk by remember { mutableStateOf(false) }
+            AdasIpCameraPreview(
+                rtspUrl = "rtsp://192.168.1.78:554/live/ch0_0",
+                onFrame = { frame ->
+                    visionProcessor.analyzeBitmap(frame)
+                },
+                onStatusChange = { status ->
+                    if (status.startsWith("✓") || status.startsWith("📡")) {
+                        rtspOk = true
+                    } else if (!rtspOk && (status.contains("ERROR") || status.contains("lỗi"))) {
+                        ipFallback = false
                     }
                 }
             )

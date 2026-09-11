@@ -394,8 +394,5 @@ private fun FmmsNavHost(navController: androidx.navigation.NavHostController, vm
         composable("dtc_scan") {
             com.fmms.carlogger.ui.diagnostics.DiagnosticsScreen()
         }
-        composable("adas") {
-            com.fmms.carlogger.ui.adas.AdasScreen(onNavigateBack = { navController.popBackStack() })
-        }
     }
 }
