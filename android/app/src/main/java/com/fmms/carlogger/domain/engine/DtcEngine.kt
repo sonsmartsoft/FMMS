@@ -148,6 +148,12 @@ class DtcEngine(
                             code in codes -> "CONFIRMED"
                             else -> "PENDING"
                         }
+                        // Server yêu cầu severity NOT NULL → map từ status (fix kẹt sync HTTP 400).
+                        val severity = when (status) {
+                            "PERMANENT" -> "HIGH"
+                            "CONFIRMED" -> "MEDIUM"
+                            else -> "LOW"
+                        }
                         val existing = dtcLogDao.getActiveByCode(vehicle.id, code)
                         if (existing != null) {
                             // Lỗi đã active: chỉ cập nhật last_detected_at (không tạo scan mới liên tục).
@@ -172,7 +178,7 @@ class DtcEngine(
                                 dtcCode = code,
                                 status = status,
                                 systemCategory = null, // server enrich từ dictionary
-                                severity = null,
+                                severity = severity,
                                 descriptionVi = null,
                                 freezeFrame = ff,
                                 isActive = true,
@@ -194,7 +200,16 @@ class DtcEngine(
                     val cleared = dtcLogDao.getActive(vehicle.id)
                     dtcLogDao.markAllInactive(vehicle.id, now)
                     cleared.forEach { c ->
-                        val closed = c.copy(isActive = false, clearedAt = now, scannedAt = now)
+                        val closed = c.copy(
+                            isActive = false,
+                            clearedAt = now,
+                            scannedAt = now,
+                            severity = c.severity ?: when (c.status) {
+                                "PERMANENT" -> "HIGH"
+                                "CONFIRMED" -> "MEDIUM"
+                                else -> "LOW"
+                            },
+                        )
                         // Không cập nhật deviceId/scanId mới để giữ nguyên nguồn gốc.
                         dtcLogDao.upsert(closed)
                         syncQueueRepository.enqueueDtcLog(closed)

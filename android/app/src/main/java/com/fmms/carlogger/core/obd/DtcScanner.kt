@@ -40,38 +40,96 @@ object DtcScanner {
     /** Extract the list of free hex tokens from a raw ELM response (skips the
      *  service echo "43"/"47"/"4A", CAN headers "7E8", and "0"/prompt noise). */
 
-    /** Raw parse producing a list of decoded DTC codes from a Mode 03/07/0A response. */
-    fun parseDtcResponse(response: String?): List<String> {
+    /** Tách response thành các token hex độc lập; bỏ rác không phải hex. */
+    private fun tokens(response: String?): List<String> {
         if (response.isNullOrBlank()) return emptyList()
-        val hex = response.replace(Regex("[^0-9A-Fa-f]"), "")
-        // Locate the service echo (43 for mode 03, 47 for 07, 4A for 0A).
-        val marker = when {
-            hex.contains("47", true) -> hex.indexOf("47", 2)
-            hex.contains("4A", true) -> hex.indexOf("4A", 2)
-            else -> hex.indexOf("43", 2)
-        }
-        val start = if (marker >= 0) marker + 2 else hex.indexOf("43", 2).let { if (it >= 0) it + 2 else 0 }
-        val data = hex.substring(start).trim()
-        if (data.length < 4) return emptyList()
-        val tokens = data.chunked(4).mapNotNull { pair ->
-            if (pair.length < 4) return@mapNotNull null
-            val a = pair.substring(0, 2).toIntOrNull(16) ?: return@mapNotNull null
-            val b = pair.substring(2, 4).toIntOrNull(16) ?: return@mapNotNull null
-            if (a == 0 && b == 0) return@mapNotNull null // filler after last real code
-            decodeDtc(a, b)
-        }
-        return tokens
+        return response
+            .replace(Regex("[^0-9A-Fa-f\\s]"), " ")
+            .uppercase()
+            .split(Regex("\\s+"))
+            .filter { it.isNotEmpty() && it.all { ch -> ch.isDigit() || ch in 'A'..'F' } }
     }
 
-    /** Parse Mode 01 01: returns (milOn, dtcCount) or null if invalid. */
+    /** Hex byte thứ 8 của token (0..255) hoặc null nếu token không phải byte. */
+    private fun byteOf(token: String): Int? =
+        if (token.length == 2) token.toIntOrNull(16) else null
+
+    /** Header CAN: 11-bit (3 hex, ví dụ 7E8) hoặc 29-bit (8 hex, ví dụ 18DAF110). */
+    private fun isHeader(token: String): Boolean = token.length == 3 || token.length == 8
+
+    /**
+     * Dịch ISO-TP: các khung "7E8 10 xx ..." (First Frame) và "7E8 21 xx ..."
+     * (Consecutive) chỉ có khi adapter KHÔNG tự ráp đa khung. Ở đây ta bỏ header
+     * và PCI để output trở thành dòng data thuần "43 xx xx xx ...".
+     * Cẩn thận: PCI ngay SAU header mới bị bỏ ("10 <len>"/"21"/"22"/"30"); token
+     * "43"/"47"/"4A" đứng sau header là service-echo → PHẢI giữ.
+     */
+    private fun stripIsoTp(raw: List<String>): List<String> {
+        val out = mutableListOf<String>()
+        var afterHeader = false
+        var i = 0
+        while (i < raw.size) {
+            val tok = raw[i]
+            if (isHeader(tok)) {
+                afterHeader = true
+                i++
+                continue
+            }
+            if (afterHeader) {
+                afterHeader = false
+                when (tok) {
+                    "10" -> { // First Frame: "10 <len> <data>"
+                        if (i + 1 < raw.size) i++
+                        i++
+                        continue
+                    }
+                    "21", "22", "30" -> { // Consecutive / Flow Control
+                        i++
+                        continue
+                    }
+                }
+            }
+            out.add(tok)
+            i++
+        }
+        return out
+    }
+
+    /** Raw parse producing a list of decoded DTC codes from a Mode 03/07/0A response. */
+    fun parseDtcResponse(response: String?): List<String> {
+        val clean = stripIsoTp(tokens(response))
+        // Tìm service-echo "43"/"47"/"4A" (token byte đầu tiên trong vùng data).
+        val serviceIdx = clean.indexOfFirst { val b = byteOf(it); b == 0x43 || b == 0x47 || b == 0x4A }
+        if (serviceIdx < 0) return emptyList()
+        val data = clean.drop(serviceIdx + 1)
+        if (data.size < 2) return emptyList()
+        // DTC = 2 byte liên tiếp (4 hex). Bỏ filler 0000 ở cuối.
+        return data.chunked(2).mapNotNull { pair ->
+            if (pair.size < 2) return@mapNotNull null
+            val a = pair[0].toIntOrNull(16) ?: return@mapNotNull null
+            val b = pair[1].toIntOrNull(16) ?: return@mapNotNull null
+            if (a == 0 && b == 0) return@mapNotNull null // filler sau mã thật
+            decodeDtc(a, b)
+        }
+    }
+
+    /** Parse Mode 01 01: returns (milOn, dtcCount) or null if invalid.
+     *  Cấu trúc response: "41 01 <stateByte>" (headers OFF) hoặc "7E8 41 01 <stateByte>"
+     *  (headers ON). Phải bỏ PID-echo "41 01" rồi mới đọc byte trạng thái. */
     fun parseMil(response: String?): Pair<Boolean, Int>? {
-        if (response.isNullOrBlank()) return null
-        val hex = response.replace(Regex("[^0-9A-Fa-f]"), "")
-        val idx = hex.indexOf("41", 2)
-        if (idx < 0) return null
-        val data = hex.substring(idx + 2)
-        if (data.length < 2) return null
-        val a = data.substring(0, 2).toIntOrNull(16) ?: return null
+        val clean = stripIsoTp(tokens(response))
+        val sidIdx = clean.indexOfFirst { byteOf(it) == 0x41 }
+        if (sidIdx < 0) return null
+        // clean[sidIdx]="41" (SID), clean[sidIdx+1]="01" (PID) → byte trạng thái = +2.
+        // Nếu clone chèn thêm byte DLC trước PID thì dịch 1: dùng token kế trực tiếp.
+        val pidIdx = sidIdx + 1
+        val pidTok = clean.getOrNull(pidIdx)
+        val stateHex = if (pidTok != null && byteOf(pidTok) == 0x01) {
+            clean.getOrNull(pidIdx + 1)
+        } else {
+            pidTok
+        }
+        val a = stateHex?.toIntOrNull(16) ?: return null
         val milOn = (a and 0x80) != 0
         val count = a and 0x7F
         return milOn to count

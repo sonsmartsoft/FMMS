@@ -260,15 +260,20 @@ class TripEngine(
         }
         lastOdoKm = odo
 
-        // Fuel used: prefer 015E fuel rate (L/h → L/s)
-        if (live.fuelRateLph != null) {
-            accumulatedFuelUsed += live.fuelRateLph!! / 3600.0
+        // Fuel used: prefer 015E fuel rate (L/h → L/s). Một số clone ELM trả giá trị
+        // vô lý (vd 400+ L/h) → chỉ tích lũy trong ngưỡng khả thi của Mazda2 1.5L.
+        val rate = live.fuelRateLph?.takeIf { it.isFinite() && it > 0.0 && it <= 80.0 }
+        if (rate != null) {
+            accumulatedFuelUsed += rate / 3600.0
         } else if (live.fuelLevelPercent != null && lastFuelLevel != null) {
             val delta = lastFuelLevel!! - live.fuelLevelPercent!!
             if (delta > 0 && delta < 10) {
                 accumulatedFuelUsed += vehicle.tankCapacityLiters * delta / 100.0
             }
         }
+        // Phòng thủ: tổng nhiên liệu không thể vượt quá ~1.5 bình cho một chuyến.
+        val fuelCap = (vehicle.tankCapacityLiters * 1.5).coerceAtLeast(60.0)
+        if (accumulatedFuelUsed > fuelCap) accumulatedFuelUsed = fuelCap
         lastFuelLevel = live.fuelLevelPercent
 
         val current = _state.value
@@ -281,6 +286,8 @@ class TripEngine(
         )
 
         val consumption = if (dist > 0.05 && accumulatedFuelUsed > 0) accumulatedFuelUsed / dist * 100 else null
+        // Server cột numeric(5,2) → chặn tràn (max 999.99), giá trị vô lý coi như không có dữ liệu.
+        val consumptionSafe = consumption?.takeIf { it.isFinite() && it in 0.0..999.99 }
         val avgSpeed = if (elapsed > 0) dist / (elapsed / 3600.0) else 0.0
 
         tripRepository.getActiveTrip(vehicle.id)?.let { trip ->
@@ -291,7 +298,7 @@ class TripEngine(
                 averageSpeedKmh = avgSpeed,
                 maxSpeedKmh = if (maxSpeed > 0) maxSpeed else null,
                 fuelUsedLiters = if (accumulatedFuelUsed > 0) accumulatedFuelUsed else null,
-                averageConsumptionL100km = consumption,
+                averageConsumptionL100km = consumptionSafe,
                 updatedAt = now,
             )
             tripRepository.startTrip(updated)
@@ -307,9 +314,16 @@ class TripEngine(
         val odo = lastOdoKm ?: vehicle?.odometerKm
 
         var fuelUsed = accumulatedFuelUsed
+        val fuelCap = (vehicle?.tankCapacityLiters ?: 0.0) * 1.5
+        if (fuelUsed > fuelCap && fuelCap > 0) fuelUsed = fuelCap
         var consumption: Double? = null
         val dist = current.distanceKm
         if (fuelUsed > 0 && dist > 0.05) consumption = fuelUsed / dist * 100
+        // Chặn giá trị vô lý (server numeric(5,2) giới hạn 999.99).
+        if (consumption != null && (!consumption.isFinite() || consumption > 999.99)) {
+            consumption = null
+            fuelUsed = 0.0
+        }
 
         val elapsedSeconds = (now - startTime) / 1000.0
 
