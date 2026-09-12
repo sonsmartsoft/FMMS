@@ -92,13 +92,16 @@ class DtcEngine(
             if (parsedMil == null) return
             val (milOn, count) = parsedMil
 
-            val confirmed = DtcScanner.parseDtcResponse(elms.readPidRaw(DtcScanner.DTC_COMMAND_CONFIRMED, 2500))
-            val pending = DtcScanner.parseDtcResponse(elms.readPidRaw(DtcScanner.DTC_COMMAND_PENDING, 2500))
-            val permanent = try {
-                DtcScanner.parseDtcResponse(elms.readPidRaw(DtcScanner.DTC_COMMAND_PERMANENT, 2500))
+            val confRaw = elms.readPidRaw(DtcScanner.DTC_COMMAND_CONFIRMED, 2500)
+            val pendRaw = elms.readPidRaw(DtcScanner.DTC_COMMAND_PENDING, 2500)
+            val permRaw = try {
+                elms.readPidRaw(DtcScanner.DTC_COMMAND_PERMANENT, 2500)
             } catch (_: Exception) {
-                emptyList()
+                null
             }
+            val confirmed = DtcScanner.parseDtcResponse(confRaw)
+            val pending = DtcScanner.parseDtcResponse(pendRaw)
+            val permanent = DtcScanner.parseDtcResponse(permRaw)
 
             val codes = confirmed.toSet()
             val now = System.currentTimeMillis()

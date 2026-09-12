@@ -95,22 +95,33 @@ object DtcScanner {
         return out
     }
 
-    /** Raw parse producing a list of decoded DTC codes from a Mode 03/07/0A response. */
+    /** Raw parse producing a list of decoded DTC codes from a Mode 03/07/0A response.
+     *  ELM trả mỗi ECU/mỗi response trên một DÒNG riêng ("43 xx xx..."). Phải parse
+     *  TỪNG DÒNG để tránh service-echo "43"/"47" của ECU sau bị đọc nhầm thành byte
+     *  DTC khi gom các dòng lại (bug C0300/C0700 dạo trước). */
     fun parseDtcResponse(response: String?): List<String> {
-        val clean = stripIsoTp(tokens(response))
-        // Tìm service-echo "43"/"47"/"4A" (token byte đầu tiên trong vùng data).
-        val serviceIdx = clean.indexOfFirst { val b = byteOf(it); b == 0x43 || b == 0x47 || b == 0x4A }
-        if (serviceIdx < 0) return emptyList()
-        val data = clean.drop(serviceIdx + 1)
-        if (data.size < 2) return emptyList()
-        // DTC = 2 byte liên tiếp (4 hex). Bỏ filler 0000 ở cuối.
-        return data.chunked(2).mapNotNull { pair ->
-            if (pair.size < 2) return@mapNotNull null
-            val a = pair[0].toIntOrNull(16) ?: return@mapNotNull null
-            val b = pair[1].toIntOrNull(16) ?: return@mapNotNull null
-            if (a == 0 && b == 0) return@mapNotNull null // filler sau mã thật
-            decodeDtc(a, b)
+        if (response.isNullOrBlank()) return emptyList()
+        val out = mutableListOf<String>()
+        // Tách dòng giữ nguyên run mới (ELM dùng CR/LF giữa các ECU/frame).
+        val lines = response.split(Regex("\\r?\\n"))
+        for (line in lines) {
+            val clean = stripIsoTp(tokens(line))
+            // Tìm service-echo "43"/"47"/"4A" (token byte đầu tiên trong vùng data).
+            val serviceIdx = clean.indexOfFirst { val b = byteOf(it); b == 0x43 || b == 0x47 || b == 0x4A }
+            if (serviceIdx < 0) continue
+            val data = clean.drop(serviceIdx + 1)
+            if (data.size < 2) continue
+            // DTC = 2 byte liên tiếp (4 hex). Bỏ filler 0000 ở cuối.
+            val codes = data.chunked(2).mapNotNull { pair ->
+                if (pair.size < 2) return@mapNotNull null
+                val a = pair[0].toIntOrNull(16) ?: return@mapNotNull null
+                val b = pair[1].toIntOrNull(16) ?: return@mapNotNull null
+                if (a == 0 && b == 0) return@mapNotNull null // filler sau mã thật
+                decodeDtc(a, b)
+            }
+            out.addAll(codes)
         }
+        return out.distinct()
     }
 
     /** Parse Mode 01 01: returns (milOn, dtcCount) or null if invalid.
