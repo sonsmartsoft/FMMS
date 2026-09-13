@@ -58,11 +58,13 @@ object DtcScanner {
     private fun isHeader(token: String): Boolean = token.length == 3 || token.length == 8
 
     /**
-     * Dịch ISO-TP: các khung "7E8 10 xx ..." (First Frame) và "7E8 21 xx ..."
-     * (Consecutive) chỉ có khi adapter KHÔNG tự ráp đa khung. Ở đây ta bỏ header
-     * và PCI để output trở thành dòng data thuần "43 xx xx xx ...".
-     * Cẩn thận: PCI ngay SAU header mới bị bỏ ("10 <len>"/"21"/"22"/"30"); token
-     * "43"/"47"/"4A" đứng sau header là service-echo → PHẢI giữ.
+     * Dịch ISO-TP: sau mỗi header CAN là byte PCI quy định khung:
+     *  - 0x00-0x07 : single frame (độ dài data = PCI). → bỏ PCI.
+     *  - 0x10-0x1F : first frame, theo sau là 1 byte length. → bỏ PCI + len.
+     *  - 0x20-0x2F : consecutive frame. → bỏ PCI.
+     *  - 0x30-0x3F : flow control. → bỏ PCI.
+     *  Service-echo "43"/"47"/"4A" (>0x3F) sau header ¬ LÀ PCI → PHẢI giữ.
+     *  ELM trả mỗi ECU một dòng cách nhau bằng \r (hoặc \n) — gọi với TỪNG dòng.
      */
     private fun stripIsoTp(raw: List<String>): List<String> {
         val out = mutableListOf<String>()
@@ -77,16 +79,13 @@ object DtcScanner {
             }
             if (afterHeader) {
                 afterHeader = false
-                when (tok) {
-                    "10" -> { // First Frame: "10 <len> <data>"
-                        if (i + 1 < raw.size) i++
-                        i++
-                        continue
+                val pc = byteOf(tok)
+                if (pc != null && pc < 0x40) {
+                    if (pc in 0x10..0x1F && i + 1 < raw.size) {
+                        i++ // first frame: bỏ thêm 1 byte length
                     }
-                    "21", "22", "30" -> { // Consecutive / Flow Control
-                        i++
-                        continue
-                    }
+                    i++
+                    continue
                 }
             }
             out.add(tok)
@@ -96,14 +95,15 @@ object DtcScanner {
     }
 
     /** Raw parse producing a list of decoded DTC codes from a Mode 03/07/0A response.
-     *  ELM trả mỗi ECU/mỗi response trên một DÒNG riêng ("43 xx xx..."). Phải parse
-     *  TỪNG DÒNG để tránh service-echo "43"/"47" của ECU sau bị đọc nhầm thành byte
-     *  DTC khi gom các dòng lại (bug C0300/C0700 dạo trước). */
+     *  ELM trả mỗi ECU/mỗi response trên một DÒNG riêng ("7E9 02 43 00" rồi
+     *  "7E8 02 43 00"), các dòng cách nhau bằng \r hoặc \n. Phải parse TỪNG DÒNG
+     *  để tránh service-echo "43"/"47" của ECU sau bị đọc nhầm thành byte DTC
+     *  (bug ghost C0300/C0700). */
     fun parseDtcResponse(response: String?): List<String> {
         if (response.isNullOrBlank()) return emptyList()
         val out = mutableListOf<String>()
-        // Tách dòng giữ nguyên run mới (ELM dùng CR/LF giữa các ECU/frame).
-        val lines = response.split(Regex("\\r?\\n"))
+        // Tách dòng theo \r\n, \r, hoặc \n (một số adapter dùng \r đơn).
+        val lines = response.split(Regex("[\\r\\n]+"))
         for (line in lines) {
             val clean = stripIsoTp(tokens(line))
             // Tìm service-echo "43"/"47"/"4A" (token byte đầu tiên trong vùng data).
