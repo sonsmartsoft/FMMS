@@ -183,7 +183,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <>
       <header
-        className="sticky top-0 z-40 w-full glass-panel px-2.5 sm:px-4 md:px-6 py-2 sm:py-2.5 flex items-center justify-between gap-1.5 sm:gap-3"
+        className="sticky top-0 z-40 w-full glass-panel px-2.5 sm:px-4 md:px-6 xl:px-8 py-2 sm:py-2.5 flex items-center justify-between gap-1.5 sm:gap-3"
         style={{ borderBottom: '1px solid var(--border-default)', minHeight: 'var(--header-height, 60px)' }}
       >
         {/* Left: Hamburger (mobile/tablet) + Logo */}

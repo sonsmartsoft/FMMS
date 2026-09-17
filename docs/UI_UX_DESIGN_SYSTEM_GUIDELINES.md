@@ -322,3 +322,10 @@ fun FmmsGradientButton(
    - Hỗ trợ thanh cuộn ngang cảm ứng mượt mà (`overflow-x-auto` kết hợp bo tròn pill tabs).
    - Trên màn hình hẹp (`< 640px`), bổ sung Dropdown Switcher chọn nhanh trực tiếp giúp người dùng nhảy tab ngay lập tức mà không cần vuốt qua lại nhiều lần.
 
+5. **Hiển Thị Tràn Viền Trên Màn Hình Máy Tính Lớn (Fluid Full-Width Desktop Optimization):**
+   - **Gỡ bỏ giới hạn cố định:** Thẻ `<main>` bao bọc toàn bộ ứng dụng (`ClientShell.tsx`) không đặt giới hạn chiều rộng cứng như `max-w-7xl`, `max-w-6xl` hay căn giữa thu hẹp `mx-auto`. Chiều rộng luôn là `w-full` (100% fluid).
+   - **Khoảng đệm thích ứng (Adaptive Padding):** Áp dụng padding hai bên lề chuẩn: `p-3.5 sm:p-5 lg:p-6 xl:p-8` kết hợp thanh `Navbar` `px-2.5 sm:px-4 md:px-6 xl:px-8` đảm bảo nội dung không bị dính sát mép trên màn hình 24", 27", 32" (1080p, 2K, 4K).
+   - **Lưới hiển thị co giãn (Fluid Grids):** Danh sách thẻ xe hỗ trợ `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6`, tự động chuyển sang 4 cột trên màn hình siêu rộng để thẻ không bị kéo dãn bất thường.
+   - **Bảng biểu & Biểu đồ:** Các bảng dữ liệu (Nhiên liệu, Bảo dưỡng, Hành trình, Tài chính) dùng `overflow-x-auto` với `w-full`; biểu đồ Recharts khai báo `ResponsiveContainer width="100%"` tự động trải đều không gian hiển thị.
+
+

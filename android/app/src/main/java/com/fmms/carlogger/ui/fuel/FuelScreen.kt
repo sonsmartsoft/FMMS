@@ -459,7 +459,7 @@ private fun AddRefuelBar(vm: FuelViewModel) {
                 )
                 OutlinedTextField(
                     value = price,
-                    onValueChange = { price = it.filter { c -> c.isDigit() || c == '.' } },
+                    onValueChange = { price = it.filter { c -> c.isDigit() || c == '.' || c == ',' } },
                     label = { Text(strings.pricePerL, color = colors.textSecondary) },
                     modifier = Modifier.weight(1f),
                     singleLine = true,
@@ -467,6 +467,29 @@ private fun AddRefuelBar(vm: FuelViewModel) {
             }
 
             val pumpedL = liters.toDoubleOrNull()
+            val priceL = price.replace(',', '.').toDoubleOrNull()
+            val likelyPriceUnitError = priceL != null && priceL > 0 && priceL < 10_000
+            if (pumpedL != null && priceL != null && pumpedL > 0) {
+                val totalVnd = pumpedL * priceL
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (likelyPriceUnitError) colors.amber.copy(alpha = 0.15f) else colors.cyan.copy(alpha = 0.10f),
+                ) {
+                    Text(
+                        text = if (likelyPriceUnitError) {
+                            "⚠ Giá ${String.format(Locale.US, "%.0f", priceL)} đ/L quá thấp (thiếu ×1000?) — tổng ~${String.format(Locale.US, "%,.0f", totalVnd)} đ. Có phải ${String.format(Locale.US, "%.0f", priceL * 1000)} đ/L?"
+                        } else {
+                            "Tổng ≈ ${String.format(Locale.US, "%,.0f", totalVnd)} đ"
+                        },
+                        color = if (likelyPriceUnitError) colors.amber else colors.cyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
+
             val floatL = estimate.estimatedLiters
             if (pumpedL != null && floatL != null && pumpedL > 0) {
                 val tankSize = CAPACITY_LITERS
@@ -510,8 +533,8 @@ private fun AddRefuelBar(vm: FuelViewModel) {
                     icon = Icons.Rounded.Save,
                     onClick = {
                         val l = liters.toDoubleOrNull()
-                        val p = price.toDoubleOrNull()
-                        if (l != null && p != null) {
+                        val p = price.replace(',', '.').toDoubleOrNull()
+                        if (l != null && p != null && p > 0 && p >= 10_000) {
                             vm.addRefuel(l, p, full)
                             liters = ""
                             price = ""

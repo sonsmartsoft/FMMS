@@ -329,6 +329,19 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
   - Tích hợp **Quick Tab Dropdown Selector** cho màn hình siêu nhỏ (`sm:hidden`, $< 640\text{px}$) giúp chuyển đổi tab tức thì mà không cần cuộn ngang dài.
   - Tối ưu thanh tab cuộn ngang dạng pill (`min-h-[42px]`, `touch-manipulation`, `active:scale-95`) hiển thị mượt mà trên tablet và mobile lớn.
 
+### Đợt 16 (17/09/2026): Tối Ưu Hiển Thị Tràn Viền (Fluid Full-Width) Trên Màn Hình Máy Tính Lớn (Full HD 1920x1080, 2K, 4K, 24-27 Inch)
+- **Loại Bỏ Rào Cản Giới Hạn Cố Định Ở Shell Chính (`ClientShell.tsx`):**
+  - Gỡ bỏ hoàn toàn `max-w-7xl` (1280px) và căn giữa `mx-auto` ở thẻ `<main>`.
+  - Thiết lập chiều rộng `w-full` tràn viền tối đa (Fluid Full-Width), mở rộng không gian nội dung cho toàn bộ các trang: Dashboard (`/`), Phân tích TCO (`/analytics`), Nhiên liệu (`/fuel`), Bảo dưỡng (`/maintenance`), Đội xe (`/assets`), Chi tiết xe 11 tabs (`/assets/[id]`), Tài chính & Khoản vay (`/finance`), Giấy tờ & Bảo hiểm (`/documents`, `/warranties`).
+  - Nâng cấp khoảng đệm chuẩn thích ứng theo kích thước hiển thị: `p-3.5 sm:p-5 lg:p-6 xl:p-8` giúp nội dung trên màn hình 24", 27", 32" không bị dính sát mép mà luôn có khoảng cách thở sang trọng, thoáng đãng.
+- **Đồng Bộ Header Navbar (`Navbar.tsx`):**
+  - Bổ sung padding thích ứng `xl:px-8` đồng bộ hoàn hảo với lề nội dung chính của `<main>`.
+- **Nâng Cấp Lưới Phương Tiện Tự Động Co Giãn (`HomePage.tsx`):**
+  - Nâng cấp lưới hiển thị xe: `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6`. Trên màn hình siêu rộng (2K, 4K, $\ge 1536\text{px}$), danh sách phương tiện tự động chia thành 4 cột cân đối, tránh hiện tượng thẻ xe bị bè ngang quá mức.
+- **Đảm Bảo Tính Nhất Quán Cho Bảng Biểu & Biểu Đồ:**
+  - Bảng lịch sử đổ xăng, bảo dưỡng, hành trình mở rộng theo chiều ngang tự nhiên với `w-full overflow-x-auto`.
+  - Tất cả biểu đồ Recharts với `ResponsiveContainer width="100%"` tự động mở rộng theo kích thước màn hình hiển thị.
+
 ---
 
 ## 10. CÁC LƯU Ý QUAN TRỌNG CHO ĐỢT PHÁT TRIỂN TIẾP THEO

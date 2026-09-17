@@ -37,6 +37,18 @@ Ghi chú thay đổi theo từng REV của app Android `com.fmms.carlogger`.
 
 ---
 
+## Nhánh REV 132 → 136 (DTC parse fix + chống nhập sai giá xăng)
+
+| Rev | Thời gian build | Dung lượng | Nội dung chính |
+|-----|-----------------|-----------|----------------|
+| 132 | — | — | — |
+| 133 | 2026-09-13 | 25 MB | Đồng bộ severity DTC từ code + fuel rate guard (chặn fuel rate bẩn). |
+| 134 | 2026-09-14 | 25 MB | **Fix DTC parse (bước 1)**: `parseDtcResponse` tách dòng theo `\r?\n` — hết mã ảo `C0300/C0700` do gộp response 2 ECU thành 1 dòng. |
+| 135 | 2026-09-15 | 25 MB | **Fix DTC parse thật (triệt để)**: tách theo `[\r\n]+` + `stripIsoTp` bỏ byte PCI sau header CAN → hết `P0002` (PCI `02` lọt vào data) và `C0300/C0700`. Verify trên xe: `decoded=[]`. |
+| 136 | 2026-09-16 06:12 | 25 MB | **Chống nhập sai giá đổ xăng** (FuelScreen): chấp nhận dấu phẩy `,`; live preview "Tổng ≈ X đ" dưới ô nhập; **chặn Save khi giá < 10.000 đ/L** (thiếu ×1000, VD nhập 25.53 thay vì 25.530). APK md5 `649c9f34...`. |
+
+---
+
 ## Nhánh REV 120 → 131 (Duplicate fix + R8 optimization)
 
 | Rev | Thời gian build | Dung lượng | Nội dung chính |
@@ -190,7 +202,7 @@ Ghi chú thay đổi theo từng REV của app Android `com.fmms.carlogger`.
 
 ## Ghi chú kỹ thuật
 
-- **Số REV** được quản lý thủ công trong `android/app/build.gradle.kts` (hiện `REV = "119"`),
+- **Số REV** được quản lý thủ công trong `android/app/build.gradle.kts` (hiện `REV = "136"`),
   **không liên quan** tới `versionCode`/`versionName` của Android manifest (tất cả apk đều
   `versionCode='2' versionName='1.1.0'`).
 - **Không có git history cho Android:** repo chứa duy nhất code web. Các rev apk chỉ lưu
