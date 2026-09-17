@@ -183,15 +183,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <>
       <header
-        className="sticky top-0 z-40 w-full glass-panel px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between"
+        className="sticky top-0 z-40 w-full glass-panel px-2.5 sm:px-4 md:px-6 py-2 sm:py-2.5 flex items-center justify-between gap-1.5 sm:gap-3"
         style={{ borderBottom: '1px solid var(--border-default)', minHeight: 'var(--header-height, 60px)' }}
       >
         {/* Left: Hamburger (mobile/tablet) + Logo */}
-        <div className="flex items-center space-x-2 sm:space-x-3">
+        <div className="flex items-center space-x-1.5 sm:space-x-3 min-w-0 shrink">
           {/* Mobile Navigation Drawer Toggle — visible only below 1024px */}
           <button
             onClick={onToggleMobileNav}
-            className="lg:hidden p-2.5 rounded-xl transition flex items-center justify-center min-w-[44px] min-h-[44px] shrink-0 active:scale-95"
+            className="lg:hidden p-2 rounded-xl transition flex items-center justify-center min-w-[38px] min-h-[38px] sm:min-w-[42px] sm:min-h-[42px] shrink-0 active:scale-95"
             style={{
               background: isMobileNavOpen ? 'var(--accent-cyan-bg)' : 'var(--bg-hover)',
               border: `1px solid ${isMobileNavOpen ? 'var(--accent-cyan-border)' : 'var(--border-default)'}`,
@@ -208,15 +208,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2 sm:space-x-3 group min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:scale-105 transition-transform shrink-0">
-              <Car className="w-5 h-5 text-white" />
+          <Link href="/" className="flex items-center space-x-1.5 sm:space-x-2.5 group min-w-0">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20 group-hover:scale-105 transition-transform shrink-0">
+              <Car className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <div className="truncate">
-              <span className="text-sm sm:text-lg font-bold gradient-text tracking-wide block leading-tight truncate">
+            <div className="min-w-0">
+              <span className="text-xs sm:text-base md:text-lg font-extrabold gradient-text tracking-tight sm:tracking-wide block leading-tight truncate">
                 FAMILY MOBILITY
               </span>
-              <span className="text-[8px] sm:text-[10px] font-medium tracking-widest uppercase block -mt-0.5 sm:-mt-1 truncate" style={{ color: 'var(--text-muted)' }}>
+              <span className="text-[7.5px] sm:text-[9px] md:text-[10px] font-medium tracking-wider sm:tracking-widest uppercase block -mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
                 Management System
               </span>
             </div>
@@ -224,7 +224,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Center Status */}
-        <div className="hidden md:flex items-center space-x-3">
+        <div className="hidden md:flex items-center space-x-3 shrink-0">
           <div
             className="flex items-center space-x-2 rounded-full px-4 py-1.5 text-xs"
             style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
@@ -243,61 +243,65 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Right Controls */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1 sm:space-x-2 shrink-0">
           {/* AI Button */}
           <button
             onClick={onToggleAiChat}
-            className="flex items-center space-x-2 px-3 py-1.5 rounded-xl text-xs font-semibold text-white transition shadow-sm"
+            className="flex items-center space-x-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-semibold text-white transition shadow-sm active:scale-95"
             style={{
               background: 'linear-gradient(135deg, rgba(139,92,246,0.3), rgba(56,189,248,0.3))',
               border: '1px solid rgba(139,92,246,0.35)',
             }}
+            title={isEn ? 'AI Assistant' : 'Trợ lý AI'}
+            aria-label="AI Assistant"
           >
-            <Sparkles className="w-4 h-4 animate-spin-slow" style={{ color: 'var(--accent-cyan)' }} />
-            <span className="hidden sm:inline">AI Assistant</span>
+            <Sparkles className="w-4 h-4 animate-spin-slow shrink-0" style={{ color: 'var(--accent-cyan)' }} />
+            <span className="hidden md:inline">AI Assistant</span>
           </button>
 
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-xl transition-all duration-300"
+            className="p-2 sm:p-2.5 rounded-xl transition-all duration-300 active:scale-95 flex items-center justify-center"
             style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
             title={theme === 'dark' ? (isEn ? 'Switch to Light Mode' : 'Chuyển Light Mode') : (isEn ? 'Switch to Dark Mode' : 'Chuyển Dark Mode')}
             aria-label="Toggle theme"
           >
             {theme === 'dark' ? (
-              <Sun className="w-4 h-4 text-amber-400" />
+              <Sun className="w-4 h-4 text-amber-400 shrink-0" />
             ) : (
-              <Moon className="w-4 h-4 text-indigo-500" />
+              <Moon className="w-4 h-4 text-indigo-500 shrink-0" />
             )}
           </button>
 
           {/* Settings */}
           <button
             onClick={onOpenSettings}
-            className="p-2 rounded-xl transition"
+            className="p-2 sm:p-2.5 rounded-xl transition active:scale-95 flex items-center justify-center"
             style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
             title={isEn ? 'Dashboard Settings' : 'Tùy chỉnh Dashboard'}
+            aria-label="Dashboard Settings"
           >
-            <Sliders className="w-4 h-4" />
+            <Sliders className="w-4 h-4 shrink-0" />
           </button>
 
           {/* User Profile Trigger */}
-          <div className="relative pl-2 border-l" style={{ borderColor: 'var(--border-default)' }}>
+          <div className="relative pl-1 sm:pl-2 border-l" style={{ borderColor: 'var(--border-default)' }}>
             <button
               onClick={() => setShowProfileMenu(p => !p)}
-              className="flex items-center space-x-2.5 p-1 rounded-full transition hover:opacity-90"
+              className="flex items-center space-x-1.5 sm:space-x-2.5 p-0.5 sm:p-1 rounded-full transition hover:opacity-90 active:scale-95"
               style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)' }}
+              aria-label="User Profile Menu"
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-200 via-orange-300 to-amber-400 p-0.5 shadow-sm flex items-center justify-center overflow-hidden">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-amber-200 via-orange-300 to-amber-400 p-0.5 shadow-sm flex items-center justify-center overflow-hidden shrink-0">
                 <img
                   src={`https://api.dicebear.com/7.x/bottts/svg?seed=${userEmail}`}
                   alt="Avatar"
                   className="w-full h-full rounded-full object-cover bg-amber-100"
                 />
               </div>
-              <div className="hidden sm:flex flex-col text-left pr-2">
-                <span className="text-xs font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>
+              <div className="hidden lg:flex flex-col text-left pr-2">
+                <span className="text-xs font-bold leading-tight truncate max-w-[120px]" style={{ color: 'var(--text-primary)' }}>
                   {userName}
                 </span>
                 <span className="text-[9px] font-semibold" style={{ color: 'var(--text-muted)' }}>
@@ -313,7 +317,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div className="fixed inset-0 z-[9998]" onClick={() => setShowProfileMenu(false)} />
 
                 <div
-                  className="absolute right-0 mt-3 w-80 rounded-2xl shadow-2xl z-[9999] overflow-hidden animate-scaleIn"
+                  className="absolute right-0 mt-2 sm:mt-3 w-[calc(100vw-24px)] max-w-[320px] rounded-2xl shadow-2xl z-[9999] overflow-hidden animate-scaleIn"
                   style={{
                     background: 'var(--bg-primary)',
                     border: '1px solid var(--border-default)',
