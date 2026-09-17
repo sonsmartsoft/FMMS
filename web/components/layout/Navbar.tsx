@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Car, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, X, Save } from 'lucide-react';
+import { Car, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, X, Save, Menu } from 'lucide-react';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { createClient } from '@/lib/supabase/client';
@@ -13,9 +13,16 @@ import DraggableModal from '@/components/ui/DraggableModal';
 interface NavbarProps {
   onOpenSettings?: () => void;
   onToggleAiChat?: () => void;
+  isMobileNavOpen?: boolean;
+  onToggleMobileNav?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  onOpenSettings,
+  onToggleAiChat,
+  isMobileNavOpen = false,
+  onToggleMobileNav,
+}) => {
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage, isEn, t } = useLanguage();
   const router = useRouter();
@@ -176,18 +183,40 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings, onToggleAiChat }
   return (
     <>
       <header
-        className="sticky top-0 z-40 w-full glass-panel px-6 py-3 flex items-center justify-between"
-        style={{ borderBottom: '1px solid var(--border-default)' }}
+        className="sticky top-0 z-40 w-full glass-panel px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between"
+        style={{ borderBottom: '1px solid var(--border-default)', minHeight: 'var(--header-height, 60px)' }}
       >
-        {/* Logo */}
-        <div className="flex items-center space-x-3">
-          <Link href="/" className="flex items-center space-x-3 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:scale-105 transition-transform">
+        {/* Left: Hamburger (mobile/tablet) + Logo */}
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* Mobile Navigation Drawer Toggle — visible only below 1024px */}
+          <button
+            onClick={onToggleMobileNav}
+            className="lg:hidden p-2.5 rounded-xl transition flex items-center justify-center min-w-[44px] min-h-[44px] shrink-0 active:scale-95"
+            style={{
+              background: isMobileNavOpen ? 'var(--accent-cyan-bg)' : 'var(--bg-hover)',
+              border: `1px solid ${isMobileNavOpen ? 'var(--accent-cyan-border)' : 'var(--border-default)'}`,
+              color: isMobileNavOpen ? 'var(--accent-cyan)' : 'var(--text-primary)',
+            }}
+            aria-label={isMobileNavOpen ? 'Đóng menu điều hướng' : 'Mở menu điều hướng'}
+            title={isMobileNavOpen ? 'Đóng menu' : 'Menu điều hướng'}
+          >
+            {isMobileNavOpen ? (
+              <X className="w-5 h-5" />
+            ) : (
+              <Menu className="w-5 h-5" />
+            )}
+          </button>
+
+          {/* Logo */}
+          <Link href="/" className="flex items-center space-x-2 sm:space-x-3 group min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 group-hover:scale-105 transition-transform shrink-0">
               <Car className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <span className="text-lg font-bold gradient-text tracking-wide block">FAMILY MOBILITY</span>
-              <span className="text-[10px] font-medium tracking-widest uppercase block -mt-1" style={{ color: 'var(--text-muted)' }}>
+            <div className="truncate">
+              <span className="text-sm sm:text-lg font-bold gradient-text tracking-wide block leading-tight truncate">
+                FAMILY MOBILITY
+              </span>
+              <span className="text-[8px] sm:text-[10px] font-medium tracking-widest uppercase block -mt-0.5 sm:-mt-1 truncate" style={{ color: 'var(--text-muted)' }}>
                 Management System
               </span>
             </div>

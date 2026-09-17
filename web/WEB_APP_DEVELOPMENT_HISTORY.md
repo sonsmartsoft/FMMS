@@ -314,15 +314,20 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
   - Tách biệt thang đo trục tung (Dual-Axis) ngăn đường giá xăng bị méo tỷ lệ.
   - Sửa lỗi runtime `showToast` khi build Vercel.
 
-### Đợt 14 (07/09/2026): Chuẩn Hóa Bộ Lọc Năm Động Analytics & Hoàn Thiện Chuỗi 98 Chuyến Đi 3.030 km
-- **Bộ Lọc Năm Động Thông Minh (`/analytics`):**
-  - Tự động phát hiện toàn bộ các năm có phát sinh dữ liệu (`Tất cả`, `2024`, `2025`, `2026`, `2027`...).
-  - Mặc định khởi tạo theo năm hiện tại (`2026`), tự động chuyển `2027` khi sang năm mới.
-  - Tinh chỉnh màu sắc biểu đồ "Km di chuyển" sang tông `#10B981` ngọc lục bảo sang trọng, dịu mắt, loại bỏ các ký hiệu rườm rà.
-- **Chuẩn Hóa Chuỗi 98 Chuyến Đi Khớp ODO 3.030 km (`/assets/[id]` & `tripService.ts`):**
-  - Đồng bộ 100% dữ liệu Supabase: 1 chặng Showroom + 64 chuyến Excel lịch sử + 33 chuyến OBD CarLogger = 98 chuyến, tổng $3.030,00\text{ km}$.
-  - Giải quyết dứt điểm các trường hợp hiển thị thiếu $1.986\text{ km}$ hoặc cộng lặp $5.162\text{ km}$.
-  - Tạo Trigger `auto_sync_asset_odometer_from_trips` trên Supabase đảm bảo mọi chuyến đi mới tự động đẩy ODO xe lên theo `MAX(end_odometer)` mà không gây drift.
+### Đợt 15 (17/09/2026): Tối Ưu Kiến Trúc Đa Thiết Bị (Responsive Web App Architecture), Mobile Drawer Navigation & Multi-Tab Switcher
+- **Tái Cấu Trúc Layout Toàn Diện & Chuẩn Hóa Breakpoints:**
+  - Chuẩn hóa hệ thống Breakpoints trong `tailwind.config.js`: `xs: 480px`, `sm: 640px`, `md: 768px`, `lg: 1024px`, `xl: 1280px`, `2xl: 1440px`.
+  - Bổ sung Design Tokens trong `globals.css`: `--sidebar-width: 260px`, `--header-height: 60px`, `--touch-target-min: 44px`.
+  - Khắc phục triệt để lỗi mất thanh điều hướng trên màn hình nhỏ/di động (`< 1024px`) mà không làm thay đổi hay phá vỡ giao diện Desktop.
+- **Hệ Thống Điều Hướng Đa Thiết Bị (Navbar + Sidebar Drawer):**
+  - **`Navbar.tsx`:** Tích hợp nút Hamburger (☰) chuẩn công thái học cảm ứng ($\ge 44 \times 44\text{px}$), hiển thị riêng trên mobile/tablet (`lg:hidden`). Tự động thu gọn khoảng đệm và logo trên màn hình nhỏ.
+  - **`Sidebar.tsx`:** Chuyển đổi thành Dual-Mode Component:
+    - *Desktop Mode* ($\ge 1024\text{px}$): Sidebar cố định bên trái mượt mà, đầy đủ các mục điều hướng và widget xe hoạt động thời gian thực.
+    - *Mobile Drawer Mode* ($< 1024\text{px}$): Drawer trượt từ mép trái (`animate-slideInLeft`) với lớp phủ làm mờ nền (Backdrop Blur), tự động khóa cuộn trang nền (`overflow: hidden`), tự động đóng khi chọn menu hoặc bấm phím `Escape` / chạm vào vùng overlay.
+  - **`ClientShell.tsx`:** Quản trị trạng thái `isMobileNavOpen` tập trung, tự động reset đóng Drawer khi đổi route (`pathname`), co giãn padding nội dung chính thích ứng từ `p-3.5 sm:p-5 lg:p-6`.
+- **Tối Ưu Điều Hướng 11 Tabs Trang Chi Tiết Phương Tiện (`/assets/[id]`):**
+  - Tích hợp **Quick Tab Dropdown Selector** cho màn hình siêu nhỏ (`sm:hidden`, $< 640\text{px}$) giúp chuyển đổi tab tức thì mà không cần cuộn ngang dài.
+  - Tối ưu thanh tab cuộn ngang dạng pill (`min-h-[42px]`, `touch-manipulation`, `active:scale-95`) hiển thị mượt mà trên tablet và mobile lớn.
 
 ---
 
@@ -333,6 +338,8 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
 3. **Không kết hợp `flex items-center` và `overflow-y-auto` trên cùng một div**: Luôn dùng mô hình 2 lớp div (`overflow-y-auto` ở lớp ngoài và `flex min-h-full items-center justify-center pt-20` ở lớp trong).
 4. **Thêm style inline với CSS Variable cho màu sắc**: Giúp đảm bảo tương thích 100% khi chuyển đổi Light Mode và Dark Mode mà không bị phụ thuộc vào class cố định của Tailwind.
 5. **Mọi thay đổi giao diện phải kiểm tra đồng thời trên cả 9 màn hình**: `/dashboard`, `/assets`, `/assets/[id]`, `/fuel`, `/maintenance`, `/finance`, `/documents`, `/warranties`, `/settings/*`.
+6. **Tuân thủ Chuẩn Responsive & Touch Targets ($\ge 44\text{px}$)**: Mọi nút bấm, menu item, icon clickable trên mobile phải đạt kích thước tối thiểu $44 \times 44\text{px}$ để đảm bảo trải nghiệm cảm ứng ngón tay.
+
 
 
 

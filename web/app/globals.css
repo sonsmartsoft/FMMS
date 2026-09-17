@@ -39,6 +39,10 @@
   --scrollbar-track:      #E2E8F0;
   --scrollbar-thumb:      #CBD5E1;
   --scrollbar-thumb-hover: #0EA5E9;
+
+  --sidebar-width:        260px;
+  --header-height:        60px;
+  --touch-target-min:     44px;
 }
 
 .dark {
@@ -164,6 +168,12 @@
   to   { transform: translateX(0);    opacity: 1; }
 }
 .animate-slideLeft { animation: slideLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+.animate-slideInLeft { animation: slideInLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
 @keyframes bounceSub {
   0%, 100% { transform: translateY(0); }

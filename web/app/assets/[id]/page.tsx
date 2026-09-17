@@ -2670,29 +2670,55 @@ export default function AssetDetailPage() {
         </div>
       </div>
 
-      {/* ── Tab Bar ── */}
-      <div className="flex items-center space-x-1 overflow-x-auto pb-1">
-        {tabs.map((t) => {
-          const Icon = t.icon;
-          const isActive = activeTab === t.id;
-          return (
-            <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all"
-              style={isActive
-                ? { background: 'var(--accent-cyan-bg)', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan-border)' }
-                : { background: 'transparent', color: 'var(--text-muted)', border: '1px solid transparent' }}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{t.label}</span>
-            </button>
-          );
-        })}
+      {/* ── Responsive Tab Bar ── */}
+      <div className="space-y-2">
+        {/* Mobile Quick Tab Switcher (< 640px) */}
+        <div className="sm:hidden flex items-center gap-2">
+          <label className="text-[11px] font-bold uppercase tracking-wider shrink-0" style={{ color: 'var(--text-muted)' }}>
+            Phân hệ:
+          </label>
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value)}
+            className="theme-select flex-1 font-bold text-xs py-2 px-3 rounded-xl"
+            style={{
+              background: 'var(--bg-secondary)',
+              color: 'var(--accent-cyan)',
+              border: '1px solid var(--accent-cyan-border)',
+            }}
+          >
+            {tabs.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Scrollable Tab Pills (All screen sizes, touch-optimized) */}
+        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1.5 scrollbar-thin">
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            const isActive = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className="flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all shrink-0 min-h-[42px] active:scale-95"
+                style={isActive
+                  ? { background: 'var(--accent-cyan-bg)', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan-border)' }
+                  : { background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
+              >
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Tab Content ── */}
-      <div className="glass-panel p-6 rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
+      <div className="glass-panel p-3.5 sm:p-5 lg:p-6 rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
 
         {/* ═══ OVERVIEW ═══ */}
         {activeTab === 'overview' && (

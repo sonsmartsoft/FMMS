@@ -297,3 +297,28 @@ fun FmmsGradientButton(
    - RPM: Dùng viền Amber Gradient (`#F59E0B` → `#D97706`), chuyển Đỏ khi > 3500 RPM.
 3. **Màn hình Nhiên liệu (Fuel Screen):**
    - Mức xăng & % bình xăng: Dùng Gradient Emerald mượt mà kèm thanh tiến trình bo tròn.
+
+---
+
+## 🌐 5. TIÊU CHUẨN THIẾT KẾ ĐA THIẾT BỊ & ĐIỀU HƯỚNG DI ĐỘNG (RESPONSIVE WEB APP SPECIFICATION)
+
+1. **Ma Trận Kích Thước & Điểm Ngắt (Breakpoint Standards):**
+   - `xs: < 480px`: Điện thoại di động nhỏ (iPhone SE, Galaxy A/S tiêu chuẩn).
+   - `sm: 480px – 767px`: Điện thoại cỡ lớn / xoay ngang.
+   - `md: 768px – 1023px`: Máy tính bảng (iPad, Surface) và đầu màn hình xe hơi Zestech 9/10".
+   - `lg: 1024px – 1279px`: Laptop & Màn hình làm việc nhỏ.
+   - `xl: 1280px – 1439px`: Desktop tiêu chuẩn.
+   - `2xl: ≥ 1440px`: Màn hình lớn độ nét cao.
+
+2. **Quy Chuẩn Chạm Cảm Ứng (Touch Target Ergonomics):**
+   - Mọi nút bấm, icon thao tác, liên kết menu trên thiết bị di động phải đạt vùng chạm tối thiểu **`44 × 44px`** (`--touch-target-min: 44px`).
+   - Khoảng cách an toàn giữa các phần tử cảm ứng tối thiểu `8px` để chống bấm nhầm.
+
+3. **Cơ Chế Mobile Navigation Drawer:**
+   - Khi viewport `< 1024px`, Sidebar chuyển thành Drawer trượt từ mép trái (`animate-slideInLeft`), có nền mờ làm mờ nội dung (`backdrop-blur-sm`).
+   - Tự động đóng khi: (1) người dùng chọn route bất kỳ, (2) bấm nút X, (3) bấm vào backdrop mờ ngoài, (4) nhấn phím `Escape`.
+
+4. **Trang Chi Tiết Đa Tab (Multi-Tab Switching):**
+   - Hỗ trợ thanh cuộn ngang cảm ứng mượt mà (`overflow-x-auto` kết hợp bo tròn pill tabs).
+   - Trên màn hình hẹp (`< 640px`), bổ sung Dropdown Switcher chọn nhanh trực tiếp giúp người dùng nhảy tab ngay lập tức mà không cần vuốt qua lại nhiều lần.
+

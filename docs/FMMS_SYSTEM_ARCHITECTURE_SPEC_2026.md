@@ -98,3 +98,51 @@ Hệ thống kế toán phương tiện FMMS chia chi phí thành **4 nhóm chu�
 * **Sync Trace Logger (`syncLogger.ts`):** Ghi nhận real-time mọi hành động `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `RPC` đồng bộ giữa Frontend và Supabase Cloud.
 * **Supabase Security & RLS:** Phân quyền theo người dùng (`owner_id`), chính sách Row Level Security, Trigger cập nhật Odometer và tổng chi phí.
 * **Multi-AI Assistant Gateway:** Trợ lý ảo AI phân tích dữ liệu xe, nhắc lịch bảo dưỡng và tối ưu chi phí nhiên liệu.
+
+---
+
+## 6. KIẾN TRÚC GIAO DIỆN THÍCH ỨNG ĐA THIẾT BỊ (RESPONSIVE WEB APP ARCHITECTURE)
+
+Hệ thống Web App FMMS được thiết kế theo nguyên lý **Một Ứng Dụng — Một Mã Nguồn — Tự Động Thích Ứng Mọi Khung Hình (One Codebase, Adaptive Layout Across All Viewports)**:
+
+### 6.1. Chuẩn Hóa Ma Trận Breakpoint Hệ Thống
+* **XS (`< 480px`):** Điện thoại thông minh nhỏ & trung bình.
+* **SM (`480px – 767px`):** Điện thoại màn hình lớn & chế độ xoay ngang.
+* **MD (`768px – 1023px`):** Máy tính bảng xoay dọc (iPad, Zestech 9/10 inch).
+* **LG (`1024px – 1279px`):** Laptop nhỏ & Máy tính bảng xoay ngang.
+* **XL (`1280px – 1439px`):** Màn hình máy tính chuẩn (Desktop).
+* **2XL (`≥ 1440px`):** Màn hình độ phân giải cao & TV giám sát Fleet.
+
+### 6.2. Kiến Trúc Khung Ứng Dụng (AppShell Architecture)
+```text
+                         ClientShell (AppShell)
+                                   │
+          ┌────────────────────────┼────────────────────────┐
+        Navbar                Navigation                   Main
+          │                        │                        │
+   [☰ Hamburger]                   │                   Responsive
+  (Hiện khi < 1024px)              │                   p-3.5..p-6
+                                   │                   min-h-[100dvh]
+                ┌──────────────────┴──────────────────┐
+                │                                     │
+        Màn hình ≥ 1024px                     Màn hình < 1024px
+                │                                     │
+         Persistent Sidebar                    Adaptive Drawer
+        (Cố định bên trái)              (Trượt từ trái + Backdrop mờ,
+                                         tự đóng khi đổi route / ESC)
+```
+
+### 6.3. Chiến Lược Điều Hướng Thích Ứng (Adaptive Navigation)
+* **Desktop (≥ 1024px):** Thanh Sidebar bên trái cố định (rộng 240–260px) hiển thị trực quan các phân hệ quản lý và khối trạng thái trực tiếp của xe (Live OBD/GPS).
+* **Mobile / Tablet (< 1024px):** Thanh Sidebar tự động chuyển thành **Mobile Navigation Drawer** trượt từ mép trái màn hình (`animate-slideInLeft`), kích hoạt qua nút Hamburger (☰) trên Header.
+* **Quy tắc An Toàn Trải Nghiệm (UX Safety Rules):**
+  - Tuyệt đối không ẩn hoàn toàn thanh điều hướng mà không cung cấp điểm kích hoạt thay thế.
+  - Vùng chạm (Touch Target) của các nút và liên kết menu luôn đạt tối thiểu `44 × 44px`.
+  - Drawer tự động đóng khi người dùng chọn một mục điều hướng mới, nhấn phím `Escape`, hoặc chạm vào vùng Backdrop mờ bên ngoài.
+  - Khóa cuộn nền (`document.body.style.overflow = 'hidden'`) khi Drawer đang mở để tránh giật cuộn nội dung phía sau.
+
+### 6.4. Thanh Tab Đa Phân Hệ Thích Ứng (Responsive Multi-Tab Pattern)
+* Đối với các trang chứa nhiều tab chuyên sâu (ví dụ trang chi tiết xe `/assets/[id]` với 11 tab), hệ thống áp dụng cơ chế kép:
+  - **Màn hình nhỏ (< 640px):** Cung cấp Menu chọn nhanh (Quick Dropdown Switcher) giúp người dùng chuyển tab tức thì chỉ với 1 chạm.
+  - **Màn hình lớn (≥ 640px):** Hiển thị thanh cuộn mượt các Tab Pills có hỗ trợ vuốt cảm ứng nhạy và hiển thị trạng thái phân hệ trực quan.
+
