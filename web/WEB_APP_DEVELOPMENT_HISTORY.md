@@ -381,7 +381,21 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
   - **Bộ lọc loại xe (`/assets`):** Thanh 6 nút phân loại xe (`ALL, CAR, MOTORCYCLE...`) bổ sung `max-w-full overflow-x-auto scrollbar-none pb-1` ngăn tràn mép màn hình mobile.
   - **Bộ lọc bảo hành (`/warranties`):** Bổ sung `flex-wrap gap-2` và cuộn ngang cho thanh trạng thái bảo hành.
   - **Chuẩn hóa Padding thẻ trên mobile:** Toàn bộ card biểu đồ Recharts chuyển từ `p-5` sang `p-3.5 sm:p-5`, tăng 12px không gian hiển thị nội dung trên màn hình điện thoại 360–390px.
-  - **Nâng cấp `SectionHeader`:** Hỗ trợ `flex-col xs:flex-row`, `min-w-0` và `truncate` có `title` tooltip giúp tiêu đề không bị chèn ép nút điều khiển ở góc phải.
+### Đợt 19 (18/09/2026): Nâng Cấp Thiết Kế Nút Bật/Tắt Nhãn Biểu Đồ Sang Chuẩn "ChartValueToggle" (Eye/EyeOff Dynamic Icons & Outlined vs Contained States)
+- **Tái Cấu Trúc Toàn Diện Reusable Component `ChartLabelToggle` (`web/components/charts/ChartLabelToggle.tsx`):**
+  - **Chuyển đổi Icon Động Trực Quan:**
+    - Trạng thái Tắt (Hide/OFF): Sử dụng `<EyeOff className="w-3.5 h-3.5 opacity-75" />` biểu thị chế độ biểu đồ thoáng, ẩn số liệu.
+    - Trạng thái Bật (Show/ON): Sử dụng `<Eye className="w-3.5 h-3.5" />` biểu thị chế độ trực quan, quan sát rõ nhãn số.
+  - **Phong Cách Thị Giác Outlined vs Contained:**
+    - **Khi Tắt (Outlined):** Viền mảnh trang nhã (`border border-slate-300 dark:border-slate-700/80`), nền trong suốt hoặc hover nhẹ (`hover:bg-slate-100 dark:hover:bg-slate-800/70`), màu chữ trung tính (`text-slate-600 dark:text-slate-400`), giữ thanh tiêu đề biểu đồ gọn gàng, không tranh chấp sự chú ý của người dùng với dữ liệu chính.
+    - **Khi Bật (Contained):** Khối màu Cyan nhận diện thương hiệu (`bg-cyan-500 hover:bg-cyan-600 text-white`), viền sáng nhẹ (`border-cyan-400/50`), đổ bóng mềm chống bệt màu (`shadow-sm shadow-cyan-500/25`), nhận biết ngay tức thì chế độ nhãn đang kích hoạt.
+  - **Văn Bản & Tooltip Thích Ứng:**
+    - Nút tự động chuyển đổi text giữa `Hiện số` (khi tắt) và `Ẩn số` (khi bật), hoặc `Hiện Km` / `Ẩn Km` khi truyền prop `label="Hiện Km"`.
+    - Hỗ trợ tooltip chi tiết qua `title` / `aria-label`: *"Hiển thị nhãn số kèm nền chống lóa"* khi tắt và *"Ẩn nhãn số để biểu đồ thoáng hơn"* khi bật.
+  - **Chế Độ `compact` & Kích Thước Linh Hoạt:**
+    - Hỗ trợ prop `compact` (icon-only `p-1.5 rounded-lg`) cho các góc biểu đồ có không gian hẹp.
+    - Hỗ trợ 2 biến thể kích thước: `small` (text-[11px] / h-6) và `medium` (text-xs / h-7).
+    - Xuất thêm alias `ChartValueToggle` tương đương `ChartLabelToggle` để thuận tiện tái sử dụng trên các dự án khác.
 
 ---
 

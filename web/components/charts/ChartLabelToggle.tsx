@@ -1,14 +1,29 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Tag } from 'lucide-react';
+import { Eye, EyeOff } from 'lucide-react';
 
-interface ChartLabelToggleProps {
+export interface ChartLabelToggleProps {
   showLabels: boolean;
   onToggle: () => void;
+  /** Label for backward compatibility or when a single base label is given */
   label?: string;
-  className?: string;
+  /** Label to display when toggle is OFF (default: 'Hiện số') */
+  labelShow?: string;
+  /** Label to display when toggle is ON (default: 'Ẩn số') */
+  labelHide?: string;
+  /** Tooltip when toggle is OFF */
+  tooltipShow?: string;
+  /** Tooltip when toggle is ON */
+  tooltipHide?: string;
+  /** Custom title overriding both tooltips */
   title?: string;
+  /** Compact mode: only display icon without label text */
+  compact?: boolean;
+  /** Size variant */
+  size?: 'small' | 'medium';
+  /** Extra CSS classes */
+  className?: string;
 }
 
 /**
@@ -42,50 +57,74 @@ export function useChartLabelState(storageKey: string, defaultValue: boolean = f
 }
 
 /**
- * Modern pill-style toggle button for chart data labels
+ * Modern Outlined vs Contained toggle button with Eye / EyeOff dynamic icons
+ * for toggling data label visibility across all charts in FMMS.
  */
 export function ChartLabelToggle({
   showLabels,
   onToggle,
-  label = 'Nhãn số',
+  label,
+  labelShow,
+  labelHide,
+  tooltipShow = 'Hiển thị nhãn số kèm nền chống lóa',
+  tooltipHide = 'Ẩn nhãn số để biểu đồ thoáng hơn',
+  title,
+  compact = false,
+  size = 'medium',
   className = '',
-  title = 'Bật/tắt hiển thị số liệu trực tiếp trên đỉnh biểu đồ',
 }: ChartLabelToggleProps) {
+  // Determine dynamic text labels based on props
+  let resolvedShow = labelShow || 'Hiện số';
+  let resolvedHide = labelHide || 'Ẩn số';
+
+  if (label) {
+    if (!labelShow && !labelHide) {
+      resolvedShow = label;
+      resolvedHide = label.includes('Hiện') ? label.replace('Hiện', 'Ẩn') : label;
+    } else if (labelShow) {
+      resolvedShow = labelShow;
+    }
+  }
+
+  const currentLabel = showLabels ? resolvedHide : resolvedShow;
+  const currentTooltip = title || (showLabels ? tooltipHide : tooltipShow);
+
+  const sizeClasses =
+    size === 'small'
+      ? compact
+        ? 'p-1 rounded-md'
+        : 'px-2 py-0.5 text-[11px] rounded-md gap-1'
+      : compact
+        ? 'p-1.5 rounded-lg'
+        : 'px-2.5 py-1 text-xs rounded-lg gap-1.5';
+
   return (
     <button
       type="button"
       onClick={onToggle}
-      title={title}
-      className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer select-none active:scale-95 shrink-0 ${
+      title={currentTooltip}
+      aria-label={currentTooltip}
+      aria-pressed={showLabels}
+      className={`inline-flex items-center justify-center font-medium transition-all duration-200 cursor-pointer select-none active:scale-95 shrink-0 ${sizeClasses} ${
         showLabels
-          ? 'shadow-sm'
-          : 'hover:opacity-100 opacity-70'
+          ? 'bg-cyan-500 hover:bg-cyan-600 text-white shadow-sm shadow-cyan-500/25 border border-cyan-400/50 font-semibold'
+          : 'bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800/70 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700/80'
       } ${className}`}
-      style={
-        showLabels
-          ? {
-              background: 'rgba(6,182,212,0.18)',
-              color: 'var(--accent-cyan, #06B6D4)',
-              border: '1px solid rgba(6,182,212,0.4)',
-            }
-          : {
-              background: 'var(--bg-hover, rgba(255,255,255,0.05))',
-              color: 'var(--text-secondary, #94A3B8)',
-              border: '1px solid var(--border-subtle, rgba(255,255,255,0.1))',
-            }
-      }
     >
-      <Tag className={`w-3.5 h-3.5 transition-transform ${showLabels ? 'rotate-12 scale-105' : ''}`} />
-      <span>{label}</span>
-      <span
-        className="w-1.5 h-1.5 rounded-full shrink-0 transition-all"
-        style={{
-          background: showLabels ? 'var(--accent-cyan, #06B6D4)' : 'var(--text-muted, #64748B)',
-          boxShadow: showLabels ? '0 0 6px var(--accent-cyan, #06B6D4)' : 'none',
-        }}
-      />
+      {showLabels ? (
+        <Eye className="w-3.5 h-3.5 shrink-0 transition-transform" />
+      ) : (
+        <EyeOff className="w-3.5 h-3.5 shrink-0 transition-transform opacity-75" />
+      )}
+
+      {!compact && (
+        <span className="leading-none whitespace-nowrap">{currentLabel}</span>
+      )}
     </button>
   );
 }
+
+// Alias export for ChartValueToggle
+export const ChartValueToggle = ChartLabelToggle;
 
 export default ChartLabelToggle;

@@ -336,10 +336,20 @@ fun FmmsGradientButton(
    - Cho phép người dùng trực tiếp quan sát các giá trị số liệu trên các cột, điểm dữ liệu mà không nhất thiết phải di chuột hay rê tay mở Tooltip.
    - Cung cấp nút chuyển đổi nhanh trực tiếp tại từng biểu đồ (Per-Chart Quick Toggle) kết hợp ghi nhớ trạng thái thông minh qua `localStorage`.
 
-2. **Cấu Trúc Nút Bấm Chuẩn (`ChartLabelToggle`):**
-   - **Thành phần:** Nút bấm dạng Pill Button gọn gàng, bao gồm Icon `Tag` nhỏ, nhãn `"Nhãn số"` và đèn LED trạng thái (Cyan Glow khi bật, Muted khi tắt).
-   - **Kích thước & Vùng chạm:** Cao 28px (`h-7`), font chữ `text-[11px] font-semibold`, padding `px-2.5 py-1`, đáp ứng chuẩn responsive không chiếm dụng không gian của biểu đồ.
-   - **Hiệu ứng thị giác:** Phù hợp Dark/Light mode, viền subtle border, đổi màu nền nhẹ khi `isActive`.
+2. **Cấu Trúc Nút Bấm Chuẩn (`ChartLabelToggle` / `ChartValueToggle`):**
+   - **Thành phần:** Nút bấm trực quan với icon động `Eye` (khi bật) và `EyeOff` (khi tắt), chuyển đổi linh hoạt giữa 2 trạng thái Outlined và Contained.
+   - **Trạng thái Tắt (Hide / OFF - Outlined):**
+     - Viền subtle (`border border-slate-300 dark:border-slate-700/80`), nền trong suốt hoặc hover nhẹ (`hover:bg-slate-100 dark:hover:bg-slate-800/70`), chữ màu ghi thanh thoát (`text-slate-600 dark:text-slate-400`).
+     - Icon `EyeOff` mờ nhẹ, văn bản hiển thị `"Hiện số"` (hoặc `"Hiện Km"` / `"Hiện giá trị"`).
+     - Tooltip giải thích: `"Hiển thị nhãn số kèm nền chống lóa"`.
+   - **Trạng thái Bật (Show / ON - Contained):**
+     - Nền khối rực rỡ chuẩn nhận diện thương hiệu (`bg-cyan-500 hover:bg-cyan-600 text-white`), viền sáng nhẹ (`border-cyan-400/50`), đổ bóng mềm chống bệt màu (`shadow-sm shadow-cyan-500/25`).
+     - Icon `Eye` sắc nét, văn bản hiển thị `"Ẩn số"` (hoặc `"Ẩn Km"` / `"Ẩn giá trị"`).
+     - Tooltip giải thích: `"Ẩn nhãn số để biểu đồ thoáng hơn"`.
+   - **Kích thước & Chế độ thu gọn:**
+     - Mặc định: Cao ~28px (`h-7`), font chữ `text-xs font-semibold`, padding `px-2.5 py-1 rounded-lg`.
+     - Chế độ `compact` (icon-only): `p-1.5 rounded-lg` dành riêng cho các thẻ phụ chật chội hoặc thiết bị siêu nhỏ.
+     - Tương thích ngược 100% với prop `label` truyền vào từ trước (`label="Hiện Km"` tự động chuyển thành `"Hiện Km"` khi tắt và `"Ẩn Km"` khi bật).
 
 3. **Nguyên Tắc Định Dạng Số Thông Minh (Smart Formatting):**
    - **Tiền tệ lớn:** `X.XM ₫` (ví dụ `1.2M ₫`, `350k ₫`).
