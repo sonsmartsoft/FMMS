@@ -1144,30 +1144,30 @@ export default function FinancePage() {
             return (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {/* Stacked Area Chart with Clickable Legend */}
-                <div className="lg:col-span-2 p-3.5 sm:p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center space-x-2">
+                <div className="lg:col-span-2 p-3.5 sm:p-5 rounded-2xl space-y-3 max-w-full overflow-hidden" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0 max-w-full">
+                    <div className="flex items-center space-x-2 min-w-0">
                       <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 shrink-0">
                         <BarChart3 className="w-4 h-4" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="text-sm font-extrabold flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-primary)' }}>
-                          <span>Biến Động Chi Phí Theo Tháng</span>
-                          <span className="text-[9px] font-normal text-slate-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full lowercase">
-                            (Bấm vào chú thích để bật/tắt danh mục)
+                          <span className="truncate">Biến Động Chi Phí Theo Tháng</span>
+                          <span className="text-[9px] font-normal text-slate-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full lowercase shrink-0">
+                            (Bấm chú thích để bật/tắt)
                           </span>
                         </h3>
-                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
                           Phân bổ theo các nhóm chi phí chính qua từng tháng
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap w-full sm:w-auto">
+                    <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap w-full sm:w-auto min-w-0 max-w-full">
                       <ChartLabelToggle
                         showLabels={showFinLabels}
                         onToggle={toggleFinLabels}
                       />
-                      <span className="text-[10px] font-mono text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
+                      <span className="text-[10px] font-mono text-zinc-400 shrink-0">Đơn vị: Triệu ₫ (M)</span>
                     </div>
                   </div>
 

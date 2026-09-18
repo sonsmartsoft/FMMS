@@ -236,8 +236,8 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-8 animate-fadeIn pb-16">
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 min-w-0 max-w-full">
+        <div className="min-w-0">
           <h1 className="text-2xl font-extrabold" style={{ color: 'var(--text-primary)' }}>Báo Cáo & Phân Tích</h1>
           <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
             {selectedAssetId
@@ -246,7 +246,7 @@ export default function AnalyticsPage() {
             }
           </p>
         </div>
-        <div className="flex items-center gap-1.5 p-1 rounded-xl max-w-full overflow-x-auto scrollbar-none" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="flex items-center gap-1.5 p-1 rounded-xl max-w-full min-w-0 overflow-x-auto scrollbar-none self-start md:self-auto" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <div className="flex items-center gap-1.5 px-2 text-xs font-bold shrink-0" style={{ color: 'var(--accent-cyan)' }}>
             <Calendar className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Năm:</span>
@@ -331,23 +331,25 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Composed Chart: Multi-category stack + Km bar */}
-      <div className="p-3.5 sm:p-5 rounded-2xl space-y-4 shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <SectionHeader
-            icon={Activity}
-            title={`Xu hướng chi phí & quãng đường theo tháng — ${chartTitleYear}`}
-            sub="Biểu đồ kết hợp: Cột (Km) + Vùng xếp chồng (Chi phí theo nhóm)"
-            color="#38BDF8"
-          />
-          <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap w-full sm:w-auto -mt-2 sm:mt-0">
-            <div className="flex items-center gap-1 p-1 rounded-xl max-w-full overflow-x-auto scrollbar-none" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
+      <div className="p-3.5 sm:p-5 rounded-2xl space-y-4 shadow-sm max-w-full overflow-hidden" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 min-w-0 max-w-full">
+          <div className="min-w-0 flex-1">
+            <SectionHeader
+              icon={Activity}
+              title={`Xu hướng chi phí & quãng đường theo tháng — ${chartTitleYear}`}
+              sub="Biểu đồ kết hợp: Cột (Km) + Vùng xếp chồng (Chi phí theo nhóm)"
+              color="#38BDF8"
+            />
+          </div>
+          <div className="flex items-center justify-between xl:justify-end gap-2 flex-wrap w-full xl:w-auto min-w-0 max-w-full -mt-2 xl:mt-0">
+            <div className="flex items-center gap-1 p-1 rounded-xl max-w-full min-w-0 overflow-x-auto scrollbar-none" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
               <button
                 onClick={() => setSelectedYear('ALL')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${selectedYear === 'ALL' ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
                 style={selectedYear === 'ALL' ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
               >
-                <span className="hidden xs:inline">Tất cả các năm</span>
-                <span className="xs:hidden">Tất cả</span>
+                <span className="hidden sm:inline">Tất cả các năm</span>
+                <span className="sm:hidden">Tất cả</span>
               </button>
               {availableYears.map(yr => (
                 <button

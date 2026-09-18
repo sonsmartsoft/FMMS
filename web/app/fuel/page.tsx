@@ -435,17 +435,17 @@ export default function FuelPage() {
 
       {/* 📊 BIỂU ĐỒ THEO DÕI NHIÊN LIỆU THEO THÁNG */}
       {monthlyFuelData.length > 0 && (
-        <div className="p-3.5 sm:p-5 rounded-2xl space-y-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center space-x-2.5">
+        <div className="p-3.5 sm:p-5 rounded-2xl space-y-4 max-w-full overflow-hidden" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0 max-w-full">
+            <div className="flex items-center space-x-2.5 min-w-0">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm shrink-0" style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
                 <Fuel className="w-4 h-4 text-amber-400" />
               </div>
-              <div>
-                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }} title="Phân Tích Nhiên Liệu & Đơn Giá Theo Tháng">
                   Phân Tích Nhiên Liệu &amp; Đơn Giá Theo Tháng
                 </h3>
-                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>
                   {chartMode === 'COMBINED'
                     ? 'So sánh tổng chi phí nhiên liệu (₫) và tổng số lít (L) tiêu thụ mỗi tháng'
                     : 'Biến động đơn giá trung bình (₫/L) qua từng chu kỳ đổ xăng'}
@@ -454,8 +454,8 @@ export default function FuelPage() {
             </div>
 
             {/* Mode Switch & Summary Badges & Label Toggle */}
-            <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap w-full sm:w-auto">
-              <div className="flex items-center p-1 rounded-xl max-w-full overflow-x-auto scrollbar-none" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)' }}>
+            <div className="flex items-center justify-between lg:justify-end gap-2 flex-wrap w-full lg:w-auto min-w-0 max-w-full">
+              <div className="flex items-center p-1 rounded-xl max-w-full min-w-0 overflow-x-auto scrollbar-none" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)' }}>
                 <button
                   onClick={() => setChartMode('COMBINED')}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${chartMode === 'COMBINED' ? 'bg-amber-500/20 text-amber-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
@@ -476,11 +476,11 @@ export default function FuelPage() {
                 onToggle={toggleChartLabels}
               />
 
-              <div className="hidden sm:flex items-center gap-2 pl-2 border-l" style={{ borderColor: 'var(--border-subtle)' }}>
-                <span className="px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--status-amber)' }}>
+              <div className="hidden lg:flex items-center gap-2 pl-2 border-l shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--status-amber)' }}>
                   Tổng: <strong>{fmt(totalFuel)} ₫</strong>
                 </span>
-                <span className="px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-cyan)' }}>
+                <span className="px-2.5 py-1 rounded-lg text-xs font-semibold shrink-0" style={{ background: 'rgba(6,182,212,0.1)', color: 'var(--accent-cyan)' }}>
                   Tổng: <strong>{totalLiters.toFixed(1)} L</strong>
                 </span>
                 {avgFuelPrice > 0 && (

@@ -197,15 +197,15 @@ export default function DtcDistributionMatrix({
       }}
     >
       {/* ── Top Header & Advanced Time Scope Filter ── */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-4 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
-        <div>
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-4 border-b min-w-0 max-w-full" style={{ borderColor: 'var(--border-subtle)' }}>
+        <div className="min-w-0">
           <div className="flex items-center space-x-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
-            <h4 className="text-sm font-bold tracking-wide uppercase" style={{ color: 'var(--text-primary)' }}>
+            <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+            <h4 className="text-sm font-bold tracking-wide uppercase truncate" style={{ color: 'var(--text-primary)' }}>
               Phân bố mã lỗi chẩn đoán (DTC Distribution)
             </h4>
           </div>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>
             {timeScope === 'ALL' 
               ? 'Tổng hợp chu kỳ 12 tháng của tất cả các năm (Toàn bộ vòng đời xe)'
               : 'Biểu đồ ma trận phân bố mã lỗi OBD-II theo hệ thống trong năm ' + timeScope + ' (12 tháng)'}
@@ -214,7 +214,7 @@ export default function DtcDistributionMatrix({
 
         {/* Smart Time Scope Selector */}
         <div 
-          className="flex items-center space-x-1.5 self-stretch sm:self-auto p-1 rounded-xl border text-xs max-w-full overflow-x-auto scrollbar-none"
+          className="flex items-center space-x-1.5 self-stretch md:self-auto p-1 rounded-xl border text-xs max-w-full min-w-0 overflow-x-auto scrollbar-none"
           style={{
             background: 'var(--bg-primary)',
             borderColor: 'var(--border-default)',
@@ -232,8 +232,8 @@ export default function DtcDistributionMatrix({
             style={timeScope !== 'ALL' ? { color: 'var(--text-secondary)' } : {}}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">Tất cả các năm</span>
-            <span className="xs:hidden">Tất cả</span>
+            <span className="hidden sm:inline">Tất cả các năm</span>
+            <span className="sm:hidden">Tất cả</span>
           </button>
 
           {/* Individual Year Buttons */}
