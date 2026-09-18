@@ -752,6 +752,8 @@ export default function AssetDetailPage() {
   const [showOdoChartLabels, toggleOdoChartLabels] = useChartLabelState('fmms_asset_odo_chart_labels', true);
   const [showAssetFuelLabels, toggleAssetFuelLabels] = useChartLabelState('fmms_asset_fuel_chart_labels', false);
   const [showAssetExpLabels, toggleAssetExpLabels] = useChartLabelState('fmms_asset_exp_chart_labels', false);
+  const [showTcoDonutLabels, toggleTcoDonutLabels] = useChartLabelState('fmms_asset_tco_donut_labels', false);
+  const [showTcoBarLabels, toggleTcoBarLabels] = useChartLabelState('fmms_asset_tco_bar_labels', false);
   const [fuelChartMode, setFuelChartMode] = useState<'COMBINED' | 'PRICE_TREND'>('COMBINED');
   const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', total_cost: '', odometer_km: '', station: '', notes: '' });
   const [maintForm, setMaintForm] = useState({ date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', discount: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
@@ -5330,18 +5332,55 @@ export default function AssetDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Donut Chart */}
                 <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-amber-500/15 text-amber-500 border border-amber-500/30">
-                      <PieChart className="w-3.5 h-3.5" />
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-amber-500/15 text-amber-500 border border-amber-500/30 shrink-0">
+                        <PieChart className="w-3.5 h-3.5" />
+                      </div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 truncate">Cơ cấu Tổng Chi Phí Thực Tế</p>
                     </div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">Cơ cấu Tổng Chi Phí Thực Tế</p>
+                    <ChartLabelToggle showLabels={showTcoDonutLabels} onToggle={toggleTcoDonutLabels} size="small" />
                   </div>
                   {tcoDonutData.length > 0 ? (
                     <div>
                       <div className="relative" style={{ height: 150 }}>
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
-                            <Pie data={tcoDonutData} cx="50%" cy="50%" innerRadius={46} outerRadius={68} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
+                            <Pie
+                              data={tcoDonutData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={46}
+                              outerRadius={68}
+                              paddingAngle={3}
+                              dataKey="value"
+                              nameKey="name"
+                              stroke="none"
+                              labelLine={false}
+                              label={
+                                showTcoDonutLabels
+                                  ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                      if (!percent || percent < 0.05) return null;
+                                      const RADIAN = Math.PI / 180;
+                                      const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
+                                      const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                                      const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                                      return (
+                                        <text
+                                          x={x}
+                                          y={y}
+                                          fill="#FFFFFF"
+                                          textAnchor="middle"
+                                          dominantBaseline="central"
+                                          style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                                        >
+                                          {`${Math.round(percent * 100)}%`}
+                                        </text>
+                                      );
+                                    }
+                                  : false
+                              }
+                            >
                               {tcoDonutData.map((entry, index) => (
                                 <Cell key={index} fill={entry.color} />
                               ))}
@@ -5376,11 +5415,14 @@ export default function AssetDetailPage() {
 
                 {/* Horizontal Bar Chart: So sánh Giá trị xe vs Chi phí phát sinh */}
                 <div className="p-4 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30">
-                      <BarChart3 className="w-3.5 h-3.5" />
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-cyan-500/15 text-cyan-500 border border-cyan-500/30 shrink-0">
+                        <BarChart3 className="w-3.5 h-3.5" />
+                      </div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400 truncate">So sánh Chi Phí Mua Xe &amp; Nuôi Xe</p>
                     </div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">So sánh Chi Phí Mua Xe &amp; Nuôi Xe</p>
+                    <ChartLabelToggle showLabels={showTcoBarLabels} onToggle={toggleTcoBarLabels} size="small" />
                   </div>
 
                   <div style={{ height: 240 }}>
@@ -5393,7 +5435,7 @@ export default function AssetDetailPage() {
                           { name: 'Tổng tiền thực chi', amount: totalRealSpent, fill: '#10B981' },
                         ]}
                         layout="vertical"
-                        margin={{ top: 5, right: 25, left: 10, bottom: 5 }}
+                        margin={{ top: 5, right: showTcoBarLabels ? 60 : 25, left: 10, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
                         <XAxis type="number" tickFormatter={v => `${(v / 1_000_000).toFixed(0)}M`} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)' }} tickLine={false} />
@@ -5407,6 +5449,14 @@ export default function AssetDetailPage() {
                             <Cell key="2" fill="#EC4899" />,
                             <Cell key="3" fill="#10B981" />,
                           ]}
+                          {showTcoBarLabels && (
+                            <LabelList
+                              dataKey="amount"
+                              position="right"
+                              formatter={(v: number) => (v > 0 ? `${(v / 1_000_000).toFixed(1)}M ₫` : '')}
+                              style={{ fontSize: 10, fontWeight: 700, fill: isDark ? '#E2E8F0' : '#1E293B' }}
+                            />
+                          )}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>

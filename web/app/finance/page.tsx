@@ -120,6 +120,7 @@ export default function FinancePage() {
   const [loans, setLoans] = useState<LoanRow[]>([]);
   const [payments, setPayments] = useState<LoanPaymentRow[]>([]);
   const [showFinLabels, toggleFinLabels] = useChartLabelState('fmms_finance_chart_labels', false);
+  const [showDonutLabels, toggleDonutLabels] = useChartLabelState('fmms_finance_donut_labels', false);
 
   const [openModal, setOpenModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -1291,30 +1292,67 @@ export default function FinancePage() {
 
               {/* Donut Chart - Overlap-free design with center stat and clean category list */}
               <div className="p-5 rounded-2xl space-y-3 flex flex-col justify-between" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
                       <PieIcon className="w-4 h-4" />
                     </div>
-                    <div>
-                      <h3 className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-extrabold truncate" style={{ color: 'var(--text-primary)' }}>
                         Tỷ Trọng Danh Mục
                       </h3>
-                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
                         Cơ cấu chi tiêu ({breakdown.length} nhóm)
                       </p>
                     </div>
                   </div>
-                  <span className="text-xs font-mono font-extrabold text-amber-500 dark:text-amber-400">
-                    {(totalExpenses / 1_000_000).toFixed(1)}M ₫
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <ChartLabelToggle showLabels={showDonutLabels} onToggle={toggleDonutLabels} size="small" />
+                    <span className="text-xs font-mono font-extrabold text-amber-500 dark:text-amber-400">
+                      {(totalExpenses / 1_000_000).toFixed(1)}M ₫
+                    </span>
+                  </div>
                 </div>
 
                 {/* Donut chart with centered summary stat */}
                 <div className="relative" style={{ height: 150 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={expensePieData} cx="50%" cy="50%" innerRadius={46} outerRadius={68} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
+                      <Pie
+                        data={expensePieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={46}
+                        outerRadius={68}
+                        paddingAngle={3}
+                        dataKey="value"
+                        nameKey="name"
+                        stroke="none"
+                        labelLine={false}
+                        label={
+                          showDonutLabels
+                            ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                if (!percent || percent < 0.05) return null;
+                                const RADIAN = Math.PI / 180;
+                                const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
+                                const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                                const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                                return (
+                                  <text
+                                    x={x}
+                                    y={y}
+                                    fill="#FFFFFF"
+                                    textAnchor="middle"
+                                    dominantBaseline="central"
+                                    style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                                  >
+                                    {`${Math.round(percent * 100)}%`}
+                                  </text>
+                                );
+                              }
+                            : false
+                        }
+                      >
                         {expensePieData.map((entry, index) => (
                           <Cell key={index} fill={entry.color} />
                         ))}

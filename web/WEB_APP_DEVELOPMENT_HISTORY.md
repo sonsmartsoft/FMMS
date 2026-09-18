@@ -397,6 +397,26 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
     - Hỗ trợ 2 biến thể kích thước: `small` (text-[11px] / h-6) và `medium` (text-xs / h-7).
     - Xuất thêm alias `ChartValueToggle` tương đương `ChartLabelToggle` để thuận tiện tái sử dụng trên các dự án khác.
 
+### Đợt 20 (18/09/2026): Phủ Kín Nút Bật/Tắt Nhãn Số (ChartValueToggle) Cho 100% Biểu Đồ Toàn Bộ Hệ Thống FMMS
+- **Trang Bị Bổ Sung Toàn Diện Cho 5 Biểu Đồ Chưa Có Nút:**
+  1. **Biểu đồ Phân bổ chi phí theo danh mục (`/analytics` - Donut `PieChart`):**
+     - Bổ sung nút `ChartLabelToggle` vào `SectionHeader` với khóa `fmms_analytics_category_labels`.
+     - Tự động hiển thị nhãn phần trăm trực quan trên từng lát cắt Donut khi bật, chữ trắng font đậm kèm đổ bóng mềm chống bệt màu.
+  2. **Biểu đồ Chi phí bảo dưỡng & nhiên liệu theo xe (`/analytics` - Grouped `BarChart`):**
+     - Bổ sung nút `ChartLabelToggle` vào `SectionHeader` với khóa `fmms_analytics_asset_cost_labels`.
+     - Bổ sung `<LabelList>` hiển thị số tiền rút gọn `fmtM(v)` trực tiếp trên đỉnh cột Bảo dưỡng và Nhiên liệu; tự động nới lề trên `margin.top: 22` khi bật nhãn để chống tràn đỉnh.
+  3. **Biểu đồ Tỷ trọng danh mục chi tiêu (`/finance` - Donut `PieChart`):**
+     - Bổ sung nút `ChartLabelToggle` size `small` vào thanh tiêu đề thẻ với khóa `fmms_finance_donut_labels`.
+     - Hiển thị nhãn phần trăm trực tiếp trên lát cắt Donut khi được kích hoạt.
+  4. **Biểu đồ Cơ cấu tổng chi phí thực tế (`/assets/[id]` - TCO Donut `PieChart`):**
+     - Bổ sung nút `ChartLabelToggle` size `small` với khóa `fmms_asset_tco_donut_labels`.
+     - Hiển thị tỷ trọng phần trăm từng hạng mục chi phí nuôi xe trên vòng Donut khi bật.
+  5. **Biểu đồ So sánh Chi phí mua xe & Nuôi xe (`/assets/[id]` - TCO Horizontal `BarChart`):**
+     - Bổ sung nút `ChartLabelToggle` size `small` với khóa `fmms_asset_tco_bar_labels`.
+     - Bổ sung `<LabelList>` hiển thị số tiền `...M ₫` bên phải thanh ngang; tự động mở rộng lề phải `margin.right: 60` chống đè hoặc cắt chữ.
+- **Hoàn Tất 100% Độ Phủ Biểu Đồ:**
+  - Toàn bộ 12 biểu đồ trên 4 trang cốt lõi (`/fuel`, `/analytics`, `/finance`, `/assets/[id]`) đều sở hữu nút chuyển đổi nhãn đồng bộ theo phong cách `ChartValueToggle` (Eye / EyeOff + Outlined / Contained).
+
 ---
 
 ## 10. CÁC LƯU Ý QUAN TRỌNG CHO ĐỢT PHÁT TRIỂN TIẾP THEO

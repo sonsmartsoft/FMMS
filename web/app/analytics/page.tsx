@@ -72,6 +72,8 @@ export default function AnalyticsPage() {
   const [showCompareLabels, toggleCompareLabels] = useChartLabelState('fmms_analytics_compare_labels', false);
   const [showFuelLabels, toggleFuelLabels] = useChartLabelState('fmms_analytics_fuel_labels', false);
   const [showDistanceLabels, toggleDistanceLabels] = useChartLabelState('fmms_analytics_distance_labels', false);
+  const [showCategoryLabels, toggleCategoryLabels] = useChartLabelState('fmms_analytics_category_labels', false);
+  const [showAssetCostLabels, toggleAssetCostLabels] = useChartLabelState('fmms_analytics_asset_cost_labels', false);
 
   const isSameAsset = (recAssetId: string, targetAssetId: string) => {
     if (recAssetId === targetAssetId) return true;
@@ -444,13 +446,53 @@ export default function AnalyticsPage() {
         {/* Category Breakdown Donut Chart */}
         <div className="p-3.5 sm:p-5 rounded-2xl shadow-sm space-y-3 flex flex-col justify-between" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <div>
-            <SectionHeader icon={DollarSign} title="Phân bổ chi phí theo danh mục" sub="Tỷ trọng chi tiêu toàn bộ danh mục thực tế" color="#F59E0B" />
+            <SectionHeader
+              icon={DollarSign}
+              title="Phân bổ chi phí theo danh mục"
+              sub="Tỷ trọng chi tiêu toàn bộ danh mục thực tế"
+              color="#F59E0B"
+              action={<ChartLabelToggle showLabels={showCategoryLabels} onToggle={toggleCategoryLabels} />}
+            />
             {pieData.length > 0 ? (
               <div>
                 <div className="relative" style={{ height: 160 }}>
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} paddingAngle={3} dataKey="value" nameKey="name" stroke="none">
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={48}
+                        outerRadius={72}
+                        paddingAngle={3}
+                        dataKey="value"
+                        nameKey="name"
+                        stroke="none"
+                        labelLine={false}
+                        label={
+                          showCategoryLabels
+                            ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                if (!percent || percent < 0.05) return null;
+                                const RADIAN = Math.PI / 180;
+                                const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
+                                const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                                const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                                return (
+                                  <text
+                                    x={x}
+                                    y={y}
+                                    fill="#FFFFFF"
+                                    textAnchor="middle"
+                                    dominantBaseline="central"
+                                    style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                                  >
+                                    {`${Math.round(percent * 100)}%`}
+                                  </text>
+                                );
+                              }
+                            : false
+                        }
+                      >
                         {pieData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
                       </Pie>
                       <ReTooltip formatter={(v: number, name) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0,0,0,0.6)' : '0 10px 25px -5px rgba(0,0,0,0.1)' }} />
@@ -639,21 +681,45 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="p-3.5 sm:p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-            <SectionHeader icon={Wrench} title="Chi phí bảo dưỡng & nhiên liệu theo xe" sub="Tổng chi phí phân theo từng phương tiện" color="#06B6D4" />
-            <div style={{ height: 280 }}>
+            <SectionHeader
+              icon={Wrench}
+              title="Chi phí bảo dưỡng & nhiên liệu theo xe"
+              sub="Tổng chi phí phân theo từng phương tiện"
+              color="#06B6D4"
+              action={<ChartLabelToggle showLabels={showAssetCostLabels} onToggle={toggleAssetCostLabels} />}
+            />
+            <div style={{ height: showAssetCostLabels ? 295 : 280 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={assets.map((a, ai) => ({
                   name: a.name.split(' ')[0],
                   'Bảo dưỡng': maintRecords.filter(m => isSameAsset(m.asset_id, a.id)).reduce((s, m) => s + m.cost, 0),
                   'Nhiên liệu': fuelLogs.filter(f => isSameAsset(f.asset_id, a.id)).reduce((s, f) => s + f.total_cost, 0),
-                }))} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+                }))} margin={{ top: showAssetCostLabels ? 22 : 5, right: 10, left: -10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                   <XAxis dataKey="name" tick={{ fill: axisColor, fontSize: 11 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} />
                   <YAxis tickFormatter={v => fmtM(v)} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={40} />
                   <ReTooltip formatter={(v: number, name) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0,0,0,0.6)' : '0 10px 25px -5px rgba(0,0,0,0.1)' }} />
                   <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="Bảo dưỡng" fill="#06B6D4" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Nhiên liệu" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Bảo dưỡng" fill="#06B6D4" radius={[4, 4, 0, 0]}>
+                    {showAssetCostLabels && (
+                      <LabelList
+                        dataKey="Bảo dưỡng"
+                        position="top"
+                        formatter={(v: number) => (v > 0 ? fmtM(v) : '')}
+                        style={{ fontSize: 9, fontWeight: 700, fill: '#06B6D4' }}
+                      />
+                    )}
+                  </Bar>
+                  <Bar dataKey="Nhiên liệu" fill="#F59E0B" radius={[4, 4, 0, 0]}>
+                    {showAssetCostLabels && (
+                      <LabelList
+                        dataKey="Nhiên liệu"
+                        position="top"
+                        formatter={(v: number) => (v > 0 ? fmtM(v) : '')}
+                        style={{ fontSize: 9, fontWeight: 700, fill: '#F59E0B' }}
+                      />
+                    )}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
