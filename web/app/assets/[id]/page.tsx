@@ -1202,10 +1202,15 @@ export default function AssetDetailPage() {
     });
 
 
-    // Check if current asset odometer is higher than highest event ODO
-    const maxEventOdo = events.reduce((max, ev) => Math.max(max, ev.odometer_km || 0), 0);
+    // Check if current asset odometer is higher than the estimated real ODO
+    // maxEventOdo considers both discrete ODO readings AND accumulated trip distances
+    const maxDiscreteOdo = events.reduce((max, ev) => Math.max(max, ev.odometer_km || 0), 0);
+    const totalTripKm = events
+      .filter(ev => ev.type === 'TRIP' && ev.raw?.distance_km)
+      .reduce((sum, ev) => sum + Number(ev.raw.distance_km), 0);
+    const estimatedRealOdo = maxDiscreteOdo + totalTripKm;
     const todayStr = toLocalDateString(new Date().toISOString());
-    if (asset && asset.current_odometer_km > maxEventOdo) {
+    if (asset && asset.current_odometer_km > estimatedRealOdo) {
       events.push({
         date: todayStr,
         odometer_km: asset.current_odometer_km,
@@ -1305,7 +1310,10 @@ export default function AssetDetailPage() {
         ...day,
         dayOfWeek,
         kmRun: Number(kmRun.toFixed(2)),
-        displayOdo: Number((asset?.current_odometer_km && asset.current_odometer_km > 0 ? Math.min(asset.current_odometer_km, Math.max(day.maxOdo || 0, prevOdo)) : Math.max(day.maxOdo || 0, prevOdo)).toFixed(1)),
+        // Use the running prevOdo (accumulated from trips + ODO logs).
+        // Do NOT clamp to asset.current_odometer_km — that DB value may be stale
+        // (e.g., 2651 km) while accumulated trips push real ODO higher (e.g., 2858 km).
+        displayOdo: Number(Math.max(day.maxOdo || 0, prevOdo).toFixed(1)),
       };
     }).reverse();
 
