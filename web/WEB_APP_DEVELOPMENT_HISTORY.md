@@ -417,6 +417,32 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
 - **Hoàn Tất 100% Độ Phủ Biểu Đồ:**
   - Toàn bộ 12 biểu đồ trên 4 trang cốt lõi (`/fuel`, `/analytics`, `/finance`, `/assets/[id]`) đều sở hữu nút chuyển đổi nhãn đồng bộ theo phong cách `ChartValueToggle` (Eye / EyeOff + Outlined / Contained).
 
+### Đợt 21 (19/09/2026): Khắc Phục Lỗi Mốc ODO Cuối Ngày Bị Trùng Nhau Giữa Các Ngày Liên Tiếp (`/assets/[id]`)
+- **Bối Cảnh & Hiện Tượng:**
+  - Trên trang chi tiết phương tiện (`/assets/[id]`), biểu đồ *Quãng đường Di chuyển Theo Ngày* và bảng chi tiết nhật ký hàng ngày xuất hiện tình trạng: Dù các ngày liên tiếp xe đều có phát sinh chuyến đi lăn bánh (`+37.9 km`, `+10.58 km`, `+125.99 km`...), cột **Mốc ODO** và đường line ODO màu xanh lá vẫn bị kẹt cứng ở cùng một giá trị duy nhất (`2.651 km`) trong 7 ngày liên tục (từ ngày 25/08 đến 31/08/2026).
+- **Phân Tích Nguyên Nhân Gốc Rễ (Root Cause Analysis):**
+  1. **Lỗi Cắt Trần Cứng (Hard-Capping Bug tại Dòng 1308):**
+     - Đoạn code tính `displayOdo`:
+       ```typescript
+       displayOdo: Number((asset?.current_odometer_km && asset.current_odometer_km > 0 
+         ? Math.min(asset.current_odometer_km, Math.max(day.maxOdo || 0, prevOdo)) 
+         : Math.max(day.maxOdo || 0, prevOdo)
+       ).toFixed(1))
+       ```
+     - Thuộc tính `asset.current_odometer_km` lưu tĩnh trong cơ sở dữ liệu là `2.651 km`.
+     - Trong khi đó, từ 24/08 đến 31/08 có 19 chuyến đi (trips) phát sinh với tổng quãng đường `+208.02 km`, đưa ODO thực tế của xe lũy tiến từ `2.646 km` lên `2.858.2 km`.
+     - Do hàm `Math.min(2651, accumulatedOdo)`, toàn bộ các ngày có ODO thực vượt quá 2.651 km đều bị ép ngược về trần `2.651 km`.
+  2. **Thiếu Quãng Đường Chuyến Đi (Trips) Khi Đánh Giá Synthetic ODO Event:**
+     - Các bản ghi chuyến đi (`type: 'TRIP'`) có `odometer_km: 0` (vì chỉ lưu `distance_km`). Biến `maxDiscreteOdo` khi chỉ quét `odometer_km` sẽ không nhận biết được xe đã đi thêm 208 km, dẫn đến việc chèn một bản ghi giả định cho ngày hiện tại với giá trị ODO cũ.
+- **Giải Pháp Triệt Để:**
+  1. **Loại Bỏ Hoàn Toàn `Math.min` Khỏi `displayOdo`:**
+     - Cho phép `displayOdo` phản ánh trung thực giá trị `prevOdo` lũy tiến tự nhiên được cộng dồn chuẩn xác từ các chuyến đi và các mốc đổ xăng/bảo dưỡng thực tế.
+  2. **Nâng Cấp `estimatedRealOdo` Cho Sự Kiện Tổng Kết Ngày:**
+     - Tính gộp cả `maxDiscreteOdo` (các mốc ODO rời rạc) lẫn `totalTripKm` (quãng đường các chuyến đi GPS/OBD) trước khi quyết định chèn sự kiện ODO tổng hợp ngày hôm nay.
+- **Kết Quả Đạt Được:**
+  - Toàn bộ 7 ngày xe lăn bánh từ 25/08 đến 31/08/2026 hiển thị đường ODO tăng trưởng tự nhiên, chính xác từng ngày (`2.688,1 km` → `2.698,7 km` → `2.706,1 km` → `2.711,2 km` → `2.732,2 km` → `2.858,2 km`).
+  - Hệ thống vượt qua **34/34 bài kiểm tra tự động** (`qa_full_system_audit.js`), đảm bảo 0 lỗi TypeScript, 100% dịch vụ và biểu đồ hoạt động an toàn.
+
 ---
 
 ## 10. CÁC LƯU Ý QUAN TRỌNG CHO ĐỢT PHÁT TRIỂN TIẾP THEO
