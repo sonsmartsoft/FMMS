@@ -4,7 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip as ReTooltip, Legend,
+  Tooltip as ReTooltip, Legend, LabelList,
 } from 'recharts';
 import Link from 'next/link';
 import { getAssets } from '@/lib/services/assetService';
@@ -13,6 +13,7 @@ import { Asset } from '@/types/mobility';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { Fuel, Zap, TrendingDown, Plus, X, Pencil, Trash2, Check, BarChart3 } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
+import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartLabelToggle';
 
 
 const fmt = (n: number | string | undefined | null) => {
@@ -46,6 +47,7 @@ export default function FuelPage() {
   const [assetFilter, setAssetFilter] = useState<string>('ALL');
   const [toast, setToast] = useState<string | null>(null);
   const [chartMode, setChartMode] = useState<'COMBINED' | 'PRICE_TREND'>('COMBINED');
+  const [showChartLabels, toggleChartLabels] = useChartLabelState('fmms_fuel_chart_labels', false);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -433,10 +435,10 @@ export default function FuelPage() {
 
       {/* 📊 BIỂU ĐỒ THEO DÕI NHIÊN LIỆU THEO THÁNG */}
       {monthlyFuelData.length > 0 && (
-        <div className="p-5 rounded-2xl space-y-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="p-3.5 sm:p-5 rounded-2xl space-y-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center space-x-2.5">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm" style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm shrink-0" style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)' }}>
                 <Fuel className="w-4 h-4 text-amber-400" />
               </div>
               <div>
@@ -451,22 +453,28 @@ export default function FuelPage() {
               </div>
             </div>
 
-            {/* Mode Switch & Summary Badges */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center p-1 rounded-xl" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)' }}>
+            {/* Mode Switch & Summary Badges & Label Toggle */}
+            <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap w-full sm:w-auto">
+              <div className="flex items-center p-1 rounded-xl max-w-full overflow-x-auto scrollbar-none" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)' }}>
                 <button
                   onClick={() => setChartMode('COMBINED')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${chartMode === 'COMBINED' ? 'bg-amber-500/20 text-amber-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${chartMode === 'COMBINED' ? 'bg-amber-500/20 text-amber-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
                 >
                   <BarChart3 className="w-3.5 h-3.5" /> Chi phí &amp; Lít
                 </button>
                 <button
                   onClick={() => setChartMode('PRICE_TREND')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${chartMode === 'PRICE_TREND' ? 'bg-emerald-500/20 text-emerald-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shrink-0 ${chartMode === 'PRICE_TREND' ? 'bg-emerald-500/20 text-emerald-400 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
                 >
                   <TrendingDown className="w-3.5 h-3.5" /> Xu hướng Giá (₫/L)
                 </button>
               </div>
+
+              {/* Data Labels Toggle */}
+              <ChartLabelToggle
+                showLabels={showChartLabels}
+                onToggle={toggleChartLabels}
+              />
 
               <div className="hidden sm:flex items-center gap-2 pl-2 border-l" style={{ borderColor: 'var(--border-subtle)' }}>
                 <span className="px-2.5 py-1 rounded-lg text-xs font-semibold" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--status-amber)' }}>
@@ -484,10 +492,10 @@ export default function FuelPage() {
             </div>
           </div>
 
-          <div style={{ height: 270 }}>
+          <div style={{ height: showChartLabels ? 285 : 270 }}>
             <ResponsiveContainer width="100%" height="100%">
               {chartMode === 'COMBINED' ? (
-                <ComposedChart data={monthlyFuelData} margin={{ top: 15, right: 15, left: -5, bottom: 5 }} barGap={6}>
+                <ComposedChart data={monthlyFuelData} margin={{ top: showChartLabels ? 24 : 15, right: 15, left: -5, bottom: 5 }} barGap={6}>
                   <defs>
                     <linearGradient id="fuelCostGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.8} />
@@ -529,11 +537,39 @@ export default function FuelPage() {
                     formatter={v => <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold px-2">{v}</span>}
                     wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
                   />
-                  <Bar yAxisId="cost" dataKey="cost" name="Tổng chi phí" fill="url(#fuelCostGrad)" stroke="#F59E0B" strokeWidth={1} barSize={22} radius={[6, 6, 0, 0]} />
-                  <Bar yAxisId="liters" dataKey="liters" name="Tổng số lít" fill="url(#fuelLitersGrad)" stroke="#06B6D4" strokeWidth={1} barSize={22} radius={[6, 6, 0, 0]} />
+                  <Bar yAxisId="cost" dataKey="cost" name="Tổng chi phí" fill="url(#fuelCostGrad)" stroke="#F59E0B" strokeWidth={1} barSize={22} radius={[6, 6, 0, 0]}>
+                    {showChartLabels && (
+                      <LabelList
+                        dataKey="cost"
+                        position="top"
+                        formatter={(v: any) => {
+                          const n = Number(v) || 0;
+                          if (n <= 0) return '';
+                          return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}k`;
+                        }}
+                        style={{ fill: '#F59E0B', fontSize: 9, fontWeight: 700 }}
+                        offset={4}
+                      />
+                    )}
+                  </Bar>
+                  <Bar yAxisId="liters" dataKey="liters" name="Tổng số lít" fill="url(#fuelLitersGrad)" stroke="#06B6D4" strokeWidth={1} barSize={22} radius={[6, 6, 0, 0]}>
+                    {showChartLabels && (
+                      <LabelList
+                        dataKey="liters"
+                        position="top"
+                        formatter={(v: any) => {
+                          const n = Number(v) || 0;
+                          if (n <= 0) return '';
+                          return `${n.toFixed(1)}L`;
+                        }}
+                        style={{ fill: '#06B6D4', fontSize: 9, fontWeight: 700 }}
+                        offset={4}
+                      />
+                    )}
+                  </Bar>
                 </ComposedChart>
               ) : (
-                <ComposedChart data={monthlyFuelData} margin={{ top: 15, right: 20, left: 10, bottom: 5 }}>
+                <ComposedChart data={monthlyFuelData} margin={{ top: showChartLabels ? 24 : 15, right: 20, left: 10, bottom: 5 }}>
                   <defs>
                     <linearGradient id="priceAreaGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#10B981" stopOpacity={0.4} />
@@ -558,7 +594,21 @@ export default function FuelPage() {
                     formatter={v => <span className="text-slate-600 dark:text-slate-300 text-xs font-semibold px-2">{v}</span>}
                     wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
                   />
-                  <Area type="monotone" dataKey="avgPrice" name="Đơn giá TB (₫/L)" fill="url(#priceAreaGrad)" stroke="#10B981" strokeWidth={3} dot={{ fill: '#10B981', r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} activeDot={{ r: 7 }} />
+                  <Area type="monotone" dataKey="avgPrice" name="Đơn giá TB (₫/L)" fill="url(#priceAreaGrad)" stroke="#10B981" strokeWidth={3} dot={{ fill: '#10B981', r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} activeDot={{ r: 7 }}>
+                    {showChartLabels && (
+                      <LabelList
+                        dataKey="avgPrice"
+                        position="top"
+                        formatter={(v: any) => {
+                          const n = Number(v) || 0;
+                          if (n <= 0) return '';
+                          return `${(n / 1000).toFixed(1)}k`;
+                        }}
+                        style={{ fill: '#10B981', fontSize: 10, fontWeight: 700 }}
+                        offset={8}
+                      />
+                    )}
+                  </Area>
                 </ComposedChart>
               )}
             </ResponsiveContainer>

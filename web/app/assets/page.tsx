@@ -175,12 +175,12 @@ export default function AssetsPage() {
             className="theme-input !pl-9"
           />
         </div>
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1 max-w-full overflow-x-auto scrollbar-none pb-1">
           {Object.keys(TYPE_LABELS).map((t) => (
             <button
               key={t}
               onClick={() => setFilter(t)}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold transition shrink-0"
               style={filter === t
                 ? { background: 'var(--accent-cyan-bg)', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan-border)' }
                 : { background: 'var(--bg-secondary)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}

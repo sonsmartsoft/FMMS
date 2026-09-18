@@ -328,4 +328,38 @@ fun FmmsGradientButton(
    - **Lưới hiển thị co giãn (Fluid Grids):** Danh sách thẻ xe hỗ trợ `grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6`, tự động chuyển sang 4 cột trên màn hình siêu rộng để thẻ không bị kéo dãn bất thường.
    - **Bảng biểu & Biểu đồ:** Các bảng dữ liệu (Nhiên liệu, Bảo dưỡng, Hành trình, Tài chính) dùng `overflow-x-auto` với `w-full`; biểu đồ Recharts khai báo `ResponsiveContainer width="100%"` tự động trải đều không gian hiển thị.
 
+---
+
+## 📊 6. TIÊU CHUẨN HIỂN THỊ DỮ LIỆU TRÊN BIỂU ĐỒ (CHART DATA LABELS SYSTEM)
+
+1. **Mục Tiêu:**
+   - Cho phép người dùng trực tiếp quan sát các giá trị số liệu trên các cột, điểm dữ liệu mà không nhất thiết phải di chuột hay rê tay mở Tooltip.
+   - Cung cấp nút chuyển đổi nhanh trực tiếp tại từng biểu đồ (Per-Chart Quick Toggle) kết hợp ghi nhớ trạng thái thông minh qua `localStorage`.
+
+2. **Cấu Trúc Nút Bấm Chuẩn (`ChartLabelToggle`):**
+   - **Thành phần:** Nút bấm dạng Pill Button gọn gàng, bao gồm Icon `Tag` nhỏ, nhãn `"Nhãn số"` và đèn LED trạng thái (Cyan Glow khi bật, Muted khi tắt).
+   - **Kích thước & Vùng chạm:** Cao 28px (`h-7`), font chữ `text-[11px] font-semibold`, padding `px-2.5 py-1`, đáp ứng chuẩn responsive không chiếm dụng không gian của biểu đồ.
+   - **Hiệu ứng thị giác:** Phù hợp Dark/Light mode, viền subtle border, đổi màu nền nhẹ khi `isActive`.
+
+3. **Nguyên Tắc Định Dạng Số Thông Minh (Smart Formatting):**
+   - **Tiền tệ lớn:** `X.XM ₫` (ví dụ `1.2M ₫`, `350k ₫`).
+   - **Nhiên liệu:** `X.XL` hoặc `XL` (ví dụ `42.5L`).
+   - **Khoảng cách:** `X,XXX km` hoặc `Xk km`.
+   - **Đơn giá:** `XX.Xk` hoặc `XX,XXX ₫/L`.
+   - **Bộ lọc số 0:** Các tháng/kỳ không phát sinh chi phí (`value === 0` hoặc `null`) trả về chuỗi rỗng `''` để giữ biểu đồ luôn tinh gọn, không bị rối mắt.
+
+4. **Chống Tràn Lề & Đè Chữ (Anti-Overlapping & Top Margin):**
+   - Biểu đồ tự động tăng lề trên (`margin.top: showChartLabels ? 24 : 15`) khi nhãn được kích hoạt, tránh việc số liệu bị cắt cụt ở đỉnh đồ thị.
+   - Với biểu đồ xếp chồng (Stacked Area/Bar), sử dụng đường gián tiếp trong suốt hoặc đặt nhãn ở tổng số liệu cao nhất để tránh đè chéo nhãn các lớp con.
+
+5. **Quy Chuẩn Thanh Điều Khiển & Bộ Lọc Năm Trên Mobile (Anti-Card-Overflow Specification):**
+   - **Tuyệt đối không đặt `shrink-0` ở thanh container bao ngoài:** Container chứa các nút năm/bộ lọc phải khai báo `max-w-full overflow-x-auto scrollbar-none` để người dùng có thể cuộn ngang mượt mà khi dữ liệu có nhiều năm hoặc nhiều danh mục, không bị tràn/đè ra ngoài viền thẻ (`out thẻ`).
+   - **Rút gọn nhãn thông minh trên Mobile:**
+     - `"Tất cả các năm"` ➔ `<span className="hidden xs:inline">Tất cả các năm</span><span className="xs:hidden">Tất cả</span>`.
+     - `"Năm 2026"` ➔ `<span className="hidden xs:inline">Năm </span>2026`.
+   - **Đặt `shrink-0` cho từng nút con:** Đảm bảo từng nút năm hoặc icon không bị bẹp méo khi nội dung chạm mép container.
+   - **Padding thẻ biểu đồ chuẩn Mobile:** Dùng `p-3.5 sm:p-5 rounded-2xl` thay vì `p-5` cố định để chừa đủ khoảng thở cho nội dung trên thiết bị 360–390px.
+
+
+
 

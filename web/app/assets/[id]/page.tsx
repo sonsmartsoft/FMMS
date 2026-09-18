@@ -22,6 +22,7 @@ import { createOdometerAdjustment, getOdometerLogs, createOdometerLog, updateOdo
 import { getDailySummaries, DailySummary } from '@/lib/services/analyticsService';
 import { getWarranties, createWarranty, updateWarranty, deleteWarranty, createWarrantyClaim } from '@/lib/services/warrantyService';
 import { getMasterMaintenanceCategories } from '@/lib/services/masterDataService';
+import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartLabelToggle';
 
 import { createClient } from '@/lib/supabase/client';
 import { useTheme } from '@/lib/theme/ThemeContext';
@@ -748,7 +749,9 @@ export default function AssetDetailPage() {
   /* ── Form states ── */
   const [odoViewMode, setOdoViewMode] = useState<'daily' | 'monthly' | 'yearly'>('daily');
   const [selectedOdoYear, setSelectedOdoYear] = useState<string>('ALL');
-  const [showOdoChartLabels, setShowOdoChartLabels] = useState<boolean>(true);
+  const [showOdoChartLabels, toggleOdoChartLabels] = useChartLabelState('fmms_asset_odo_chart_labels', true);
+  const [showAssetFuelLabels, toggleAssetFuelLabels] = useChartLabelState('fmms_asset_fuel_chart_labels', false);
+  const [showAssetExpLabels, toggleAssetExpLabels] = useChartLabelState('fmms_asset_exp_chart_labels', false);
   const [fuelChartMode, setFuelChartMode] = useState<'COMBINED' | 'PRICE_TREND'>('COMBINED');
   const [fuelForm, setFuelForm] = useState({ date: '', liters: '', price_per_liter: '', total_cost: '', odometer_km: '', station: '', notes: '' });
   const [maintForm, setMaintForm] = useState({ date: '', maintenance_type: 'Thay dầu máy', odometer_km: '', cost: '', discount: '', vendor: '', notes: '', next_due_km: '', next_due_date: '' });
@@ -3244,19 +3247,11 @@ export default function AssetDetailPage() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setShowOdoChartLabels(v => !v)}
-                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 ${
-                              showOdoChartLabels
-                                ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/25'
-                                : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                            }`}
-                            title="Bật / tắt hiển thị số Km trực tiếp trên từng cột biểu đồ"
-                          >
-                            {showOdoChartLabels ? <Eye className="w-3 h-3 text-white" /> : <EyeOff className="w-3 h-3 text-slate-400" />}
-                            <span>{showOdoChartLabels ? 'Hiện số Km: BẬT' : 'Hiện số Km: TẮT'}</span>
-                          </button>
+                          <ChartLabelToggle
+                            showLabels={showOdoChartLabels}
+                            onToggle={toggleOdoChartLabels}
+                            label="Hiện Km"
+                          />
                           <button
                             onClick={() => setHideRestDays(p => !p)}
                             className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 ${
@@ -3461,51 +3456,44 @@ export default function AssetDetailPage() {
                           </p>
                         </div>
 
-                        <div className="flex items-center flex-wrap gap-2">
+                        <div className="flex items-center justify-between sm:justify-end flex-wrap gap-2 w-full sm:w-auto">
                           {/* Bộ lọc Năm */}
                           {availableOdoYears.length > 0 && (
-                            <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                            <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700/80 max-w-full overflow-x-auto scrollbar-none">
                               <button
                                 type="button"
                                 onClick={() => setSelectedOdoYear('ALL')}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 ${
                                   selectedOdoYear === 'ALL'
                                     ? 'bg-cyan-500 text-white shadow-sm shadow-cyan-500/30'
                                     : 'text-slate-600 dark:text-slate-400 hover:text-cyan-500'
                                 }`}
                               >
-                                Tất cả các năm
+                                <span className="hidden xs:inline">Tất cả các năm</span>
+                                <span className="xs:hidden">Tất cả</span>
                               </button>
                               {availableOdoYears.map(yr => (
                                 <button
                                   key={yr}
                                   type="button"
                                   onClick={() => setSelectedOdoYear(yr)}
-                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 ${
                                     selectedOdoYear === yr
                                       ? 'bg-cyan-500 text-white shadow-sm shadow-cyan-500/30'
                                       : 'text-slate-600 dark:text-slate-400 hover:text-cyan-500'
                                   }`}
                                 >
-                                  Năm {yr}
+                                  <span className="hidden xs:inline">Năm </span>{yr}
                                 </button>
                               ))}
                             </div>
                           )}
 
-                          <button
-                            type="button"
-                            onClick={() => setShowOdoChartLabels(v => !v)}
-                            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                              showOdoChartLabels
-                                ? 'bg-emerald-500 text-white shadow-emerald-500/25'
-                                : 'bg-slate-200/80 dark:bg-slate-800/80 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300/50 dark:border-slate-700/50'
-                            }`}
-                            title="Bật / tắt hiển thị số Km trực tiếp trên từng cột biểu đồ"
-                          >
-                            {showOdoChartLabels ? <Eye className="w-3.5 h-3.5 text-white" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
-                            <span>{showOdoChartLabels ? 'Hiện số Km trên cột: BẬT' : 'Hiện số Km trên cột: TẮT'}</span>
-                          </button>
+                          <ChartLabelToggle
+                            showLabels={showOdoChartLabels}
+                            onToggle={toggleOdoChartLabels}
+                            label="Hiện Km"
+                          />
                         </div>
                       </div>
 
@@ -3688,19 +3676,11 @@ export default function AssetDetailPage() {
                           <p className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-600 dark:text-cyan-400">Biểu đồ Km &amp; Chi phí theo năm</p>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => setShowOdoChartLabels(v => !v)}
-                          className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-sm ${
-                            showOdoChartLabels
-                              ? 'bg-emerald-500 text-white shadow-emerald-500/25'
-                              : 'bg-slate-200/80 dark:bg-slate-800/80 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300/50 dark:border-slate-700/50'
-                          }`}
-                          title="Bật / tắt hiển thị số Km trực tiếp trên từng cột biểu đồ"
-                        >
-                          {showOdoChartLabels ? <Eye className="w-3.5 h-3.5 text-white" /> : <EyeOff className="w-3.5 h-3.5 text-slate-400" />}
-                          <span>{showOdoChartLabels ? 'Hiện số Km trên cột: BẬT' : 'Hiện số Km trên cột: TẮT'}</span>
-                        </button>
+                        <ChartLabelToggle
+                          showLabels={showOdoChartLabels}
+                          onToggle={toggleOdoChartLabels}
+                          label="Hiện Km"
+                        />
                       </div>
 
                       <div style={{ height: 250 }}>
@@ -3977,67 +3957,112 @@ export default function AssetDetailPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center p-0.5 rounded-xl text-xs" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)' }}>
-                    <button
-                      onClick={() => setFuelChartMode('COMBINED')}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 ${fuelChartMode === 'COMBINED' ? 'bg-amber-500/20 text-amber-500 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-                    >
-                      <BarChart3 className="w-3 h-3" /> Chi phí &amp; Lít
-                    </button>
-                    <button
-                      onClick={() => setFuelChartMode('PRICE_TREND')}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 ${fuelChartMode === 'PRICE_TREND' ? 'bg-emerald-500/20 text-emerald-500 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-                    >
-                      <TrendingDown className="w-3 h-3" /> Xu hướng Giá
-                    </button>
+                    <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap w-full sm:w-auto">
+                      <div className="flex items-center p-0.5 rounded-xl text-xs max-w-full overflow-x-auto scrollbar-none" style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-subtle)' }}>
+                        <button
+                          onClick={() => setFuelChartMode('COMBINED')}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 shrink-0 ${fuelChartMode === 'COMBINED' ? 'bg-amber-500/20 text-amber-500 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                          <BarChart3 className="w-3 h-3" /> Chi phí &amp; Lít
+                        </button>
+                        <button
+                          onClick={() => setFuelChartMode('PRICE_TREND')}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 shrink-0 ${fuelChartMode === 'PRICE_TREND' ? 'bg-emerald-500/20 text-emerald-500 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                          <TrendingDown className="w-3 h-3" /> Xu hướng Giá
+                        </button>
+                      </div>
+                      <ChartLabelToggle
+                        showLabels={showAssetFuelLabels}
+                        onToggle={toggleAssetFuelLabels}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ height: showAssetFuelLabels ? 245 : 230 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      {fuelChartMode === 'COMBINED' ? (
+                        <ComposedChart data={assetMonthlyFuelData} margin={{ top: showAssetFuelLabels ? 22 : 10, right: 10, left: -10, bottom: 0 }} barGap={6}>
+                          <defs>
+                            <linearGradient id="assetFuelCostGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.8} />
+                              <stop offset="100%" stopColor="#D97706" stopOpacity={0.3} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" opacity={0.6} />
+                          <XAxis dataKey="label" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
+                          <YAxis yAxisId="cost" stroke="#F59E0B" fontSize={10} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} tickLine={false} axisLine={false} />
+                          <YAxis yAxisId="liters" orientation="right" stroke="#06B6D4" fontSize={10} tickFormatter={(v) => `${v}L`} tickLine={false} axisLine={false} />
+                          <ReTooltip
+                            contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: '12px', fontSize: '11px', color: 'var(--text-primary)' }}
+                            formatter={(val: any, name: any) => {
+                              if (name === 'cost') return [`${fmt(Number(val))} ₫`, 'Tổng chi phí'];
+                              if (name === 'liters') return [`${Number(val).toFixed(2)} Lít`, 'Tổng nhiên liệu'];
+                              return [val, name];
+                            }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} formatter={(val) => val === 'cost' ? 'Chi phí (₫)' : 'Số lít (L)'} />
+                          <Bar yAxisId="cost" dataKey="cost" name="cost" fill="url(#assetFuelCostGrad)" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                            {showAssetFuelLabels && (
+                              <LabelList
+                                dataKey="cost"
+                                position="top"
+                                formatter={(v: any) => {
+                                  const n = Number(v) || 0;
+                                  return n > 0 ? (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}k`) : '';
+                                }}
+                                style={{ fill: '#F59E0B', fontSize: 9, fontWeight: 700 }}
+                                offset={4}
+                              />
+                            )}
+                          </Bar>
+                          <Line yAxisId="liters" type="monotone" dataKey="liters" name="liters" stroke="#06B6D4" strokeWidth={2.5} dot={{ r: 3, fill: '#06B6D4' }}>
+                            {showAssetFuelLabels && (
+                              <LabelList
+                                dataKey="liters"
+                                position="top"
+                                formatter={(v: any) => {
+                                  const n = Number(v) || 0;
+                                  return n > 0 ? `${n.toFixed(1)}L` : '';
+                                }}
+                                style={{ fill: '#06B6D4', fontSize: 9, fontWeight: 700 }}
+                                offset={4}
+                              />
+                            )}
+                          </Line>
+                        </ComposedChart>
+                      ) : (
+                        <ComposedChart data={assetMonthlyFuelData} margin={{ top: showAssetFuelLabels ? 22 : 10, right: 10, left: -10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" opacity={0.6} />
+                          <XAxis dataKey="label" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
+                          <YAxis yAxisId="price" stroke="#10B981" fontSize={10} domain={['auto', 'auto']} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tickLine={false} axisLine={false} />
+                          <ReTooltip
+                            contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: '12px', fontSize: '11px', color: 'var(--text-primary)' }}
+                            formatter={(val: any, name: any) => {
+                              if (name === 'avgPrice') return [`${fmt(Number(val))} ₫/L`, 'Đơn giá TB'];
+                              return [val, name];
+                            }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} formatter={(val) => val === 'avgPrice' ? 'Đơn giá trung bình (₫/L)' : val} />
+                          <Line yAxisId="price" type="monotone" dataKey="avgPrice" name="avgPrice" stroke="#10B981" strokeWidth={2.5} dot={{ r: 4, fill: '#10B981' }}>
+                            {showAssetFuelLabels && (
+                              <LabelList
+                                dataKey="avgPrice"
+                                position="top"
+                                formatter={(v: any) => {
+                                  const n = Number(v) || 0;
+                                  return n > 0 ? `${(n / 1000).toFixed(1)}k` : '';
+                                }}
+                                style={{ fill: '#10B981', fontSize: 9, fontWeight: 700 }}
+                                offset={6}
+                              />
+                            )}
+                          </Line>
+                        </ComposedChart>
+                      )}
+                    </ResponsiveContainer>
                   </div>
                 </div>
-
-                <div style={{ height: 230 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    {fuelChartMode === 'COMBINED' ? (
-                      <ComposedChart data={assetMonthlyFuelData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }} barGap={6}>
-                        <defs>
-                          <linearGradient id="assetFuelCostGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#F59E0B" stopOpacity={0.8} />
-                            <stop offset="100%" stopColor="#D97706" stopOpacity={0.3} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" opacity={0.6} />
-                        <XAxis dataKey="label" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
-                        <YAxis yAxisId="cost" stroke="#F59E0B" fontSize={10} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} tickLine={false} axisLine={false} />
-                        <YAxis yAxisId="liters" orientation="right" stroke="#06B6D4" fontSize={10} tickFormatter={(v) => `${v}L`} tickLine={false} axisLine={false} />
-                        <ReTooltip
-                          contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: '12px', fontSize: '11px', color: 'var(--text-primary)' }}
-                          formatter={(val: any, name: any) => {
-                            if (name === 'cost') return [`${fmt(Number(val))} ₫`, 'Tổng chi phí'];
-                            if (name === 'liters') return [`${Number(val).toFixed(2)} Lít`, 'Tổng nhiên liệu'];
-                            return [val, name];
-                          }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} formatter={(val) => val === 'cost' ? 'Chi phí (₫)' : 'Số lít (L)'} />
-                        <Bar yAxisId="cost" dataKey="cost" name="cost" fill="url(#assetFuelCostGrad)" radius={[4, 4, 0, 0]} maxBarSize={32} />
-                        <Line yAxisId="liters" type="monotone" dataKey="liters" name="liters" stroke="#06B6D4" strokeWidth={2.5} dot={{ r: 3, fill: '#06B6D4' }} />
-                      </ComposedChart>
-                    ) : (
-                      <ComposedChart data={assetMonthlyFuelData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" opacity={0.6} />
-                        <XAxis dataKey="label" stroke="var(--text-muted)" fontSize={10} tickLine={false} />
-                        <YAxis yAxisId="price" stroke="#10B981" fontSize={10} domain={['auto', 'auto']} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tickLine={false} axisLine={false} />
-                        <ReTooltip
-                          contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border-default)', borderRadius: '12px', fontSize: '11px', color: 'var(--text-primary)' }}
-                          formatter={(val: any, name: any) => {
-                            if (name === 'avgPrice') return [`${fmt(Number(val))} ₫/L`, 'Đơn giá TB'];
-                            return [val, name];
-                          }}
-                        />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} formatter={(val) => val === 'avgPrice' ? 'Đơn giá trung bình (₫/L)' : val} />
-                        <Line yAxisId="price" type="monotone" dataKey="avgPrice" name="avgPrice" stroke="#10B981" strokeWidth={2.5} dot={{ r: 4, fill: '#10B981' }} />
-                      </ComposedChart>
-                    )}
-                  </ResponsiveContainer>
-                </div>
-              </div>
             )}
 
             <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--border-default)' }}>
@@ -4522,12 +4547,18 @@ export default function AssetDetailPage() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
+                    <div className="flex items-center gap-2">
+                      <ChartLabelToggle
+                        showLabels={showAssetExpLabels}
+                        onToggle={toggleAssetExpLabels}
+                      />
+                      <span className="text-[10px] font-mono text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
+                    </div>
                   </div>
 
-                  <div style={{ height: 260 }}>
+                  <div style={{ height: showAssetExpLabels ? 275 : 260 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={chartData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                      <AreaChart data={chartData} margin={{ top: showAssetExpLabels ? 24 : 10, right: 15, left: -10, bottom: 5 }}>
                         <defs>
                           <linearGradient id="astPurchase" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.75}/>
@@ -4622,6 +4653,20 @@ export default function AssetDetailPage() {
                         <Area type="monotone" dataKey="loan" stackId="exp" name="Khoản vay & Lãi" stroke="#EC4899" fill="url(#astLoan)" strokeWidth={1.5} hide={hiddenExpKeys.includes('loan')} />
                         <Area type="monotone" dataKey="running" stackId="exp" name="Phí đỗ & Cầu đường" stroke="#F97316" fill="url(#astRunning)" strokeWidth={1.5} hide={hiddenExpKeys.includes('running')} />
                         <Area type="monotone" dataKey="other" stackId="exp" name="Chi phí khác" stroke="#64748B" fill="url(#astOther)" strokeWidth={1.5} hide={hiddenExpKeys.includes('other')} />
+                        <Line type="monotone" dataKey="total" stroke="transparent" dot={false} activeDot={false} name="Tổng cộng" legendType="none">
+                          {showAssetExpLabels && (
+                            <LabelList
+                              dataKey="total"
+                              position="top"
+                              formatter={(v: any) => {
+                                const n = Number(v) || 0;
+                                return n > 0 ? `${(n / 1_000_000).toFixed(1)}M` : '';
+                              }}
+                              style={{ fill: isDark ? '#38BDF8' : '#0284C7', fontSize: 10, fontWeight: 800 }}
+                              offset={6}
+                            />
+                          )}
+                        </Line>
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>

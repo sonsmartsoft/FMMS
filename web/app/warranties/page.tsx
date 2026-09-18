@@ -246,18 +246,18 @@ export default function WarrantiesPage() {
           />
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 flex-wrap gap-2">
           <select className="theme-select" value={assetFilter} onChange={e => setAssetFilter(e.target.value)}>
             <option value="ALL">Tất cả phương tiện</option>
             {assets.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
 
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center space-x-1 max-w-full overflow-x-auto scrollbar-none">
             {(['ALL', 'ACTIVE', 'NEAR', 'EXPIRED'] as const).map(s => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1.5 rounded-xl font-bold transition ${statusFilter === s ? 'bg-cyan-500 text-white' : 'hover:bg-slate-500/10'}`}
+                className={`px-3 py-1.5 rounded-xl font-bold transition shrink-0 ${statusFilter === s ? 'bg-cyan-500 text-white' : 'hover:bg-slate-500/10'}`}
                 style={{
                   color: statusFilter === s ? '#ffffff' : 'var(--text-secondary)',
                   border: statusFilter === s ? 'none' : '1px solid var(--border-default)',

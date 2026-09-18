@@ -342,6 +342,47 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
   - Bảng lịch sử đổ xăng, bảo dưỡng, hành trình mở rộng theo chiều ngang tự nhiên với `w-full overflow-x-auto`.
   - Tất cả biểu đồ Recharts với `ResponsiveContainer width="100%"` tự động mở rộng theo kích thước màn hình hiển thị.
 
+### Đợt 17 (17/09/2026): Hệ Thống Nút Bật/Tắt Nhãn Số Dữ Liệu (Chart Data Labels Quick Toggle) Toàn Diện & Ghi Nhớ Thông Minh Cho Toàn Bộ Biểu Đồ Hệ Thống
+- **Xây Dựng Reusable Component `ChartLabelToggle` (`web/components/charts/ChartLabelToggle.tsx`):**
+  - Thiết kế nút bấm Pill Button hiện đại với icon `Tag`, đèn LED trạng thái (Cyan Glow khi bật, Muted khi tắt), văn bản "Nhãn số".
+  - Tích hợp custom hook `useChartLabelState(storageKey, defaultValue)`: Quản trị state an toàn với Next.js SSR Hydration, tự động đồng bộ và lưu trữ lựa chọn của người dùng vào `localStorage` cho từng biểu đồ riêng biệt.
+- **Tích Hợp Toàn Bộ Biểu Đồ Toàn Hệ Thống:**
+  1. **Biểu đồ Nhiên liệu & Đơn giá (`/fuel`):**
+     - Nút toggle lưu trữ khóa `fmms_fuel_chart_labels`.
+     - Tự động bật nhãn chi phí (`X.XM ₫` - Amber) và số lít (`XL` - Cyan) ở chế độ `COMBINED`.
+     - Tự động bật nhãn giá xăng (`XX.Xk` - Emerald) ở chế độ `PRICE_TREND`.
+     - Tự động căn chỉnh lề trên `margin.top: showChartLabels ? 24 : 15` để số không bị chạm đỉnh biểu đồ.
+  2. **Biểu đồ Phân tích Đa Chiều (`/analytics`):**
+     - Nâng cấp `SectionHeader` hỗ trợ truyền `action` slot linh hoạt.
+     - Tích hợp toggle và nhãn số cho cả 4 biểu đồ phân tích:
+       - Biểu đồ Tổng quan Tháng (`ComposedChart` - `fmms_analytics_monthly_labels`): Nhãn số km vận hành.
+       - Biểu đồ So sánh Mua xe vs Chi phí Vận hành (`BarChart` - `fmms_analytics_compare_labels`): Nhãn số tiền mua và tổng chi.
+       - Biểu đồ Chi phí Nhiên liệu theo Tháng (`BarChart` - `fmms_analytics_fuel_labels`): Nhãn số tiền xăng từng tháng.
+       - Biểu đồ Quãng đường Di chuyển (`AreaChart` - `fmms_analytics_distance_labels`): Nhãn số km chi tiết từng tháng.
+  3. **Biểu đồ Tài chính & Dòng tiền (`/finance`):**
+     - Nút toggle lưu trữ khóa `fmms_finance_chart_labels`.
+     - Ứng dụng kỹ thuật `Line` trong suốt làm mỏ neo nhãn số tổng cho biểu đồ vùng xếp chồng (`Stacked AreaChart`), hiển thị tổng chi tiêu hàng tháng (`X.XM ₫`) rõ nét mà không đè chéo các lớp chi phí thành phần.
+  4. **Biểu đồ Chi Tiết Phương Tiện (`/assets/[id]`):**
+     - Chuẩn hóa nút toggle cho Biểu đồ ODO (`fmms_asset_odo_chart_labels`).
+     - Bổ sung toggle cho Biểu đồ Tiêu thụ Nhiên liệu xe (`fmms_asset_fuel_chart_labels`).
+     - Bổ sung toggle và nhãn tổng chi phí cho Biểu đồ Chi phí Vận hành xe (`fmms_asset_exp_chart_labels`).
+
+### Đợt 18 (18/09/2026): Tối Ưu Triệt Để Thanh Điều Khiển Năm & Các Thẻ Biểu Đồ Trên Mobile (Anti-Card-Overflow & Responsive Control Bars)
+- **Khắc Phục Lỗi Thanh Bar Năm Bị Tràn Thẻ (Card Overflow) Trên Mobile:**
+  - **Biểu đồ Xu hướng Chi phí & Quãng đường theo tháng (`/analytics`):**
+    - Thay thế text dài cố định `"Tất cả các năm"` bằng text thích ứng: `<span className="hidden xs:inline">Tất cả các năm</span><span className="xs:hidden">Tất cả</span>`, giảm ngay ~50px chiều rộng trên màn hình nhỏ.
+    - Gỡ bỏ thuộc tính cưỡng chế không co giãn `shrink-0` ở container cha của thanh bar năm, bổ sung `max-w-full overflow-x-auto scrollbar-none` kết hợp `shrink-0` cho từng nút con, đảm bảo thanh năm có thể cuộn ngang mượt mà khi phát sinh nhiều năm dữ liệu mà không bao giờ bị đè hoặc thò ra ngoài viền thẻ.
+    - Cấu trúc lại bố cục hàng điều khiển: `flex items-center justify-between sm:justify-end gap-2 flex-wrap w-full sm:w-auto`, đưa thanh năm và nút `ChartLabelToggle` vào hàng lối cân đối trên mobile.
+- **Rà Soát & Đồng Bộ Toàn Bộ Các Thẻ Có Lỗi Tương Tự:**
+  - **Thanh lọc năm trang Phân tích (`/analytics` - Header):** Bổ sung `max-w-full overflow-x-auto scrollbar-none` và `shrink-0` cho các nút năm.
+  - **Biểu đồ ODO Chi tiết xe (`/assets/[id]`):** Tối ưu thanh chọn năm `availableOdoYears` với text thích ứng (`Tất cả` / `Tất cả các năm`, `2026` / `Năm 2026`), cuộn ngang an toàn `max-w-full overflow-x-auto scrollbar-none`.
+  - **Biểu đồ Nhiên liệu xe (`/assets/[id]` & `/fuel`):** Thanh chuyển chế độ `Chi phí & Lít` vs `Xu hướng Giá` bổ sung `max-w-full overflow-x-auto scrollbar-none` và `shrink-0`, layout `justify-between sm:justify-end flex-wrap w-full sm:w-auto`.
+  - **Ma trận mã lỗi (`DtcDistributionMatrix.tsx`):** Selector thời gian `availableYears` bổ sung `max-w-full overflow-x-auto scrollbar-none` và rút gọn nhãn trên di động.
+  - **Bộ lọc loại xe (`/assets`):** Thanh 6 nút phân loại xe (`ALL, CAR, MOTORCYCLE...`) bổ sung `max-w-full overflow-x-auto scrollbar-none pb-1` ngăn tràn mép màn hình mobile.
+  - **Bộ lọc bảo hành (`/warranties`):** Bổ sung `flex-wrap gap-2` và cuộn ngang cho thanh trạng thái bảo hành.
+  - **Chuẩn hóa Padding thẻ trên mobile:** Toàn bộ card biểu đồ Recharts chuyển từ `p-5` sang `p-3.5 sm:p-5`, tăng 12px không gian hiển thị nội dung trên màn hình điện thoại 360–390px.
+  - **Nâng cấp `SectionHeader`:** Hỗ trợ `flex-col xs:flex-row`, `min-w-0` và `truncate` có `title` tooltip giúp tiêu đề không bị chèn ép nút điều khiển ở góc phải.
+
 ---
 
 ## 10. CÁC LƯU Ý QUAN TRỌNG CHO ĐỢT PHÁT TRIỂN TIẾP THEO

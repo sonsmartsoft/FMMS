@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   ResponsiveContainer,
-  PieChart, Pie, Cell, Tooltip as ReTooltip, Legend,
+  PieChart, Pie, Cell, Tooltip as ReTooltip, Legend, LabelList,
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   BarChart, Bar, ComposedChart, Line,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -15,6 +15,7 @@ import { getMaintenanceRecords } from '@/lib/services/maintenanceService';
 import { getTrips } from '@/lib/services/tripService';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { BarChart3, TrendingDown, TrendingUp, Car, DollarSign, Gauge, Fuel, Wrench, Activity, Calendar } from 'lucide-react';
+import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartLabelToggle';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
@@ -32,15 +33,18 @@ const getCategoryColor = (catName?: string): string => {
   return '#64748B';
 };
 
-const SectionHeader = ({ icon: Icon, title, sub, color = 'var(--accent-cyan)' }: { icon: any; title: string; sub?: string; color?: string }) => (
-  <div className="flex items-center gap-2.5 mb-4">
-    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: color + '20', border: `1px solid ${color}40` }}>
-      <Icon className="w-4 h-4" style={{ color }} />
+const SectionHeader = ({ icon: Icon, title, sub, color = 'var(--accent-cyan)', action }: { icon: any; title: string; sub?: string; color?: string; action?: React.ReactNode }) => (
+  <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-2.5 mb-3 sm:mb-4">
+    <div className="flex items-center gap-2.5 min-w-0">
+      <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: color + '20', border: `1px solid ${color}40` }}>
+        <Icon className="w-4 h-4" style={{ color }} />
+      </div>
+      <div className="min-w-0">
+        <h3 className="text-sm font-extrabold truncate" style={{ color: 'var(--text-primary)' }} title={title}>{title}</h3>
+        {sub && <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }} title={sub}>{sub}</p>}
+      </div>
     </div>
-    <div>
-      <h3 className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>{title}</h3>
-      {sub && <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{sub}</p>}
-    </div>
+    {action && <div className="shrink-0 self-end xs:self-auto">{action}</div>}
   </div>
 );
 
@@ -63,6 +67,11 @@ export default function AnalyticsPage() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [trips, setTrips] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [showMonthlyLabels, toggleMonthlyLabels] = useChartLabelState('fmms_analytics_monthly_labels', false);
+  const [showCompareLabels, toggleCompareLabels] = useChartLabelState('fmms_analytics_compare_labels', false);
+  const [showFuelLabels, toggleFuelLabels] = useChartLabelState('fmms_analytics_fuel_labels', false);
+  const [showDistanceLabels, toggleDistanceLabels] = useChartLabelState('fmms_analytics_distance_labels', false);
 
   const isSameAsset = (recAssetId: string, targetAssetId: string) => {
     if (recAssetId === targetAssetId) return true;
@@ -237,14 +246,14 @@ export default function AnalyticsPage() {
             }
           </p>
         </div>
-        <div className="flex items-center gap-1.5 p-1 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <div className="flex items-center gap-1.5 px-2 text-xs font-bold" style={{ color: 'var(--accent-cyan)' }}>
+        <div className="flex items-center gap-1.5 p-1 rounded-xl max-w-full overflow-x-auto scrollbar-none" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <div className="flex items-center gap-1.5 px-2 text-xs font-bold shrink-0" style={{ color: 'var(--accent-cyan)' }}>
             <Calendar className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Năm:</span>
           </div>
           <button
             onClick={() => setSelectedYear('ALL')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${selectedYear === 'ALL' ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${selectedYear === 'ALL' ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
             style={selectedYear === 'ALL' ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
           >
             Tất cả
@@ -253,7 +262,7 @@ export default function AnalyticsPage() {
             <button
               key={yr}
               onClick={() => setSelectedYear(yr)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${selectedYear === yr ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${selectedYear === yr ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
               style={selectedYear === yr ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
             >
               {yr}
@@ -322,7 +331,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Composed Chart: Multi-category stack + Km bar */}
-      <div className="p-5 rounded-2xl space-y-4 shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+      <div className="p-3.5 sm:p-5 rounded-2xl space-y-4 shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <SectionHeader
             icon={Activity}
@@ -330,29 +339,36 @@ export default function AnalyticsPage() {
             sub="Biểu đồ kết hợp: Cột (Km) + Vùng xếp chồng (Chi phí theo nhóm)"
             color="#38BDF8"
           />
-          <div className="flex items-center gap-1.5 p-1 rounded-xl self-start sm:self-center shrink-0" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-            <button
-              onClick={() => setSelectedYear('ALL')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${selectedYear === 'ALL' ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
-              style={selectedYear === 'ALL' ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
-            >
-              Tất cả các năm
-            </button>
-            {availableYears.map(yr => (
+          <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap w-full sm:w-auto -mt-2 sm:mt-0">
+            <div className="flex items-center gap-1 p-1 rounded-xl max-w-full overflow-x-auto scrollbar-none" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
               <button
-                key={yr}
-                onClick={() => setSelectedYear(yr)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${selectedYear === yr ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
-                style={selectedYear === yr ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
+                onClick={() => setSelectedYear('ALL')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${selectedYear === 'ALL' ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
+                style={selectedYear === 'ALL' ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
               >
-                {yr}
+                <span className="hidden xs:inline">Tất cả các năm</span>
+                <span className="xs:hidden">Tất cả</span>
               </button>
-            ))}
+              {availableYears.map(yr => (
+                <button
+                  key={yr}
+                  onClick={() => setSelectedYear(yr)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${selectedYear === yr ? 'shadow-sm' : 'opacity-70 hover:opacity-100'}`}
+                  style={selectedYear === yr ? { background: 'var(--accent-cyan)', color: '#0F172A' } : { color: 'var(--text-secondary)' }}
+                >
+                  {yr}
+                </button>
+              ))}
+            </div>
+            <ChartLabelToggle
+              showLabels={showMonthlyLabels}
+              onToggle={toggleMonthlyLabels}
+            />
           </div>
         </div>
-        <div style={{ height: 320 }}>
+        <div style={{ height: showMonthlyLabels ? 335 : 320 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+            <ComposedChart data={monthlyData} margin={{ top: showMonthlyLabels ? 22 : 10, right: 20, left: 0, bottom: 5 }}>
               <defs>
                 <linearGradient id="kmBarGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#34D399" stopOpacity={0.65} />
@@ -403,7 +419,20 @@ export default function AnalyticsPage() {
               <Area yAxisId="left" type="monotone" dataKey="ins" stackId="cost" name="Bảo hiểm/Giấy tờ" fill="#10B98140" stroke="#10B981" strokeWidth={2} />
               <Area yAxisId="left" type="monotone" dataKey="loan" stackId="cost" name="Khoản vay" fill="#EC489940" stroke="#EC4899" strokeWidth={2} />
               <Area yAxisId="left" type="monotone" dataKey="other" stackId="cost" name="Chi phí khác" fill="#64748B40" stroke="#64748B" strokeWidth={2} />
-              <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="url(#kmBarGrad)" stroke="#10B981" strokeWidth={1} radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="url(#kmBarGrad)" stroke="#10B981" strokeWidth={1} radius={[4, 4, 0, 0]}>
+                {showMonthlyLabels && (
+                  <LabelList
+                    dataKey="km"
+                    position="top"
+                    formatter={(v: any) => {
+                      const n = Number(v) || 0;
+                      return n > 0 ? `${Math.round(n)} km` : '';
+                    }}
+                    style={{ fill: isDark ? '#34D399' : '#059669', fontSize: 9, fontWeight: 700 }}
+                    offset={4}
+                  />
+                )}
+              </Bar>
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -411,7 +440,7 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Category Breakdown Donut Chart */}
-        <div className="p-5 rounded-2xl shadow-sm space-y-3 flex flex-col justify-between" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="p-3.5 sm:p-5 rounded-2xl shadow-sm space-y-3 flex flex-col justify-between" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <div>
             <SectionHeader icon={DollarSign} title="Phân bổ chi phí theo danh mục" sub="Tỷ trọng chi tiêu toàn bộ danh mục thực tế" color="#F59E0B" />
             {pieData.length > 0 ? (
@@ -453,20 +482,52 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Purchase Price vs Total Expenses Comparison Bar Chart */}
-        <div className="p-5 rounded-2xl shadow-sm space-y-3 flex flex-col justify-between" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+        <div className="p-3.5 sm:p-5 rounded-2xl shadow-sm space-y-3 flex flex-col justify-between" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
           <div>
-            <SectionHeader icon={DollarSign} title="So sánh Chi phí Mua & Nuôi từng xe" sub="So sánh chi tiêu thực tế từng phương tiện trong đội" color="#3B82F6" />
+            <SectionHeader
+              icon={DollarSign}
+              title="So sánh Chi phí Mua & Nuôi từng xe"
+              sub="So sánh chi tiêu thực tế từng phương tiện trong đội"
+              color="#3B82F6"
+              action={<ChartLabelToggle showLabels={showCompareLabels} onToggle={toggleCompareLabels} />}
+            />
             {assetBarData.length > 0 ? (
               <div style={{ height: 280 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={assetBarData} layout="vertical" margin={{ top: 0, right: 20, left: 10, bottom: 0 }}>
+                  <BarChart data={assetBarData} layout="vertical" margin={{ top: 0, right: showCompareLabels ? 45 : 20, left: 10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
                     <XAxis type="number" tickFormatter={v => fmtM(v)} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} />
                     <YAxis type="category" dataKey="name" tick={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 11, fontWeight: 600 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={130} />
                     <ReTooltip formatter={(v: number, name) => [`${fmt(v)} ₫`, name]} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0,0,0,0.6)' : '0 10px 25px -5px rgba(0,0,0,0.1)' }} />
                     <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="Giá mua xe" fill="#3B82F6" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="Tổng chi nuôi xe" fill="#F59E0B" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="Giá mua xe" fill="#3B82F6" radius={[0, 4, 4, 0]}>
+                      {showCompareLabels && (
+                        <LabelList
+                          dataKey="Giá mua xe"
+                          position="right"
+                          formatter={(v: any) => {
+                            const n = Number(v) || 0;
+                            return n > 0 ? fmtM(n) : '';
+                          }}
+                          style={{ fill: '#3B82F6', fontSize: 9, fontWeight: 700 }}
+                          offset={4}
+                        />
+                      )}
+                    </Bar>
+                    <Bar dataKey="Tổng chi nuôi xe" fill="#F59E0B" radius={[0, 4, 4, 0]}>
+                      {showCompareLabels && (
+                        <LabelList
+                          dataKey="Tổng chi nuôi xe"
+                          position="right"
+                          formatter={(v: any) => {
+                            const n = Number(v) || 0;
+                            return n > 0 ? fmtM(n) : '';
+                          }}
+                          style={{ fill: '#F59E0B', fontSize: 9, fontWeight: 700 }}
+                          offset={4}
+                        />
+                      )}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -479,28 +540,52 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <SectionHeader icon={Fuel} title="Chi phí nhiên liệu theo tháng" sub={`Biểu đồ cột — ${chartTitleYear}`} color="#F59E0B" />
-          <div style={{ height: 220 }}>
+        <div className="p-3.5 sm:p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <SectionHeader
+            icon={Fuel}
+            title="Chi phí nhiên liệu theo tháng"
+            sub={`Biểu đồ cột — ${chartTitleYear}`}
+            color="#F59E0B"
+            action={<ChartLabelToggle showLabels={showFuelLabels} onToggle={toggleFuelLabels} />}
+          />
+          <div style={{ height: showFuelLabels ? 235 : 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+              <BarChart data={monthlyData} margin={{ top: showFuelLabels ? 22 : 5, right: 10, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
                 <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} />
                 <YAxis tickFormatter={v => v > 0 ? fmtM(v) : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={40} />
                 <ReTooltip formatter={(v: number) => [`${fmt(v)} ₫`, 'Chi phí nhiên liệu']} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0,0,0,0.6)' : '0 10px 25px -5px rgba(0,0,0,0.1)' }} />
                 <Bar dataKey="fuel" name="Nhiên liệu" radius={[4, 4, 0, 0]}>
                   {monthlyData.map((_, index) => <Cell key={index} fill={index === new Date().getMonth() ? '#F59E0B' : '#F59E0B70'} />)}
+                  {showFuelLabels && (
+                    <LabelList
+                      dataKey="fuel"
+                      position="top"
+                      formatter={(v: any) => {
+                        const n = Number(v) || 0;
+                        return n > 0 ? fmtM(n) : '';
+                      }}
+                      style={{ fill: '#F59E0B', fontSize: 9, fontWeight: 700 }}
+                      offset={4}
+                    />
+                  )}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <SectionHeader icon={Gauge} title="Quãng đường di chuyển theo tháng" sub={`Từ dữ liệu nhật ký chuyến đi — ${chartTitleYear}`} color="#10B981" />
-          <div style={{ height: 220 }}>
+        <div className="p-3.5 sm:p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <SectionHeader
+            icon={Gauge}
+            title="Quãng đường di chuyển theo tháng"
+            sub={`Từ dữ liệu nhật ký chuyến đi — ${chartTitleYear}`}
+            color="#10B981"
+            action={<ChartLabelToggle showLabels={showDistanceLabels} onToggle={toggleDistanceLabels} />}
+          />
+          <div style={{ height: showDistanceLabels ? 235 : 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
+              <AreaChart data={monthlyData} margin={{ top: showDistanceLabels ? 22 : 5, right: 10, left: -10, bottom: 5 }}>
                 <defs>
                   <linearGradient id="kmGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10B981" stopOpacity={0.45} />
@@ -511,7 +596,20 @@ export default function AnalyticsPage() {
                 <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} />
                 <YAxis tickFormatter={v => v > 0 ? `${fmt(Math.round(v))}` : '0'} tick={{ fill: axisColor, fontSize: 10 }} axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }} tickLine={false} width={40} />
                 <ReTooltip formatter={(v: number) => [`${fmt(Math.round(v))} km`, 'Quãng đường']} contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 12, fontSize: 11, color: tooltipText, boxShadow: isDark ? '0 10px 25px -5px rgba(0,0,0,0.6)' : '0 10px 25px -5px rgba(0,0,0,0.1)' }} />
-                <Area type="monotone" dataKey="km" name="Km di chuyển" stroke="#10B981" strokeWidth={2.5} fill="url(#kmGrad)" dot={{ fill: '#10B981', r: 3 }} activeDot={{ r: 5 }} />
+                <Area type="monotone" dataKey="km" name="Km di chuyển" stroke="#10B981" strokeWidth={2.5} fill="url(#kmGrad)" dot={{ fill: '#10B981', r: 3 }} activeDot={{ r: 5 }}>
+                  {showDistanceLabels && (
+                    <LabelList
+                      dataKey="km"
+                      position="top"
+                      formatter={(v: any) => {
+                        const n = Number(v) || 0;
+                        return n > 0 ? `${Math.round(n)}` : '';
+                      }}
+                      style={{ fill: '#10B981', fontSize: 9, fontWeight: 700 }}
+                      offset={6}
+                    />
+                  )}
+                </Area>
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -520,7 +618,7 @@ export default function AnalyticsPage() {
 
       {!selectedAssetId && assets.length > 1 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <div className="p-3.5 sm:p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
             <SectionHeader icon={Activity} title="So sánh đa chiều giữa các xe" sub="Radar chart — 5 chỉ số được chuẩn hóa 0–100" color="#8B5CF6" />
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -538,7 +636,7 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+          <div className="p-3.5 sm:p-5 rounded-2xl shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
             <SectionHeader icon={Wrench} title="Chi phí bảo dưỡng & nhiên liệu theo xe" sub="Tổng chi phí phân theo từng phương tiện" color="#06B6D4" />
             <div style={{ height: 280 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -561,7 +659,7 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      <div className="p-5 rounded-2xl space-y-4 shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+      <div className="p-3.5 sm:p-5 rounded-2xl space-y-4 shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
         <SectionHeader icon={Car} title="Thống kê chuyến đi" sub="Phân tích hành trình dựa trên dữ liệu ghi nhận thực tế" color="#10B981" />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[

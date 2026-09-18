@@ -214,7 +214,7 @@ export default function DtcDistributionMatrix({
 
         {/* Smart Time Scope Selector */}
         <div 
-          className="flex items-center space-x-1.5 self-stretch sm:self-auto p-1 rounded-xl border text-xs flex-wrap gap-1"
+          className="flex items-center space-x-1.5 self-stretch sm:self-auto p-1 rounded-xl border text-xs max-w-full overflow-x-auto scrollbar-none"
           style={{
             background: 'var(--bg-primary)',
             borderColor: 'var(--border-default)',
@@ -224,7 +224,7 @@ export default function DtcDistributionMatrix({
           <button
             onClick={() => setTimeScope('ALL')}
             className={
-              'px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ' +
+              'px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 shrink-0 ' +
               (timeScope === 'ALL'
                 ? 'bg-cyan-500 text-white shadow-sm'
                 : 'hover:opacity-80')
@@ -232,17 +232,18 @@ export default function DtcDistributionMatrix({
             style={timeScope !== 'ALL' ? { color: 'var(--text-secondary)' } : {}}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Tất cả các năm</span>
+            <span className="hidden xs:inline">Tất cả các năm</span>
+            <span className="xs:hidden">Tất cả</span>
           </button>
 
           {/* Individual Year Buttons */}
-          <div className="flex items-center space-x-1 pl-1 border-l" style={{ borderColor: 'var(--border-subtle)' }}>
+          <div className="flex items-center space-x-1 pl-1 border-l shrink-0" style={{ borderColor: 'var(--border-subtle)' }}>
             {availableYears.map(yr => (
               <button
                 key={yr}
                 onClick={() => setTimeScope(yr)}
                 className={
-                  'px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition ' +
+                  'px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold transition shrink-0 ' +
                   (timeScope === yr
                     ? 'bg-cyan-500 text-white shadow-sm'
                     : 'hover:opacity-80')

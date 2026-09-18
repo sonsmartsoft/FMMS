@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip as ReTooltip, Legend, PieChart, Pie, Cell, AreaChart, Area,
+  Tooltip as ReTooltip, Legend, PieChart, Pie, Cell, AreaChart, Area, Line, LabelList,
 } from 'recharts';
 
 import { getAssets } from '@/lib/services/assetService';
@@ -15,12 +15,14 @@ import { ExpenseRecord, TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
 import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOverview';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { DollarSign, CreditCard, Plus, X, TrendingDown, CheckCircle2, Clock, AlertTriangle, Edit2, Trash2, Pencil, BarChart3, PieChart as PieIcon, Filter, Calendar } from 'lucide-react';
+import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartLabelToggle';
 
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
+const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
 
 const CAT_LABELS: Record<string, string> = {
@@ -117,6 +119,7 @@ export default function FinancePage() {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [loans, setLoans] = useState<LoanRow[]>([]);
   const [payments, setPayments] = useState<LoanPaymentRow[]>([]);
+  const [showFinLabels, toggleFinLabels] = useChartLabelState('fmms_finance_chart_labels', false);
 
   const [openModal, setOpenModal] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -1141,14 +1144,14 @@ export default function FinancePage() {
             return (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {/* Stacked Area Chart with Clickable Legend */}
-                <div className="lg:col-span-2 p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+                <div className="lg:col-span-2 p-3.5 sm:p-5 rounded-2xl space-y-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div className="flex items-center space-x-2">
-                      <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                      <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 shrink-0">
                         <BarChart3 className="w-4 h-4" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-extrabold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                        <h3 className="text-sm font-extrabold flex items-center gap-2 flex-wrap" style={{ color: 'var(--text-primary)' }}>
                           <span>Biến Động Chi Phí Theo Tháng</span>
                           <span className="text-[9px] font-normal text-slate-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-full lowercase">
                             (Bấm vào chú thích để bật/tắt danh mục)
@@ -1159,12 +1162,18 @@ export default function FinancePage() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-mono text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
+                    <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap w-full sm:w-auto">
+                      <ChartLabelToggle
+                        showLabels={showFinLabels}
+                        onToggle={toggleFinLabels}
+                      />
+                      <span className="text-[10px] font-mono text-zinc-400">Đơn vị: Triệu ₫ (M)</span>
+                    </div>
                   </div>
 
-                  <div style={{ height: 260 }}>
+                  <div style={{ height: showFinLabels ? 275 : 260 }}>
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={monthlyExpensesData} margin={{ top: 10, right: 15, left: -10, bottom: 5 }}>
+                      <AreaChart data={monthlyExpensesData} margin={{ top: showFinLabels ? 24 : 10, right: 15, left: -10, bottom: 5 }}>
                         <defs>
                           <linearGradient id="finPurchase" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.75}/>
@@ -1259,6 +1268,20 @@ export default function FinancePage() {
                         <Area type="monotone" dataKey="loan" stackId="exp" name="Khoản vay & Lãi" stroke="#EC4899" fill="url(#finLoan)" strokeWidth={1.5} hide={hiddenFinKeys.includes('loan')} />
                         <Area type="monotone" dataKey="running" stackId="exp" name="Vận hành (Rửa xe, Bãi đỗ, BOT)" stroke="#F97316" fill="url(#finRunning)" strokeWidth={1.5} hide={hiddenFinKeys.includes('running')} />
                         <Area type="monotone" dataKey="other" stackId="exp" name="Chi phí khác" stroke="#64748B" fill="url(#finOther)" strokeWidth={1.5} hide={hiddenFinKeys.includes('other')} />
+                        <Line type="monotone" dataKey="total" stroke="transparent" dot={false} activeDot={false} name="Tổng cộng" legendType="none">
+                          {showFinLabels && (
+                            <LabelList
+                              dataKey="total"
+                              position="top"
+                              formatter={(v: any) => {
+                                const n = Number(v) || 0;
+                                return n > 0 ? fmtM(n) : '';
+                              }}
+                              style={{ fill: isDark ? '#38BDF8' : '#0284C7', fontSize: 10, fontWeight: 800 }}
+                              offset={6}
+                            />
+                          )}
+                        </Line>
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
