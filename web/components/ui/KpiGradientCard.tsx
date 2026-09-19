@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, LucideIcon } from 'lucide-react';
 import { useTheme } from '@/lib/theme/ThemeContext';
 
 export type KpiColorType = 'cyan' | 'emerald' | 'amber' | 'rose' | 'purple' | 'blue' | 'teal' | 'indigo';
@@ -17,7 +17,7 @@ export interface KpiCardProps {
   badgeType?: 'default' | 'success' | 'warning' | 'danger' | 'info';
   progressPercent?: number;
   colorType?: KpiColorType;
-  icon?: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }> | React.ReactNode;
+  icon?: LucideIcon | React.ComponentType<any> | React.ReactNode;
   onClick?: () => void;
   href?: string;
   trend?: {
@@ -288,12 +288,12 @@ export default function KpiGradientCard({
   const isDark = isMounted ? theme === 'dark' : true;
   const qmsTheme = getQmsTheme(colorType, isDark);
 
-  // Safe icon renderer supporting components, functions, or rendered JSX elements
+  // Safe icon renderer supporting components, functions, Lucide icons, or rendered JSX elements
   const renderIcon = () => {
     if (!icon) return null;
     if (React.isValidElement(icon)) return icon;
-    if (typeof icon === 'function') {
-      const IconComponent = icon as React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
+    if (typeof icon === 'function' || typeof icon === 'object') {
+      const IconComponent = icon as React.ElementType;
       return <IconComponent size={16} />;
     }
     return null;
