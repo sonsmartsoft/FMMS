@@ -218,7 +218,6 @@ export default function AssetDetailPage() {
     inspection_expiry_date: '',
     notes: '',
   });
-  const [hideRestDays, setHideRestDays] = useState(true);
   const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; title?: string; description?: string; actionName?: string; onConfirm?: () => void }>({ isOpen: false });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -750,6 +749,7 @@ export default function AssetDetailPage() {
   const [odoViewMode, setOdoViewMode] = useState<'daily' | 'monthly' | 'yearly'>('daily');
   const [selectedOdoYear, setSelectedOdoYear] = useState<string>('ALL');
   const [showOdoChartLabels, toggleOdoChartLabels] = useChartLabelState('fmms_asset_odo_chart_labels', true);
+  const [hideRestDays, toggleHideRestDays] = useChartLabelState('fmms_asset_hide_rest_days', true);
   const [showAssetFuelLabels, toggleAssetFuelLabels] = useChartLabelState('fmms_asset_fuel_chart_labels', false);
   const [showAssetExpLabels, toggleAssetExpLabels] = useChartLabelState('fmms_asset_exp_chart_labels', false);
   const [showTcoDonutLabels, toggleTcoDonutLabels] = useChartLabelState('fmms_asset_tco_donut_labels', false);
@@ -1294,6 +1294,36 @@ export default function AssetDetailPage() {
       }
     });
 
+    // Fill in missing calendar days between initialHandoverDate (or first event) and today
+    // so continuous tracking and 0km rest days are preserved for the user
+    const allExistingDates = Array.from(dailyMap.keys()).sort();
+    if (allExistingDates.length > 0) {
+      const minDateStr = initialHandoverDate || allExistingDates[0];
+      const maxDateStr = todayStr > allExistingDates[allExistingDates.length - 1] ? todayStr : allExistingDates[allExistingDates.length - 1];
+
+      const startD = new Date(minDateStr + 'T00:00:00');
+      const endD = new Date(maxDateStr + 'T00:00:00');
+
+      const diffDays = Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays >= 0 && diffDays <= 730) {
+        for (let cur = new Date(startD); cur <= endD; cur.setDate(cur.getDate() + 1)) {
+          const y = cur.getFullYear();
+          const m = String(cur.getMonth() + 1).padStart(2, '0');
+          const d = String(cur.getDate()).padStart(2, '0');
+          const dStr = `${y}-${m}-${d}`;
+          if (!dailyMap.has(dStr)) {
+            dailyMap.set(dStr, {
+              date: dStr,
+              minOdo: 0,
+              maxOdo: 0,
+              tripDistance: 0,
+              notes: [{ type: 'REST', text: 'Xe nghỉ / Không phát sinh di chuyển', id: `rest_${dStr}` }],
+            });
+          }
+        }
+      }
+    }
+
     const sortedDays = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
     let prevOdo = 0;
 
@@ -1380,7 +1410,7 @@ export default function AssetDetailPage() {
       const mKey = day.date.slice(0, 7);
       const mData = getOrCreateMonth(mKey);
       mData.totalKm += day.kmRun;
-      if (day.kmRun > 0 || day.notes.length > 0) mData.activeDays += 1;
+      if (day.kmRun > 0 || day.notes.some(n => n.type !== 'REST')) mData.activeDays += 1;
       mData.dayList.push(day);
     });
 
@@ -3289,17 +3319,15 @@ export default function AssetDetailPage() {
                             onToggle={toggleOdoChartLabels}
                             label="Hiện Km"
                           />
-                          <button
-                            onClick={() => setHideRestDays(p => !p)}
-                            className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 ${
-                              hideRestDays
-                                ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
-                                : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
-                            }`}
-                            title="Bấm để chuyển đổi hiển thị ngày xe nghỉ"
-                          >
-                            <span>{hideRestDays ? '✓ Ẩn ngày xe nghỉ (0 km)' : 'Hiện tất cả'}</span>
-                          </button>
+                          <ChartLabelToggle
+                            showLabels={hideRestDays}
+                            onToggle={toggleHideRestDays}
+                            labelShow="Hiện tất cả ngày"
+                            labelHide="Ẩn ngày xe nghỉ (0 km)"
+                            tooltipShow="Đang hiện tất cả các ngày. Bấm để ẩn ngày xe nghỉ 0 km"
+                            tooltipHide="Đang ẩn ngày xe nghỉ 0 km. Bấm để hiển thị tất cả các ngày"
+                            size="small"
+                          />
                           <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                             ({displayedDailyReport.length} ngày)
                           </span>
@@ -3529,7 +3557,7 @@ export default function AssetDetailPage() {
                           <ChartLabelToggle
                             showLabels={showOdoChartLabels}
                             onToggle={toggleOdoChartLabels}
-                            label="Hiện Km"
+                            label="Hiện số liệu"
                           />
                         </div>
                       </div>
@@ -3582,7 +3610,28 @@ export default function AssetDetailPage() {
                                 />
                               )}
                             </Bar>
-                            <Line yAxisId="left" type="monotone" dataKey="cost" name="Tổng chi phí" stroke="#F87171" strokeWidth={2} dot={{ fill: '#F87171', r: 3 }} strokeDasharray="4 2" />
+                            <Line yAxisId="left" type="monotone" dataKey="cost" name="Tổng chi phí" stroke="#F87171" strokeWidth={2} dot={{ fill: '#F87171', r: 3 }} strokeDasharray="4 2">
+                              {showOdoChartLabels && (
+                                <LabelList
+                                  dataKey="cost"
+                                  position="top"
+                                  formatter={(v: any) => {
+                                    const num = Number(v || 0);
+                                    if (num <= 0) return '';
+                                    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+                                    if (num >= 1_000) return `${(num / 1_000).toFixed(0)}k`;
+                                    return `${num}`;
+                                  }}
+                                  style={{
+                                    fill: isDark ? '#F87171' : '#DC2626',
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    fontFamily: 'monospace',
+                                  }}
+                                  offset={6}
+                                />
+                              )}
+                            </Line>
                           </ComposedChart>
                         </ResponsiveContainer>
                       </div>
@@ -3716,7 +3765,7 @@ export default function AssetDetailPage() {
                         <ChartLabelToggle
                           showLabels={showOdoChartLabels}
                           onToggle={toggleOdoChartLabels}
-                          label="Hiện Km"
+                          label="Hiện số liệu"
                         />
                       </div>
 
@@ -3744,7 +3793,28 @@ export default function AssetDetailPage() {
                             />
 
                             <Legend formatter={v => <span className="text-slate-700 dark:text-slate-200 text-xs font-semibold">{v}</span>} wrapperStyle={{ fontSize: 10, paddingTop: 10 }} />
-                            <Bar yAxisId="left" dataKey="cost" name="Tổng chi phí" fill="#F59E0B80" stroke="#F59E0B" strokeWidth={1} radius={[4, 4, 0, 0]} />
+                            <Bar yAxisId="left" dataKey="cost" name="Tổng chi phí" fill="#F59E0B80" stroke="#F59E0B" strokeWidth={1} radius={[4, 4, 0, 0]}>
+                              {showOdoChartLabels && (
+                                <LabelList
+                                  dataKey="cost"
+                                  position="top"
+                                  formatter={(v: any) => {
+                                    const num = Number(v || 0);
+                                    if (num <= 0) return '';
+                                    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M ₫`;
+                                    if (num >= 1_000) return `${(num / 1_000).toFixed(0)}k ₫`;
+                                    return `${num.toLocaleString('vi-VN')} ₫`;
+                                  }}
+                                  style={{
+                                    fill: isDark ? '#FBBF24' : '#D97706',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    fontFamily: 'monospace',
+                                  }}
+                                  offset={6}
+                                />
+                              )}
+                            </Bar>
                             <Bar yAxisId="right" dataKey="km" name="Km di chuyển" fill="#10B98135" stroke="#10B981" strokeWidth={1.5} radius={[4, 4, 0, 0]}>
                               {showOdoChartLabels && (
                                 <LabelList
