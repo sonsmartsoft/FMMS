@@ -459,7 +459,19 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
      - Mốc `displayOdo` cuối ngày tự động lấy theo `end_odometer` của chuyến đi muộn nhất lúc xe tắt máy hoặc mốc ODO lũy kế chính xác.
 - **Kết Quả Đạt Được:**
   - Hệ thống vận hành hoàn toàn tự động 100%, người dùng không cần gõ bất kỳ số nào.
-  - Vượt qua toàn bộ **34/34 bài kiểm tra tự động** (`qa_full_system_audit.js`), đảm bảo 0 lỗi TypeScript và an toàn tuyệt đối.
+### Đợt 23 (19/09/2026): Đồng Bộ Chuẩn Xác Mốc ODO 3.312 KM & Bổ Sung Chặng "Data Lệch Trước Khi Dùng OBD"
+- **Bối Cảnh & Vấn Đề:**
+  - Trên trang chi tiết xe Mazda 2AT (`/assets/20260308-0001-4222-8888-19b213872026`), mốc Odometer thực tế trên xe là **`3.312 km`**, trong khi thẻ thống kê mục Chuyến đi chỉ ghi nhận tổng cộng **`2.207 km`** (vênh **$1.105\text{ km}$** do giai đoạn đầu xe lăn bánh trước khi lắp thiết bị OBD/GPS chưa có đầy đủ bản ghi hành trình chi tiết).
+- **Giải Pháp Triển Khai:**
+  1. **Tạo Script Đồng Bộ SQL Toàn Diện Cho Supabase:**
+     - Tạo file [`supabase/ALIGN_ODOMETER_3312_KM_AND_ADD_PRE_OBD_GAP.sql`](file:///Users/uti/Documents/FMMS/supabase/ALIGN_ODOMETER_3312_KM_AND_ADD_PRE_OBD_GAP.sql):
+       - Tự động bổ sung bản ghi chuyến đi bù đúng $1.105\text{ km}$ với ghi chú: `Data lệch trước khi dùng OBD`.
+       - Cập nhật chỉ số `current_odometer_km` và `virtual_odometer_km` của xe Mazda 2 lên chính xác **`3.312 km`**.
+  2. **Cập Nhật Dữ Liệu Fallback & Hiển Thị UI Web:**
+     - Bổ sung bản ghi chuyến đi bù tích lũy vào `REAL_AUGUST_TRIPS` (`web/lib/data/realTripsData.ts`) với khoảng cách $1.105\text{ km}$, xuất phát lúc bàn giao xe.
+     - Cập nhật bảng chuyến đi trên Web: Hiển thị badge nổi bật màu cam `Data lệch trước khi dùng OBD` trong cột Lộ trình để người dùng theo dõi minh bạch.
+- **Kết Quả:**
+  - Tổng km các chuyến đi và mốc ODO xe được kết nối đồng bộ 100% khớp đúng mốc thực tế **`3.312 km`**.
 
 ---
 

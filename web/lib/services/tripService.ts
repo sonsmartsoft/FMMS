@@ -48,6 +48,7 @@ export function mapTripRow(row: any): TripRecord {
     end_location: row.notes ? row.notes.split('|')[1] : (row.end_address || endCoord || 'Điểm đến'),
     start_odometer: row.start_odometer != null ? Number(row.start_odometer) : undefined,
     end_odometer: row.end_odometer != null ? Number(row.end_odometer) : undefined,
+    notes: row.notes || undefined,
   };
 }
 

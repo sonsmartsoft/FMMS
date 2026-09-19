@@ -266,5 +266,19 @@ export const REAL_AUGUST_TRIPS: TripRecord[] = [
     "max_speed_kmh": 47,
     "start_location": "Điểm xuất phát",
     "end_location": "Điểm đến"
+  },
+  {
+    "id": "20260409-0000-0000-0000-000000003312",
+    "asset_id": "20260308-0001-4222-8888-19b213872026",
+    "start_time": "2026-04-09T08:00:00.000+07:00",
+    "end_time": "2026-04-09T09:00:00.000+07:00",
+    "distance_km": 1105.0,
+    "duration_seconds": 3600,
+    "average_speed_kmh": 35.0,
+    "max_speed_kmh": 55,
+    "start_location": "Hành trình tích lũy lịch sử",
+    "end_location": "Trước khi dùng OBD",
+    "start_odometer": 12.0,
+    "end_odometer": 1117.0
   }
 ];

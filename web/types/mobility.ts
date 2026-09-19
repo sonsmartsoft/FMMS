@@ -200,6 +200,7 @@ export interface TripRecord {
   end_location?: string;
   start_odometer?: number;
   end_odometer?: number;
+  notes?: string;
 }
 
 export interface MaintenanceRecord {

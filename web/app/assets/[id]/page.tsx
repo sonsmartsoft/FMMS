@@ -3902,9 +3902,16 @@ export default function AssetDetailPage() {
                           <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{trip.start_time ? new Date(trip.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                         </td>
                         <td className="px-3 py-2.5">
-                          <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                            {trip.start_location || 'Điểm xuất phát'} → {trip.end_location || 'Điểm đến'}
-                          </p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+                              {trip.start_location || 'Điểm xuất phát'} → {trip.end_location || 'Điểm đến'}
+                            </p>
+                            {trip.notes && !trip.notes.includes('|') && (
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${trip.notes.includes('OBD') ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30' : 'bg-slate-500/15 text-slate-400'}`}>
+                                {trip.notes}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 py-2.5 font-mono font-bold text-cyan-400 whitespace-nowrap">
                           {trip.distance_km != null ? `${Number(trip.distance_km).toFixed(1)} km` : '0 km'}
