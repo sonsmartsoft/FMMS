@@ -14,6 +14,8 @@ export interface TripInput {
   max_speed_kmh?: number;
   start_location?: string;
   end_location?: string;
+  start_odometer?: number;
+  end_odometer?: number;
   notes?: string;
 }
 
@@ -44,6 +46,8 @@ export function mapTripRow(row: any): TripRecord {
     max_speed_kmh: Number(row.max_speed_kmh) || 0,
     start_location: row.notes ? row.notes.split('|')[0] : (row.start_address || startCoord || 'Điểm xuất phát'),
     end_location: row.notes ? row.notes.split('|')[1] : (row.end_address || endCoord || 'Điểm đến'),
+    start_odometer: row.start_odometer != null ? Number(row.start_odometer) : undefined,
+    end_odometer: row.end_odometer != null ? Number(row.end_odometer) : undefined,
   };
 }
 
@@ -139,6 +143,8 @@ export async function createTrip(input: TripInput) {
     max_speed_kmh: input.max_speed_kmh ?? 0,
     start_location: input.start_location,
     end_location: input.end_location,
+    start_odometer: input.start_odometer,
+    end_odometer: input.end_odometer,
   };
 
   try {
@@ -157,6 +163,8 @@ export async function createTrip(input: TripInput) {
         notes: input.start_location || input.end_location
           ? `${input.start_location ?? ''}|${input.end_location ?? ''}`
           : input.notes || null,
+        start_odometer: input.start_odometer ?? null,
+        end_odometer: input.end_odometer ?? null,
         status: 'COMPLETED',
       })
       .select()
@@ -185,6 +193,8 @@ export async function updateTrip(id: string, input: Partial<TripInput>) {
     if (input.duration_seconds != null) updatePayload.duration_seconds = input.duration_seconds;
     if (input.fuel_used_liters != null) updatePayload.fuel_used_liters = input.fuel_used_liters;
     if (input.average_speed_kmh != null) updatePayload.average_speed_kmh = input.average_speed_kmh;
+    if (input.start_odometer != null) updatePayload.start_odometer = input.start_odometer;
+    if (input.end_odometer != null) updatePayload.end_odometer = input.end_odometer;
     if (input.start_location || input.end_location) {
       updatePayload.notes = `${input.start_location ?? ''}|${input.end_location ?? ''}`;
     }
@@ -204,6 +214,8 @@ export async function updateTrip(id: string, input: Partial<TripInput>) {
     if (input.average_speed_kmh != null) locals[idx].average_speed_kmh = input.average_speed_kmh;
     if (input.start_location != null) locals[idx].start_location = input.start_location;
     if (input.end_location != null) locals[idx].end_location = input.end_location;
+    if (input.start_odometer != null) locals[idx].start_odometer = input.start_odometer;
+    if (input.end_odometer != null) locals[idx].end_odometer = input.end_odometer;
     saveLocalTrips(locals);
     return locals[idx];
   }

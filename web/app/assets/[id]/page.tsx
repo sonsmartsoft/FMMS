@@ -1172,17 +1172,45 @@ export default function AssetDetailPage() {
       }
     });
 
-    // Trips
-    trips.forEach(t => {
+    // Trips: Sắp xếp theo thứ tự thời gian tăng dần để phân tích chuỗi Odometer
+    const chronologicalTrips = [...trips].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
+    let prevTripEndOdo: number | null = null;
+
+    chronologicalTrips.forEach(t => {
       const dStr = toLocalDateString(t.start_time);
+      const startOdo = t.start_odometer != null && Number(t.start_odometer) > 0 ? Number(t.start_odometer) : null;
+      const endOdo = t.end_odometer != null && Number(t.end_odometer) > 0 ? Number(t.end_odometer) : null;
+
+      // 🔍 TỰ ĐỘNG PHÁT HIỆN KHOẢNG HỞ ODO (Auto Gap Detection khi app bị sót chuyến đi)
+      if (prevTripEndOdo != null && startOdo != null && startOdo > prevTripEndOdo) {
+        const gapKm = Number((startOdo - prevTripEndOdo).toFixed(2));
+        // Nếu khoảng hở từ 0.1 km đến 500 km: đây là chuyến đi bị sót GPS / quên bật app
+        if (gapKm >= 0.1 && gapKm <= 500) {
+          events.push({
+            date: dStr,
+            odometer_km: startOdo,
+            type: 'TRIP',
+            note: `Tự động bù ODO thất lạc: +${fmt(gapKm)} km (${fmt(prevTripEndOdo)} → ${fmt(startOdo)} km)`,
+            id: `auto_gap_${t.id}`,
+            raw: { distance_km: gapKm, isAutoGap: true, odometer_km: startOdo },
+          });
+        }
+      }
+
       events.push({
         date: dStr,
-        odometer_km: 0,
+        odometer_km: endOdo || 0,
         type: 'TRIP',
-        note: `Chuyến đi: ${t.start_location || 'Xuất phát'} → ${t.end_location || 'Điểm đến'} (${t.distance_km} km)`,
+        note: `Chuyến đi: ${t.start_location || 'Xuất phát'} → ${t.end_location || 'Điểm đến'} (${t.distance_km} km)${endOdo ? ` [Mốc ODO: ${fmt(endOdo)} km]` : ''}`,
         id: t.id,
         raw: t,
       });
+
+      if (endOdo != null) {
+        prevTripEndOdo = endOdo;
+      } else if (startOdo != null && Number(t.distance_km) > 0) {
+        prevTripEndOdo = Number((startOdo + Number(t.distance_km)).toFixed(2));
+      }
     });
 
     // Daily Summaries (only for days without individual trips to prevent double-counting)
@@ -1244,7 +1272,7 @@ export default function AssetDetailPage() {
       if (!dailyMap.has(ev.date)) {
         dailyMap.set(ev.date, {
           date: ev.date,
-          minOdo: ev.odometer_km || 0,
+          minOdo: ev.odometer_km || (ev.raw?.start_odometer ? Number(ev.raw.start_odometer) : 0),
           maxOdo: ev.odometer_km || 0,
           tripDistance: ev.type === 'TRIP' ? (Number(ev.raw?.distance_km) || 0) : 0,
           notes: [{ type: ev.type, text: ev.note, id: ev.id, raw: ev.raw }],
@@ -1254,6 +1282,10 @@ export default function AssetDetailPage() {
         if (ev.odometer_km > 0) {
           if (cur.minOdo === 0 || ev.odometer_km < cur.minOdo) cur.minOdo = ev.odometer_km;
           if (ev.odometer_km > cur.maxOdo) cur.maxOdo = ev.odometer_km;
+        }
+        if (ev.raw?.start_odometer && Number(ev.raw.start_odometer) > 0) {
+          const sOdo = Number(ev.raw.start_odometer);
+          if (cur.minOdo === 0 || sOdo < cur.minOdo) cur.minOdo = sOdo;
         }
         if (ev.type === 'TRIP') {
           cur.tripDistance += (Number(ev.raw?.distance_km) || 0);
@@ -1267,38 +1299,35 @@ export default function AssetDetailPage() {
 
     const dailyReport = sortedDays.map((day) => {
       let kmRun = 0;
-      // 1. Determine kmRun for the day
-      // RULE: Trips (GPS/OBD recorded) are the authoritative km source.
-      // ODO log events (fuel fill-up, maintenance, manual odometer check) are ONLY used to
-      // advance prevOdo tracking. They must NOT generate kmRun by themselves when trip data
-      // already exists — otherwise a single ODO log at 3066km after a baseline of 12km would
-      // add 3054km on top of actual trip distances, inflating total by 2×.
-      // Exception: if a day has ONLY ODO-type events (no trips, no summaries), and the delta
-      // from prevOdo is small enough to be plausible daily driving (≤ 500 km), we accept it.
       const hasOdoOnlyDay = day.tripDistance === 0 && day.notes.every(n => n.type !== 'TRIP');
-      if (day.tripDistance > 0) {
-        kmRun = day.tripDistance;
-      } else if (hasOdoOnlyDay && day.maxOdo > 0 && prevOdo > 0 && day.maxOdo > prevOdo) {
-        const delta = day.maxOdo - prevOdo;
-        // Only trust ODO-delta if it looks like real daily driving (≤ 500 km per log entry)
-        // Larger deltas just mean the user hadn't recorded an ODO log in a while, not km driven today.
-        if (delta <= 500) {
-          kmRun = delta;
+
+      // 1. TÍNH QUÃNG ĐƯỜNG TRONG NGÀY (kmRun) THEO NGUYÊN TẮC: ODO LÀ CHÂN LÝ TỐI THƯỢNG
+      // Nếu ngày có mốc ODO thực tế (day.maxOdo > 0) và mốc ODO trước đó (prevOdo > 0):
+      if (day.maxOdo > 0 && prevOdo > 0 && day.maxOdo > prevOdo) {
+        const odoDelta = Number((day.maxOdo - prevOdo).toFixed(2));
+        if (odoDelta <= 500) {
+          // Tự động đối soát: Nếu xe chạy thực tế theo ODO lớn hơn tổng các chuyến GPS bắt được
+          // (do app bị sót chuyến), kmRun tự động lấy theo odoDelta để bù chính xác 100%
+          kmRun = Math.max(day.tripDistance, odoDelta);
+        } else {
+          // Bước nhảy ODO quá lớn (> 500 km do lâu ngày mới chốt ODO), ưu tiên quãng đường trip nếu có
+          kmRun = day.tripDistance > 0 ? day.tripDistance : 0;
         }
-        // If delta > 500 km, the ODO log just brought prevOdo up-to-date; no kmRun credited.
+      } else if (day.tripDistance > 0) {
+        // Ngày chỉ có chuyến GPS lăn bánh (chưa có mốc ODO chốt từ OBD/xăng)
+        kmRun = day.tripDistance;
       } else if (hasOdoOnlyDay && day.maxOdo > 0 && day.minOdo > 0 && day.maxOdo > day.minOdo) {
-        const delta = day.maxOdo - day.minOdo;
+        const delta = Number((day.maxOdo - day.minOdo).toFixed(2));
         if (delta <= 500) {
           kmRun = delta;
         }
       }
 
-      // 2. Always advance prevOdo to the highest known ODO reading (regardless of whether kmRun was credited)
+      // 2. Luôn đẩy mốc prevOdo tiến bước chính xác
       if (day.maxOdo > prevOdo) {
         prevOdo = day.maxOdo;
-      } else if (day.tripDistance > 0 && prevOdo + day.tripDistance > prevOdo) {
-        prevOdo += day.tripDistance;
-        // If an ODO log on the same day is higher (e.g. maintenance record), sync up
+      } else if (kmRun > 0 && prevOdo + kmRun > prevOdo) {
+        prevOdo = Number((prevOdo + kmRun).toFixed(2));
         if (day.maxOdo > prevOdo) prevOdo = day.maxOdo;
       }
 
@@ -1310,9 +1339,7 @@ export default function AssetDetailPage() {
         ...day,
         dayOfWeek,
         kmRun: Number(kmRun.toFixed(2)),
-        // Use the running prevOdo (accumulated from trips + ODO logs).
-        // Do NOT clamp to asset.current_odometer_km — that DB value may be stale
-        // (e.g., 2651 km) while accumulated trips push real ODO higher (e.g., 2858 km).
+        // Mốc ODO cuối ngày hiển thị: Luôn là mốc ODO thực tế cao nhất của ngày hoặc mốc lũy kế chính xác
         displayOdo: Number(Math.max(day.maxOdo || 0, prevOdo).toFixed(1)),
       };
     }).reverse();
@@ -3414,10 +3441,10 @@ export default function AssetDetailPage() {
                                   {day.notes.map((n, nIdx) => (
                                     <div key={nIdx} className="flex items-center gap-1.5 text-xs flex-wrap">
                                       <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={{
-                                        background: n.type === 'FUEL' ? 'rgba(245,158,11,0.15)' : n.type === 'MAINTENANCE' ? 'rgba(56,189,248,0.15)' : n.type === 'TRIP' ? 'rgba(168,85,247,0.15)' : 'rgba(52,211,153,0.15)',
-                                        color: n.type === 'FUEL' ? 'var(--status-amber)' : n.type === 'MAINTENANCE' ? 'var(--accent-cyan)' : n.type === 'TRIP' ? '#C084FC' : 'var(--status-green)',
+                                        background: n.raw?.isAutoGap ? 'rgba(99,102,241,0.18)' : n.type === 'FUEL' ? 'rgba(245,158,11,0.15)' : n.type === 'MAINTENANCE' ? 'rgba(56,189,248,0.15)' : n.type === 'TRIP' ? 'rgba(168,85,247,0.15)' : 'rgba(52,211,153,0.15)',
+                                        color: n.raw?.isAutoGap ? '#818CF8' : n.type === 'FUEL' ? 'var(--status-amber)' : n.type === 'MAINTENANCE' ? 'var(--accent-cyan)' : n.type === 'TRIP' ? '#C084FC' : 'var(--status-green)',
                                       }}>
-                                        {n.type === 'FUEL' ? '⛽ Xăng' : n.type === 'MAINTENANCE' ? '🔧 Bảo dưỡng' : n.type === 'TRIP' ? '📍 Chuyến đi' : '🚗 ODO'}
+                                        {n.raw?.isAutoGap ? '🔄 Bù ODO' : n.type === 'FUEL' ? '⛽ Xăng' : n.type === 'MAINTENANCE' ? '🔧 Bảo dưỡng' : n.type === 'TRIP' ? '📍 Chuyến đi' : '🚗 ODO'}
                                       </span>
                                       <span style={{ color: 'var(--text-secondary)' }}>{n.text}</span>
                                     </div>

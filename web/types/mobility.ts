@@ -198,6 +198,8 @@ export interface TripRecord {
   max_speed_kmh: number;
   start_location?: string;
   end_location?: string;
+  start_odometer?: number;
+  end_odometer?: number;
 }
 
 export interface MaintenanceRecord {

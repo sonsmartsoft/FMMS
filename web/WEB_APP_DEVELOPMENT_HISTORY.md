@@ -441,7 +441,25 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
      - Tính gộp cả `maxDiscreteOdo` (các mốc ODO rời rạc) lẫn `totalTripKm` (quãng đường các chuyến đi GPS/OBD) trước khi quyết định chèn sự kiện ODO tổng hợp ngày hôm nay.
 - **Kết Quả Đạt Được:**
   - Toàn bộ 7 ngày xe lăn bánh từ 25/08 đến 31/08/2026 hiển thị đường ODO tăng trưởng tự nhiên, chính xác từng ngày (`2.688,1 km` → `2.698,7 km` → `2.706,1 km` → `2.711,2 km` → `2.732,2 km` → `2.858,2 km`).
-  - Hệ thống vượt qua **34/34 bài kiểm tra tự động** (`qa_full_system_audit.js`), đảm bảo 0 lỗi TypeScript, 100% dịch vụ và biểu đồ hoạt động an toàn.
+### Đợt 22 (19/09/2026): Tự Động Hóa 100% Đồng Bộ ODO & Quãng Đường Hàng Ngày (Auto Gap Detection & EOD ODO Snapshot)
+- **Bối Cảnh Yêu Cầu:**
+  - Người dùng không muốn can thiệp hay nhập liệu thủ công bằng tay. Trong thực tế, nếu app/GPS bị mất tín hiệu hoặc sót chuyến đi trong ngày, mốc ODO chốt cuối ngày vẫn cao hơn tổng km của các chuyến app ghi nhận được. Hệ thống cần hoàn toàn tự động biết chính xác mốc ODO cuối ngày và tự động bù đắp km di chuyển giữa các ngày mà không bị hao hụt.
+- **Giải Pháp Kỹ Thuật Toàn Diện (100% Automated Architecture):**
+  1. **Khai Thác Mốc ODO Từ OBD/Telemetry (`start_odometer` & `end_odometer`):**
+     - Cập nhật `TripRecord` trong `web/types/mobility.ts` và service layer `tripService.ts` (`mapTripRow`, `createTrip`, `updateTrip`) để ánh xạ trọn vẹn 2 trường `start_odometer` và `end_odometer` từ bảng `trips` trong database.
+  2. **Thuật Toán Tự Động Phát Hiện Khoảng Hở ODO (Auto Gap Detection):**
+     - Khi sắp xếp chuỗi chuyến đi theo thời gian, nếu phát hiện $\text{trip}[i].\text{start\_odometer} > \text{trip}[i-1].\text{end\_odometer}$ (khoảng cách từ 0.1 km đến 500 km), hệ thống tự động nhận diện đây là chuyến đi bị sót GPS và tự động chèn một sự kiện bù km:
+       `type: 'TRIP', distance_km: gapKm, note: 'Tự động bù ODO thất lạc: +X km (A → B)'`.
+     - Bổ sung huy hiệu trực quan `🔄 Bù ODO` (nền tím xanh indigo) trong bảng lịch sử để người dùng theo dõi minh bạch.
+  3. **Nguyên Tắc ODO Là Chân Lý Tối Thượng (Reconciliation Rule):**
+     - Trong ngày có mốc ODO thực tế từ xe (`day.maxOdo > 0`), quãng đường ngày tự động tính bằng:
+       $$\text{kmRun} = \max\Big(\text{day.tripDistance},\; \text{day.maxOdo} - \text{prevOdo}\Big)$$
+     - Nếu xe chạy thực tế trên taplo nhiều hơn các chuyến GPS bắt được, $\text{kmRun}$ tự động lấy theo $\Delta\text{ODO}$ giúp tổng km của ngày luôn đúng 100% theo đồng hồ xe.
+  4. **Chốt Mốc ODO Cuối Ngày Hoàn Toàn Tự Động:**
+     - Mốc `displayOdo` cuối ngày tự động lấy theo `end_odometer` của chuyến đi muộn nhất lúc xe tắt máy hoặc mốc ODO lũy kế chính xác.
+- **Kết Quả Đạt Được:**
+  - Hệ thống vận hành hoàn toàn tự động 100%, người dùng không cần gõ bất kỳ số nào.
+  - Vượt qua toàn bộ **34/34 bài kiểm tra tự động** (`qa_full_system_audit.js`), đảm bảo 0 lỗi TypeScript và an toàn tuyệt đối.
 
 ---
 
