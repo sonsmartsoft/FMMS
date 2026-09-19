@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
-import { X, Send, Sparkles, Bot, User, CheckCircle2, Settings, Trash2, Maximize2, RotateCcw, ArrowUpRight, MessageSquareText, Layers, ShieldCheck } from 'lucide-react';
+import { X, Send, Sparkles, Bot, User, CheckCircle2, Settings, Trash2, Maximize2, RotateCcw, ArrowUpRight, MessageSquareText, Layers, ShieldCheck, Copy, Check } from 'lucide-react';
 import Link from 'next/link';
 import { MODERN_AI_PROVIDERS, getActiveAISettings } from '@/lib/services/aiConfig';
 import { useAIChat } from '@/lib/hooks/useAIChat';
@@ -66,9 +66,19 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const [activeProvider, setActiveProvider] = useState('gemini');
   const [selectedCategory, setSelectedCategory] = useState<'AUTO' | 'ALL' | 'FINANCE' | 'FUEL' | 'MAINTENANCE'>('AUTO');
   const [shuffleIndex, setShuffleIndex] = useState(0);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const { messages, loading, sendMessage, clearHistory } = useAIChat();
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleCopy = (text: string, id: string) => {
+    const clean = text.replace(/```(?:fmms_action|json:action|action)[\s\S]*?```/gi, '').trim();
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(clean);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -326,9 +336,30 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
                 <MarkdownMessage content={m.text} isUser={m.sender === 'user'} />
               </div>
 
-              {m.providerUsed && (
-                <p className="text-[9px] font-mono text-right pt-0.5 opacity-60">⚡ {m.providerUsed}</p>
-              )}
+              <div className={`flex items-center gap-2 pt-0.5 px-1 ${m.sender === 'user' ? 'justify-end' : 'justify-between'}`}>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(m.text, m.id)}
+                  className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-cyan-400 transition-colors py-0.5 px-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                  title="Sao chép toàn bộ tin nhắn"
+                >
+                  {copiedId === m.id ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      <span className="text-emerald-500 font-medium">Đã sao chép</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 opacity-70" />
+                      <span>Sao chép</span>
+                    </>
+                  )}
+                </button>
+
+                {m.providerUsed && (
+                  <p className="text-[9px] font-mono opacity-60">⚡ {m.providerUsed}</p>
+                )}
+              </div>
 
               {m.toolCall && (
                 <div

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { FMMSActionCard, ActionPayload } from './FMMSActionCard';
 
 interface MarkdownMessageProps {
   content: string;
@@ -12,7 +13,22 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, isUse
     return <p className="whitespace-pre-wrap font-medium">{content}</p>;
   }
 
-  const lines = content.split('\n');
+  // 1. Trích xuất Action Payload (nếu có) để render thẻ tương tác
+  let actionPayload: ActionPayload | null = null;
+  let cleanContent = content;
+
+  const actionMatch = content.match(/```(?:fmms_action|json:action|action)\s*([\s\S]*?)\s*```/i);
+  if (actionMatch) {
+    try {
+      actionPayload = JSON.parse(actionMatch[1].trim());
+      // Lọc bỏ block code JSON thô để người dùng không phải nhìn thấy code
+      cleanContent = content.replace(actionMatch[0], '').trim();
+    } catch (e) {
+      console.warn('[MarkdownMessage] Failed to parse action block:', e);
+    }
+  }
+
+  const lines = cleanContent.split('\n');
   const elements: React.ReactNode[] = [];
   let tableBuffer: string[] = [];
 
@@ -149,5 +165,10 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({ content, isUse
     elements.push(renderTable(tableBuffer, lines.length));
   }
 
-  return <div className="space-y-1">{elements}</div>;
+  return (
+    <div className="space-y-1">
+      {elements}
+      {actionPayload && <FMMSActionCard payload={actionPayload} />}
+    </div>
+  );
 };

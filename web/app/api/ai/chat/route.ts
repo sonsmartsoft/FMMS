@@ -17,6 +17,158 @@ QUY TẮC TRÌNH BÀY VÀ ĐỊNH DẠNG (BẮT BUỘC):
    - Tiếng Việt chuẩn mực, thông minh, ân cần, xưng "Tôi" và gọi người dùng là "Bạn".
    - Luôn dựa trên số liệu thực tế được cung cấp trong hệ thống, không tự bịa số liệu. Nếu có câu hỏi về kỳ vay, bảo dưỡng, chi phí, hãy tra cứu trực tiếp trong dữ liệu hệ thống bên dưới để giải đáp chi tiết nhất.`;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AI ACTION ENGINE RULES — LUÔN GHÉP VÀO CUỐI MỌI SYSTEM PROMPT
+// Không bao giờ bị Persona override. Đây là lớp "phản xạ" ghi DB bắt buộc.
+// ─────────────────────────────────────────────────────────────────────────────
+const ACTION_ENGINE_RULES = `
+
+--- [AI ACTION ENGINE - HỆ THỐNG GHI SỔ TỰ ĐỘNG - BẮT BUỘC LUÔN LUÔN ÁP DỤNG] ---
+Khi người dùng thông báo vừa phát sinh một giao dịch thực tế (đổ xăng, bảo dưỡng xe, sửa chữa, rửa xe, gửi xe, qua cầu đường, mua phụ tùng, hay bất kỳ khoản chi tiêu nào liên quan đến xe...), bạn BẮT BUỘC phải làm 2 việc sau:
+1. Trả lời phân tích ngắn gọn như thường (xác nhận thông số, tính toán nếu cần).
+2. Đính kèm NGAY Ở CUỐI TIN NHẮN một khối JSON theo cú pháp sau để hệ thống tự render thẻ xác nhận 1-click ghi vào database:
+
+\`\`\`fmms_action
+{
+  "action_type": "LOG_EXPENSE",
+  "title": "Xác nhận ghi nhận chi phí",
+  "data": {
+    "asset_id": "20260308-0001-4222-8888-19b213872026",
+    "date": "NGÀY_THỰC_TẾ_YYYY-MM-DD",
+    "category": "MAINTENANCE",
+    "amount": 60000,
+    "vendor": "Tiệm rửa xe",
+    "description": "Rửa xe"
+  }
+}
+\`\`\`
+
+QUY TẮC CHỌN action_type:
+- "LOG_FUEL": đổ xăng/dầu. data gồm: asset_id, date, total_cost, price_per_liter, liters (=total_cost/price_per_liter, làm tròn 2 chữ số), station, odometer_km (nếu biết).
+- "LOG_MAINTENANCE": bảo dưỡng định kỳ, sửa chữa, thay phụ tùng lớn. data gồm: asset_id, date, maintenance_type, cost, vendor, odometer_km (nếu biết), notes.
+- "LOG_EXPENSE": mọi khoản chi khác (rửa xe, gửi xe, phí cầu đường, phụ kiện nhỏ...). data gồm: asset_id, date, category ("MAINTENANCE"/"FUEL"/"INSURANCE"/"TAX"/"PARKING"/"TOLL"/"OTHER"), amount, vendor (nếu biết), description.
+
+QUY TẮC XỬ LÝ NGÀY:
+- Nếu người dùng nói "hôm nay" → dùng ngày hiện tại theo định dạng YYYY-MM-DD.
+- Nếu người dùng nói "hôm qua" hay "sáng nay" → tính tương đối và điền ngày phù hợp.
+- KHÔNG ĐƯỢC để nguyên chuỗi "NGÀY_THỰC_TẾ_YYYY-MM-DD" trong JSON output, phải thay bằng ngày thật.`;
+
+function parseMoney(text: string): number | null {
+  const kMatch = text.match(/(\d+(?:[.,]\d+)?)\s*k\b/i);
+  if (kMatch) return Math.round(parseFloat(kMatch[1].replace(',', '.')) * 1000);
+
+  const trieuMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(?:tr|triệu|trieu)\b/i);
+  if (trieuMatch) return Math.round(parseFloat(trieuMatch[1].replace(',', '.')) * 1000000);
+
+  const numMatch = text.match(/(\d{1,3}(?:[.,]\d{3})+)/);
+  if (numMatch) return parseInt(numMatch[1].replace(/[.,]/g, ''), 10);
+
+  const rawNumMatch = text.match(/\b(\d{4,9})\b/);
+  if (rawNumMatch) return parseInt(rawNumMatch[1], 10);
+
+  return null;
+}
+
+function ensureActionBlock(reply: string, prompt: string, todayIso: string): string {
+  if (!reply) return reply;
+  if (/```(?:fmms_action|json:action|action)/i.test(reply)) {
+    return reply;
+  }
+
+  const combined = `${prompt} ${reply}`.toLowerCase();
+
+  // 1. Nhận diện đổ xăng
+  if (/đổ\s*xăng|đổ\s*nhiên\s*liệu|tiền\s*xăng|bình\s*xăng/i.test(combined)) {
+    const cost = parseMoney(prompt) || parseMoney(reply);
+    const priceMatch = combined.match(/(?:giá|đơn giá)\s*[:=]?\s*(\d{4,6})/i);
+    const price = priceMatch ? parseInt(priceMatch[1], 10) : 24000;
+    if (cost && cost > 10000) {
+      const liters = +(cost / price).toFixed(2);
+      return reply + `\n\n\`\`\`fmms_action
+{
+  "action_type": "LOG_FUEL",
+  "title": "Xác nhận ghi nhận đổ xăng",
+  "data": {
+    "asset_id": "20260308-0001-4222-8888-19b213872026",
+    "date": "${todayIso}",
+    "total_cost": ${cost},
+    "price_per_liter": ${price},
+    "liters": ${liters},
+    "station": "Cây xăng"
+  }
+}
+\`\`\``;
+    }
+  }
+
+  // 2. Nhận diện rửa xe
+  if (/rửa\s*xe|rua\s*xe/i.test(combined)) {
+    const cost = parseMoney(prompt) || parseMoney(reply) || 60000;
+    return reply + `\n\n\`\`\`fmms_action
+{
+  "action_type": "LOG_EXPENSE",
+  "title": "Xác nhận ghi nhận chi phí rửa xe",
+  "data": {
+    "asset_id": "20260308-0001-4222-8888-19b213872026",
+    "date": "${todayIso}",
+    "category": "Running",
+    "subcategory": "Car Wash",
+    "amount": ${cost},
+    "total_cost": ${cost},
+    "description": "Rửa xe chăm sóc nội ngoại thất"
+  }
+}
+\`\`\``;
+  }
+
+  // 3. Nhận diện bảo dưỡng / thay dầu
+  if (/thay\s*dầu|thay\s*nhớt|bảo\s*dưỡng/i.test(combined)) {
+    const cost = parseMoney(prompt) || parseMoney(reply) || 500000;
+    return reply + `\n\n\`\`\`fmms_action
+{
+  "action_type": "LOG_MAINTENANCE",
+  "title": "Xác nhận ghi nhận bảo dưỡng",
+  "data": {
+    "asset_id": "20260308-0001-4222-8888-19b213872026",
+    "date": "${todayIso}",
+    "maintenance_type": "Bảo dưỡng thay dầu định kỳ",
+    "cost": ${cost},
+    "total_cost": ${cost},
+    "vendor": "Gara sửa chữa",
+    "notes": "Thay dầu máy và bảo dưỡng định kỳ"
+  }
+}
+\`\`\``;
+  }
+
+  // 4. Nhận diện gửi xe / phí cầu đường
+  if (/gửi\s*xe|đỗ\s*xe|vé\s*cầu|vetc|epass/i.test(combined)) {
+    const cost = parseMoney(prompt) || parseMoney(reply);
+    if (cost && cost > 0) {
+      const isParking = /gửi|đỗ/i.test(combined);
+      return reply + `\n\n\`\`\`fmms_action
+{
+  "action_type": "LOG_EXPENSE",
+  "title": "Xác nhận ghi nhận chi phí ${isParking ? 'gửi xe' : 'cầu đường'}",
+  "data": {
+    "asset_id": "20260308-0001-4222-8888-19b213872026",
+    "date": "${todayIso}",
+    "category": "Running",
+    "subcategory": "${isParking ? 'Parking' : 'Epass Fee'}",
+    "amount": ${cost},
+    "total_cost": ${cost},
+    "description": "${isParking ? 'Chi phí gửi xe' : 'Phí cầu đường VETC/ePass'}"
+  }
+}
+\`\`\``;
+    }
+  }
+
+  return reply;
+}
+
+
+
 async function buildContext(supabase: any, assetId?: string): Promise<string> {
   try {
     let assetQuery = supabase.from('assets').select('*');
@@ -308,8 +460,9 @@ export async function POST(req: NextRequest) {
       historyText = `\n[LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]:\n` + history.map((h: any) => `${h.role === 'user' ? 'Người dùng' : 'AI Cố vấn'}: ${h.text}`).join('\n\n') + '\n\n';
     }
 
-    const activeSystemPrompt = userCustomPrompt || DEFAULT_SYSTEM_PROMPT;
-    const fullPrompt = `[HỆ THỐNG VAI TRÒ & QUY TẮC PHÂN TÍCH]:\n${activeSystemPrompt}\n\n${contextText}\n${historyText}[CÂU HỎI HIỆN TẠI CỦA NGƯỜI DÙNG]:\n${prompt}`;
+    const isTx = /đổ\s*xăng|xăng|rửa\s*xe|rua\s*xe|thay\s*dầu|thay\s*nhớt|bảo\s*dưỡng|gửi\s*xe|vé\s*cầu|chi\s*phí|\d+k|\d+\s*nghìn|\d+\s*triệu/i.test(prompt);
+    const tailNote = isTx ? `\n\n[LƯU Ý BẮT BUỘC]: Người dùng đang thông báo về một giao dịch/chi phí phát sinh ("${prompt}"). Sau câu trả lời phân tích, ở DÒNG CUỐI CÙNG bạn BẮT BUỘC phải đính kèm khối mã \`\`\`fmms_action { ... } \`\`\` theo đúng hướng dẫn để hệ thống hiển thị nút bấm lưu vào Database cho người dùng.` : '';
+    const fullPrompt = `[HỆ THỐNG VAI TRÒ & QUY TẮC PHÂN TÍCH]:\n${activeSystemPrompt}\n\n${contextText}\n${historyText}[CÂU HỎI HIỆN TẠI CỦA NGƯỜI DÙNG]:\n${prompt}${tailNote}`;
 
     // ─────────────────────────────────────────────────────────────
     // 1. GOOGLE GEMINI
@@ -343,8 +496,9 @@ export async function POST(req: NextRequest) {
         }
 
         if (result.ok && result.text) {
+          const finalReply = ensureActionBlock(result.text, prompt, todayIso);
           return NextResponse.json({
-            reply: result.text,
+            reply: finalReply,
             providerUsed: `Google Gemini (${activeModel})`,
             hasRealData: !!contextText,
             timestamp: new Date().toISOString(),
@@ -399,8 +553,9 @@ export async function POST(req: NextRequest) {
         if (res.ok) {
           const data = await res.json();
           const reply = data.content?.[0]?.text || 'Claude không phản hồi.';
+          const finalReply = ensureActionBlock(reply, prompt, todayIso);
           return NextResponse.json({
-            reply,
+            reply: finalReply,
             providerUsed: `Anthropic Claude (${activeModel})`,
             hasRealData: !!contextText,
             timestamp: new Date().toISOString(),
@@ -473,8 +628,9 @@ export async function POST(req: NextRequest) {
       if (res.ok) {
         const data = await res.json();
         const reply = data.choices?.[0]?.message?.content || 'AI không trả lời được.';
+        const finalReply = ensureActionBlock(reply, prompt, todayIso);
         return NextResponse.json({
-          reply,
+          reply: finalReply,
           providerUsed: `${provider.toUpperCase()} (${activeModel})`,
           hasRealData: !!contextText,
           timestamp: new Date().toISOString(),

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, Send, Bot, User, Car, DollarSign, Wrench, BarChart3, Settings, Trash2, RotateCcw } from 'lucide-react';
+import { Sparkles, Send, Bot, User, Car, DollarSign, Wrench, BarChart3, Settings, Trash2, RotateCcw, Copy, Check } from 'lucide-react';
 import Link from 'next/link';
 import { useAIChat } from '@/lib/hooks/useAIChat';
 import { MarkdownMessage } from '@/components/ai/MarkdownMessage';
@@ -16,7 +16,17 @@ const QUICK_PROMPTS = [
 export default function AiCenterPage() {
   const { messages, loading, sendMessage, clearHistory } = useAIChat();
   const [input, setInput] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const handleCopy = (text: string, id: string) => {
+    const clean = text.replace(/```(?:fmms_action|json:action|action)[\s\S]*?```/gi, '').trim();
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(clean);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }
+  };
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -91,9 +101,32 @@ export default function AiCenterPage() {
                 ? { background: 'var(--accent-cyan)', color: 'white' }
                 : { background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
               <MarkdownMessage content={msg.text} isUser={msg.sender === 'user'} />
-              {msg.providerUsed && (
-                <p className="text-[9px] font-mono text-right pt-2 opacity-50">⚡ {msg.providerUsed}</p>
-              )}
+              <div className={`flex items-center gap-2 pt-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-between'}`}>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(msg.text, msg.id)}
+                  className={`flex items-center gap-1 text-[10px] transition-colors py-0.5 px-1.5 rounded-lg ${
+                    msg.sender === 'user' ? 'text-white/70 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:text-cyan-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                  title="Sao chép tin nhắn"
+                >
+                  {copiedId === msg.id ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      <span className="text-emerald-500 font-medium">Đã sao chép</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 opacity-70" />
+                      <span>Sao chép</span>
+                    </>
+                  )}
+                </button>
+
+                {msg.providerUsed && (
+                  <p className="text-[9px] font-mono opacity-50">⚡ {msg.providerUsed}</p>
+                )}
+              </div>
             </div>
           </div>
         ))}
