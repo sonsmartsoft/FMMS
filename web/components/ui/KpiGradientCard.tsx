@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 import { useTheme } from '@/lib/theme/ThemeContext';
 
 export type KpiColorType = 'cyan' | 'emerald' | 'amber' | 'rose' | 'purple' | 'blue' | 'teal' | 'indigo';
@@ -17,7 +17,7 @@ export interface KpiCardProps {
   badgeType?: 'default' | 'success' | 'warning' | 'danger' | 'info';
   progressPercent?: number;
   colorType?: KpiColorType;
-  icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }> | React.ReactNode;
+  icon?: React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }> | React.ReactNode;
   onClick?: () => void;
   href?: string;
   trend?: {
@@ -30,126 +30,235 @@ export interface KpiCardProps {
   valueColor?: string;
 }
 
-interface ColorConfig {
-  hex: string;
-  rgb: string;
-  textAccent: string;
-  iconBgLight: string;
-  iconBgDark: string;
-  borderLight: string;
-  borderDark: string;
+export interface QmsThemeTokens {
+  border: string;
   borderHover: string;
+  cornerGlow: string;
+  cornerGlowHover: string;
+  accent: string;
+  cardBg: string;
+  cardBgHover: string;
   badgeBg: string;
   badgeText: string;
-  barGradient: string;
+  badgeBorder: string;
+  iconBg: string;
+  iconBgHover: string;
+  progressBar: string;
 }
 
-const COLOR_MAP: Record<KpiColorType, ColorConfig> = {
-  cyan: {
-    hex: '#0EA5E9',
-    rgb: '14, 165, 233',
-    textAccent: 'text-sky-600 dark:text-sky-400',
-    iconBgLight: 'rgba(14, 165, 233, 0.12)',
-    iconBgDark: 'rgba(56, 189, 248, 0.16)',
-    borderLight: 'rgba(14, 165, 233, 0.22)',
-    borderDark: 'rgba(56, 189, 248, 0.25)',
-    borderHover: '#0EA5E9',
-    badgeBg: 'bg-sky-50 dark:bg-sky-950/40 border-sky-200 dark:border-sky-800',
-    badgeText: 'text-sky-700 dark:text-sky-300',
-    barGradient: 'from-sky-400 to-cyan-500',
-  },
-  emerald: {
-    hex: '#10B981',
-    rgb: '16, 185, 129',
-    textAccent: 'text-emerald-600 dark:text-emerald-400',
-    iconBgLight: 'rgba(16, 185, 129, 0.12)',
-    iconBgDark: 'rgba(52, 211, 153, 0.16)',
-    borderLight: 'rgba(16, 185, 129, 0.22)',
-    borderDark: 'rgba(52, 211, 153, 0.25)',
-    borderHover: '#10B981',
-    badgeBg: 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800',
-    badgeText: 'text-emerald-700 dark:text-emerald-300',
-    barGradient: 'from-emerald-400 to-teal-500',
-  },
-  amber: {
-    hex: '#F59E0B',
-    rgb: '245, 158, 11',
-    textAccent: 'text-amber-600 dark:text-amber-400',
-    iconBgLight: 'rgba(245, 158, 11, 0.12)',
-    iconBgDark: 'rgba(251, 191, 36, 0.16)',
-    borderLight: 'rgba(245, 158, 11, 0.22)',
-    borderDark: 'rgba(251, 191, 36, 0.25)',
-    borderHover: '#F59E0B',
-    badgeBg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800',
-    badgeText: 'text-amber-700 dark:text-amber-300',
-    barGradient: 'from-amber-400 to-orange-500',
-  },
-  rose: {
-    hex: '#F43F5E',
-    rgb: '244, 63, 94',
-    textAccent: 'text-rose-600 dark:text-rose-400',
-    iconBgLight: 'rgba(244, 63, 94, 0.12)',
-    iconBgDark: 'rgba(251, 113, 133, 0.16)',
-    borderLight: 'rgba(244, 63, 94, 0.22)',
-    borderDark: 'rgba(251, 113, 133, 0.25)',
-    borderHover: '#F43F5E',
-    badgeBg: 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-800',
-    badgeText: 'text-rose-700 dark:text-rose-300',
-    barGradient: 'from-rose-400 to-pink-600',
-  },
-  purple: {
-    hex: '#8B5CF6',
-    rgb: '139, 92, 246',
-    textAccent: 'text-purple-600 dark:text-purple-400',
-    iconBgLight: 'rgba(139, 92, 246, 0.12)',
-    iconBgDark: 'rgba(167, 139, 250, 0.16)',
-    borderLight: 'rgba(139, 92, 246, 0.22)',
-    borderDark: 'rgba(167, 139, 250, 0.25)',
-    borderHover: '#8B5CF6',
-    badgeBg: 'bg-purple-50 dark:bg-purple-950/40 border-purple-200 dark:border-purple-800',
-    badgeText: 'text-purple-700 dark:text-purple-300',
-    barGradient: 'from-purple-400 to-indigo-600',
-  },
-  blue: {
-    hex: '#3B82F6',
-    rgb: '59, 130, 246',
-    textAccent: 'text-blue-600 dark:text-blue-400',
-    iconBgLight: 'rgba(59, 130, 246, 0.12)',
-    iconBgDark: 'rgba(96, 165, 250, 0.16)',
-    borderLight: 'rgba(59, 130, 246, 0.22)',
-    borderDark: 'rgba(96, 165, 250, 0.25)',
-    borderHover: '#3B82F6',
-    badgeBg: 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',
-    badgeText: 'text-blue-700 dark:text-blue-300',
-    barGradient: 'from-blue-400 to-indigo-500',
-  },
-  teal: {
-    hex: '#14B8A6',
-    rgb: '20, 184, 166',
-    textAccent: 'text-teal-600 dark:text-teal-400',
-    iconBgLight: 'rgba(20, 184, 166, 0.12)',
-    iconBgDark: 'rgba(45, 212, 191, 0.16)',
-    borderLight: 'rgba(20, 184, 166, 0.22)',
-    borderDark: 'rgba(45, 212, 191, 0.25)',
-    borderHover: '#14B8A6',
-    badgeBg: 'bg-teal-50 dark:bg-teal-950/40 border-teal-200 dark:border-teal-800',
-    badgeText: 'text-teal-700 dark:text-teal-300',
-    barGradient: 'from-teal-400 to-emerald-500',
-  },
-  indigo: {
-    hex: '#6366F1',
-    rgb: '99, 102, 241',
-    textAccent: 'text-indigo-600 dark:text-indigo-400',
-    iconBgLight: 'rgba(99, 102, 241, 0.12)',
-    iconBgDark: 'rgba(129, 140, 248, 0.16)',
-    borderLight: 'rgba(99, 102, 241, 0.22)',
-    borderDark: 'rgba(129, 140, 248, 0.25)',
-    borderHover: '#6366F1',
-    badgeBg: 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800',
-    badgeText: 'text-indigo-700 dark:text-indigo-300',
-    barGradient: 'from-indigo-400 to-purple-600',
-  },
-};
+// 1:1 Color Theme Matrix replicated directly from QMS UnifiedKpiCard
+export function getQmsTheme(colorType: KpiColorType = 'cyan', isDark = false): QmsThemeTokens {
+  switch (colorType) {
+    // 1. Sky Blue / Cyan (Controlled Docs - ISO §7.5) [Default]
+    case 'cyan':
+      return {
+        border: isDark ? 'rgba(14, 165, 233, 0.4)' : 'rgba(2, 132, 199, 0.35)',
+        borderHover: isDark ? '#38bdf8' : '#0284c7',
+        cornerGlow: isDark
+          ? 'radial-gradient(circle at top right, rgba(14, 165, 233, 0.25) 0%, rgba(17, 24, 39, 0) 70%)'
+          : 'radial-gradient(circle at top right, rgba(224, 242, 254, 0.95) 0%, rgba(255, 255, 255, 0) 70%)',
+        cornerGlowHover: isDark
+          ? 'radial-gradient(circle at top right, rgba(14, 165, 233, 0.45) 0%, rgba(17, 24, 39, 0.1) 75%)'
+          : 'radial-gradient(circle at top right, rgba(186, 230, 253, 1) 0%, rgba(224, 242, 254, 0.3) 75%)',
+        accent: isDark ? '#38bdf8' : '#0284c7',
+        cardBg: isDark ? '#111827' : '#ffffff',
+        cardBgHover: isDark ? '#121e2a' : '#f8fcff',
+        badgeBg: isDark ? 'rgba(14, 165, 233, 0.22)' : 'rgba(224, 242, 254, 0.9)',
+        badgeText: isDark ? '#7dd3fc' : '#0369a1',
+        badgeBorder: isDark ? 'rgba(14, 165, 233, 0.45)' : 'rgba(2, 132, 199, 0.35)',
+        iconBg: isDark
+          ? 'linear-gradient(135deg, rgba(14, 165, 233, 0.35) 0%, rgba(14, 165, 233, 0.12) 100%)'
+          : 'linear-gradient(135deg, rgba(2, 132, 199, 0.22) 0%, rgba(2, 132, 199, 0.08) 100%)',
+        iconBgHover: isDark
+          ? 'linear-gradient(135deg, rgba(14, 165, 233, 0.5) 0%, rgba(14, 165, 233, 0.25) 100%)'
+          : 'linear-gradient(135deg, rgba(2, 132, 199, 0.38) 0%, rgba(2, 132, 199, 0.18) 100%)',
+        progressBar: 'linear-gradient(90deg, #38bdf8 0%, #0284c7 100%)',
+      };
+
+    // 2. Emerald Green (First Pass Yield - Line KPI)
+    case 'emerald':
+      return {
+        border: isDark ? 'rgba(16, 185, 129, 0.4)' : 'rgba(16, 185, 129, 0.35)',
+        borderHover: isDark ? '#34d399' : '#059669',
+        cornerGlow: isDark
+          ? 'radial-gradient(circle at top right, rgba(16, 185, 129, 0.25) 0%, rgba(17, 24, 39, 0) 70%)'
+          : 'radial-gradient(circle at top right, rgba(209, 250, 229, 0.95) 0%, rgba(255, 255, 255, 0) 70%)',
+        cornerGlowHover: isDark
+          ? 'radial-gradient(circle at top right, rgba(16, 185, 129, 0.45) 0%, rgba(17, 24, 39, 0.1) 75%)'
+          : 'radial-gradient(circle at top right, rgba(167, 243, 208, 1) 0%, rgba(209, 250, 229, 0.25) 75%)',
+        accent: isDark ? '#34d399' : '#059669',
+        cardBg: isDark ? '#111827' : '#ffffff',
+        cardBgHover: isDark ? '#12201d' : '#f7fdfb',
+        badgeBg: isDark ? 'rgba(16, 185, 129, 0.22)' : 'rgba(209, 250, 229, 0.9)',
+        badgeText: isDark ? '#a7f3d0' : '#047857',
+        badgeBorder: isDark ? 'rgba(16, 185, 129, 0.45)' : 'rgba(16, 185, 129, 0.35)',
+        iconBg: isDark
+          ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.35) 0%, rgba(16, 185, 129, 0.12) 100%)'
+          : 'linear-gradient(135deg, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.08) 100%)',
+        iconBgHover: isDark
+          ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.5) 0%, rgba(16, 185, 129, 0.25) 100%)'
+          : 'linear-gradient(135deg, rgba(16, 185, 129, 0.38) 0%, rgba(16, 185, 129, 0.18) 100%)',
+        progressBar: 'linear-gradient(90deg, #34d399 0%, #059669 100%)',
+      };
+
+    // 3. Vibrant Amber / Orange (Open CAPAs - 8D Loop)
+    case 'amber':
+      return {
+        border: isDark ? 'rgba(245, 158, 11, 0.4)' : 'rgba(245, 158, 11, 0.35)',
+        borderHover: isDark ? '#fcd34d' : '#ea580c',
+        cornerGlow: isDark
+          ? 'radial-gradient(circle at top right, rgba(245, 158, 11, 0.25) 0%, rgba(17, 24, 39, 0) 70%)'
+          : 'radial-gradient(circle at top right, rgba(255, 237, 213, 0.95) 0%, rgba(255, 255, 255, 0) 70%)',
+        cornerGlowHover: isDark
+          ? 'radial-gradient(circle at top right, rgba(245, 158, 11, 0.45) 0%, rgba(17, 24, 39, 0.1) 75%)'
+          : 'radial-gradient(circle at top right, rgba(254, 215, 170, 1) 0%, rgba(255, 237, 213, 0.25) 75%)',
+        accent: isDark ? '#fbbf24' : '#ea580c',
+        cardBg: isDark ? '#111827' : '#ffffff',
+        cardBgHover: isDark ? '#231c15' : '#fffdf9',
+        badgeBg: isDark ? 'rgba(245, 158, 11, 0.22)' : 'rgba(255, 237, 213, 0.9)',
+        badgeText: isDark ? '#fed7aa' : '#c2410c',
+        badgeBorder: isDark ? 'rgba(245, 158, 11, 0.45)' : 'rgba(234, 88, 12, 0.35)',
+        iconBg: isDark
+          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.35) 0%, rgba(245, 158, 11, 0.12) 100%)'
+          : 'linear-gradient(135deg, rgba(234, 88, 12, 0.22) 0%, rgba(234, 88, 12, 0.08) 100%)',
+        iconBgHover: isDark
+          ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.5) 0%, rgba(245, 158, 11, 0.25) 100%)'
+          : 'linear-gradient(135deg, rgba(234, 88, 12, 0.38) 0%, rgba(234, 88, 12, 0.18) 100%)',
+        progressBar: 'linear-gradient(90deg, #fbbf24 0%, #ea580c 100%)',
+      };
+
+    // 4. Vivid Rose / Ruby / Pink (Scrap Rate - Waste)
+    case 'rose':
+      return {
+        border: isDark ? 'rgba(244, 63, 94, 0.4)' : 'rgba(244, 63, 94, 0.35)',
+        borderHover: isDark ? '#fb7185' : '#e11d48',
+        cornerGlow: isDark
+          ? 'radial-gradient(circle at top right, rgba(244, 63, 94, 0.25) 0%, rgba(17, 24, 39, 0) 70%)'
+          : 'radial-gradient(circle at top right, rgba(255, 228, 230, 0.95) 0%, rgba(255, 255, 255, 0) 70%)',
+        cornerGlowHover: isDark
+          ? 'radial-gradient(circle at top right, rgba(244, 63, 94, 0.45) 0%, rgba(17, 24, 39, 0.1) 75%)'
+          : 'radial-gradient(circle at top right, rgba(254, 205, 211, 1) 0%, rgba(255, 228, 230, 0.25) 75%)',
+        accent: isDark ? '#fb7185' : '#e11d48',
+        cardBg: isDark ? '#111827' : '#ffffff',
+        cardBgHover: isDark ? '#1f151b' : '#fffafd',
+        badgeBg: isDark ? 'rgba(244, 63, 94, 0.22)' : 'rgba(255, 228, 230, 0.9)',
+        badgeText: isDark ? '#fda4af' : '#9f1239',
+        badgeBorder: isDark ? 'rgba(244, 63, 94, 0.45)' : 'rgba(244, 63, 94, 0.35)',
+        iconBg: isDark
+          ? 'linear-gradient(135deg, rgba(244, 63, 94, 0.35) 0%, rgba(244, 63, 94, 0.12) 100%)'
+          : 'linear-gradient(135deg, rgba(244, 63, 94, 0.22) 0%, rgba(244, 63, 94, 0.08) 100%)',
+        iconBgHover: isDark
+          ? 'linear-gradient(135deg, rgba(244, 63, 94, 0.5) 0%, rgba(244, 63, 94, 0.25) 100%)'
+          : 'linear-gradient(135deg, rgba(244, 63, 94, 0.38) 0%, rgba(244, 63, 94, 0.18) 100%)',
+        progressBar: 'linear-gradient(90deg, #fb7185 0%, #e11d48 100%)',
+      };
+
+    // 5. Electric Violet / Purple (ECN Notices - 1:1 Pair)
+    case 'purple':
+      return {
+        border: isDark ? 'rgba(147, 51, 234, 0.4)' : 'rgba(147, 51, 234, 0.35)',
+        borderHover: isDark ? '#c084fc' : '#9333ea',
+        cornerGlow: isDark
+          ? 'radial-gradient(circle at top right, rgba(147, 51, 234, 0.25) 0%, rgba(17, 24, 39, 0) 70%)'
+          : 'radial-gradient(circle at top right, rgba(243, 232, 255, 0.95) 0%, rgba(255, 255, 255, 0) 70%)',
+        cornerGlowHover: isDark
+          ? 'radial-gradient(circle at top right, rgba(147, 51, 234, 0.45) 0%, rgba(17, 24, 39, 0.1) 75%)'
+          : 'radial-gradient(circle at top right, rgba(233, 213, 255, 1) 0%, rgba(243, 232, 255, 0.25) 75%)',
+        accent: isDark ? '#c084fc' : '#9333ea',
+        cardBg: isDark ? '#111827' : '#ffffff',
+        cardBgHover: isDark ? '#181427' : '#faf8ff',
+        badgeBg: isDark ? 'rgba(147, 51, 234, 0.22)' : 'rgba(243, 232, 255, 0.9)',
+        badgeText: isDark ? '#d8b4fe' : '#6b21a8',
+        badgeBorder: isDark ? 'rgba(147, 51, 234, 0.45)' : 'rgba(147, 51, 234, 0.35)',
+        iconBg: isDark
+          ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.35) 0%, rgba(147, 51, 234, 0.12) 100%)'
+          : 'linear-gradient(135deg, rgba(147, 51, 234, 0.22) 0%, rgba(147, 51, 234, 0.08) 100%)',
+        iconBgHover: isDark
+          ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.5) 0%, rgba(147, 51, 234, 0.25) 100%)'
+          : 'linear-gradient(135deg, rgba(147, 51, 234, 0.38) 0%, rgba(147, 51, 234, 0.18) 100%)',
+        progressBar: 'linear-gradient(90deg, #c084fc 0%, #9333ea 100%)',
+      };
+
+    // 6. Cobalt / Electric Blue (Kaizen Projects - DMAIC)
+    case 'blue':
+      return {
+        border: isDark ? 'rgba(59, 130, 246, 0.4)' : 'rgba(37, 99, 235, 0.35)',
+        borderHover: isDark ? '#60a5fa' : '#2563eb',
+        cornerGlow: isDark
+          ? 'radial-gradient(circle at top right, rgba(59, 130, 246, 0.25) 0%, rgba(17, 24, 39, 0) 70%)'
+          : 'radial-gradient(circle at top right, rgba(219, 234, 254, 0.95) 0%, rgba(255, 255, 255, 0) 70%)',
+        cornerGlowHover: isDark
+          ? 'radial-gradient(circle at top right, rgba(59, 130, 246, 0.45) 0%, rgba(17, 24, 39, 0.1) 75%)'
+          : 'radial-gradient(circle at top right, rgba(191, 219, 254, 1) 0%, rgba(219, 234, 254, 0.25) 75%)',
+        accent: isDark ? '#60a5fa' : '#2563eb',
+        cardBg: isDark ? '#111827' : '#ffffff',
+        cardBgHover: isDark ? '#131b2c' : '#f7faff',
+        badgeBg: isDark ? 'rgba(59, 130, 246, 0.22)' : 'rgba(219, 234, 254, 0.9)',
+        badgeText: isDark ? '#bfdbfe' : '#1d4ed8',
+        badgeBorder: isDark ? 'rgba(59, 130, 246, 0.45)' : 'rgba(37, 99, 235, 0.35)',
+        iconBg: isDark
+          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.35) 0%, rgba(59, 130, 246, 0.12) 100%)'
+          : 'linear-gradient(135deg, rgba(37, 99, 235, 0.22) 0%, rgba(37, 99, 235, 0.08) 100%)',
+        iconBgHover: isDark
+          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.5) 0%, rgba(59, 130, 246, 0.25) 100%)'
+          : 'linear-gradient(135deg, rgba(37, 99, 235, 0.38) 0%, rgba(37, 99, 235, 0.18) 100%)',
+        progressBar: 'linear-gradient(90deg, #60a5fa 0%, #2563eb 100%)',
+      };
+
+    // 7. Deep Teal / Ocean (OEE Score - TPM)
+    case 'teal':
+      return {
+        border: isDark ? 'rgba(20, 184, 166, 0.4)' : 'rgba(13, 148, 136, 0.35)',
+        borderHover: isDark ? '#2dd4bf' : '#0d9488',
+        cornerGlow: isDark
+          ? 'radial-gradient(circle at top right, rgba(20, 184, 166, 0.25) 0%, rgba(17, 24, 39, 0) 70%)'
+          : 'radial-gradient(circle at top right, rgba(204, 251, 241, 0.95) 0%, rgba(255, 255, 255, 0) 70%)',
+        cornerGlowHover: isDark
+          ? 'radial-gradient(circle at top right, rgba(20, 184, 166, 0.45) 0%, rgba(17, 24, 39, 0.1) 75%)'
+          : 'radial-gradient(circle at top right, rgba(153, 246, 228, 1) 0%, rgba(204, 251, 241, 0.25) 75%)',
+        accent: isDark ? '#2dd4bf' : '#0d9488',
+        cardBg: isDark ? '#111827' : '#ffffff',
+        cardBgHover: isDark ? '#112224' : '#f6fdfc',
+        badgeBg: isDark ? 'rgba(20, 184, 166, 0.22)' : 'rgba(204, 251, 241, 0.9)',
+        badgeText: isDark ? '#99f6e4' : '#115e59',
+        badgeBorder: isDark ? 'rgba(20, 184, 166, 0.45)' : 'rgba(13, 148, 136, 0.35)',
+        iconBg: isDark
+          ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.35) 0%, rgba(20, 184, 166, 0.12) 100%)'
+          : 'linear-gradient(135deg, rgba(13, 148, 136, 0.22) 0%, rgba(13, 148, 136, 0.08) 100%)',
+        iconBgHover: isDark
+          ? 'linear-gradient(135deg, rgba(20, 184, 166, 0.5) 0%, rgba(20, 184, 166, 0.25) 100%)'
+          : 'linear-gradient(135deg, rgba(13, 148, 136, 0.38) 0%, rgba(13, 148, 136, 0.18) 100%)',
+        progressBar: 'linear-gradient(90deg, #2dd4bf 0%, #0d9488 100%)',
+      };
+
+    // 8. Royal Indigo (ECO Change Orders - 5M1E)
+    case 'indigo':
+    default:
+      return {
+        border: isDark ? 'rgba(99, 102, 241, 0.4)' : 'rgba(79, 70, 229, 0.35)',
+        borderHover: isDark ? '#818cf8' : '#4f46e5',
+        cornerGlow: isDark
+          ? 'radial-gradient(circle at top right, rgba(99, 102, 241, 0.25) 0%, rgba(17, 24, 39, 0) 70%)'
+          : 'radial-gradient(circle at top right, rgba(238, 242, 255, 0.95) 0%, rgba(255, 255, 255, 0) 70%)',
+        cornerGlowHover: isDark
+          ? 'radial-gradient(circle at top right, rgba(99, 102, 241, 0.45) 0%, rgba(17, 24, 39, 0.1) 75%)'
+          : 'radial-gradient(circle at top right, rgba(224, 231, 255, 1) 0%, rgba(238, 242, 255, 0.25) 75%)',
+        accent: isDark ? '#818cf8' : '#4f46e5',
+        cardBg: isDark ? '#111827' : '#ffffff',
+        cardBgHover: isDark ? '#14172e' : '#f8f9ff',
+        badgeBg: isDark ? 'rgba(99, 102, 241, 0.22)' : 'rgba(238, 242, 255, 0.9)',
+        badgeText: isDark ? '#c7d2fe' : '#3730a3',
+        badgeBorder: isDark ? 'rgba(99, 102, 241, 0.45)' : 'rgba(79, 70, 229, 0.35)',
+        iconBg: isDark
+          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.35) 0%, rgba(99, 102, 241, 0.12) 100%)'
+          : 'linear-gradient(135deg, rgba(79, 70, 229, 0.22) 0%, rgba(79, 70, 229, 0.08) 100%)',
+        iconBgHover: isDark
+          ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.5) 0%, rgba(99, 102, 241, 0.25) 100%)'
+          : 'linear-gradient(135deg, rgba(79, 70, 229, 0.38) 0%, rgba(79, 70, 229, 0.18) 100%)',
+        progressBar: 'linear-gradient(90deg, #818cf8 0%, #4f46e5 100%)',
+      };
+  }
+}
 
 export default function KpiGradientCard({
   title,
@@ -177,137 +286,142 @@ export default function KpiGradientCard({
   }, []);
 
   const isDark = isMounted ? theme === 'dark' : true;
-  const c = COLOR_MAP[colorType] || COLOR_MAP.cyan;
+  const qmsTheme = getQmsTheme(colorType, isDark);
 
-  // Dynamic multi-layer gradient background for the entire card surface
-  const bgGradient = isDark
-    ? isHovered
-      ? `linear-gradient(135deg, rgba(${c.rgb}, 0.22) 0%, rgba(${c.rgb}, 0.06) 45%, rgba(17, 24, 39, 0.98) 100%)`
-      : `linear-gradient(135deg, rgba(${c.rgb}, 0.13) 0%, rgba(${c.rgb}, 0.03) 45%, rgba(17, 24, 39, 0.96) 100%)`
-    : isHovered
-      ? `linear-gradient(135deg, rgba(${c.rgb}, 0.15) 0%, rgba(${c.rgb}, 0.035) 45%, #ffffff 100%)`
-      : `linear-gradient(135deg, rgba(${c.rgb}, 0.075) 0%, rgba(${c.rgb}, 0.015) 45%, #ffffff 100%)`;
-
-  // Render Icon safely whether it's a React component or a rendered Node
+  // Safe icon renderer supporting components, functions, or rendered JSX elements
   const renderIcon = () => {
     if (!icon) return null;
     if (React.isValidElement(icon)) return icon;
     if (typeof icon === 'function') {
-      const IconComponent = icon as React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-      return <IconComponent className="w-4 h-4 stroke-[2]" />;
+      const IconComponent = icon as React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>;
+      return <IconComponent size={16} />;
     }
     return null;
   };
+
+  const isClickable = Boolean(onClick || href);
 
   const cardContent = (
     <div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={onClick}
-      className={`group relative flex flex-col justify-between p-4 sm:p-4.5 rounded-2xl transition-all duration-300 select-none overflow-hidden ${
-        href || onClick ? 'cursor-pointer' : ''
-      } ${
-        isHovered
-          ? '-translate-y-1 shadow-lg'
-          : 'hover:-translate-y-0.5'
+      className={`kpi-card-root group relative flex flex-col justify-between p-3.5 sm:p-4 rounded-2xl select-none overflow-hidden ${
+        isClickable ? 'cursor-pointer' : 'cursor-default'
       } ${className}`}
       style={{
-        background: bgGradient,
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
+        height: '100%',
+        minHeight: '136px',
+        borderRadius: '16px',
         border: active
-          ? `1.5px solid ${c.hex}`
+          ? `1.5px solid ${qmsTheme.borderHover}`
           : isHovered
-            ? `1.5px solid ${c.hex}`
-            : isDark
-              ? `1px solid rgba(${c.rgb}, 0.32)`
-              : `1px solid rgba(${c.rgb}, 0.22)`,
+            ? `1.5px solid ${qmsTheme.borderHover}`
+            : `1.5px solid ${qmsTheme.border}`,
+        backgroundColor: isHovered ? qmsTheme.cardBgHover : qmsTheme.cardBg,
+        backgroundImage: isHovered ? qmsTheme.cornerGlowHover : qmsTheme.cornerGlow,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'top right',
+        backgroundSize: '100% 100%',
         boxShadow: isHovered
-          ? `0 16px 32px -6px rgba(${c.rgb}, ${isDark ? 0.35 : 0.22}), 0 6px 16px -2px rgba(${c.rgb}, ${isDark ? 0.20 : 0.12})`
-          : isDark
-            ? `0 4px 16px 0 rgba(0, 0, 0, 0.45), 0 1px 3px 0 rgba(${c.rgb}, 0.10)`
-            : `0 4px 16px 0 rgba(${c.rgb}, 0.08), 0 1px 3px 0 rgba(0, 0, 0, 0.04)`,
+          ? (isDark
+              ? `0 12px 28px -4px ${qmsTheme.accent}35, 0 4px 10px -2px ${qmsTheme.accent}20`
+              : `0 12px 28px -4px ${qmsTheme.accent}30, 0 4px 10px -2px ${qmsTheme.accent}15`)
+          : (isDark
+              ? '0 4px 12px -2px rgba(0, 0, 0, 0.5)'
+              : '0 2px 8px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02)'),
+        transform: isHovered && isClickable ? 'translateY(-3px)' : 'none',
+        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
-      {/* ── LAYER 1a: Top Edge Luminous Highlight (Glass Shimmer Beam) ── */}
-      <div
-        className="absolute top-0 inset-x-0 h-[1.5px] pointer-events-none transition-opacity duration-300"
-        style={{
-          background: `linear-gradient(90deg, transparent 0%, rgba(${c.rgb}, ${isHovered ? 0.85 : 0.45}) 30%, rgba(${c.rgb}, ${isHovered ? 0.95 : 0.6}) 50%, rgba(${c.rgb}, ${isHovered ? 0.85 : 0.45}) 70%, transparent 100%)`,
-          opacity: isHovered ? 1 : 0.7,
-        }}
-      />
-
-      {/* ── LAYER 1b: Primary Corner Glow (Radial Gradient ở góc trên phải) ── */}
-      <div
-        className="absolute top-0 right-0 w-44 h-44 rounded-full pointer-events-none transition-all duration-500 blur-2xl -mr-12 -mt-12"
-        style={{
-          background: `radial-gradient(circle at top right, rgba(${c.rgb}, ${isDark ? (isHovered ? 0.42 : 0.25) : (isHovered ? 0.30 : 0.16)}) 0%, transparent 70%)`,
-          opacity: isHovered ? 1 : 0.85,
-        }}
-      />
-
-      {/* ── LAYER 1c: Secondary Ambient Counter-Glow (Góc dưới trái) ── */}
-      <div
-        className="absolute bottom-0 left-0 w-36 h-36 rounded-full pointer-events-none transition-all duration-500 blur-2xl -ml-10 -mb-10"
-        style={{
-          background: `radial-gradient(circle at bottom left, rgba(${c.rgb}, ${isDark ? (isHovered ? 0.20 : 0.10) : (isHovered ? 0.14 : 0.06)}) 0%, transparent 70%)`,
-          opacity: isHovered ? 1 : 0.8,
-        }}
-      />
-
-      {/* ── LAYER 2: Header (Icon Box + Title + Badge / Arrow) ── */}
-      <div className="flex items-center justify-between gap-2 mb-2 relative z-10">
-        <div className="flex items-center gap-2.5 min-w-0">
+      {/* ── TOP ROW: Icon + Title on Left, Badge on Right (QMS 1:1) ── */}
+      <div className="flex items-center justify-between gap-2 mb-1.5 relative z-10">
+        <div className="flex items-center gap-2 min-w-0">
           {icon && (
             <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 group-hover:scale-105 group-hover:rotate-1"
+              className="kpi-icon-box shrink-0"
               style={{
-                background: `linear-gradient(135deg, rgba(${c.rgb}, 0.22) 0%, rgba(${c.rgb}, 0.06) 100%)`,
-                border: `1px solid rgba(${c.rgb}, 0.32)`,
-                color: c.hex,
+                width: 30,
+                height: 30,
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: isHovered ? qmsTheme.iconBgHover : qmsTheme.iconBg,
+                color: qmsTheme.accent,
+                transition: 'all 0.2s ease',
+                transform: isHovered ? 'scale(1.05)' : 'none',
               }}
             >
               {renderIcon()}
             </div>
           )}
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 truncate">
+          <span
+            className="truncate font-extrabold uppercase tracking-wide select-none"
+            style={{
+              color: isDark ? '#cbd5e1' : '#334155',
+              fontWeight: 800,
+              fontSize: '0.72rem',
+              letterSpacing: '0.5px',
+            }}
+          >
             {title}
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          {badgeText && (
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${c.badgeBg} ${c.badgeText}`}>
-              {badgeText}
-            </span>
-          )}
-          {(href || onClick) && (
-            <ChevronRight
-              className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-0.5 opacity-50 group-hover:opacity-100"
-              style={{ color: c.hex }}
-            />
-          )}
-        </div>
+        {badgeText && (
+          <span
+            style={{
+              backgroundColor: qmsTheme.badgeBg,
+              color: qmsTheme.badgeText,
+              border: `1px solid ${qmsTheme.badgeBorder}`,
+              padding: '2px 7px',
+              borderRadius: '8px',
+              fontSize: '0.65rem',
+              fontWeight: 700,
+              letterSpacing: '0.3px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {badgeText}
+          </span>
+        )}
       </div>
 
-      {/* ── LAYER 3: Main Metric & Trend ── */}
-      <div className="my-1 relative z-10">
-        <div className="flex items-baseline gap-1 flex-wrap">
+      {/* ── MIDDLE ROW: Main Metric Value + Unit + Trend (QMS 1:1) ── */}
+      <div className="my-1 relative z-10 flex-1 flex flex-col justify-center">
+        <div className="flex items-baseline gap-1.5 flex-nowrap overflow-hidden">
           <span
-            className="text-xl sm:text-2xl font-black font-mono tracking-tight"
-            style={{ color: valueColor || 'var(--text-primary)' }}
+            style={{
+              color: valueColor || (isDark ? '#f8fafc' : '#0f172a'),
+              fontWeight: 800,
+              lineHeight: 1.1,
+              fontSize: String(value).length > 8 ? '1.15rem' : String(value).length > 5 ? '1.28rem' : '1.45rem',
+              letterSpacing: '-0.3px',
+              whiteSpace: 'nowrap',
+              fontFamily: 'monospace, system-ui, -apple-system, sans-serif',
+            }}
           >
             {value}
           </span>
           {unit && (
-            <span className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wide">
+            <span
+              style={{
+                color: isDark ? '#94a3b8' : '#64748b',
+                fontSize: '0.66rem',
+                fontWeight: 800,
+                letterSpacing: '0.3px',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+              }}
+            >
               {unit}
             </span>
           )}
         </div>
 
-        {/* Trend indicator if available */}
+        {/* Trend Indicator if available */}
         {trend && (
           <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold">
             {trend.isPositive ? (
@@ -326,40 +440,86 @@ export default function KpiGradientCard({
           </div>
         )}
 
-        {/* ── LAYER 4: Progress Bar (nếu có progressPercent) ── */}
+        {/* ── Progress Bar (QMS 1:1) ── */}
         {progressPercent !== undefined && (
-          <div className="mt-2.5">
-            <div className="flex justify-between text-[10px] mb-1 font-bold text-slate-500 dark:text-slate-400">
-              <span>Tiến độ / Mục tiêu</span>
-              <span className={c.textAccent}>{progressPercent}%</span>
+          <div className="mt-2">
+            <div className="flex justify-between text-[10px] mb-1 font-semibold">
+              <span style={{ color: isDark ? '#64748b' : '#94a3b8', fontSize: '0.68rem', fontWeight: 600 }}>
+                Tiến độ / Mục tiêu
+              </span>
+              <span style={{ color: qmsTheme.accent, fontWeight: 700, fontSize: '0.68rem' }}>
+                {progressPercent}%
+              </span>
             </div>
-            <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800/90 rounded-full overflow-hidden border border-slate-200/50 dark:border-slate-700/50">
+            <div
+              style={{
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#f1f5f9',
+                overflow: 'hidden',
+                width: '100%',
+              }}
+            >
               <div
-                className={`h-full rounded-full bg-gradient-to-r ${c.barGradient} transition-all duration-500`}
-                style={{ width: `${Math.min(Math.max(progressPercent, 0), 100)}%` }}
+                style={{
+                  height: '100%',
+                  width: `${Math.min(Math.max(progressPercent, 0), 100)}%`,
+                  background: qmsTheme.progressBar,
+                  borderRadius: 2,
+                  transition: 'width 0.4s ease',
+                }}
               />
             </div>
           </div>
         )}
       </div>
 
-      {/* ── LAYER 5: Footer Subtitle ── */}
-      {subtitle && (
-        <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] font-medium relative z-10">
+      {/* ── BOTTOM ROW: Divider & Footer Subtitle + QMS Arrow (QMS 1:1) ── */}
+      <div className="mt-auto pt-1.5 relative z-10">
+        <div
+          style={{
+            marginBottom: 6,
+            height: '1px',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+          }}
+        />
+        <div className="flex items-center justify-between">
           <span
-            className="truncate"
-            style={{ color: subColor || 'var(--text-muted)' }}
+            style={{
+              color: subColor || (isDark ? '#94a3b8' : '#64748b'),
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: isClickable ? '85%' : '100%',
+            }}
           >
-            {subtitle}
+            {subtitle || 'FMMS Operational Baseline'}
           </span>
+
+          {isClickable && (
+            <span
+              className="kpi-arrow"
+              style={{
+                color: isHovered ? qmsTheme.accent : (isDark ? '#64748b' : '#94a3b8'),
+                fontWeight: 800,
+                fontSize: '0.8rem',
+                transition: 'all 0.2s ease',
+                transform: isHovered ? 'translateX(3px)' : 'none',
+              }}
+            >
+              →
+            </span>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 
   if (href) {
     return (
-      <Link href={href} className="block no-underline">
+      <Link href={href} className="block no-underline h-full">
         {cardContent}
       </Link>
     );
