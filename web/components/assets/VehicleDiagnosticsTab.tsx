@@ -22,6 +22,7 @@ import {
   ObdDtcDictionaryEntry 
 } from '@/lib/services/diagnosticService';
 import DtcDistributionMatrix from './DtcDistributionMatrix';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 interface VehicleDiagnosticsTabProps {
   assetId: string;
@@ -148,61 +149,29 @@ export default function VehicleDiagnosticsTab({
         </div>
       </div>
 
-      {/* ── 3 Quick KPI Cards (Chuẩn layout FMMS) ── */}
+      {/* ── 3 Quick KPI Cards (Chuẩn layout QMS / FMMS) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-        <div className="p-3.5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <p className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>Tình trạng mã lỗi (DTC)</p>
-          <div className="flex items-center space-x-1.5 mt-1">
-            {activeDtcLogs.length > 0 ? (
-              <div className="flex items-center space-x-1.5 text-rose-500 font-bold text-base">
-                <AlertTriangle className="w-4 h-4 text-rose-500" />
-                <span>{activeDtcLogs.length} mã lỗi active</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-1.5 text-emerald-500 dark:text-emerald-400 font-bold text-base">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center border border-emerald-500/30 shadow-sm">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-                </div>
-                <span>0 lỗi (Hoàn hảo)</span>
-              </div>
-            )}
-          </div>
-          <span className="text-[10px] block mt-1" style={{ color: 'var(--text-muted)' }}>
-            {resolvedDtcLogs.length > 0 ? `Đã xử lý ${resolvedDtcLogs.length} lỗi trong lịch sử` : 'Chưa có lỗi nào phát hiện'}
-          </span>
-        </div>
-
-        <div className="p-3.5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <p className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>Đèn Check Engine (MIL)</p>
-          <div className="flex items-center space-x-1.5 mt-1">
-            {latestScan?.mil_status ? (
-              <div className="flex items-center space-x-1.5 text-rose-500 font-bold text-base">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-                <span>MIL ON (Đang sáng)</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-1.5 text-emerald-500 dark:text-emerald-400 font-bold text-base">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/15 flex items-center justify-center border border-emerald-500/30 shadow-sm">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-                </div>
-                <span>MIL OFF (Bình thường)</span>
-              </div>
-            )}
-          </div>
-          <span className="text-[10px] block mt-1" style={{ color: 'var(--text-muted)' }}>
-            {latestScan ? `Kiểm tra tự động khi nổ máy` : 'Chờ kết nối OBD'}
-          </span>
-        </div>
-
-        <div className="p-3.5 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-          <p className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>Phiên quét chẩn đoán gần nhất</p>
-          <p className="text-lg font-bold mt-0.5" style={{ color: 'var(--text-primary)' }}>
-            {latestScan ? new Date(latestScan.scanned_at).toLocaleDateString('vi-VN') : 'Chưa có'}
-          </p>
-          <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-            {latestScan?.odometer_km ? `Tại ODO ${latestScan.odometer_km.toLocaleString()} km` : `Tổng ${scans.length} phiên quét đã lưu`}
-          </span>
-        </div>
+        <KpiGradientCard
+          title="Tình trạng mã lỗi (DTC)"
+          value={activeDtcLogs.length > 0 ? `${activeDtcLogs.length} lỗi active` : '0 lỗi (Hoàn hảo)'}
+          subtitle={resolvedDtcLogs.length > 0 ? `Đã xử lý ${resolvedDtcLogs.length} lỗi trong lịch sử` : 'Hệ thống vận hành an toàn'}
+          colorType={activeDtcLogs.length > 0 ? 'rose' : 'emerald'}
+          icon={activeDtcLogs.length > 0 ? AlertTriangle : CheckCircle2}
+        />
+        <KpiGradientCard
+          title="Đèn Check Engine (MIL)"
+          value={latestScan?.mil_status ? 'MIL ON (Đang sáng)' : 'MIL OFF (Bình thường)'}
+          subtitle={latestScan ? 'Kiểm tra tự động khi nổ máy' : 'Chờ kết nối OBD'}
+          colorType={latestScan?.mil_status ? 'rose' : 'emerald'}
+          icon={ShieldAlert}
+        />
+        <KpiGradientCard
+          title="Phiên quét gần nhất"
+          value={latestScan ? new Date(latestScan.scanned_at).toLocaleDateString('vi-VN') : 'Chưa có'}
+          subtitle={latestScan?.odometer_km ? `Tại ODO ${latestScan.odometer_km.toLocaleString()} km` : `Tổng ${scans.length} phiên quét đã lưu`}
+          colorType="cyan"
+          icon={Activity}
+        />
       </div>
 
       {/* ── DTC Distribution Categorical Monthly Heatmap Matrix ── */}
