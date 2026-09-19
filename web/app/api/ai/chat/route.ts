@@ -51,7 +51,15 @@ QUY TẮC CHỌN action_type:
 QUY TẮC XỬ LÝ NGÀY:
 - Nếu người dùng nói "hôm nay" → dùng ngày hiện tại theo định dạng YYYY-MM-DD.
 - Nếu người dùng nói "hôm qua" hay "sáng nay" → tính tương đối và điền ngày phù hợp.
-- KHÔNG ĐƯỢC để nguyên chuỗi "NGÀY_THỰC_TẾ_YYYY-MM-DD" trong JSON output, phải thay bằng ngày thật.`;
+- KHÔNG ĐƯỢC để nguyên chuỗi "NGÀY_THỰC_TẾ_YYYY-MM-DD" trong JSON output, phải thay bằng ngày thật.
+
+QUY TẮC XỬ LÝ ODOMETER (ODO - BẮT BUỘC):
+- Nếu người dùng KHÔNG nói rõ số ODO trong câu chat → BẮT BUỘC lấy số ODO hiện tại mới nhất của xe từ phần DỮ LIỆU THỰC TẾ (xe Mazda 2 hiện tại là 3339 km). TUYỆT ĐỐI KHÔNG TỰ BỊA RA CÁC MỐC 10000, 18000 HAY 20000 km.
+- Nếu người dùng có nói rõ số ODO (vd: 'odo 3350') → điền đúng số đó.
+
+QUY TẮC XỬ LÝ SỐ TIỀN (COST / AMOUNT - BẮT BUỘC):
+- 800k = 800000 (tám trăm nghìn đồng), TUYỆT ĐỐI KHÔNG ĐƯỢC thiếu số 0 thành 80000.
+- 900k = 900000, 60k = 60000, 1.2tr = 1200000.`;
 
 function parseMoney(text: string): number | null {
   const kMatch = text.match(/(\d+(?:[.,]\d+)?)\s*k\b/i);

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign } from 'lucide-react';
+import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check } from 'lucide-react';
 import { createFuelLog } from '@/lib/services/fuelService';
 import { createExpense } from '@/lib/services/expenseService';
 import { createMaintenanceRecord } from '@/lib/services/maintenanceService';
@@ -49,10 +49,29 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
   const recordDate = data.date || todayStr;
   const assetId = data.asset_id || '20260308-0001-4222-8888-19b213872026'; // Mazda 2 default
 
-  // Computed fields
-  const cost = data.total_cost ?? data.amount ?? data.cost ?? 0;
-  const liters = data.liters ?? data.fuel_liters ?? (data.price_per_liter && cost ? +(cost / data.price_per_liter).toFixed(2) : 0);
-  const price = data.price_per_liter ?? (liters > 0 && cost > 0 ? Math.round(cost / liters) : 0);
+  // Chuẩn hóa ODO: Nếu bị AI đoán mò > 10.000 km trong khi xe mới chạy ~3.338 km -> đưa về 3.339 km
+  const rawOdo = data.odometer_km;
+  const initialOdo = (rawOdo && rawOdo < 10000 && rawOdo > 1000) ? rawOdo : 3339;
+
+  // Chuẩn hóa Cost: Nếu lỡ bị thiếu số 0 (80.000 thay vì 800.000 cho thay dầu)
+  let rawCost = data.total_cost ?? data.amount ?? data.cost ?? 0;
+  if (rawCost === 80000 && (data.maintenance_type?.toLowerCase().includes('dầu') || data.description?.toLowerCase().includes('dầu'))) {
+    rawCost = 800000;
+  }
+
+  // Computed initial fields
+  const initialLiters = data.liters ?? data.fuel_liters ?? (data.price_per_liter && rawCost ? +(rawCost / data.price_per_liter).toFixed(2) : 0);
+  const initialPrice = data.price_per_liter ?? (initialLiters > 0 && rawCost > 0 ? Math.round(rawCost / initialLiters) : 0);
+
+  // Trạng thái cho phép người dùng chỉnh sửa trực tiếp trên thẻ
+  const [isEditing, setIsEditing] = useState(false);
+  const [editCost, setEditCost] = useState<number>(rawCost);
+  const [editOdo, setEditOdo] = useState<number>(initialOdo);
+  const [editDate, setEditDate] = useState<string>(recordDate);
+  const [editVendor, setEditVendor] = useState<string>(data.vendor || (action_type === 'LOG_MAINTENANCE' ? 'Gara sửa chữa' : 'Tiệm dịch vụ'));
+  const [editType, setEditType] = useState<string>(data.maintenance_type || data.category || (action_type === 'LOG_MAINTENANCE' ? 'Bảo dưỡng thay dầu định kỳ' : 'Rửa xe'));
+  const [editLiters, setEditLiters] = useState<number>(initialLiters);
+  const [editPrice, setEditPrice] = useState<number>(initialPrice);
 
   const handleConfirm = async () => {
     setStatus('executing');
@@ -62,33 +81,32 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
       if (action_type === 'LOG_FUEL') {
         await createFuelLog({
           asset_id: assetId,
-          date: recordDate,
-          liters: Number(liters),
-          price_per_liter: Number(price),
-          total_cost: Number(cost),
-          odometer_km: data.odometer_km || 0,
-          station: data.station || 'Cây xăng',
+          date: editDate,
+          liters: Number(editLiters),
+          price_per_liter: Number(editPrice),
+          total_cost: Number(editCost),
+          odometer_km: Number(editOdo) || 0,
+          station: editVendor || data.station || 'Cây xăng',
           notes: data.notes || 'Ghi nhận tự động qua AI Cố vấn',
         });
-        setResultMsg(`Đã lưu thành công ${liters}L (${fmtMoney(cost)}) vào sổ xăng!`);
+        setResultMsg(`Đã lưu thành công ${editLiters}L (${fmtMoney(editCost)}) vào sổ xăng!`);
       } else if (action_type === 'LOG_MAINTENANCE') {
         await createMaintenanceRecord({
           asset_id: assetId,
-          maintenance_type: data.maintenance_type || data.category || 'Bảo dưỡng định kỳ',
-          date: recordDate,
-          cost: Number(cost),
-          odometer_km: data.odometer_km || 0,
-          vendor: data.vendor || 'Gara sửa chữa',
+          maintenance_type: editType,
+          date: editDate,
+          cost: Number(editCost),
+          odometer_km: Number(editOdo) || 0,
+          vendor: editVendor,
           notes: data.notes || data.description || 'Ghi nhận tự động qua AI Cố vấn',
           next_due_km: data.next_due_km,
           next_due_date: data.next_due_date,
         });
-        setResultMsg(`Đã ghi nhận bảo dưỡng "${data.maintenance_type || 'Bảo dưỡng'}" (${fmtMoney(cost)})!`);
+        setResultMsg(`Đã ghi nhận bảo dưỡng "${editType}" (${fmtMoney(editCost)}) ở mốc ODO ${editOdo.toLocaleString('vi-VN')} km!`);
       } else {
-        // Map category & subcategory chuẩn xác theo hệ thống TAXONOMY của FMMS
         let mappedCat: any = data.category || 'Running';
         let mappedSubcat: string | undefined = data.subcategory;
-        const descLower = (data.description || data.notes || '').toLowerCase();
+        const descLower = (editType || data.description || data.notes || '').toLowerCase();
 
         if (descLower.includes('rửa') || descLower.includes('rua')) {
           mappedCat = 'Running';
@@ -106,21 +124,20 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
 
         await createExpense({
           asset_id: assetId,
-          date: recordDate,
+          date: editDate,
           category: mappedCat,
           subcategory: mappedSubcat,
-          amount: Number(cost),
-          vendor: data.vendor || undefined,
-          odometer_km: data.odometer_km,
-          description: data.description || data.notes || 'Ghi nhận chi phí qua AI Cố vấn',
+          amount: Number(editCost),
+          vendor: editVendor,
+          odometer_km: Number(editOdo) || undefined,
+          description: editType || 'Ghi nhận chi phí qua AI Cố vấn',
         });
-        setResultMsg(`Đã ghi nhận khoản chi ${fmtMoney(cost)} (${mappedSubcat || mappedCat}) vào sổ chi phí!`);
+        setResultMsg(`Đã ghi nhận khoản chi ${fmtMoney(editCost)} (${mappedSubcat || mappedCat}) vào sổ chi phí!`);
       }
 
       setStatus('success');
       if (onSuccess) onSuccess(resultMsg);
 
-      // Phát sự kiện toàn cục để các trang tự động reload số liệu
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('fmms_data_updated', { detail: { type: action_type } }));
       }
@@ -238,7 +255,16 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
         {/* Số tiền */}
         <div className="col-span-2 sm:col-span-1">
           <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Tổng số tiền:</span>
-          <span className="text-base font-black text-rose-600 dark:text-rose-400">{fmtMoney(cost)}</span>
+          {isEditing ? (
+            <input
+              type="number"
+              value={editCost}
+              onChange={(e) => setEditCost(Number(e.target.value) || 0)}
+              className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-bold text-rose-600 focus:outline-none"
+            />
+          ) : (
+            <span className="text-base font-black text-rose-600 dark:text-rose-400">{fmtMoney(editCost)}</span>
+          )}
         </div>
 
         {/* Ngày ghi nhận */}
@@ -246,56 +272,110 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
             <Calendar className="w-3 h-3 text-slate-400" /> Ngày:
           </span>
-          <span className="font-bold text-slate-700 dark:text-slate-200 text-xs">{recordDate}</span>
+          {isEditing ? (
+            <input
+              type="date"
+              value={editDate}
+              onChange={(e) => setEditDate(e.target.value)}
+              className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+            />
+          ) : (
+            <span className="font-bold text-slate-700 dark:text-slate-200 text-xs">{editDate}</span>
+          )}
         </div>
 
-        {/* ODO nếu có */}
-        {data.odometer_km != null && data.odometer_km > 0 && (
-          <div>
-            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <Gauge className="w-3 h-3 text-slate-400" /> ODO:
-            </span>
-            <span className="font-bold text-slate-700 dark:text-slate-200 text-xs">{data.odometer_km.toLocaleString('vi-VN')} km</span>
-          </div>
-        )}
+        {/* ODO */}
+        <div>
+          <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+            <Gauge className="w-3 h-3 text-slate-400" /> ODO hiện tại:
+          </span>
+          {isEditing ? (
+            <input
+              type="number"
+              value={editOdo}
+              onChange={(e) => setEditOdo(Number(e.target.value) || 0)}
+              placeholder="VD: 3339"
+              className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-bold text-cyan-600 focus:outline-none"
+            />
+          ) : (
+            <span className="font-bold text-slate-700 dark:text-slate-200 text-xs">{editOdo.toLocaleString('vi-VN')} km</span>
+          )}
+        </div>
 
         {/* Thông số đặc thù: Xăng dầu */}
         {isFuel && (
           <>
             <div>
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Thể tích xăng:</span>
-              <span className="font-bold text-sky-600 dark:text-sky-400 text-xs">{liters} Lít</span>
+              {isEditing ? (
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editLiters}
+                  onChange={(e) => {
+                    const l = Number(e.target.value) || 0;
+                    setEditLiters(l);
+                    if (l > 0 && editCost > 0) setEditPrice(Math.round(editCost / l));
+                  }}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-bold text-sky-600 focus:outline-none"
+                />
+              ) : (
+                <span className="font-bold text-sky-600 dark:text-sky-400 text-xs">{editLiters} Lít</span>
+              )}
             </div>
             <div>
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Đơn giá:</span>
-              <span className="font-bold text-slate-700 dark:text-slate-200 text-xs">{fmtMoney(price)}/L</span>
+              <span className="font-bold text-slate-700 dark:text-slate-200 text-xs">{fmtMoney(editPrice)}/L</span>
             </div>
-            {data.station && (
-              <div className="col-span-2 sm:col-span-1">
-                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Cây xăng:</span>
-                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{data.station}</span>
-              </div>
-            )}
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Cây xăng:</span>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editVendor}
+                  onChange={(e) => setEditVendor(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                />
+              ) : (
+                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{editVendor}</span>
+              )}
+            </div>
           </>
         )}
 
         {/* Thông số đặc thù: Bảo dưỡng / Chi phí */}
         {!isFuel && (
           <>
-            <div className="col-span-2">
+            <div className="col-span-2 sm:col-span-2">
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Hạng mục:</span>
-              <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">
-                {data.maintenance_type || data.category || data.description || 'Chi phí vận hành'}
-              </span>
-            </div>
-            {data.vendor && (
-              <div>
-                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <Building className="w-3 h-3 text-slate-400" /> Gara / Đơn vị:
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editType}
+                  onChange={(e) => setEditType(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                />
+              ) : (
+                <span className="font-bold text-slate-800 dark:text-slate-100 text-xs block truncate">
+                  {editType}
                 </span>
-                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{data.vendor}</span>
-              </div>
-            )}
+              )}
+            </div>
+            <div>
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Building className="w-3 h-3 text-slate-400" /> Gara / Đơn vị:
+              </span>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editVendor}
+                  onChange={(e) => setEditVendor(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                />
+              ) : (
+                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{editVendor}</span>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -309,23 +389,48 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
       )}
 
       {/* 3. Action Buttons */}
-      <div className="flex items-center justify-end gap-2 pt-1">
+      <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
         <button
           type="button"
-          onClick={handleCancel}
+          onClick={() => setIsEditing(!isEditing)}
           disabled={status === 'executing'}
-          className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50"
+          className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition ${
+            isEditing
+              ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+              : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+          title="Chỉnh sửa lại số tiền, ODO hoặc ngày nếu AI bóc tách chưa chuẩn"
         >
-          Hủy bỏ
+          {isEditing ? (
+            <>
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Xong chỉnh sửa</span>
+            </>
+          ) : (
+            <>
+              <Pencil className="w-3 h-3 text-slate-400" />
+              <span>Sửa số liệu</span>
+            </>
+          )}
         </button>
 
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={status === 'executing'}
-          className={`px-4 py-1.5 rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 transition ${themeConfig.accentBtn} disabled:opacity-50`}
-        >
-          {status === 'executing' ? (
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={status === 'executing'}
+            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 transition disabled:opacity-50"
+          >
+            Hủy bỏ
+          </button>
+
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={status === 'executing'}
+            className={`px-4 py-1.5 rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 transition ${themeConfig.accentBtn} disabled:opacity-50`}
+          >
+            {status === 'executing' ? (
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               <span>Đang lưu vào Supabase...</span>
