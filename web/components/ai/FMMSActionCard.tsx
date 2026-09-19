@@ -442,6 +442,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
             </>
           )}
         </button>
+        </div>
       </div>
     </div>
   );
