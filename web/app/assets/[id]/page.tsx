@@ -30,14 +30,14 @@ import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOvervi
 import VehicleDiagnosticsTab from '@/components/assets/VehicleDiagnosticsTab';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
-import KpiGradientCard from '@/components/ui/KpiGradientCard';
+import KpiGradientCard, { getQmsTheme, KpiColorType } from '@/components/ui/KpiGradientCard';
 
 import {
   ArrowLeft, Gauge, Fuel, Wrench, DollarSign, FileText, BarChart3,
   Cpu, CheckCircle2, Plus, MapPin, Activity, Layers, Car, X, Pencil,
   Zap, Clock, TrendingDown, Shield, CreditCard, Award, Trash2, Edit2,
   SlidersHorizontal, Calendar, CalendarDays, CalendarRange, Search, Filter,
-  AlertTriangle, ShieldAlert, Eye, EyeOff,
+  AlertTriangle, ShieldAlert, Eye, EyeOff, RotateCw, Thermometer, BatteryCharging,
 } from 'lucide-react';
 
 
@@ -164,6 +164,205 @@ const CAT_LABELS: Record<string, string> = {
   LOAN: 'Khoản vay', LOAN_PAYMENT: 'Trả gốc vay', LOAN_INTEREST: 'Trả lãi vay',
   INITIAL: 'Vốn mua xe', UPGRADE: 'Nâng cấp/Đồ chơi', CAR_WASH: 'Rửa xe', OTHER: 'Khác',
 };
+
+/* ── OBD Radial Gauge Card (QMS 1:1 Ambient Glow & Gradient) ── */
+function ObdGaugeCard({
+  label,
+  icon: Icon,
+  value,
+  displayValue,
+  unit,
+  min,
+  max,
+  colorType,
+  subLabel,
+  isObdLive,
+  isDark,
+}: {
+  label: string;
+  icon: any;
+  value: number | null | undefined;
+  displayValue: string;
+  unit: string;
+  min: number;
+  max: number;
+  colorType: KpiColorType;
+  subLabel: string;
+  isObdLive: boolean;
+  isDark: boolean;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+  const qmsTheme = getQmsTheme(colorType, isDark);
+
+  const numVal = value != null ? Math.max(min, Math.min(max, value)) : min;
+  const pct = Math.max(0, Math.min(100, ((numVal - min) / (max - min)) * 100));
+  const radius = 36;
+  const strokeWidth = 7;
+  const circumference = 2 * Math.PI * radius;
+  const arcLength = circumference * 0.72;
+  const strokeDashoffset = arcLength - (arcLength * pct) / 100;
+  const gradId = `obd-grad-${label.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`;
+
+  return (
+    <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className={`kpi-card-root group relative p-4 rounded-2xl flex flex-col items-center justify-between transition-all duration-300 overflow-hidden select-none ${
+        !isObdLive ? 'opacity-90' : ''
+      }`}
+      style={{
+        minHeight: '260px',
+        borderRadius: '16px',
+        border: isHovered ? `1.5px solid ${qmsTheme.borderHover}` : `1.5px solid ${qmsTheme.border}`,
+        backgroundColor: isHovered ? qmsTheme.cardBgHover : qmsTheme.cardBg,
+        backgroundImage: isHovered ? qmsTheme.cornerGlowHover : qmsTheme.cornerGlow,
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'top right',
+        backgroundSize: '100% 100%',
+        boxShadow: isHovered
+          ? (isDark
+              ? `0 12px 28px -4px ${qmsTheme.accent}35, 0 4px 10px -2px ${qmsTheme.accent}20`
+              : `0 12px 28px -4px ${qmsTheme.accent}30, 0 4px 10px -2px ${qmsTheme.accent}15`)
+          : (isDark
+              ? '0 4px 12px -2px rgba(0, 0, 0, 0.5)'
+              : '0 2px 8px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.02)'),
+        transform: isHovered ? 'translateY(-3px)' : 'none',
+        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+      }}
+    >
+      {/* ── TOP ROW: Icon + Title on Left, Badge on Right (QMS 1:1) ── */}
+      <div className="w-full flex items-center justify-between gap-2 mb-1.5 z-10">
+        <div className="flex items-center gap-2 min-w-0">
+          <div
+            className="kpi-icon-box shrink-0"
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: isHovered ? qmsTheme.iconBgHover : qmsTheme.iconBg,
+              color: qmsTheme.accent,
+              transition: 'all 0.2s ease',
+              transform: isHovered ? 'scale(1.05)' : 'none',
+            }}
+          >
+            <Icon size={16} />
+          </div>
+          <span
+            className="truncate font-extrabold uppercase tracking-wide select-none"
+            style={{
+              color: isDark ? '#cbd5e1' : '#334155',
+              fontWeight: 800,
+              fontSize: '0.72rem',
+              letterSpacing: '0.5px',
+            }}
+          >
+            {label}
+          </span>
+        </div>
+
+        <span
+          style={{
+            backgroundColor: qmsTheme.badgeBg,
+            color: qmsTheme.badgeText,
+            border: `1px solid ${qmsTheme.badgeBorder}`,
+            padding: '2px 7px',
+            borderRadius: '8px',
+            fontSize: '0.65rem',
+            fontWeight: 700,
+            letterSpacing: '0.3px',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {unit}
+        </span>
+      </div>
+
+      {/* ── MIDDLE ROW: Radial Gauge SVG ── */}
+      <div className="relative w-36 h-36 flex items-center justify-center my-2">
+        <svg className="w-full h-full -rotate-[125deg]" viewBox="0 0 100 100">
+          <defs>
+            <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor={qmsTheme.accent} />
+              <stop offset="100%" stopColor={qmsTheme.borderHover} />
+            </linearGradient>
+          </defs>
+          {/* Background Track */}
+          <circle
+            cx="50"
+            cy="50"
+            r={radius}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${arcLength} ${circumference}`}
+            strokeLinecap="round"
+            className="text-slate-200 dark:text-slate-800/80"
+          />
+          {/* Active Value Arc */}
+          <circle
+            cx="50"
+            cy="50"
+            r={radius}
+            fill="none"
+            stroke={`url(#${gradId})`}
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${arcLength} ${circumference}`}
+            strokeDashoffset={value != null ? strokeDashoffset : arcLength}
+            strokeLinecap="round"
+            style={{
+              transition: 'stroke-dashoffset 0.7s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          />
+        </svg>
+
+        {/* Center Value */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+          <span
+            className="text-3xl sm:text-4xl font-black tracking-tight drop-shadow-sm font-mono"
+            style={{
+              color: value != null ? (isDark ? '#f8fafc' : '#0f172a') : (isDark ? '#64748b' : '#94a3b8'),
+              fontWeight: 800,
+              lineHeight: 1,
+            }}
+          >
+            {displayValue}
+          </span>
+          <span
+            className="text-[10px] font-extrabold uppercase mt-1 tracking-wider"
+            style={{ color: qmsTheme.accent }}
+          >
+            {unit}
+          </span>
+        </div>
+      </div>
+
+      {/* ── BOTTOM ROW: Divider & Smart Status Subtitle (QMS 1:1) ── */}
+      <div className="w-full mt-auto pt-1.5 z-10">
+        <div
+          style={{
+            marginBottom: 6,
+            height: '1px',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+          }}
+        />
+        <p
+          className="text-center truncate"
+          style={{
+            color: isDark ? '#94a3b8' : '#64748b',
+            fontSize: '0.72rem',
+            fontWeight: 600,
+          }}
+        >
+          {subLabel}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════════
    MAIN PAGE
@@ -3026,170 +3225,72 @@ export default function AssetDetailPage() {
               }
             </div>
 
-            {/* OBD Modern Radial Gauge Meters — Realtime từ Android CarLogger */}
+            {/* OBD Modern Radial Gauge Meters — Realtime từ Android CarLogger (QMS 1:1 Ambient Glow & Gradient) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {(() => {
                 const gauges = [
                   {
                     label: 'Tốc độ xe',
-                    icon: '⚡',
+                    icon: Zap,
                     value: live.speed,
                     displayValue: live.speed != null ? `${Math.round(live.speed)}` : '0',
                     unit: 'km/h',
                     min: 0,
                     max: 160,
-                    color: 'var(--accent-cyan)',
-                    bgColor: 'rgba(6,182,212,0.12)',
-                    borderColor: 'rgba(6,182,212,0.25)',
-                    gradId: 'grad-speed',
-                    gradColors: ['#06B6D4', '#10B981'] as [string, string],
+                    colorType: 'cyan' as KpiColorType,
                     subLabel: live.speed == null ? 'Chờ tín hiệu OBD...' : live.speed === 0 ? 'Xe dừng / Nổ máy tại chỗ' : live.speed < 40 ? 'Đang chạy trong phố' : live.speed < 80 ? 'Tốc độ đường trường' : 'Đang chạy cao tốc',
                   },
                   {
                     label: 'Vòng tua máy RPM',
-                    icon: '🔄',
+                    icon: RotateCw,
                     value: live.rpm,
                     displayValue: live.rpm != null ? `${Math.round(live.rpm)}` : '0',
                     unit: 'rpm',
                     min: 0,
                     max: 6000,
-                    color: live.rpm != null && live.rpm > 3500 ? 'var(--status-rose)' : 'var(--status-amber)',
-                    bgColor: 'rgba(245,158,11,0.12)',
-                    borderColor: 'rgba(245,158,11,0.25)',
-                    gradId: 'grad-rpm',
-                    gradColors: live.rpm != null && live.rpm > 3500 ? ['#F59E0B', '#EF4444'] as [string, string] : ['#F59E0B', '#F97316'] as [string, string],
+                    colorType: (live.rpm != null && live.rpm > 3500 ? 'rose' : 'amber') as KpiColorType,
                     subLabel: live.rpm == null ? 'Chờ tín hiệu OBD...' : live.rpm === 0 ? 'Động cơ đang tắt' : live.rpm < 950 ? 'Garanti / Không tải chuẩn' : live.rpm < 2500 ? 'Vùng tiết kiệm nhiên liệu' : live.rpm < 4000 ? 'Vòng tua cao' : '⚠️ Vùng đỏ Redline',
                   },
                   {
                     label: 'Nhiệt độ nước làm mát',
-                    icon: '🌡️',
+                    icon: Thermometer,
                     value: live.coolant,
                     displayValue: live.coolant != null && live.coolant > 0 ? `${Math.round(live.coolant)}` : '—',
                     unit: '°C',
                     min: 0,
                     max: 120,
-                    color: live.coolant != null && live.coolant > 100 ? 'var(--status-rose)' : live.coolant != null && live.coolant < 60 ? 'var(--accent-cyan)' : 'var(--status-green)',
-                    bgColor: 'rgba(165,180,252,0.12)',
-                    borderColor: 'rgba(16,185,129,0.25)',
-                    gradId: 'grad-coolant',
-                    gradColors: live.coolant != null && live.coolant > 100 ? ['#F59E0B', '#EF4444'] as [string, string] : ['#10B981', '#06B6D4'] as [string, string],
+                    colorType: (live.coolant != null && live.coolant > 100 ? 'rose' : live.coolant != null && live.coolant < 60 ? 'cyan' : 'emerald') as KpiColorType,
                     subLabel: live.coolant == null || live.coolant <= 0 ? 'Chờ tín hiệu OBD...' : !isObdLive ? `Lưu lúc tắt máy (${Math.round(live.coolant)}°C)` : live.coolant < 60 ? '🔵 Đang làm nóng máy' : live.coolant <= 95 ? '🟢 Nhiệt độ tối ưu' : live.coolant <= 105 ? '🟠 Quạt gió làm việc' : '🔴 Cảnh báo quá nhiệt!',
                   },
                   {
                     label: 'Điện áp bình ắc quy',
-                    icon: '🔋',
+                    icon: BatteryCharging,
                     value: live.voltage,
                     displayValue: live.voltage != null && live.voltage > 0 ? live.voltage.toFixed(1) : '—',
                     unit: 'V',
                     min: 10,
                     max: 16,
-                    color: live.voltage != null && live.voltage < 11.8 ? 'var(--status-rose)' : 'var(--status-purple)',
-                    bgColor: 'rgba(168,85,247,0.12)',
-                    borderColor: 'rgba(168,85,247,0.25)',
-                    gradId: 'grad-voltage',
-                    gradColors: ['#A855F7', '#6366F1'] as [string, string],
+                    colorType: (live.voltage != null && live.voltage < 11.8 ? 'rose' : 'purple') as KpiColorType,
                     subLabel: live.voltage == null || live.voltage <= 0 ? 'Chờ tín hiệu OBD...' : !isObdLive ? `Điện áp ắc quy lúc tắt máy (${live.voltage.toFixed(1)}V)` : live.voltage < 11.8 ? '🔴 Bình yếu, cần sạc' : live.voltage <= 12.8 ? '🟡 Điện áp bình tốt' : live.voltage <= 14.8 ? '⚡ Máy phát đang sạc tốt' : '⚠️ Quá áp máy phát',
                   },
                 ];
 
-                return gauges.map((g, idx) => {
-                  const numVal = g.value != null ? Math.max(g.min, Math.min(g.max, g.value)) : g.min;
-                  const pct = Math.max(0, Math.min(100, ((numVal - g.min) / (g.max - g.min)) * 100));
-                  const radius = 36;
-                  const strokeWidth = 7;
-                  const circumference = 2 * Math.PI * radius; // ~226.19
-                  const arcLength = circumference * 0.72; // 260-degree arc ~162.8
-                  const strokeDashoffset = arcLength - (arcLength * pct) / 100;
-
-                  return (
-                    <div
-                      key={idx}
-                      className={`relative p-5 rounded-2xl flex flex-col items-center justify-between transition-all duration-300 hover:scale-[1.02] shadow-lg overflow-hidden group ${!isObdLive ? 'opacity-90' : ''}`}
-                      style={{
-                        background: 'var(--bg-secondary)',
-                        border: `1px solid ${g.borderColor}`,
-                        boxShadow: `0 10px 30px -10px ${g.color}25`,
-                      }}
-                    >
-                      {/* Ambient light glow */}
-                      <div
-                        className="absolute -top-10 -right-10 w-28 h-28 rounded-full blur-2xl opacity-15 pointer-events-none transition-all group-hover:opacity-30"
-                        style={{ background: g.color }}
-                      />
-
-                      {/* Header */}
-                      <div className="w-full flex items-center justify-between mb-1 z-10">
-                        <span className="text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
-                          <span>{g.icon}</span>
-                          <span>{g.label}</span>
-                        </span>
-                        <span
-                          className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                          style={{ background: g.bgColor, color: g.color }}
-                        >
-                          {g.unit}
-                        </span>
-                      </div>
-
-                      {/* Radial Gauge SVG */}
-                      <div className="relative w-36 h-36 flex items-center justify-center my-2">
-                        <svg className="w-full h-full -rotate-[125deg]" viewBox="0 0 100 100">
-                          <defs>
-                            <linearGradient id={g.gradId} x1="0%" y1="0%" x2="100%" y2="100%">
-                              <stop offset="0%" stopColor={g.gradColors[0]} />
-                              <stop offset="100%" stopColor={g.gradColors[1]} />
-                            </linearGradient>
-                          </defs>
-                          {/* Background Track */}
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r={radius}
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth={strokeWidth}
-                            strokeDasharray={`${arcLength} ${circumference}`}
-                            strokeLinecap="round"
-                            className="text-slate-200 dark:text-slate-800/80"
-                          />
-                          {/* Active Value Arc */}
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r={radius}
-                            fill="none"
-                            stroke={`url(#${g.gradId})`}
-                            strokeWidth={strokeWidth}
-                            strokeDasharray={`${arcLength} ${circumference}`}
-                            strokeDashoffset={g.value != null ? strokeDashoffset : arcLength}
-                            strokeLinecap="round"
-                            className="transition-all duration-700 ease-out"
-                          />
-                        </svg>
-
-                        {/* Center Value */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                          <span
-                            className="text-3xl sm:text-4xl font-black tracking-tight drop-shadow-sm transition-all"
-                            style={{ color: g.value != null ? g.color : 'var(--text-muted)' }}
-                          >
-                            {g.displayValue}
-                          </span>
-                          <span className="text-[10px] font-bold uppercase mt-0.5 tracking-wider" style={{ color: 'var(--text-faint)' }}>
-                            {g.unit}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Smart Status Badge */}
-                      <div className="w-full mt-1 pt-2.5 border-t text-center z-10" style={{ borderColor: 'var(--border-default)' }}>
-                        <p className="text-[11px] font-semibold truncate" style={{ color: g.value != null ? 'var(--text-primary)' : 'var(--text-faint)' }}>
-                          {g.subLabel}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                });
+                return gauges.map((g, idx) => (
+                  <ObdGaugeCard
+                    key={idx}
+                    label={g.label}
+                    icon={g.icon}
+                    value={g.value}
+                    displayValue={g.displayValue}
+                    unit={g.unit}
+                    min={g.min}
+                    max={g.max}
+                    colorType={g.colorType}
+                    subLabel={g.subLabel}
+                    isObdLive={isObdLive}
+                    isDark={isDark}
+                  />
+                ));
               })()}
             </div>
 
