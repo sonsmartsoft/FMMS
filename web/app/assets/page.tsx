@@ -545,10 +545,10 @@ export default function AssetsPage() {
 
                 {/* 3. Giá trị & Odometer */}
                 <div className="p-4 rounded-xl space-y-3" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}>
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">3. Ngày mua, Giá trị &amp; Odometer ban đầu</h4>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-400">3. Ngày nhận xe, Giá trị &amp; Odometer ban đầu</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày mua</label>
+                      <label className="block mb-1 font-bold uppercase text-[10px]" style={{ color: 'var(--text-muted)' }}>Ngày nhận xe</label>
                       <input
                         type="date"
                         className="theme-input"

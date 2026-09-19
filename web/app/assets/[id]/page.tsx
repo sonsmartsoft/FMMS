@@ -2836,7 +2836,7 @@ export default function AssetDetailPage() {
                   }
                 }
                 return [
-                  { label: 'Giá mua ban đầu', value: `${fmt(asset.purchase_price)} ₫`, sub: `Ngày mua: ${fmtDate(asset.purchase_date || '')}`, color: 'var(--text-primary)' },
+                  { label: 'Giá mua ban đầu', value: `${fmt(asset.purchase_price)} ₫`, sub: `Ngày nhận xe: ${fmtDate(asset.purchase_date || '')}`, color: 'var(--text-primary)' },
                   { label: 'Tổng chi phí phát sinh', value: `${fmt(totalExpenses)} ₫`, sub: `Chi phí vận hành, bảo dưỡng & nuôi xe`, color: 'var(--status-amber)' },
                   { label: 'Bảo dưỡng tiếp theo', value: maintValue, sub: maintSub, color: maintColor },
                 ];
@@ -5140,7 +5140,7 @@ export default function AssetDetailPage() {
                   ['Hạng mục', `${asset.brand} ${asset.model}`],
                   ['Đơn vị bảo hành', `${asset.brand} Việt Nam`],
                   ['Thời hạn', '3 năm / 100,000 km'],
-                  ['Ngày bắt đầu', asset.purchase_date || '01/01/2026'],
+                  ['Ngày nhận xe / Bắt đầu', asset.purchase_date ? fmtDate(asset.purchase_date) : '09/04/2026'],
                   ['Trạng thái', 'Đang áp dụng'],
                 ].map(([k, v], i) => (
                   <div key={i} className="flex justify-between">
@@ -5589,7 +5589,7 @@ export default function AssetDetailPage() {
           <Field label="Năm sản xuất"><input type="number" className="theme-input" value={editForm.year} onChange={e => setEditForm(p => ({ ...p, year: e.target.value }))} /></Field>
           <Field label="Giá mua ban đầu (₫)"><input type="number" className="theme-input" placeholder="VD: 520000000" value={editForm.purchase_price} onChange={e => setEditForm(p => ({ ...p, purchase_price: e.target.value }))} /></Field>
           <Field label="Giá trị ước tính hiện tại (₫)"><input type="number" className="theme-input" placeholder="VD: 490000000" value={editForm.current_value} onChange={e => setEditForm(p => ({ ...p, current_value: e.target.value }))} /></Field>
-          <Field label="Ngày mua"><input type="date" className="theme-input" value={editForm.purchase_date} onChange={e => setEditForm(p => ({ ...p, purchase_date: e.target.value }))} /></Field>
+          <Field label="Ngày nhận xe"><input type="date" className="theme-input" value={editForm.purchase_date} onChange={e => setEditForm(p => ({ ...p, purchase_date: e.target.value }))} /></Field>
           <Field label="Biển số xe"><input type="text" className="theme-input" value={editForm.license_plate} onChange={e => setEditForm(p => ({ ...p, license_plate: e.target.value }))} /></Field>
           <Field label="Số khung / VIN"><input type="text" className="theme-input" value={editForm.vin} onChange={e => setEditForm(p => ({ ...p, vin: e.target.value }))} /></Field>
           <Field label="Số máy / Động cơ"><input type="text" className="theme-input" placeholder="VD: 1.5L SkyActiv" value={editForm.engine} onChange={e => setEditForm(p => ({ ...p, engine: e.target.value }))} /></Field>
