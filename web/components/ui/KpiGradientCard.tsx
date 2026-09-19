@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { useTheme } from '@/lib/theme/ThemeContext';
 
 export type KpiColorType = 'cyan' | 'emerald' | 'amber' | 'rose' | 'purple' | 'blue' | 'teal' | 'indigo';
 
@@ -167,8 +168,25 @@ export default function KpiGradientCard({
   className = '',
   valueColor,
 }: KpiCardProps) {
+  const { theme } = useTheme();
+  const [isMounted, setIsMounted] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const isDark = isMounted ? theme === 'dark' : true;
   const c = COLOR_MAP[colorType] || COLOR_MAP.cyan;
+
+  // Dynamic multi-layer gradient background for the entire card surface
+  const bgGradient = isDark
+    ? isHovered
+      ? `linear-gradient(135deg, rgba(${c.rgb}, 0.22) 0%, rgba(${c.rgb}, 0.06) 45%, rgba(17, 24, 39, 0.98) 100%)`
+      : `linear-gradient(135deg, rgba(${c.rgb}, 0.13) 0%, rgba(${c.rgb}, 0.03) 45%, rgba(17, 24, 39, 0.96) 100%)`
+    : isHovered
+      ? `linear-gradient(135deg, rgba(${c.rgb}, 0.15) 0%, rgba(${c.rgb}, 0.035) 45%, #ffffff 100%)`
+      : `linear-gradient(135deg, rgba(${c.rgb}, 0.075) 0%, rgba(${c.rgb}, 0.015) 45%, #ffffff 100%)`;
 
   // Render Icon safely whether it's a React component or a rendered Node
   const renderIcon = () => {
@@ -194,23 +212,47 @@ export default function KpiGradientCard({
           : 'hover:-translate-y-0.5'
       } ${className}`}
       style={{
-        background: 'var(--bg-secondary)',
+        background: bgGradient,
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
         border: active
           ? `1.5px solid ${c.hex}`
           : isHovered
             ? `1.5px solid ${c.hex}`
-            : `1px solid rgba(${c.rgb}, 0.25)`,
+            : isDark
+              ? `1px solid rgba(${c.rgb}, 0.32)`
+              : `1px solid rgba(${c.rgb}, 0.22)`,
         boxShadow: isHovered
-          ? `0 14px 30px -6px rgba(${c.rgb}, 0.28), 0 4px 12px -2px rgba(${c.rgb}, 0.14)`
-          : `0 2px 8px 0 rgba(0, 0, 0, 0.04)`,
+          ? `0 16px 32px -6px rgba(${c.rgb}, ${isDark ? 0.35 : 0.22}), 0 6px 16px -2px rgba(${c.rgb}, ${isDark ? 0.20 : 0.12})`
+          : isDark
+            ? `0 4px 16px 0 rgba(0, 0, 0, 0.45), 0 1px 3px 0 rgba(${c.rgb}, 0.10)`
+            : `0 4px 16px 0 rgba(${c.rgb}, 0.08), 0 1px 3px 0 rgba(0, 0, 0, 0.04)`,
       }}
     >
-      {/* ── LAYER 1: Corner Glow (Radial Gradient ở góc trên phải) ── */}
+      {/* ── LAYER 1a: Top Edge Luminous Highlight (Glass Shimmer Beam) ── */}
       <div
-        className="absolute top-0 right-0 w-36 h-36 rounded-full pointer-events-none transition-opacity duration-500 blur-2xl -mr-10 -mt-10"
+        className="absolute top-0 inset-x-0 h-[1.5px] pointer-events-none transition-opacity duration-300"
         style={{
-          background: `radial-gradient(circle at top right, rgba(${c.rgb}, ${isHovered ? 0.35 : 0.16}) 0%, transparent 70%)`,
+          background: `linear-gradient(90deg, transparent 0%, rgba(${c.rgb}, ${isHovered ? 0.85 : 0.45}) 30%, rgba(${c.rgb}, ${isHovered ? 0.95 : 0.6}) 50%, rgba(${c.rgb}, ${isHovered ? 0.85 : 0.45}) 70%, transparent 100%)`,
+          opacity: isHovered ? 1 : 0.7,
+        }}
+      />
+
+      {/* ── LAYER 1b: Primary Corner Glow (Radial Gradient ở góc trên phải) ── */}
+      <div
+        className="absolute top-0 right-0 w-44 h-44 rounded-full pointer-events-none transition-all duration-500 blur-2xl -mr-12 -mt-12"
+        style={{
+          background: `radial-gradient(circle at top right, rgba(${c.rgb}, ${isDark ? (isHovered ? 0.42 : 0.25) : (isHovered ? 0.30 : 0.16)}) 0%, transparent 70%)`,
           opacity: isHovered ? 1 : 0.85,
+        }}
+      />
+
+      {/* ── LAYER 1c: Secondary Ambient Counter-Glow (Góc dưới trái) ── */}
+      <div
+        className="absolute bottom-0 left-0 w-36 h-36 rounded-full pointer-events-none transition-all duration-500 blur-2xl -ml-10 -mb-10"
+        style={{
+          background: `radial-gradient(circle at bottom left, rgba(${c.rgb}, ${isDark ? (isHovered ? 0.20 : 0.10) : (isHovered ? 0.14 : 0.06)}) 0%, transparent 70%)`,
+          opacity: isHovered ? 1 : 0.8,
         }}
       />
 

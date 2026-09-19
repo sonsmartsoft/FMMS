@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Asset, CardDisplaySettings } from '@/types/mobility';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { useTheme } from '@/lib/theme/ThemeContext';
 import { Car, Bike, Zap, Gauge, Fuel, DollarSign, ArrowRight, Battery } from 'lucide-react';
 
 interface AssetCardProps {
@@ -40,20 +41,72 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
   };
   const theme = typeColors[asset.asset_type] || { hex: '#0EA5E9', rgb: '14, 165, 233' };
 
+  const { theme: appTheme } = useTheme();
+  const [isMounted, setIsMounted] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const isDark = isMounted ? appTheme === 'dark' : true;
+
+  const bgGradient = isDark
+    ? isHovered
+      ? `linear-gradient(145deg, rgba(${theme.rgb}, 0.20) 0%, rgba(${theme.rgb}, 0.05) 45%, rgba(17, 24, 39, 0.98) 100%)`
+      : `linear-gradient(145deg, rgba(${theme.rgb}, 0.12) 0%, rgba(${theme.rgb}, 0.03) 45%, rgba(17, 24, 39, 0.96) 100%)`
+    : isHovered
+      ? `linear-gradient(145deg, rgba(${theme.rgb}, 0.14) 0%, rgba(${theme.rgb}, 0.035) 45%, #ffffff 100%)`
+      : `linear-gradient(145deg, rgba(${theme.rgb}, 0.075) 0%, rgba(${theme.rgb}, 0.015) 45%, #ffffff 100%)`;
+
   return (
-    <Link href={`/assets/${asset.id}`} className="block group">
+    <Link
+      href={`/assets/${asset.id}`}
+      className="block group"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <div
         className="glass-card rounded-2xl overflow-hidden flex flex-col h-full relative transition-all duration-300 group-hover:-translate-y-1.5"
         style={{
-          border: `1px solid rgba(${theme.rgb}, 0.22)`,
-          background: 'var(--bg-card)',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.03)',
+          border: isHovered
+            ? `1.5px solid ${theme.hex}`
+            : isDark
+              ? `1px solid rgba(${theme.rgb}, 0.32)`
+              : `1px solid rgba(${theme.rgb}, 0.22)`,
+          background: bgGradient,
+          boxShadow: isHovered
+            ? `0 16px 32px -6px rgba(${theme.rgb}, ${isDark ? 0.35 : 0.22}), 0 6px 16px -2px rgba(${theme.rgb}, ${isDark ? 0.20 : 0.12})`
+            : isDark
+              ? `0 4px 16px 0 rgba(0, 0, 0, 0.45), 0 1px 3px 0 rgba(${theme.rgb}, 0.10)`
+              : `0 4px 16px 0 rgba(${theme.rgb}, 0.08), 0 1px 3px 0 rgba(0, 0, 0, 0.04)`,
         }}
       >
+        {/* Top Edge Luminous Highlight (Glass Shimmer Beam) */}
+        <div
+          className="absolute top-0 inset-x-0 h-[1.5px] pointer-events-none transition-opacity duration-300 z-10"
+          style={{
+            background: `linear-gradient(90deg, transparent 0%, rgba(${theme.rgb}, ${isHovered ? 0.85 : 0.45}) 30%, rgba(${theme.rgb}, ${isHovered ? 0.95 : 0.6}) 50%, rgba(${theme.rgb}, ${isHovered ? 0.85 : 0.45}) 70%, transparent 100%)`,
+            opacity: isHovered ? 1 : 0.7,
+          }}
+        />
+
         {/* Subtle Ambient Corner Glow */}
         <div
-          className="absolute -top-12 -right-12 w-36 h-36 rounded-full pointer-events-none blur-2xl transition-opacity duration-500 opacity-60 group-hover:opacity-100"
-          style={{ background: `radial-gradient(circle at top right, rgba(${theme.rgb}, 0.25) 0%, transparent 70%)` }}
+          className="absolute -top-12 -right-12 w-44 h-44 rounded-full pointer-events-none blur-2xl transition-all duration-500"
+          style={{
+            background: `radial-gradient(circle at top right, rgba(${theme.rgb}, ${isDark ? (isHovered ? 0.42 : 0.25) : (isHovered ? 0.30 : 0.16)}) 0%, transparent 70%)`,
+            opacity: isHovered ? 1 : 0.85,
+          }}
+        />
+
+        {/* Secondary Ambient Bottom Counter-Glow */}
+        <div
+          className="absolute -bottom-10 -left-10 w-36 h-36 rounded-full pointer-events-none blur-2xl transition-all duration-500"
+          style={{
+            background: `radial-gradient(circle at bottom left, rgba(${theme.rgb}, ${isDark ? (isHovered ? 0.20 : 0.10) : (isHovered ? 0.14 : 0.06)}) 0%, transparent 70%)`,
+            opacity: isHovered ? 1 : 0.8,
+          }}
         />
 
         {/* Thumbnail */}
