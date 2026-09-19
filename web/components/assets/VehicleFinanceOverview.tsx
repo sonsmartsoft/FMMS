@@ -14,6 +14,7 @@ import { getMasterBanks } from '@/lib/services/masterDataService';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
+import KpiGradientCard, { KpiColorType } from '@/components/ui/KpiGradientCard';
 import {
   DollarSign, TrendingUp, TrendingDown, Wrench, Fuel, ShieldCheck,
   CreditCard, Landmark, PieChart, Plus, X, Edit2, Trash2, CheckCircle2, AlertCircle, ChevronRight, Sliders
@@ -656,16 +657,23 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
   };
 
   // 9 Summary Cards Config
-  const CARDS = [
+  const CARDS: Array<{
+    id: string;
+    title: string;
+    href?: string;
+    sub: string;
+    value: string;
+    colorType: KpiColorType;
+    icon: any;
+    detailText: string;
+  }> = [
     {
       id: 'investment',
       title: 'Investment',
       href: '/assets',
       sub: isEn ? 'Initial Equity / Down Payment' : 'Vốn tự có ban đầu',
       value: `${fmt(investment)} ₫`,
-      color: '#3B82F6',
-      bg: 'rgba(59,130,246,0.12)',
-      border: 'rgba(59,130,246,0.3)',
+      colorType: 'blue',
       icon: Landmark,
       detailText: isEn ? `Down payment ${fmt(downPayment)}₫ + Initial fees ${fmt(initialFeesTotal)}₫` : `Trả trước ${fmt(downPayment)}₫ + Phí lăn bánh ${fmt(initialFeesTotal)}₫`,
     },
@@ -675,9 +683,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
       href: '/maintenance',
       sub: isEn ? 'Upgrades & Accessories' : 'Đồ độ & Nâng cấp',
       value: `${fmt(totalUpgradeCost)} ₫`,
-      color: '#A78BFA',
-      bg: 'rgba(167,139,250,0.12)',
-      border: 'rgba(167,139,250,0.3)',
+      colorType: 'purple',
       icon: Wrench,
       detailText: isEn ? `${uniqueUpgradeCount} upgrade items — Open Parts` : `${uniqueUpgradeCount} món độ — Mở tab Phụ tùng`,
     },
@@ -687,9 +693,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
       href: '/fuel',
       sub: isEn ? 'Running & Fuel Costs' : 'Chi phí vận hành',
       value: `${fmt(totalRunningCost)} ₫`,
-      color: '#F59E0B',
-      bg: 'rgba(245,158,11,0.12)',
-      border: 'rgba(245,158,11,0.3)',
+      colorType: 'amber',
       icon: Fuel,
       detailText: isEn ? 'Fuel, Parking, Tolls, Wash... — Open Expenses' : 'Xăng, Đổ bê tông/Gửi xe, BOT, Rửa xe... — Mở tab Chi phí',
     },
@@ -699,9 +703,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
       href: '/finance',
       sub: isEn ? 'Bank Loan Interest' : 'Lãi vay ngân hàng',
       value: `${fmt(totalInterest)} ₫`,
-      color: '#EC4899',
-      bg: 'rgba(236,72,153,0.12)',
-      border: 'rgba(236,72,153,0.3)',
+      colorType: 'rose',
       icon: TrendingUp,
       detailText: loan ? (isEn ? `Pref ${loan.preferred_rate_percent || loan.interest_rate_percent}% + Float ${loan.floating_rate_percent || loan.interest_rate_percent}% — Open Loans` : `Ưu đãi ${loan.preferred_rate_percent || loan.interest_rate_percent}% + Thả nổi ${loan.floating_rate_percent || loan.interest_rate_percent}% — Mở Khoản vay`) : (isEn ? 'No active loan' : 'Chưa có khoản vay'),
     },
@@ -711,9 +713,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
       href: '/finance',
       sub: isEn ? 'Total Cost of Ownership' : 'Tổng chi phí toàn bộ',
       value: `${fmt(totalCost)} ₫`,
-      color: '#0EA5E9',
-      bg: 'rgba(14,165,233,0.12)',
-      border: 'rgba(14,165,233,0.3)',
+      colorType: 'cyan',
       icon: PieChart,
       detailText: isEn ? 'Equity + Upgrades + Running + Interest' : 'Vốn tự có + Nâng cấp + Vận hành + Lãi vay',
     },
@@ -723,9 +723,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
       href: '/finance',
       sub: isEn ? 'Out-of-Pocket Cash Out' : 'Thực chi từ túi',
       value: `${fmt(cashOut)} ₫`,
-      color: '#F43F5E',
-      bg: 'rgba(244,63,94,0.12)',
-      border: 'rgba(244,63,94,0.3)',
+      colorType: 'rose',
       icon: DollarSign,
       detailText: isEn ? 'Total Cost + Principal Paid' : 'Tổng chi phí + Gốc vay đã thanh toán',
     },
@@ -734,9 +732,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
       title: 'Usage / Odometer',
       sub: isEn ? 'Mileage & Usage' : 'Quãng đường & Tình trạng',
       value: `${fmt(asset.current_odometer_km || 0)} km`,
-      color: '#10B981',
-      bg: 'rgba(16,185,129,0.12)',
-      border: 'rgba(16,185,129,0.3)',
+      colorType: 'emerald',
       icon: Gauge,
       detailText: isEn ? `Status: ${asset.status === 'ACTIVE' ? 'Active' : asset.status === 'MAINTENANCE' ? 'Maintenance' : 'Inactive'}` : `Trạng thái: ${asset.status === 'ACTIVE' ? 'Hoạt động tốt' : asset.status === 'MAINTENANCE' ? 'Đang bảo dưỡng' : 'Không hoạt động'}`,
       href: '/fuel',
@@ -747,9 +743,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
       href: '/finance',
       sub: isEn ? 'Remaining Principal' : 'Dư nợ vay còn lại',
       value: `${fmt(remainingLoan)} ₫`,
-      color: '#FB923C',
-      bg: 'rgba(251,146,60,0.12)',
-      border: 'rgba(251,146,60,0.3)',
+      colorType: 'amber',
       icon: CreditCard,
       detailText: loan ? (isEn ? `${loan.term_months - schedule.filter(s => s.status === 'PAID').length} months remaining — Open Loans` : `Còn ${loan.term_months - schedule.filter(s => s.status === 'PAID').length} kỳ đóng — Mở Khoản vay`) : (isEn ? 'No remaining debt' : 'Không có dư nợ'),
     },
@@ -759,9 +753,7 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
       href: '/finance',
       sub: isEn ? 'Total Ownership Commitment' : 'Tổng chi phí cam kết & thực tế',
       value: `${fmt(ownershipCost)} ₫`,
-      color: '#8B5CF6',
-      bg: 'rgba(139,92,246,0.12)',
-      border: 'rgba(139,92,246,0.3)',
+      colorType: 'indigo',
       icon: TrendingDown,
       detailText: isEn ? 'Total Cost + Remaining Principal' : 'Total Cost + Dư nợ khoản vay còn lại',
     },
@@ -782,37 +774,20 @@ export function VehicleFinanceOverview({ asset, loan, expenses, parts = [], fuel
         </div>
       </div>
 
-      {/* 9 Summary Cards Grid */}
+      {/* 9 Summary Cards Grid — Multi-layer Gradient & Ambient Glow */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {CARDS.map(card => {
-          const Icon = card.icon;
-          return (
-            <div
-              key={card.id}
-              onClick={() => handleCardClick(card.id)}
-              className="glass-card p-4 rounded-2xl cursor-pointer transition-all hover:scale-[1.02] hover:shadow-lg relative overflow-hidden group"
-              style={{ background: 'var(--bg-secondary)', border: `1px solid ${card.border}` }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: card.bg, color: card.color }}>
-                    <Icon className="w-5 h-5 stroke-[2]" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: card.color }}>{card.title}</h4>
-                    <p className="text-[11px] font-medium" style={{ color: 'var(--text-muted)' }}>{card.sub}</p>
-                  </div>
-                </div>
-                <ChevronRight className="w-4 h-4 opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition" style={{ color: card.color }} />
-              </div>
-
-              <div className="mt-1">
-                <p className="text-lg sm:text-xl font-black font-mono tracking-tight" style={{ color: 'var(--text-primary)' }}>{card.value}</p>
-                <p className="text-[10px] mt-1 truncate" style={{ color: 'var(--text-faint)' }}>{card.detailText}</p>
-              </div>
-            </div>
-          );
-        })}
+        {CARDS.map(card => (
+          <KpiGradientCard
+            key={card.id}
+            title={card.title}
+            value={card.value}
+            subtitle={card.detailText}
+            badgeText={card.sub}
+            colorType={card.colorType}
+            icon={card.icon}
+            onClick={() => handleCardClick(card.id)}
+          />
+        ))}
       </div>
 
       {/* ─── MODAL DRILL-DOWNS ─── */}

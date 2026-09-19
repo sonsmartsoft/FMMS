@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { getAssets, createAsset, deleteAsset } from '@/lib/services/assetService';
 import { getMaintenanceRecords } from '@/lib/services/maintenanceService';
 import { Asset, AssetType, MaintenanceRecord } from '@/types/mobility';
-import { Car, Bike, Zap, Plus, Search, Filter, ChevronRight, X, Trash2, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Car, Bike, Zap, Plus, Search, Filter, ChevronRight, X, Trash2, CheckCircle2, AlertCircle, Clock, DollarSign, Gauge, Wrench } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 const TYPE_LABELS: Record<string, string> = {
   ALL: 'Tất cả', CAR: 'Ô Tô', MOTORCYCLE: 'Mô Tô', BICYCLE: 'Xe Đạp', E_BIKE: 'Xe Điện',
@@ -161,6 +162,38 @@ export default function AssetsPage() {
           <Plus className="w-4 h-4" />
           <span>Thêm phương tiện</span>
         </button>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiGradientCard
+          colorType="emerald"
+          title="Tổng phương tiện"
+          value={`${assets.length} xe`}
+          icon={Car}
+          subtitle="Đang quản lý trong gia đình"
+        />
+        <KpiGradientCard
+          colorType="cyan"
+          title="Tổng quãng đường"
+          value={`${assets.reduce((s, a) => s + (a.current_odometer_km || 0), 0).toLocaleString('vi-VN')} km`}
+          icon={Gauge}
+          subtitle="Tổng km tích lũy toàn đội xe"
+        />
+        <KpiGradientCard
+          colorType="amber"
+          title="Tổng giá trị xe"
+          value={`${(assets.reduce((s, a) => s + (a.purchase_price || 0), 0) / 1_000_000).toFixed(0)}M ₫`}
+          icon={DollarSign}
+          subtitle="Nguyên giá mua ban đầu"
+        />
+        <KpiGradientCard
+          colorType="blue"
+          title="Đang hoạt động"
+          value={`${assets.filter(a => a.status === 'ACTIVE').length} xe`}
+          icon={CheckCircle2}
+          subtitle="Trạng thái vận hành bình thường"
+        />
       </div>
 
       {/* Filters */}

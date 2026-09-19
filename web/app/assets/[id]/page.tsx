@@ -30,6 +30,7 @@ import { VehicleFinanceOverview } from '@/components/assets/VehicleFinanceOvervi
 import VehicleDiagnosticsTab from '@/components/assets/VehicleDiagnosticsTab';
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 import {
   ArrowLeft, Gauge, Fuel, Wrench, DollarSign, FileText, BarChart3,
@@ -2831,7 +2832,7 @@ export default function AssetDetailPage() {
                 <span>Sửa thông số xe</span>
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {(() => {
                 // Tính ngày bảo dưỡng tiếp theo từ maintenance records thực tế
                 const futureDates = maintenance
@@ -2841,7 +2842,7 @@ export default function AssetDetailPage() {
                 const maintDateStr = futureDates.length > 0 ? futureDates[0] : (asset.next_maintenance_due || null);
                 let maintValue = 'Chưa lên lịch';
                 let maintSub = 'Chưa có kế hoạch bảo dưỡng';
-                let maintColor = 'var(--text-muted)';
+                let maintColorType: 'emerald' | 'amber' | 'rose' | 'cyan' = 'cyan';
                 if (maintDateStr) {
                   const maintDate = new Date(maintDateStr);
                   const today = new Date();
@@ -2850,34 +2851,47 @@ export default function AssetDetailPage() {
                   maintValue = fmtMaintDate;
                   if (diffDays < 0) {
                     maintSub = `Đã quá hạn ${Math.abs(diffDays)} ngày`;
-                    maintColor = 'var(--status-rose)';
+                    maintColorType = 'rose';
                   } else if (diffDays === 0) {
                     maintSub = 'Hôm nay là ngày bảo dưỡng';
-                    maintColor = 'var(--status-rose)';
+                    maintColorType = 'rose';
                   } else if (diffDays <= 7) {
                     maintSub = `Còn ${diffDays} ngày (sắp đến)`;
-                    maintColor = 'var(--status-amber)';
+                    maintColorType = 'amber';
                   } else if (diffDays <= 30) {
                     maintSub = `Còn ${diffDays} ngày`;
-                    maintColor = 'var(--status-amber)';
+                    maintColorType = 'amber';
                   } else {
                     maintSub = `Còn ${diffDays} ngày`;
-                    maintColor = 'var(--status-green)';
+                    maintColorType = 'emerald';
                   }
                 }
-                return [
-                  { label: 'Giá mua ban đầu', value: `${fmt(asset.purchase_price)} ₫`, sub: `Ngày nhận xe: ${fmtDate(asset.purchase_date || '')}`, color: 'var(--text-primary)' },
-                  { label: 'Tổng chi phí phát sinh', value: `${fmt(totalExpenses)} ₫`, sub: `Chi phí vận hành, bảo dưỡng & nuôi xe`, color: 'var(--status-amber)' },
-                  { label: 'Bảo dưỡng tiếp theo', value: maintValue, sub: maintSub, color: maintColor },
-                ];
-
-              })().map((item, i) => (
-                <div key={i} className="p-4 rounded-xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>{item.label}</span>
-                  <p className="text-base font-bold mt-1" style={{ color: item.color }}>{item.value}</p>
-                  <span style={{ color: 'var(--text-faint)', fontSize: 10 }}>{item.sub}</span>
-                </div>
-              ))}
+                return (
+                  <>
+                    <KpiGradientCard
+                      colorType="cyan"
+                      title="Giá mua ban đầu"
+                      value={`${fmt(asset.purchase_price)} ₫`}
+                      icon={DollarSign}
+                      subtitle={`Ngày nhận xe: ${fmtDate(asset.purchase_date || '')}`}
+                    />
+                    <KpiGradientCard
+                      colorType="amber"
+                      title="Tổng chi phí phát sinh"
+                      value={`${fmt(totalExpenses)} ₫`}
+                      icon={TrendingDown}
+                      subtitle="Chi phí vận hành, bảo dưỡng & nuôi xe"
+                    />
+                    <KpiGradientCard
+                      colorType={maintColorType}
+                      title="Bảo dưỡng tiếp theo"
+                      value={maintValue}
+                      icon={Wrench}
+                      subtitle={maintSub}
+                    />
+                  </>
+                );
+              })()}
             </div>
 
             {/* Extended Overview — spec §91 */}
@@ -5426,18 +5440,35 @@ export default function AssetDetailPage() {
               </div>
 
               {/* KPI Cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-center">
-                {[
-                  { label: 'Giá mua ban đầu', value: `${(purchasePrice / 1000000).toFixed(1)}M ₫`, color: 'var(--accent-cyan)' },
-                  { label: 'Tổng chi phí nuôi xe', value: `${(totalExpenses / 1000000).toFixed(1)}M ₫`, color: 'var(--status-amber)' },
-                  { label: 'Chi phí / km', value: totalKm > 0 ? `${(totalExpenses / totalKm).toFixed(0)} ₫/km` : '0 ₫/km', color: 'var(--status-green)' },
-                  { label: 'Tổng tiền thực tế đã chi', value: `${(totalRealSpent / 1000000).toFixed(1)}M ₫`, color: 'var(--status-purple)' },
-                ].map((s, i) => (
-                  <div key={i} className="p-4 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-                    <p className="text-base font-extrabold" style={{ color: s.color }}>{s.value}</p>
-                    <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
-                  </div>
-                ))}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KpiGradientCard
+                  colorType="cyan"
+                  title="Giá mua ban đầu"
+                  value={`${(purchasePrice / 1000000).toFixed(1)}M ₫`}
+                  icon={DollarSign}
+                  subtitle="Nguyên giá khi nhận xe"
+                />
+                <KpiGradientCard
+                  colorType="amber"
+                  title="Tổng chi phí nuôi xe"
+                  value={`${(totalExpenses / 1000000).toFixed(1)}M ₫`}
+                  icon={TrendingDown}
+                  subtitle="Bảo dưỡng, xăng, phí phát sinh"
+                />
+                <KpiGradientCard
+                  colorType="emerald"
+                  title="Chi phí / km"
+                  value={totalKm > 0 ? `${(totalExpenses / totalKm).toFixed(0)} ₫/km` : '0 ₫/km'}
+                  icon={Gauge}
+                  subtitle="Suất tiêu hao trên mỗi km"
+                />
+                <KpiGradientCard
+                  colorType="purple"
+                  title="Tổng thực tế đã chi"
+                  value={`${(totalRealSpent / 1000000).toFixed(1)}M ₫`}
+                  icon={CreditCard}
+                  subtitle="Giá mua + Toàn bộ chi phí"
+                />
               </div>
 
               {/* 📊 Biểu Đồ Trực Quan TCO */}

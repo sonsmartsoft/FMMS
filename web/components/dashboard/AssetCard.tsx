@@ -31,12 +31,31 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, settings }) => {
 
   const AssetIcon = asset.asset_type === 'BICYCLE' ? Bike : asset.asset_type === 'E_BIKE' ? Zap : Car;
 
+  // Dynamic theme colors by asset type
+  const typeColors: Record<string, { hex: string; rgb: string }> = {
+    CAR:        { hex: '#0EA5E9', rgb: '14, 165, 233' },
+    MOTORCYCLE: { hex: '#8B5CF6', rgb: '139, 92, 246' },
+    BICYCLE:    { hex: '#10B981', rgb: '16, 185, 129' },
+    E_BIKE:     { hex: '#F59E0B', rgb: '245, 158, 11' },
+  };
+  const theme = typeColors[asset.asset_type] || { hex: '#0EA5E9', rgb: '14, 165, 233' };
+
   return (
     <Link href={`/assets/${asset.id}`} className="block group">
       <div
-        className="glass-card rounded-2xl overflow-hidden flex flex-col h-full relative"
-        style={{ border: '1px solid var(--border-default)', background: 'var(--bg-card)' }}
+        className="glass-card rounded-2xl overflow-hidden flex flex-col h-full relative transition-all duration-300 group-hover:-translate-y-1.5"
+        style={{
+          border: `1px solid rgba(${theme.rgb}, 0.22)`,
+          background: 'var(--bg-card)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.03)',
+        }}
       >
+        {/* Subtle Ambient Corner Glow */}
+        <div
+          className="absolute -top-12 -right-12 w-36 h-36 rounded-full pointer-events-none blur-2xl transition-opacity duration-500 opacity-60 group-hover:opacity-100"
+          style={{ background: `radial-gradient(circle at top right, rgba(${theme.rgb}, 0.25) 0%, transparent 70%)` }}
+        />
+
         {/* Thumbnail */}
         {settings.showPhoto && (
           <div className="relative w-full h-44 overflow-hidden" style={{ background: 'var(--bg-secondary)' }}>

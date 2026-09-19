@@ -11,6 +11,7 @@ import {
 } from '@/lib/services/documentService';
 import { FileText, CheckCircle2, AlertCircle, Clock, Plus, X, Pencil, Trash2, Shield, Save } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
 
@@ -318,6 +319,38 @@ export default function DocumentsPage() {
         >
           <Plus className="w-4 h-4" /><span>Thêm giấy tờ / bảo hiểm</span>
         </button>
+      </div>
+
+      {/* ─── KPI Summary Cards ─── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiGradientCard
+          colorType="cyan"
+          title="Tổng tài liệu"
+          value={String(allDocs.length)}
+          icon={FileText}
+          subtitle={selectedAssetId ? `Xe: ${selectedVehicleObj?.name ?? '—'}` : `${groups.length} nhóm phương tiện`}
+        />
+        <KpiGradientCard
+          colorType="emerald"
+          title="Còn hiệu lực"
+          value={String(okCount)}
+          icon={CheckCircle2}
+          subtitle="Sẵn sàng lưu thông hợp lệ"
+        />
+        <KpiGradientCard
+          colorType="amber"
+          title="Sắp hết hạn (< 60 ngày)"
+          value={String(soonCount)}
+          icon={Clock}
+          subtitle="Cần lên kế hoạch gia hạn"
+        />
+        <KpiGradientCard
+          colorType="rose"
+          title="Đã hết hạn"
+          value={String(expiredCount)}
+          icon={AlertCircle}
+          subtitle={expiredCount > 0 ? "Cảnh báo vi phạm giao thông" : "Không có tài liệu quá hạn"}
+        />
       </div>
 
       {/* ─── Vehicle Filter Bar ─── */}

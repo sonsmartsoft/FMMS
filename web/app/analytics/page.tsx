@@ -16,6 +16,7 @@ import { getTrips } from '@/lib/services/tripService';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { BarChart3, TrendingDown, TrendingUp, Car, DollarSign, Gauge, Fuel, Wrench, Activity, Calendar } from 'lucide-react';
 import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartLabelToggle';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
@@ -311,25 +312,35 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: 'Tổng chi phí vận hành', value: `${fmtM(totalExpenses)} ₫`, sub: `${filteredExpenses.length} giao dịch`, color: '#F87171', Icon: DollarSign },
-          { label: 'Tổng km đội xe', value: `${fmt(totalKm)} km`, sub: `${filteredAssets.length} phương tiện`, color: '#38BDF8', Icon: Gauge },
-          { label: 'Tổng khấu hao', value: `${fmtM(totalDepreciation)} ₫`, sub: totalPurchase > 0 ? `${((totalDepreciation / totalPurchase) * 100).toFixed(1)}% giá trị ban đầu` : '—', color: '#FBBF24', Icon: TrendingDown },
-          { label: 'Giá trị đội xe hiện tại', value: `${fmtM(totalFleetValue)} ₫`, sub: 'Ước tính thị trường', color: '#34D399', Icon: TrendingUp },
-        ].map((k, i) => (
-          <div key={i} className="p-5 rounded-2xl relative overflow-hidden shadow-sm" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-            <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full opacity-10" style={{ background: k.color }} />
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: k.color + '20', border: `1px solid ${k.color}40` }}>
-                <k.Icon className="w-4 h-4" style={{ color: k.color }} />
-              </div>
-            </div>
-            <p className="text-xl font-extrabold font-mono" style={{ color: k.color }}>{k.value}</p>
-            <p className="text-xs mt-1 font-semibold" style={{ color: 'var(--text-secondary)' }}>{k.label}</p>
-            <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{k.sub}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiGradientCard
+          title="Tổng chi phí vận hành"
+          value={`${fmtM(totalExpenses)} ₫`}
+          subtitle={`${filteredExpenses.length} giao dịch`}
+          colorType="rose"
+          icon={DollarSign}
+        />
+        <KpiGradientCard
+          title="Tổng km đội xe"
+          value={`${fmt(totalKm)} km`}
+          subtitle={`${filteredAssets.length} phương tiện`}
+          colorType="cyan"
+          icon={Gauge}
+        />
+        <KpiGradientCard
+          title="Tổng khấu hao"
+          value={`${fmtM(totalDepreciation)} ₫`}
+          subtitle={totalPurchase > 0 ? `${((totalDepreciation / totalPurchase) * 100).toFixed(1)}% giá trị ban đầu` : '—'}
+          colorType="amber"
+          icon={TrendingDown}
+        />
+        <KpiGradientCard
+          title="Giá trị đội xe hiện tại"
+          value={`${fmtM(totalFleetValue)} ₫`}
+          subtitle="Ước tính thị trường"
+          colorType="emerald"
+          icon={TrendingUp}
+        />
       </div>
 
       {/* Composed Chart: Multi-category stack + Km bar */}

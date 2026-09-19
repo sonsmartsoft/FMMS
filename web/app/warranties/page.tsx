@@ -7,6 +7,7 @@ import { getAssets } from '@/lib/services/assetService';
 import { getWarranties, getWarrantyClaims, createWarranty, createWarrantyClaim, WarrantyRecord, WarrantyClaimRecord } from '@/lib/services/warrantyService';
 import { getParts } from '@/lib/services/partService';
 import DraggableModal from '@/components/ui/DraggableModal';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
@@ -194,27 +195,35 @@ export default function WarrantiesPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
-        <div className="glass-card p-4 rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
-          <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Bảo Hành Đang Áp Dụng</p>
-          <p className="text-2xl font-extrabold mt-1" style={{ color: 'var(--status-green)' }}>{activeCount}</p>
-          <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-faint)' }}>Trong tổng số {warranties.length} hạng mục</p>
-        </div>
-        <div className="glass-card p-4 rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
-          <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Sắp Hết Hạn (&lt; 60 Ngày)</p>
-          <p className="text-2xl font-extrabold mt-1" style={{ color: 'var(--status-amber)' }}>{nearCount}</p>
-          <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-faint)' }}>Cần theo dõi để kiểm tra</p>
-        </div>
-        <div className="glass-card p-4 rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
-          <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Đã Hết Hạn</p>
-          <p className="text-2xl font-extrabold mt-1" style={{ color: 'var(--status-red)' }}>{expiredCount}</p>
-          <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-faint)' }}>Quá hạn bảo hành hãng/đại lý</p>
-        </div>
-        <div className="glass-card p-4 rounded-2xl" style={{ border: '1px solid var(--border-default)' }}>
-          <p className="text-[10px] font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Tổng Giá Trị Claim Yêu Cầu</p>
-          <p className="text-2xl font-extrabold mt-1 text-purple-400">{fmt(totalClaimAmount)} ₫</p>
-          <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-faint)' }}>{claims.length} lượt yêu cầu bồi thường</p>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiGradientCard
+          colorType="emerald"
+          title="Bảo hành áp dụng"
+          value={String(activeCount)}
+          icon={CheckCircle2}
+          subtitle={`Trong tổng số ${warranties.length} hạng mục`}
+        />
+        <KpiGradientCard
+          colorType="amber"
+          title="Sắp hết hạn (< 60 ngày)"
+          value={String(nearCount)}
+          icon={Clock}
+          subtitle="Cần theo dõi để kiểm tra"
+        />
+        <KpiGradientCard
+          colorType="rose"
+          title="Đã hết hạn"
+          value={String(expiredCount)}
+          icon={AlertCircle}
+          subtitle="Quá hạn bảo hành hãng/đại lý"
+        />
+        <KpiGradientCard
+          colorType="purple"
+          title="Tổng Claim yêu cầu"
+          value={`${fmt(totalClaimAmount)} ₫`}
+          icon={Shield}
+          subtitle={`${claims.length} lượt yêu cầu bồi thường`}
+        />
       </div>
 
       {/* Tabs */}

@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { Plus, Car, Bike, Zap, Gauge, DollarSign, Fuel, Sparkles, Search, X, Download, Sliders } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
+import KpiGradientCard, { KpiColorType } from '@/components/ui/KpiGradientCard';
 
 interface HomePageProps {
   cardSettings?: CardDisplaySettings;
@@ -253,66 +254,68 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
   const totalLoanBalance = loans.reduce((s, l) => s + Number(l.current_balance || 0), 0);
   const totalLoanMonthly = loans.reduce((s, l) => s + Number(l.monthly_payment || 0), 0);
 
-  const KPI = [
+  const KPI: Array<{
+    title: string;
+    href: string;
+    value: string;
+    subtitle: string;
+    icon: any;
+    colorType: KpiColorType;
+    badgeText?: string;
+  }> = [
     {
-      label: isEn ? 'Total Fleet Vehicles' : 'Tổng phương tiện',
+      title: isEn ? 'Total Fleet Vehicles' : 'Tổng phương tiện',
       href: '/assets',
       value: isEn ? `${assets.length} vehicles` : `${assets.length} tài sản`,
-      sub: loading ? (isEn ? 'Loading...' : 'Đang tải...') : assets.some(a => a.status === 'MAINTENANCE') ? (isEn ? '● Vehicle in maintenance' : '● Có xe đang bảo dưỡng') : (isEn ? '● All operating normally' : '● Tất cả đang hoạt động tốt'),
-      subColor: 'var(--status-green)',
+      subtitle: loading
+        ? (isEn ? 'Loading...' : 'Đang tải...')
+        : assets.some(a => a.status === 'MAINTENANCE')
+          ? (isEn ? '● Vehicle in maintenance' : '● Có xe đang bảo dưỡng')
+          : (isEn ? '● All operating normally' : '● Tất cả đang hoạt động tốt'),
+      colorType: 'emerald',
+      badgeText: assets.some(a => a.status === 'MAINTENANCE') ? 'Bảo dưỡng' : 'Hoạt động',
       icon: Car,
-      iconBg: 'var(--accent-cyan-bg)',
-      iconColor: 'var(--accent-cyan)',
-      iconBorder: 'var(--accent-cyan-border)',
-      valueColor: 'var(--text-primary)',
     },
     {
-      label: isEn ? 'Mileage & Distance' : 'Quãng đường di chuyển',
+      title: isEn ? 'Mileage & Distance' : 'Quãng đường di chuyển',
       href: '/analytics',
       value: totalDistanceThisMonth > 0
         ? `${totalDistanceThisMonth.toLocaleString(isEn ? 'en-US' : 'vi-VN')} km`
         : totalDistanceAllTime > 0
           ? `${totalDistanceAllTime.toLocaleString(isEn ? 'en-US' : 'vi-VN')} km`
           : '0 km',
-      sub: totalDistanceThisMonth > 0
-        ? (isEn ? `This month · Total: ${totalDistanceAllTime.toLocaleString()} km (${trips.length} trips)` : `Tháng ${now.getMonth() + 1} · Tổng: ${totalDistanceAllTime.toLocaleString('vi-VN')} km (${trips.length} chuyến)`)
+      subtitle: totalDistanceThisMonth > 0
+        ? (isEn ? `Tháng ${now.getMonth() + 1} · Tổng: ${totalDistanceAllTime.toLocaleString('vi-VN')} km` : `Tháng ${now.getMonth() + 1} · Tổng: ${totalDistanceAllTime.toLocaleString('vi-VN')} km`)
         : trips.length > 0
-          ? (isEn ? `Total cumulative · ${trips.length} trips logged` : `Tổng tích lũy · ${trips.length} chuyến ghi nhận`)
+          ? (isEn ? `Total cumulative · ${trips.length} trips` : `Tổng tích lũy · ${trips.length} chuyến`)
           : (isEn ? 'No trips logged' : 'Chưa có chuyến đi'),
-      subColor: 'var(--accent-cyan)',
+      colorType: 'cyan',
+      badgeText: `${trips.length} chuyến`,
       icon: Gauge,
-      iconBg: 'rgba(59,130,246,0.12)',
-      iconColor: '#60A5FA',
-      iconBorder: 'rgba(59,130,246,0.3)',
-      valueColor: 'var(--text-primary)',
     },
     {
-      label: isEn ? 'Total Fuel & Energy' : 'Tổng nhiên liệu & Pin',
+      title: isEn ? 'Total Fuel & Energy' : 'Tổng nhiên liệu & Pin',
       href: '/fuel',
       value: totalFuelCostAllTime > 0
         ? `${totalFuelCostAllTime.toLocaleString(isEn ? 'en-US' : 'vi-VN')} ₫`
         : '0 ₫',
-      sub: totalFuelCostThisMonth > 0
-        ? (isEn ? `This month: ${totalFuelCostThisMonth.toLocaleString()} ₫ (${fuelLogs.length} logs)` : `Tháng ${now.getMonth() + 1}: ${totalFuelCostThisMonth.toLocaleString('vi-VN')} ₫ · ${fuelLogs.length} lần`)
-        : (isEn ? `Total ${fuelLogs.length} logs · ${totalFuelLitersAllTime.toFixed(1)}L` : `Tổng ${fuelLogs.length} lần ghi nhận · ${totalFuelLitersAllTime.toFixed(1)}L`),
-      subColor: 'var(--text-muted)',
+      subtitle: totalFuelCostThisMonth > 0
+        ? (isEn ? `Tháng ${now.getMonth() + 1}: ${totalFuelCostThisMonth.toLocaleString('vi-VN')} ₫` : `Tháng ${now.getMonth() + 1}: ${totalFuelCostThisMonth.toLocaleString('vi-VN')} ₫`)
+        : (isEn ? `Total ${fuelLogs.length} logs · ${totalFuelLitersAllTime.toFixed(1)}L` : `Tổng ${fuelLogs.length} lần đổ · ${totalFuelLitersAllTime.toFixed(1)}L`),
+      colorType: 'amber',
+      badgeText: `${fuelLogs.length} lần đổ`,
       icon: Fuel,
-      iconBg: 'rgba(245,158,11,0.12)',
-      iconColor: 'var(--status-amber)',
-      iconBorder: 'rgba(245,158,11,0.3)',
-      valueColor: 'var(--status-amber)',
     },
     {
-      label: isEn ? 'Loan Balance' : 'Dư nợ khoản vay',
+      title: isEn ? 'Loan Balance' : 'Dư nợ khoản vay',
       href: '/finance',
       value: totalLoanBalance > 0 ? `${(totalLoanBalance / 1_000_000).toFixed(0)}M ₫` : '0 ₫',
-      sub: loans.length > 0 ? (isEn ? `${loans.length} loans · ${(totalLoanMonthly / 1_000_000).toFixed(1)}M ₫/mo` : `${loans.length} khoản · ${(totalLoanMonthly / 1_000_000).toFixed(1)}M ₫/tháng`) : (isEn ? 'No active loans' : 'Không có khoản vay'),
-      subColor: 'var(--text-muted)',
+      subtitle: loans.length > 0
+        ? (isEn ? `${loans.length} loans · ${(totalLoanMonthly / 1_000_000).toFixed(1)}M ₫/mo` : `${loans.length} khoản · ${(totalLoanMonthly / 1_000_000).toFixed(1)}M ₫/tháng`)
+        : (isEn ? 'No active loans' : 'Không có khoản vay'),
+      colorType: 'rose',
+      badgeText: loans.length > 0 ? `${loans.length} khoản vay` : undefined,
       icon: DollarSign,
-      iconBg: 'rgba(244,63,94,0.12)',
-      iconColor: 'var(--status-rose)',
-      iconBorder: 'rgba(244,63,94,0.3)',
-      valueColor: 'var(--status-rose)',
     },
   ];
 
@@ -364,21 +367,19 @@ export default function HomePage({ cardSettings = DEFAULT_CARD_SETTINGS }: HomeP
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — Multi-layer Gradient & Ambient Glow */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {KPI.map((k, i) => (
-          <Link href={k.href} key={i} className="glass-card p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:scale-[1.02] transition-transform"
-            style={{ border: '1px solid var(--border-default)' }}>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{k.label}</p>
-              <p className="text-xl font-extrabold mt-1" style={{ color: k.valueColor }}>{k.value}</p>
-              <p className="text-[10px] font-medium mt-0.5" style={{ color: k.subColor }}>{k.sub}</p>
-            </div>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: k.iconBg, color: k.iconColor, border: `1px solid ${k.iconBorder}` }}>
-              <k.icon className="w-5 h-5" />
-            </div>
-          </Link>
+          <KpiGradientCard
+            key={i}
+            title={k.title}
+            value={k.value}
+            subtitle={k.subtitle}
+            href={k.href}
+            colorType={k.colorType}
+            icon={k.icon}
+            badgeText={k.badgeText}
+          />
         ))}
       </div>
 
