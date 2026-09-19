@@ -115,14 +115,7 @@ export async function getTrips(assetId?: string): Promise<TripRecord[]> {
     map.set(item.id, item);
   });
 
-  // 2. Đảm bảo bản ghi bù chênh lệch ODO trước khi gắn OBD luôn tồn tại nếu DB chưa có
-  seedTrips.filter(t => t.id === '20260409-0000-0000-0000-000000003312').forEach(t => {
-    if (!map.has(t.id)) {
-      map.set(t.id, t);
-    }
-  });
-
-  // 3. Nếu Supabase hoàn toàn rỗng hoặc offline, fallback toàn bộ về seedTrips và localTrips
+  // 2. Nếu Supabase hoàn toàn rỗng hoặc offline, fallback về seedTrips và localTrips
   if (supabaseTrips.length === 0) {
     seedTrips.forEach(item => {
       if (!map.has(item.id)) map.set(item.id, item);

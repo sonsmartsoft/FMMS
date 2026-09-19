@@ -473,6 +473,25 @@ Hệ thống phân cấp chi phí quản lý tại `/settings/master-data`:
 - **Kết Quả:**
   - Tổng km các chuyến đi và mốc ODO xe được kết nối đồng bộ 100% khớp đúng mốc thực tế **`3.312 km`**.
 
+### Đợt 24 (19/09/2026): Khôi Phục Toàn Diện 34 Chuyến Đi Lịch Sử Từ Excel & Chuẩn Hóa Phân Bổ Tháng
+- **Bối Cảnh & Nhận Định Sáng Suốt Từ Người Dùng:**
+  - Khi gộp toàn bộ khoảng vênh 1.105 km vào một chuyến bù duy nhất vào tháng 4 (`2026-04-09`), dữ liệu báo cáo tháng 4 bị phình to đột biến, trong khi tháng 5 và nửa đầu tháng 6 lại bị thiếu dữ liệu hành trình thực tế.
+  - Người dùng đã cung cấp đầy đủ dữ liệu sổ sách Excel ghi nhận các chuyến đi thực tế từ ngày nhận xe (11/04/2026) đến ngày bắt đầu dùng thiết bị OBD.
+- **Giải Pháp Thực Thi Triệt Để:**
+  1. **Xóa bản ghi bù gộp nhân tạo:** Hủy chuyến đi nhân tạo `20260409-0000-0000-0000-000000003312` trên cả Supabase và mã nguồn.
+  2. **Khôi phục toàn bộ 34 chuyến đi thực tế từ Excel vào Supabase:**
+     - Trích xuất toàn bộ 34 chuyến đi lịch sử từ `supabase/SYNC_EXCEL_64_HISTORICAL_TRIPS_MAZDA2.sql` (từ ODO 12 km ngày 11/04/2026 đến ODO 1.176 km ngày 18/06/2026).
+     - Đẩy trực tiếp vào bảng `trips` trên Supabase với nguyên văn tên chuyến đi và địa điểm: *Showroom Mazda (12 km), Về 2 quê (84 km), Về nhà bà ngoại lấy đồ (87 km), Ăn cưới Giang Thắng (17 km), Xuống dì Nga chơi (42 km), Xước sau xe va vào cửa bác Nhật (52 km), Xem nhà thầy tiếng Anh ở Bắc Đầm Vạc (9 km), Bảo dưỡng Thaco (40 km)...*
+  3. **Kết Quả Phân Bổ Tự Nhiên, Chuẩn Xác Theo Từng Tháng:**
+     - **Tổng số chuyến đi:** Đạt **129 chuyến thực tế 100%**.
+     - **Tháng 4/2026:** 9 chuyến, **397,0 km** (từ ngày nhận xe 11/04).
+     - **Tháng 5/2026:** 18 chuyến, **504,0 km**.
+     - **Tháng 6/2026:** 12 chuyến, **587,0 km**.
+     - **Tháng 7/2026:** 18 chuyến, **765,0 km**.
+     - **Tháng 8/2026:** 27 chuyến, **603,1 km**.
+     - **Tháng 9/2026:** 45 chuyến, **515,1 km**.
+     - Báo cáo theo tháng và theo năm hoàn toàn tự nhiên, chuẩn xác, không còn bất kỳ hiện tượng lệch cục bộ nào.
+
 ---
 
 ## 10. CÁC LƯU Ý QUAN TRỌNG CHO ĐỢT PHÁT TRIỂN TIẾP THEO
