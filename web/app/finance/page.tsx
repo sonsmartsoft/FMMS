@@ -19,6 +19,7 @@ import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartL
 
 import DraggableModal from '@/components/ui/DraggableModal';
 import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
@@ -922,6 +923,39 @@ export default function FinancePage() {
             </button>
           )}
         </div>
+      </div>
+
+
+      {/* ─── KPI Summary Cards ─── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiGradientCard
+          colorType="rose"
+          title="Tổng chi phí"
+          value={`${(totalExpenses / 1_000_000).toFixed(1)}M ₫`}
+          icon={DollarSign}
+          subtitle={selectedAssetId ? `Xe: ${selectedVehicleObj?.name ?? '—'}` : `${assets.length} phương tiện`}
+        />
+        <KpiGradientCard
+          colorType="purple"
+          title="Dư nợ vay"
+          value={`${(loans.reduce((s, l) => s + (l.current_balance || 0), 0) / 1_000_000).toFixed(1)}M ₫`}
+          icon={CreditCard}
+          subtitle={`${loans.length} khoản vay`}
+        />
+        <KpiGradientCard
+          colorType="amber"
+          title="Quá hạn"
+          value={String(overduePayments)}
+          icon={AlertTriangle}
+          subtitle="Số kỳ trả chưa thực hiện"
+        />
+        <KpiGradientCard
+          colorType="cyan"
+          title="Chi phí tháng này"
+          value={`${(filteredExpenses.filter(e => e.date?.slice(0, 7) === new Date().toISOString().slice(0, 7)).reduce((s, e) => s + e.amount, 0) / 1_000_000).toFixed(1)}M ₫`}
+          icon={TrendingDown}
+          subtitle={new Date().toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' })}
+        />
       </div>
 
       {/* ─── Vehicle Filter Bar ─── */}

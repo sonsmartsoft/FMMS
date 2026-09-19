@@ -14,6 +14,7 @@ import { useTheme } from '@/lib/theme/ThemeContext';
 import { Fuel, Zap, TrendingDown, Plus, X, Pencil, Trash2, Check, BarChart3 } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
 import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartLabelToggle';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 
 const fmt = (n: number | string | undefined | null) => {
@@ -328,18 +329,35 @@ export default function FuelPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-center">
-        {[
-          { label: 'Tổng chi phí NL', value: `${fmt(totalFuel)} ₫`, color: 'var(--status-amber)' },
-          { label: 'Tổng lít đổ', value: `${totalLiters.toFixed(1)} L`, color: 'var(--accent-cyan)' },
-          { label: 'TB Tiêu thụ', value: avgConsumption ? `${avgConsumption} L/100km` : '—', color: 'var(--status-green)' },
-          { label: 'Số lần đổ', value: filteredLogs.length, color: 'var(--text-primary)' },
-        ].map((s, i) => (
-          <div key={i} className="p-4 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-            <p className="text-lg font-extrabold" style={{ color: s.color }}>{s.value}</p>
-            <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiGradientCard
+          colorType="amber"
+          title="Tổng chi phí NL"
+          value={`${fmt(totalFuel)} ₫`}
+          icon={Fuel}
+          subtitle="Chi phí nhiên liệu"
+        />
+        <KpiGradientCard
+          colorType="cyan"
+          title="Tổng lít đổ"
+          value={`${totalLiters.toFixed(1)} L`}
+          icon={Zap}
+          subtitle="Tổng lượng nạp"
+        />
+        <KpiGradientCard
+          colorType="emerald"
+          title="TB Tiêu thụ"
+          value={avgConsumption ? `${avgConsumption} L/100km` : '—'}
+          icon={TrendingDown}
+          subtitle="Mức tiêu hao trung bình"
+        />
+        <KpiGradientCard
+          colorType="blue"
+          title="Số lần đổ"
+          value={String(filteredLogs.length)}
+          icon={BarChart3}
+          subtitle="Tổng số lần nạp nhiên liệu"
+        />
       </div>
 
       {/* Asset Filter Bar */}

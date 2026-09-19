@@ -5,8 +5,9 @@ import { getAssets } from '@/lib/services/assetService';
 import { getMaintenanceRecords, createMaintenanceRecord, updateMaintenanceRecord, deleteMaintenanceRecord } from '@/lib/services/maintenanceService';
 import { getMasterMaintenanceCategories } from '@/lib/services/masterDataService';
 import { Asset, MaintenanceRecord } from '@/types/mobility';
-import { Wrench, Plus, X, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { Wrench, Plus, X, AlertTriangle, CheckCircle2, Clock, TrendingDown, BarChart3 } from 'lucide-react';
 import DraggableModal from '@/components/ui/DraggableModal';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => new Date(d).toLocaleDateString('vi-VN');
@@ -400,18 +401,35 @@ export default function MaintenancePage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs text-center">
-        {[
-          { label: 'Tổng chi phí', value: `${(totalCost / 1_000_000).toFixed(1)}M ₫`, color: 'var(--status-red)' },
-          { label: 'Số lần bảo dưỡng', value: displayRecords.length, color: 'var(--accent-cyan)' },
-          { label: 'Đang OK', value: displayRecords.filter(r => r.status === 'OK').length, color: 'var(--status-green)' },
-          { label: 'Sắp đến hạn', value: displayRecords.filter(r => r.status === 'DUE_SOON').length, color: 'var(--status-amber)' },
-        ].map((s, i) => (
-          <div key={i} className="p-4 rounded-2xl" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
-            <p className="text-lg font-extrabold" style={{ color: s.color }}>{s.value}</p>
-            <span style={{ color: 'var(--text-muted)' }}>{s.label}</span>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiGradientCard
+          colorType="rose"
+          title="Tổng chi phí"
+          value={`${(totalCost / 1_000_000).toFixed(1)}M ₫`}
+          icon={Wrench}
+          subtitle="Chi phí bảo dưỡng"
+        />
+        <KpiGradientCard
+          colorType="cyan"
+          title="Số lần bảo dưỡng"
+          value={String(displayRecords.length)}
+          icon={BarChart3}
+          subtitle="Tổng số lần dịch vụ"
+        />
+        <KpiGradientCard
+          colorType="emerald"
+          title="Đang OK"
+          value={String(displayRecords.filter(r => r.status === 'OK').length)}
+          icon={CheckCircle2}
+          subtitle="Tình trạng bình thường"
+        />
+        <KpiGradientCard
+          colorType="amber"
+          title="Sắp đến hạn"
+          value={String(displayRecords.filter(r => r.status === 'DUE_SOON').length)}
+          icon={Clock}
+          subtitle="Cần kiểm tra sớm"
+        />
       </div>
 
       {/* Upcoming reminders */}
