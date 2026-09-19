@@ -460,6 +460,10 @@ export async function POST(req: NextRequest) {
       historyText = `\n[LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]:\n` + history.map((h: any) => `${h.role === 'user' ? 'Người dùng' : 'AI Cố vấn'}: ${h.text}`).join('\n\n') + '\n\n';
     }
 
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const basePrompt = userCustomPrompt || DEFAULT_SYSTEM_PROMPT;
+    const activeSystemPrompt = basePrompt + ACTION_ENGINE_RULES + `\n[THÔNG TIN THỜI GIAN THỰC TẾ]: Hôm nay là ngày ${todayIso}. Khi điền trường 'date', hãy dùng chính xác '${todayIso}'.`;
+
     const isTx = /đổ\s*xăng|xăng|rửa\s*xe|rua\s*xe|thay\s*dầu|thay\s*nhớt|bảo\s*dưỡng|gửi\s*xe|vé\s*cầu|chi\s*phí|\d+k|\d+\s*nghìn|\d+\s*triệu/i.test(prompt);
     const tailNote = isTx ? `\n\n[LƯU Ý BẮT BUỘC]: Người dùng đang thông báo về một giao dịch/chi phí phát sinh ("${prompt}"). Sau câu trả lời phân tích, ở DÒNG CUỐI CÙNG bạn BẮT BUỘC phải đính kèm khối mã \`\`\`fmms_action { ... } \`\`\` theo đúng hướng dẫn để hệ thống hiển thị nút bấm lưu vào Database cho người dùng.` : '';
     const fullPrompt = `[HỆ THỐNG VAI TRÒ & QUY TẮC PHÂN TÍCH]:\n${activeSystemPrompt}\n\n${contextText}\n${historyText}[CÂU HỎI HIỆN TẠI CỦA NGƯỜI DÙNG]:\n${prompt}${tailNote}`;
