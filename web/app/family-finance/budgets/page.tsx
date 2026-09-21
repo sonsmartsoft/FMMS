@@ -492,14 +492,30 @@ export default function BudgetsManagementPage() {
                   const isWarning = item.target > 0 && item.ratio >= item.alertThresh && !isExceeded;
 
                   return (
-                    <tr key={item.category.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <tr
+                      key={item.category.id}
+                      className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors ${
+                        !item.category.parent_id
+                          ? 'bg-slate-50/40 dark:bg-slate-800/20 font-extrabold'
+                          : ''
+                      }`}
+                    >
                       <td className="py-3 px-4">
                         <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          {item.category.parent_id ? (
+                            <span className="text-slate-400 pl-4 font-normal text-xs">↳</span>
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-500/15 text-emerald-400 uppercase">
+                              Nhóm mẹ
+                            </span>
+                          )}
                           <span
-                            className="w-2.5 h-2.5 rounded-full"
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
                             style={{ backgroundColor: item.category.color || '#94a3b8' }}
                           />
-                          {item.category.name}
+                          <span className={item.category.parent_id ? 'text-xs text-slate-700 dark:text-slate-300' : 'text-xs font-black'}>
+                            {item.category.name}
+                          </span>
                         </div>
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">

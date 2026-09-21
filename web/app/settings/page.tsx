@@ -47,7 +47,7 @@ const SETTINGS_CARDS = [
     color: '#F59E0B',
     bg: 'rgba(245,158,11,0.15)',
     title: 'Quản lý Danh Mục & Master Data',
-    desc: 'Chỉnh sửa danh mục bảo dưỡng, danh mục chi phí, danh sách Đại lý/Garage cho Admin',
+    desc: 'Cấu hình danh mục thu chi gia đình (Mẹ & Con), 6 Chiếc Hũ, 50/30/20, danh mục bảo dưỡng & Đại lý',
     tag: 'Master',
   },
   {

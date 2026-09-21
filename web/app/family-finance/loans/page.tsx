@@ -29,6 +29,7 @@ import {
   Percent,
   Check,
 } from 'lucide-react';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 const fmtDate = (d: string) => {
@@ -236,54 +237,48 @@ export default function LoansManagementPage() {
         </div>
       </div>
 
-      {/* Summary Row */}
+      {/* Summary Row with QMS Gradient KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
-            <CreditCard className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              Tổng dư nợ gốc còn lại
-            </span>
-            <div className="text-xl font-black font-mono text-rose-600 dark:text-rose-400">
-              {fmt(totalRemainingDebt)} ₫
-            </div>
-            <span className="text-[11px] text-slate-400">{loans.length} hợp đồng vay</span>
-          </div>
-        </div>
+        <KpiGradientCard
+          title="TỔNG DƯ NỢ GỐC CÒN LẠI"
+          value={fmt(totalRemainingDebt)}
+          unit="₫"
+          subtitle={`${loans.length} hợp đồng vay đang hoạt động`}
+          colorType="rose"
+          icon={CreditCard}
+          badgeText="Nghĩa vụ nợ"
+          badgeType="danger"
+        />
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
-            <Calendar className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              Nghĩa vụ trả nợ mỗi tháng
-            </span>
-            <div className="text-xl font-black font-mono text-amber-600 dark:text-amber-400">
-              {fmt(totalMonthlyObligation)} ₫
-            </div>
-            <span className="text-[11px] text-slate-400">Bao gồm gốc và lãi định kỳ</span>
-          </div>
-        </div>
+        <KpiGradientCard
+          title="NGHĨA VỤ TRẢ NỢ HÀNG THÁNG"
+          value={fmt(totalMonthlyObligation)}
+          unit="₫"
+          subtitle="Bao gồm gốc và lãi định kỳ hàng tháng"
+          colorType="amber"
+          icon={Calendar}
+          badgeText="Định kỳ"
+          badgeType="warning"
+        />
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-cyan-100 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400">
-            <Car className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-              Vay xe Mazda 2 Deluxe
-            </span>
-            <div className="text-xl font-black font-mono text-cyan-600 dark:text-cyan-400">
-              {loans[0] ? `${fmt(loans[0].remaining_balance)} ₫` : '0 ₫'}
-            </div>
-            <span className="text-[11px] text-slate-400">
-              Trả ngày {loans[0]?.payment_day || 15} hàng tháng
-            </span>
-          </div>
-        </div>
+        {(() => {
+          const carLoan = loans.find((l) => l.linked_asset_id || l.category === 'CAR_LOAN') || loans[0];
+          const linkedAsset = assets.find((a) => a.id === carLoan?.linked_asset_id);
+          const carTitle = linkedAsset ? `${linkedAsset.name}` : carLoan?.title || 'Khoản vay mua xe';
+          return (
+            <KpiGradientCard
+              title="VAY MUA XE Ô TÔ"
+              value={carLoan ? fmt(carLoan.remaining_balance) : '0'}
+              unit="₫"
+              subtitle={carLoan ? `${carTitle} · Trả ngày ${carLoan.payment_day || 28}` : 'Chưa có khoản vay xe'}
+              colorType="cyan"
+              icon={Car}
+              badgeText={carLoan?.lender_borrower_name || 'Xe gia đình'}
+              badgeType="info"
+              href={carLoan?.linked_asset_id ? `/assets/${carLoan.linked_asset_id}` : undefined}
+            />
+          );
+        })()}
       </div>
 
       {/* Loan Cards */}
@@ -294,6 +289,7 @@ export default function LoansManagementPage() {
             loan.principal_amount > 0
               ? Math.round((paidOff / loan.principal_amount) * 100)
               : 0;
+          const linkedAsset = assets.find((a) => a.id === loan.linked_asset_id);
 
           return (
             <div
@@ -309,7 +305,7 @@ export default function LoansManagementPage() {
                     {loan.linked_asset_id && (
                       <span className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
                         <Car className="w-3 h-3" />
-                        Liên kết Mazda 2 Deluxe
+                        {linkedAsset ? `Liên kết xe: ${linkedAsset.name} (${linkedAsset.license_plate || ''})` : 'Liên kết xe gia đình'}
                       </span>
                     )}
                   </div>
@@ -420,7 +416,7 @@ export default function LoansManagementPage() {
             <input
               type="text"
               required
-              placeholder="VD: Khoản vay mua xe Mazda 2 Deluxe..."
+              placeholder="VD: Khoản vay mua xe Mazda 2AT (19B-213.87)..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"

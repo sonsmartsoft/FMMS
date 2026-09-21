@@ -2,7 +2,40 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Database, Plus, Trash2, Check, Pencil, Sliders, X, Save, Wrench } from 'lucide-react';
+import {
+  ArrowLeft,
+  Database,
+  Plus,
+  Trash2,
+  Check,
+  Pencil,
+  Sliders,
+  X,
+  Save,
+  Wrench,
+  FolderPlus,
+  Sparkles,
+  Tag,
+  ChevronDown,
+  ChevronRight,
+  Layers,
+  ShoppingBag,
+  RotateCcw,
+} from 'lucide-react';
+
+import {
+  TransactionCategory,
+  TransactionType,
+  BudgetBucket,
+} from '@/types/finance';
+import {
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  resetToDefaultCategories,
+} from '@/lib/services/familyFinanceService';
+import { SAMPLE_FAMILY_CATEGORIES } from '@/lib/data/sampleFinanceCategories';
 
 import { TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
 import {
@@ -48,20 +81,39 @@ export default function MasterDataPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; title?: string; description?: string; actionName?: string; onConfirm?: () => void }>({ isOpen: false });
 
+  // Family Finance Master Categories State
+  const [financeCategories, setFinanceCategories] = useState<TransactionCategory[]>([]);
+  const [financeLoading, setFinanceLoading] = useState(false);
+  const [selectedParentId, setSelectedParentId] = useState<string | null>(null);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatType, setNewCatType] = useState<TransactionType>('EXPENSE');
+  const [newCatBucket, setNewCatBucket] = useState<BudgetBucket>('NECESSITY');
+  const [newCatIsEssential, setNewCatIsEssential] = useState(true);
+  const [newCatColor, setNewCatColor] = useState('#06b6d4');
+  const [newCatParentId, setNewCatParentId] = useState<string>('');
+  const [editingFinanceCat, setEditingFinanceCat] = useState<TransactionCategory | null>(null);
+  const [filterCatType, setFilterCatType] = useState<'ALL' | TransactionType>('ALL');
+
   const loadAllMasterData = async () => {
     try {
-      const [maint, exp, vend, bnk, tax] = await Promise.all([
+      const [maint, exp, vend, bnk, tax, fCats] = await Promise.all([
         getMasterMaintenanceCategories(),
         getMasterExpenseCategories(),
         getMasterVendors(),
         getMasterBanks(),
         getMasterTaxonomy(),
+        getCategories(),
       ]);
       setMaintCategories(maint);
       setExpCategories(exp);
       setVendors(vend);
       setBanks(bnk);
       setTaxonomy(tax);
+      setFinanceCategories(fCats);
+      if (fCats.length > 0) {
+        const firstParent = fCats.find((c) => !c.parent_id);
+        if (firstParent) setSelectedParentId(firstParent.id);
+      }
     } catch (err) {
       console.error('Error loading master data:', err);
     }
@@ -198,6 +250,105 @@ export default function MasterDataPage() {
 
     setEditingCategory(null);
     showToast('Đã cập nhật tên danh mục thành công!');
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Family Finance Master Category Handlers
+  // ─────────────────────────────────────────────────────────────────────────────
+  const refreshFinanceCategories = async () => {
+    setFinanceLoading(true);
+    try {
+      const cats = await getCategories();
+      setFinanceCategories(cats);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFinanceLoading(false);
+    }
+  };
+
+  const handleCreateFinanceCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+
+    try {
+      await createCategory({
+        name: newCatName.trim(),
+        type: newCatType,
+        parent_id: newCatParentId ? newCatParentId : null,
+        budget_bucket: newCatBucket,
+        is_essential: newCatIsEssential,
+        color: newCatColor,
+        icon: 'Tag',
+        is_system: false,
+        display_order: financeCategories.length + 1,
+      });
+
+      setNewCatName('');
+      setNewCatParentId('');
+      showToast('Đã thêm danh mục thu chi mới thành công!');
+      await refreshFinanceCategories();
+    } catch (err) {
+      alert('Không thể tạo danh mục: ' + (err as any)?.message);
+    }
+  };
+
+  const handleUpdateFinanceCategory = async (cat: TransactionCategory) => {
+    try {
+      await updateCategory(cat.id, {
+        name: cat.name,
+        color: cat.color,
+        budget_bucket: cat.budget_bucket,
+        is_essential: cat.is_essential,
+      });
+      setEditingFinanceCat(null);
+      showToast('Đã cập nhật danh mục thành công!');
+      await refreshFinanceCategories();
+    } catch (err) {
+      alert('Cập nhật thất bại: ' + (err as any)?.message);
+    }
+  };
+
+  const handleDeleteFinanceCategory = (cat: TransactionCategory) => {
+    const isParent = !cat.parent_id;
+    setSecurityModal({
+      isOpen: true,
+      title: isParent
+        ? `Xác thực Xóa Danh Mục Mẹ "${cat.name}"`
+        : `Xác thực Xóa Danh Mục Con "${cat.name}"`,
+      description: isParent
+        ? `CẢNH BÁO: Xóa danh mục mẹ "${cat.name}" sẽ xóa hoặc tách toàn bộ danh mục con trực thuộc. Vui lòng nhập mã PIN Admin để tiếp tục.`
+        : `Xác nhận xóa danh mục con "${cat.name}". Vui lòng nhập mã PIN Admin để tiếp tục.`,
+      actionName: 'Xóa danh mục',
+      onConfirm: async () => {
+        try {
+          await deleteCategory(cat.id);
+          showToast(`Đã xóa danh mục "${cat.name}" khỏi hệ thống!`);
+          await refreshFinanceCategories();
+        } catch (err) {
+          alert('Xóa danh mục thất bại: ' + (err as any)?.message);
+        }
+      },
+    });
+  };
+
+  const handleResetDefaultFinanceCategories = () => {
+    setSecurityModal({
+      isOpen: true,
+      title: 'Khôi phục Bộ Danh Mục Thu Chi Mẫu Chuẩn Gia Đình',
+      description:
+        'Thao tác này sẽ nạp lại đầy đủ cây danh mục thu chi gia đình Việt chuẩn (Ăn uống, Nhà cửa, Xe cộ, Giáo dục, Y tế, Du lịch, Trả nợ...). Vui lòng nhập mã PIN Admin để xác nhận.',
+      actionName: 'Nạp danh mục mẫu',
+      onConfirm: async () => {
+        try {
+          const res = await resetToDefaultCategories();
+          setFinanceCategories(res);
+          showToast('Đã nạp toàn bộ cây danh mục thu chi mẫu chuẩn thành công!');
+        } catch (err) {
+          alert('Nạp danh mục mẫu thất bại: ' + (err as any)?.message);
+        }
+      },
+    });
   };
 
   const saveTaxonomy = async (updatedTax: typeof taxonomy) => {
@@ -399,16 +550,505 @@ export default function MasterDataPage() {
 
       )}
 
+      {/* Edit Finance Category Modal */}
+      {editingFinanceCat && (
+        <DraggableModal isOpen={true} onClose={() => setEditingFinanceCat(null)}>
+          <div
+            className="cursor-grab active:cursor-grabbing relative rounded-2xl w-[90vw] sm:w-[500px] max-w-md p-5 space-y-4 shadow-2xl"
+            style={{ border: '1px solid var(--border-default)', background: 'var(--bg-secondary)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'var(--border-default)' }}>
+              <h3 className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+                <Pencil className="w-4 h-4 text-cyan-400" />
+                <span>Chỉnh sửa danh mục: {editingFinanceCat.name}</span>
+              </h3>
+              <button onClick={() => setEditingFinanceCat(null)} style={{ color: 'var(--text-muted)' }}>
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-bold mb-1" style={{ color: 'var(--text-muted)' }}>
+                  Tên danh mục
+                </label>
+                <input
+                  type="text"
+                  className="theme-input text-xs font-semibold w-full"
+                  value={editingFinanceCat.name}
+                  onChange={(e) => setEditingFinanceCat({ ...editingFinanceCat, name: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold mb-1" style={{ color: 'var(--text-muted)' }}>
+                    Hũ ngân sách (6 Jars)
+                  </label>
+                  <select
+                    className="theme-input text-xs w-full"
+                    value={editingFinanceCat.budget_bucket || 'NECESSITY'}
+                    onChange={(e) => setEditingFinanceCat({ ...editingFinanceCat, budget_bucket: e.target.value as any })}
+                  >
+                    <option value="NECESSITY">Thiết yếu (NEC - 55%)</option>
+                    <option value="SAVINGS">Tiết kiệm (LTSS - 10%)</option>
+                    <option value="EDUCATION">Giáo dục (EDU - 10%)</option>
+                    <option value="PLAY">Hưởng thụ (PLAY - 10%)</option>
+                    <option value="INVESTMENT">Tự do TC (FFA - 10%)</option>
+                    <option value="GIVE">Cho đi (GIVE - 5%)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold mb-1" style={{ color: 'var(--text-muted)' }}>
+                    Quy tắc 50/30/20
+                  </label>
+                  <select
+                    className="theme-input text-xs w-full"
+                    value={editingFinanceCat.is_essential ? 'true' : 'false'}
+                    onChange={(e) => setEditingFinanceCat({ ...editingFinanceCat, is_essential: e.target.value === 'true' })}
+                  >
+                    <option value="true">Thiết yếu (Needs 50%)</option>
+                    <option value="false">Sở thích / Hưởng thụ (Wants 30%)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold mb-1" style={{ color: 'var(--text-muted)' }}>
+                  Mã màu nhận diện
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    className="w-8 h-8 rounded-lg border-0 cursor-pointer p-0"
+                    value={editingFinanceCat.color || '#06b6d4'}
+                    onChange={(e) => setEditingFinanceCat({ ...editingFinanceCat, color: e.target.value })}
+                  />
+                  <input
+                    type="text"
+                    className="theme-input text-xs font-mono flex-1"
+                    value={editingFinanceCat.color || '#06b6d4'}
+                    onChange={(e) => setEditingFinanceCat({ ...editingFinanceCat, color: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2 border-t" style={{ borderColor: 'var(--border-default)' }}>
+              <button
+                onClick={() => setEditingFinanceCat(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold hover:bg-white/10"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => handleUpdateFinanceCategory(editingFinanceCat)}
+                className="px-5 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5"
+                style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+              >
+                <Save className="w-4 h-4" />
+                Lưu thay đổi
+              </button>
+            </div>
+          </div>
+        </DraggableModal>
+      )}
+
+      {/* ─── 0.1 MASTER DANH MỤC THU CHI GIA ĐÌNH TOÀN DIỆN (FFMS FINANCE TREE) ─── */}
+      <div
+        className="glass-panel p-5 sm:p-6 rounded-2xl space-y-6 shadow-xl"
+        style={{
+          border: '2px solid rgba(16, 185, 129, 0.4)',
+          background: 'var(--bg-primary)',
+        }}
+      >
+        <div className="flex items-center justify-between flex-wrap gap-3 border-b pb-4" style={{ borderColor: 'var(--border-default)' }}>
+          <div>
+            <div className="flex items-center space-x-2.5">
+              <span className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
+                <Layers className="w-5 h-5" />
+              </span>
+              <h2 className="text-base sm:text-lg font-black text-emerald-400">
+                Cấu Hình Danh Mục Thu Chi Master Gia Đình (Phân Tầng Mẹ &amp; Con)
+              </h2>
+            </div>
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              Quản lý danh mục cha (mẹ) và các tiểu mục con tương ứng, hỗ trợ chuẩn 6 Chiếc Hũ &amp; Quy tắc 50/30/20. Không bị lẫn lộn giữa mẹ và con.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleResetDefaultFinanceCategories}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-300 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 transition-all active:scale-95"
+              title="Khôi phục cây danh mục mẫu chuẩn gia đình Việt"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Nạp danh mục mẫu chuẩn</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filter by Type: EXPENSE / INCOME / TRANSFER / ALL */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="inline-flex p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs font-semibold">
+            <button
+              onClick={() => setFilterCatType('ALL')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                filterCatType === 'ALL'
+                  ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Tất cả loại ({financeCategories.length})
+            </button>
+            <button
+              onClick={() => setFilterCatType('EXPENSE')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                filterCatType === 'EXPENSE'
+                  ? 'bg-rose-500 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Chi tiêu
+            </button>
+            <button
+              onClick={() => setFilterCatType('INCOME')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                filterCatType === 'INCOME'
+                  ? 'bg-emerald-500 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Thu nhập
+            </button>
+            <button
+              onClick={() => setFilterCatType('TRANSFER')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                filterCatType === 'TRANSFER'
+                  ? 'bg-sky-500 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Chuyển tiền
+            </button>
+          </div>
+
+          <span className="text-[11px] text-slate-400">
+            Click vào Danh mục Mẹ để xem danh sách Danh mục Con bên trong
+          </span>
+        </div>
+
+        {/* 2-Column Parent-Child Tree View */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Left Column: DANH MỤC MẸ (PARENTS) */}
+          <div
+            className="lg:col-span-5 p-4 rounded-2xl space-y-3"
+            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}
+          >
+            <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+              <h3 className="font-extrabold text-xs flex items-center space-x-2 text-emerald-400 uppercase tracking-wide">
+                <FolderPlus className="w-4 h-4" />
+                <span>1. Danh mục mẹ (Parent Categories)</span>
+              </h3>
+              <span className="text-[11px] px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/15 text-emerald-400">
+                {financeCategories.filter((c) => !c.parent_id).length} nhóm
+              </span>
+            </div>
+
+            <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
+              {financeCategories
+                .filter((c) => !c.parent_id)
+                .filter((c) => filterCatType === 'ALL' || c.type === filterCatType)
+                .map((parent) => {
+                  const isSelected = parent.id === selectedParentId;
+                  const childCount = financeCategories.filter((c) => c.parent_id === parent.id).length;
+
+                  return (
+                    <div
+                      key={parent.id}
+                      onClick={() => setSelectedParentId(parent.id)}
+                      className="p-2.5 rounded-xl flex items-center justify-between cursor-pointer transition-all border group"
+                      style={
+                        isSelected
+                          ? {
+                              background: 'rgba(16, 185, 129, 0.15)',
+                              borderColor: '#10b981',
+                              boxShadow: '0 0 12px rgba(16,185,129,0.2)',
+                            }
+                          : {
+                              background: 'var(--bg-primary)',
+                              borderColor: 'var(--border-default)',
+                            }
+                      }
+                    >
+                      <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                        <div
+                          className="w-3.5 h-3.5 rounded-full shrink-0"
+                          style={{ backgroundColor: parent.color || '#10b981' }}
+                        />
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-xs truncate" style={{ color: 'var(--text-primary)' }}>
+                            {parent.name}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                            <span className="uppercase font-bold text-[9px] px-1 rounded bg-slate-500/10">
+                              {parent.type}
+                            </span>
+                            <span>• {childCount} mục con</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-1 shrink-0 ml-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingFinanceCat(parent);
+                          }}
+                          className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15 transition"
+                          title="Sửa danh mục mẹ"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteFinanceCategory(parent);
+                          }}
+                          className="p-1 rounded text-rose-400 hover:bg-rose-500/15 transition"
+                          title="Xóa danh mục mẹ"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <ChevronRight
+                          className={`w-4 h-4 text-slate-400 transition-transform ${
+                            isSelected ? 'translate-x-0.5 text-emerald-400' : 'opacity-40'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+
+          {/* Right Column: DANH MỤC CON (CHILDREN) */}
+          <div
+            className="lg:col-span-7 p-4 rounded-2xl space-y-3"
+            style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}
+          >
+            {(() => {
+              const currentParent = financeCategories.find((c) => c.id === selectedParentId);
+              const subCats = financeCategories.filter((c) => c.parent_id === selectedParentId);
+
+              return (
+                <>
+                  <div className="flex items-center justify-between pb-2 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                    <div>
+                      <h3 className="font-extrabold text-xs flex items-center space-x-2 text-sky-400 uppercase tracking-wide">
+                        <Tag className="w-4 h-4" />
+                        <span>
+                          2. Danh mục con thuộc: {currentParent ? currentParent.name : 'Chưa chọn'}
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Tiểu mục phục vụ ghi chép chi tiêu chi tiết hàng ngày
+                      </p>
+                    </div>
+                    <span className="text-[11px] px-2 py-0.5 rounded font-mono font-bold bg-sky-500/15 text-sky-400">
+                      {subCats.length} mục con
+                    </span>
+                  </div>
+
+                  {subCats.length === 0 ? (
+                    <div className="p-8 text-center rounded-xl bg-slate-500/5 border border-dashed border-slate-500/20">
+                      <ShoppingBag className="w-8 h-8 text-slate-400 mx-auto mb-2 opacity-50" />
+                      <p className="text-xs font-semibold text-slate-400">
+                        Chưa có danh mục con nào trong nhóm này.
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Dùng form bên dưới để thêm danh mục con đầu tiên.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[350px] overflow-y-auto pr-1">
+                      {subCats.map((sub) => (
+                        <div
+                          key={sub.id}
+                          className="p-3 rounded-xl flex items-center justify-between space-x-2 group transition hover:border-sky-500/50"
+                          style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: sub.color || '#38bdf8' }}
+                              />
+                              <p className="font-bold text-xs truncate" style={{ color: 'var(--text-primary)' }}>
+                                {sub.name}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                              <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-slate-500/10">
+                                {sub.budget_bucket || 'NECESSITY'}
+                              </span>
+                              <span>• {sub.is_essential ? 'Thiết yếu (Needs)' : 'Hưởng thụ (Wants)'}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center space-x-1 shrink-0">
+                            <button
+                              onClick={() => setEditingFinanceCat(sub)}
+                              className="p-1 rounded text-cyan-400 hover:bg-cyan-500/15 transition"
+                              title="Sửa danh mục con"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteFinanceCategory(sub)}
+                              className="p-1 rounded text-rose-400 hover:bg-rose-500/15 transition"
+                              title="Xóa danh mục con"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Inline Form Thêm Danh Mục Con vào nhóm đang chọn */}
+                  {currentParent && (
+                    <div className="pt-3 border-t space-y-2" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <p className="text-[11px] font-extrabold uppercase text-slate-400 flex items-center gap-1">
+                        <Plus className="w-3.5 h-3.5 text-sky-400" />
+                        Thêm danh mục con vào nhóm &quot;{currentParent.name}&quot;
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <input
+                          type="text"
+                          className="theme-input text-xs sm:col-span-2"
+                          placeholder="Tên danh mục con mới (VD: Cafe, Đi chợ)..."
+                          value={newCatParentId === currentParent.id ? newCatName : ''}
+                          onFocus={() => {
+                            setNewCatParentId(currentParent.id);
+                            setNewCatType(currentParent.type);
+                            setNewCatBucket(currentParent.budget_bucket || 'NECESSITY');
+                          }}
+                          onChange={(e) => {
+                            setNewCatParentId(currentParent.id);
+                            setNewCatName(e.target.value);
+                          }}
+                        />
+
+                        <select
+                          className="theme-input text-xs"
+                          value={newCatBucket}
+                          onChange={(e) => setNewCatBucket(e.target.value as BudgetBucket)}
+                        >
+                          <option value="NECESSITY">Thiết yếu</option>
+                          <option value="SAVINGS">Tiết kiệm</option>
+                          <option value="EDUCATION">Giáo dục</option>
+                          <option value="PLAY">Hưởng thụ</option>
+                          <option value="INVESTMENT">Đầu tư</option>
+                          <option value="GIVE">Cho đi</option>
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            setNewCatParentId(currentParent.id);
+                            setNewCatType(currentParent.type);
+                            handleCreateFinanceCategory(e);
+                          }}
+                          className="px-3 py-2 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 shadow-sm"
+                          style={{ background: 'linear-gradient(135deg, #0EA5E9, #3B82F6)' }}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Thêm Con</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* Form Thêm Danh Mục Mẹ Mới (Top-level Parent Category) */}
+        <div
+          className="p-4 rounded-2xl space-y-3"
+          style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}
+        >
+          <div className="flex items-center gap-1.5 text-xs font-bold uppercase text-emerald-400">
+            <FolderPlus className="w-4 h-4" />
+            <span>Thêm Danh Mục Mẹ Mới (Nhóm Thu Chi Cấp 1)</span>
+          </div>
+
+          <form onSubmit={handleCreateFinanceCategory} className="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
+            <input
+              type="text"
+              required
+              className="theme-input text-xs sm:col-span-2"
+              placeholder="Tên danh mục mẹ (VD: Ăn uống, Con cái, Nhà cửa, Xe cộ)..."
+              value={newCatParentId === '' ? newCatName : ''}
+              onFocus={() => setNewCatParentId('')}
+              onChange={(e) => {
+                setNewCatParentId('');
+                setNewCatName(e.target.value);
+              }}
+            />
+
+            <select
+              className="theme-input text-xs"
+              value={newCatType}
+              onChange={(e) => setNewCatType(e.target.value as TransactionType)}
+            >
+              <option value="EXPENSE">Chi tiêu (Expense)</option>
+              <option value="INCOME">Thu nhập (Income)</option>
+              <option value="TRANSFER">Chuyển tiền (Transfer)</option>
+            </select>
+
+            <select
+              className="theme-input text-xs"
+              value={newCatBucket}
+              onChange={(e) => setNewCatBucket(e.target.value as BudgetBucket)}
+            >
+              <option value="NECESSITY">Thiết yếu (55%)</option>
+              <option value="SAVINGS">Tiết kiệm (10%)</option>
+              <option value="EDUCATION">Giáo dục (10%)</option>
+              <option value="PLAY">Hưởng thụ (10%)</option>
+              <option value="INVESTMENT">Đầu tư (10%)</option>
+              <option value="GIVE">Cho đi (5%)</option>
+            </select>
+
+            <button
+              type="submit"
+              onClick={() => setNewCatParentId('')}
+              className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shrink-0 transition flex items-center justify-center space-x-1 shadow-md shadow-emerald-500/20"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tạo Nhóm Mẹ</span>
+            </button>
+          </form>
+        </div>
+      </div>
+
       {/* ─── 0. Admin 2-Tier Taxonomy Manager (Category & SubCategory) ─── */}
       <div className="glass-panel p-5 sm:p-6 rounded-2xl space-y-6 shadow-xl" style={{ border: '2px solid rgba(14,165,233,0.3)', background: 'var(--bg-primary)' }}>
         <div className="flex items-center justify-between flex-wrap gap-2 border-b pb-4" style={{ borderColor: 'var(--border-default)' }}>
           <div>
             <h2 className="text-base font-extrabold flex items-center space-x-2 text-cyan-400">
               <Sliders className="w-5 h-5 text-cyan-400" />
-              <span>Cấu Hình Danh Mục Chi Phí 2 Tầng (Category &amp; SubCategory Admin)</span>
+              <span>Cấu Hình Danh Mục Chi Phí Xe 2 Tầng (Mobility Taxonomy Admin)</span>
             </h2>
             <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              Cấu hình trực tiếp toàn bộ Danh mục lớn &amp; Danh mục con hiển thị trong Form Thêm / Sửa Chi Phí
+              Cấu hình trực tiếp toàn bộ Danh mục lớn &amp; Danh mục con hiển thị trong Form Thêm / Sửa Chi Phí Phương Tiện Xe
             </p>
           </div>
         </div>

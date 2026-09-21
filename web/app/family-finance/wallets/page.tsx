@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   Calendar,
 } from 'lucide-react';
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 
@@ -239,46 +240,40 @@ export default function WalletsManagementPage() {
         </div>
       </div>
 
-      {/* Summary Row */}
+      {/* Summary Row with QMS Gradient KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-            <Building2 className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Tiền khả dụng (Bank & Ví)</span>
-            <div className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400">
-              {fmt(totalLiquid)} ₫
-            </div>
-            <span className="text-[11px] text-slate-400">{liquidWallets.length} tài khoản đang hoạt động</span>
-          </div>
-        </div>
+        <KpiGradientCard
+          title="TIỀN KHẢ DỤNG (BANK & VÍ)"
+          value={fmt(totalLiquid)}
+          unit="₫"
+          subtitle={`${liquidWallets.length} tài khoản đang hoạt động`}
+          colorType="emerald"
+          icon={Building2}
+          badgeText="Khả dụng"
+          badgeType="success"
+        />
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
-            <CreditCard className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Dư nợ thẻ tín dụng đã dùng</span>
-            <div className="text-xl font-black font-mono text-indigo-600 dark:text-indigo-400">
-              {fmt(totalCreditDebt)} ₫
-            </div>
-            <span className="text-[11px] text-slate-400">{creditWallets.length} thẻ tín dụng</span>
-          </div>
-        </div>
+        <KpiGradientCard
+          title="DƯ NỢ THẺ TÍN DỤNG ĐÃ DÙNG"
+          value={fmt(totalCreditDebt)}
+          unit="₫"
+          subtitle={`${creditWallets.length} thẻ tín dụng đang kích hoạt`}
+          colorType="purple"
+          icon={CreditCard}
+          badgeText="Dư nợ thẻ"
+          badgeType="warning"
+        />
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-sky-100 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400">
-            <PiggyBank className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Tiết kiệm & Dự phòng dài hạn</span>
-            <div className="text-xl font-black font-mono text-sky-600 dark:text-sky-400">
-              {fmt(totalSavings)} ₫
-            </div>
-            <span className="text-[11px] text-slate-400">{savingsWallets.length} sổ tiết kiệm</span>
-          </div>
-        </div>
+        <KpiGradientCard
+          title="TIẾT KIỆM & DỰ PHÒNG DÀI HẠN"
+          value={fmt(totalSavings)}
+          unit="₫"
+          subtitle={`${savingsWallets.length} sổ tiết kiệm tích lũy`}
+          colorType="cyan"
+          icon={PiggyBank}
+          badgeText="Tích lũy"
+          badgeType="info"
+        />
       </div>
 
       {/* Group 1: Bank & Cash */}

@@ -299,18 +299,48 @@ export default function QuickTransactionModal({
             <div>
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5 flex items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5 text-slate-400" />
-                Hạng mục thu chi
+                Hạng mục thu chi (Mẹ &amp; Con)
               </label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:ring-2 focus:ring-sky-500 focus:outline-none"
               >
-                {filteredCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
+                {(() => {
+                  const parents = filteredCategories.filter((c) => !c.parent_id);
+                  const children = filteredCategories.filter((c) => !!c.parent_id);
+
+                  if (parents.length === 0) {
+                    return filteredCategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ));
+                  }
+
+                  return parents.map((parent) => {
+                    const subs = children.filter((c) => c.parent_id === parent.id);
+                    if (subs.length === 0) {
+                      return (
+                        <option key={parent.id} value={parent.id}>
+                          {parent.name}
+                        </option>
+                      );
+                    }
+                    return (
+                      <optgroup key={parent.id} label={`📁 ${parent.name}`}>
+                        <option value={parent.id}>
+                          — {parent.name} (Chung)
+                        </option>
+                        {subs.map((sub) => (
+                          <option key={sub.id} value={sub.id}>
+                            &nbsp;&nbsp;&nbsp;&nbsp;↳ {sub.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    );
+                  });
+                })()}
               </select>
             </div>
           </div>

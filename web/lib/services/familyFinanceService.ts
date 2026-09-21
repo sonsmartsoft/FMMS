@@ -62,6 +62,8 @@ export async function deleteWallet(id: string): Promise<boolean> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+import { SAMPLE_FAMILY_CATEGORIES, flattenSampleCategories } from '@/lib/data/sampleFinanceCategories';
+
 // 2. DANH MỤC THU CHI (CATEGORIES)
 // ─────────────────────────────────────────────────────────────────────────────
 export async function getCategories(): Promise<TransactionCategory[]> {
@@ -71,8 +73,8 @@ export async function getCategories(): Promise<TransactionCategory[]> {
       .select('*')
       .order('display_order', { ascending: true });
 
-    if (error) {
-      console.warn('getCategories error, using local fallback:', error.message);
+    if (error || !data || data.length === 0) {
+      if (error) console.warn('getCategories error, using local fallback:', error.message);
       return getLocalCategories();
     }
     return (data as TransactionCategory[]) || [];
@@ -89,8 +91,75 @@ export async function createCategory(cat: Omit<TransactionCategory, 'id' | 'crea
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // If Supabase fails or is offline, save to localStorage
+    const local = getLocalCategories();
+    const newCat: TransactionCategory = {
+      ...cat,
+      id: `cat-${Date.now()}`,
+      created_at: new Date().toISOString(),
+    };
+    local.push(newCat);
+    saveLocalCategories(local);
+    return newCat;
+  }
   return data as TransactionCategory;
+}
+
+export async function updateCategory(id: string, updates: Partial<TransactionCategory>): Promise<TransactionCategory> {
+  const { data, error } = await supabase
+    .from('transaction_categories')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    const local = getLocalCategories();
+    const idx = local.findIndex((c) => c.id === id);
+    if (idx !== -1) {
+      local[idx] = { ...local[idx], ...updates };
+      saveLocalCategories(local);
+      return local[idx];
+    }
+    throw error;
+  }
+  return data as TransactionCategory;
+}
+
+export async function deleteCategory(id: string): Promise<boolean> {
+  // First nullify or delete child categories
+  await supabase.from('transaction_categories').delete().eq('parent_id', id);
+  const { error } = await supabase.from('transaction_categories').delete().eq('id', id);
+
+  if (error) {
+    const local = getLocalCategories();
+    const filtered = local.filter((c) => c.id !== id && c.parent_id !== id);
+    saveLocalCategories(filtered);
+    return true;
+  }
+  return true;
+}
+
+export async function resetToDefaultCategories(): Promise<TransactionCategory[]> {
+  const sampleCats = flattenSampleCategories();
+  try {
+    // Delete existing categories and reseed
+    await supabase.from('transaction_categories').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const { data, error } = await supabase
+      .from('transaction_categories')
+      .insert(sampleCats)
+      .select();
+
+    if (!error && data) {
+      saveLocalCategories(data as TransactionCategory[]);
+      return data as TransactionCategory[];
+    }
+  } catch (err) {
+    console.warn('resetToDefaultCategories Supabase error:', err);
+  }
+  saveLocalCategories(sampleCats);
+  return sampleCats;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -223,8 +292,10 @@ export async function getFamilyLoans(): Promise<FamilyLoan[]> {
       `)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.warn('getFamilyLoans error, using fallback:', error.message);
+    if (error || !data || data.length === 0) {
+      // If family_loans table has no rows or errors, query the real vehicle loans table
+      const vehicleLoans = await getRealVehicleLoansAsFamilyLoans();
+      if (vehicleLoans.length > 0) return vehicleLoans;
       return getLocalLoans();
     }
     return (data as FamilyLoan[]) || [];
@@ -232,6 +303,42 @@ export async function getFamilyLoans(): Promise<FamilyLoan[]> {
     console.error('getFamilyLoans exception:', err);
     return getLocalLoans();
   }
+}
+
+async function getRealVehicleLoansAsFamilyLoans(): Promise<FamilyLoan[]> {
+  try {
+    const { data: dbLoans } = await supabase
+      .from('loans')
+      .select('*, assets:asset_id(*)')
+      .order('created_at', { ascending: false });
+
+    if (dbLoans && dbLoans.length > 0) {
+      return dbLoans.map((l: any) => {
+        const carName = l.assets?.name || 'Mazda 2AT 2026';
+        const carPlate = l.assets?.license_plate || '19B-213.87';
+        return {
+          id: l.id,
+          title: `Khoản vay mua xe ${carName} (${carPlate})`,
+          loan_type: 'BORROW' as const,
+          category: 'CAR_LOAN' as const,
+          lender_borrower_name: l.lender || 'TPBank',
+          principal_amount: Number(l.principal) || 295000000,
+          remaining_balance: Number(l.current_balance) || 270918368,
+          interest_rate_percent: Number(l.interest_rate_percent) || 8.0,
+          term_months: Number(l.term_months) || 60,
+          start_date: l.start_date || '2026-04-07',
+          payment_day: Number(l.payment_day) || 28,
+          monthly_payment: Number(l.monthly_payment) || 7378216,
+          linked_asset_id: l.asset_id,
+          status: (l.status as any) || 'ACTIVE',
+          notes: l.notes || 'Vay ngân hàng TPBank thời hạn 60 tháng, trả nợ ngày 28 hàng tháng',
+        };
+      });
+    }
+  } catch (err) {
+    console.warn('Failed to load real vehicle loans as family loans:', err);
+  }
+  return [];
 }
 
 export async function createFamilyLoan(loan: Omit<FamilyLoan, 'id' | 'created_at' | 'updated_at'>): Promise<FamilyLoan> {
@@ -278,39 +385,46 @@ function getLocalWallets(): Wallet[] {
 }
 
 function getLocalCategories(): TransactionCategory[] {
-  return [
-    { id: 'cat-food', name: 'Ăn uống & Đi chợ', type: 'EXPENSE', color: '#f59e0b', icon: 'Utensils', budget_bucket: 'NECESSITY', is_essential: true, is_system: true, display_order: 1 },
-    { id: 'cat-home', name: 'Nhà cửa & Tiện ích', type: 'EXPENSE', color: '#3b82f6', icon: 'Home', budget_bucket: 'NECESSITY', is_essential: true, is_system: true, display_order: 2 },
-    { id: 'cat-mobility', name: 'Phương tiện & Đi lại (Xe)', type: 'EXPENSE', color: '#06b6d4', icon: 'Car', budget_bucket: 'NECESSITY', is_essential: true, is_system: true, display_order: 3 },
-    { id: 'cat-education', name: 'Con cái & Giáo dục', type: 'EXPENSE', color: '#8b5cf6', icon: 'GraduationCap', budget_bucket: 'EDUCATION', is_essential: true, is_system: true, display_order: 4 },
-    { id: 'cat-health', name: 'Sức khỏe & Y tế', type: 'EXPENSE', color: '#10b981', icon: 'HeartPulse', budget_bucket: 'NECESSITY', is_essential: true, is_system: true, display_order: 5 },
-    { id: 'cat-play', name: 'Hưởng thụ & Du lịch', type: 'EXPENSE', color: '#ec4899', icon: 'Plane', budget_bucket: 'PLAY', is_essential: false, is_system: true, display_order: 6 },
-    { id: 'cat-debt', name: 'Trả góp & Khoản vay', type: 'EXPENSE', color: '#e11d48', icon: 'BadgePercent', budget_bucket: 'NECESSITY', is_essential: true, is_system: true, display_order: 7 },
-    { id: 'cat-inc-salary', name: 'Lương cố định hàng tháng', type: 'INCOME', color: '#10b981', icon: 'Coins', budget_bucket: 'SAVINGS', is_essential: true, is_system: true, display_order: 8 },
-    { id: 'cat-inc-bonus', name: 'Thưởng & Thu nhập phụ', type: 'INCOME', color: '#34d399', icon: 'TrendingUp', budget_bucket: 'INVESTMENT', is_essential: false, is_system: true, display_order: 9 },
-    { id: 'cat-transfer', name: 'Chuyển tiền nội bộ giữa các ví', type: 'TRANSFER', color: '#64748b', icon: 'ArrowRightLeft', budget_bucket: 'SAVINGS', is_essential: false, is_system: true, display_order: 10 },
-  ];
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('ffms_categories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+  }
+  return flattenSampleCategories();
+}
+
+function saveLocalCategories(cats: TransactionCategory[]) {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('ffms_categories', JSON.stringify(cats));
+    } catch {}
+  }
 }
 
 function getLocalLoans(): FamilyLoan[] {
   return [
     {
       id: 'loan-mazda-01',
-      title: 'Khoản vay mua xe Mazda 2 Deluxe',
+      title: 'Khoản vay mua xe Mazda 2AT 2026 (19B-213.87)',
       loan_type: 'BORROW',
       category: 'CAR_LOAN',
-      lender_borrower_name: 'Techcombank',
-      principal_amount: 300000000,
-      remaining_balance: 245000000,
-      interest_rate_percent: 8.5,
+      lender_borrower_name: 'TPBank',
+      principal_amount: 295000000,
+      remaining_balance: 270918368,
+      interest_rate_percent: 8.0,
       term_months: 60,
-      start_date: '2026-03-08',
-      payment_day: 15,
-      monthly_payment: 6250000,
+      start_date: '2026-04-07',
+      payment_day: 28,
+      monthly_payment: 7378216,
       linked_wallet_id: 'w-tcb-01',
       linked_asset_id: '20260308-0001-4222-8888-19b213872026',
       status: 'ACTIVE',
-      notes: 'Gốc + Lãi trả ngày 15 hàng tháng tự động từ Techcombank',
+      notes: 'Khoản vay mua xe Mazda 2AT (1.5L Luxury/AT, BKS 19B-213.87) tại TPBank, trả gốc + lãi ngày 28 hàng tháng.',
     },
   ];
 }
+

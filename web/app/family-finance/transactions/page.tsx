@@ -370,11 +370,39 @@ export default function TransactionsLedgerPage() {
               className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none"
             >
               <option value="ALL">Tất cả hạng mục</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+              {(() => {
+                const parents = categories.filter((c) => !c.parent_id);
+                const children = categories.filter((c) => !!c.parent_id);
+
+                if (parents.length === 0) {
+                  return categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ));
+                }
+
+                return parents.map((parent) => {
+                  const subs = children.filter((c) => c.parent_id === parent.id);
+                  if (subs.length === 0) {
+                    return (
+                      <option key={parent.id} value={parent.id}>
+                        {parent.name}
+                      </option>
+                    );
+                  }
+                  return (
+                    <optgroup key={parent.id} label={`📁 ${parent.name}`}>
+                      <option value={parent.id}>— {parent.name} (Tất cả)</option>
+                      {subs.map((sub) => (
+                        <option key={sub.id} value={sub.id}>
+                          &nbsp;&nbsp;↳ {sub.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  );
+                });
+              })()}
             </select>
           </div>
 
