@@ -17,6 +17,7 @@ import {
   getFamilyLoans,
   deleteFamilyTransaction,
 } from '@/lib/services/familyFinanceService';
+import { get6JarsConfig, getBaseMonthlyIncome } from '@/lib/utils/jarsConfig';
 import KpiGradientCard from '@/components/ui/KpiGradientCard';
 import QuickTransactionModal from '@/components/finance/QuickTransactionModal';
 import {
@@ -151,20 +152,32 @@ export default function FamilyFinanceDashboard() {
     return loanBal + creditBal;
   }, [loans, wallets]);
 
-  // 6 Jars Calculation
-  // NECESSITY 55%, SAVINGS 10%, EDUCATION 10%, PLAY 10%, INVESTMENT 10%, GIVE 5%
-  const jarsConfig = [
-    { key: 'NECESSITY', label: 'Thiết yếu (NEC)', percent: 55, color: 'bg-emerald-500', text: 'text-emerald-500' },
-    { key: 'SAVINGS', label: 'Tiết kiệm dài hạn (LTSS)', percent: 10, color: 'bg-sky-500', text: 'text-sky-500' },
-    { key: 'EDUCATION', label: 'Giáo dục & Học tập (EDU)', percent: 10, color: 'bg-purple-500', text: 'text-purple-500' },
-    { key: 'PLAY', label: 'Hưởng thụ & Du lịch (PLAY)', percent: 10, color: 'bg-amber-500', text: 'text-amber-500' },
-    { key: 'INVESTMENT', label: 'Tự do tài chính (FFA)', percent: 10, color: 'bg-indigo-500', text: 'text-indigo-500' },
-    { key: 'GIVE', label: 'Cho đi & Biếu tặng (GIVE)', percent: 5, color: 'bg-rose-500', text: 'text-rose-500' },
-  ];
+  // 6 Jars Calculation (Dynamic Config from Settings / LocalStorage)
+  const [customJars, setCustomJars] = useState(() => get6JarsConfig());
+  const [baseIncomeSetting, setBaseIncomeSetting] = useState(() => getBaseMonthlyIncome());
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setCustomJars(get6JarsConfig());
+      setBaseIncomeSetting(getBaseMonthlyIncome());
+    };
+    window.addEventListener('ffms_6jars_updated', handleUpdate);
+    return () => window.removeEventListener('ffms_6jars_updated', handleUpdate);
+  }, []);
+
+  const jarsConfig = useMemo(() => {
+    return customJars.map((j) => ({
+      key: j.key,
+      label: j.name,
+      percent: j.percent,
+      color: j.bgBar,
+      text: j.bgBar.replace('bg-', 'text-'),
+    }));
+  }, [customJars]);
 
   const jarStats = useMemo(() => {
-    // Base standard target income or 50,000,000 fallback for target display
-    const baseIncome = monthlyIncome > 0 ? monthlyIncome : 50000000;
+    // Base standard target income or configured baseline fallback for target display
+    const baseIncome = monthlyIncome > 0 ? monthlyIncome : baseIncomeSetting;
 
     return jarsConfig.map((jar) => {
       const budgetCap = (baseIncome * jar.percent) / 100;

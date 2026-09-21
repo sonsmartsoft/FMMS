@@ -124,7 +124,7 @@ export default function TransactionsLedgerPage() {
       } else if (t.transaction_type === 'EXPENSE') {
         const amt = Number(t.amount || 0);
         expense += amt;
-        if (t.asset_id || t.category?.name?.includes('Phương tiện')) {
+        if (t.asset_id || t.category?.name?.includes('Phương tiện') || t.category_id?.startsWith('cat-mob') || t.category_id?.includes('car')) {
           mobilityExpense += amt;
         }
       }
@@ -476,7 +476,7 @@ export default function TransactionsLedgerPage() {
                         {tx.asset_id ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 text-[11px] font-bold">
                             <Car className="w-3 h-3" />
-                            Mazda 2
+                            {tx.asset_name || 'Mazda 2'}
                           </span>
                         ) : (
                           <span className="text-slate-400 text-[11px]">-</span>

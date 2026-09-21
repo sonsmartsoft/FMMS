@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { ExpenseRecord } from '@/types/mobility';
 import { resolveAssetId, isValidUuid } from './assetService';
+import { mapExpenseCategoryToFamilyCategory, mapFamilyCategoryToExpenseCategory } from './financeSyncMapper';
 
 export interface ExpenseInput {
   asset_id: string;
@@ -80,6 +81,43 @@ export async function getExpenses(assetId?: string): Promise<ExpenseRecord[]> {
                 vendor: m.vendor || 'Garage bảo dưỡng',
                 odometer_km: m.odometer_km ? Number(m.odometer_km) : undefined,
                 description: `Bảo dưỡng: ${m.maintenance_type || 'Bảo dưỡng xe'}${m.notes ? ` - ${m.notes}` : ''}`,
+              });
+            }
+          }
+        });
+      }
+    } catch {}
+
+    // Tự động gộp các khoản chi tiêu có gắn xe từ bảng family_transactions
+    try {
+      let ftQuery = supabase.from('family_transactions').select('*').eq('transaction_type', 'EXPENSE');
+      if (realId) {
+        ftQuery = ftQuery.or(`asset_id.eq.${realId},asset_id.eq.${assetId}`);
+      } else {
+        ftQuery = ftQuery.not('asset_id', 'is', null);
+      }
+      const { data: ftData } = await ftQuery;
+      if (ftData && ftData.length > 0) {
+        ftData.forEach((t: any) => {
+          const amt = Number(t.amount || 0);
+          if (amt > 0) {
+            const isAlreadyInExpenses = dbExpenses.some(e => {
+              const sameId = e.id === t.id || e.id === `exp_${t.id}` || t.id === `exp_${e.id}` || e.id === `ft_${t.id}`;
+              const sameDate = (e.date || '').slice(0, 10) === (t.date || '').slice(0, 10);
+              const sameAmount = Math.abs(Number(e.amount || 0) - amt) < 100;
+              return sameId || (sameDate && sameAmount);
+            });
+            if (!isAlreadyInExpenses) {
+              dbExpenses.push({
+                id: `ft_${t.id}`,
+                asset_id: t.asset_id,
+                date: t.date,
+                category: mapFamilyCategoryToExpenseCategory(t.category_id),
+                subcategory: t.description || 'Chi tiêu sổ gia đình',
+                amount: amt,
+                currency: 'VND',
+                vendor: t.payee_vendor || 'Chi tiêu gia đình',
+                description: t.notes || t.description || 'Đồng bộ từ Sổ Thu Chi Gia Đình',
               });
             }
           }
@@ -211,6 +249,25 @@ export async function createExpense(data: ExpenseInput, skipAutoLinks = false): 
     }
   }
 
+  // 4. Tự động đồng bộ sang Sổ Thu Chi Gia Đình (family_transactions)
+  try {
+    const mapped = mapExpenseCategoryToFamilyCategory(data.category, data.subcategory, data.description);
+    const familyTxPayload: any = {
+      wallet_id: 'w-tcb-01',
+      category_id: mapped.categoryId,
+      asset_id: realId,
+      transaction_type: 'EXPENSE',
+      amount: data.amount,
+      date: data.date || new Date().toISOString().slice(0, 10),
+      payee_vendor: data.vendor || 'Dịch vụ xe ô tô',
+      description: data.description || data.subcategory || mapped.categoryName,
+      notes: `[Tự động đồng bộ từ xe] ${data.odometer_km ? `ODO: ${Number(data.odometer_km).toLocaleString('vi-VN')} km - ` : ''}${data.description || ''}`,
+      is_essential: mapped.bucket === 'NECESSITY',
+      exclude_from_reports: false,
+    };
+    await supabase.from('family_transactions').insert(familyTxPayload);
+  } catch {}
+
   return newExpObj;
 }
 
@@ -260,6 +317,8 @@ export async function deleteExpense(id: string): Promise<boolean> {
   try {
     const supabase = createClient();
     await supabase.from('expenses').delete().eq('id', id);
+    // Đồng bộ xóa cả bên family_transactions nếu có bản ghi liên quan
+    await supabase.from('family_transactions').delete().or(`id.eq.exp_${id},id.eq.${id}`);
   } catch {}
 
   if (typeof window !== 'undefined') {

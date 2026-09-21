@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Car, Bike, Fuel, Wrench, DollarSign,
   FileText, BarChart3, Settings, Activity, Sparkles, Award, MapPin, Radio, ChevronRight, X,
-  Wallet, PieChart, CreditCard, Receipt, ShieldCheck
+  Wallet, PieChart, CreditCard, Receipt, ShieldCheck, BookOpen
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getAssets } from '@/lib/services/assetService';
@@ -194,6 +194,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { name: 'AI Center Studio', href: '/ai-center', icon: Sparkles },
         { name: isEn ? 'OBD Devices' : 'Thiết bị Tracker', href: '/settings/devices', icon: Radio },
         { name: isEn ? 'System Settings' : 'Cài đặt hệ thống', href: '/settings', icon: Settings },
+        { name: isEn ? 'User Guide & About' : 'Hướng dẫn & Giới thiệu', href: '/about', icon: BookOpen },
         { name: 'System Health', href: '/settings/health', icon: Activity },
       ],
     },

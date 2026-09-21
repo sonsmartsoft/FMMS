@@ -28,9 +28,23 @@ import {
   TrendingUp,
   Tag,
   ShieldAlert,
+  Sliders,
+  Settings2,
+  Info,
+  RotateCcw,
 } from 'lucide-react';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
 import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
+import {
+  get6JarsConfig,
+  save6JarsConfig,
+  reset6JarsConfig,
+  getBaseMonthlyIncome,
+  saveBaseMonthlyIncome,
+  JarItemConfig,
+  DEFAULT_6JARS_CONFIG,
+  DEFAULT_BASE_INCOME,
+} from '@/lib/utils/jarsConfig';
 
 export default function BudgetsManagementPage() {
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
@@ -42,11 +56,27 @@ export default function BudgetsManagementPage() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [activeTab, setActiveTab] = useState<'6_JARS' | '50_30_20' | 'CATEGORIES'>('6_JARS');
 
-  // Edit Modal State
+  // Edit Category Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<TransactionCategory | null>(null);
   const [budgetAmountStr, setBudgetAmountStr] = useState('');
   const [alertThreshold, setAlertThreshold] = useState('80');
+
+  // 6 Jars Configuration State
+  const [jarsConfig, setJarsConfig] = useState<JarItemConfig[]>(DEFAULT_6JARS_CONFIG);
+  const [baseIncome, setBaseIncome] = useState<number>(DEFAULT_BASE_INCOME);
+  const [isJarsModalOpen, setIsJarsModalOpen] = useState(false);
+  const [tempJarsConfig, setTempJarsConfig] = useState<JarItemConfig[]>(DEFAULT_6JARS_CONFIG);
+  const [tempBaseIncomeStr, setTempBaseIncomeStr] = useState('50,000,000');
+  const [jarsErrorMsg, setJarsErrorMsg] = useState('');
+
+  // Initial load of 6 jars config
+  useEffect(() => {
+    setJarsConfig(get6JarsConfig());
+    const bInc = getBaseMonthlyIncome();
+    setBaseIncome(bInc);
+    setTempBaseIncomeStr(bInc.toLocaleString('vi-VN'));
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -83,8 +113,8 @@ export default function BudgetsManagementPage() {
     const inc = transactions
       .filter((t) => t.transaction_type === 'INCOME' && !t.exclude_from_reports)
       .reduce((s, t) => s + Number(t.amount || 0), 0);
-    return inc > 0 ? inc : 50000000; // Baseline 50m VND if not yet recorded
-  }, [transactions]);
+    return inc > 0 ? inc : baseIncome; // Baseline from setting if not yet recorded
+  }, [transactions, baseIncome]);
 
   // Actual monthly expense
   const totalExpense = useMemo(() => {
@@ -92,58 +122,6 @@ export default function BudgetsManagementPage() {
       .filter((t) => t.transaction_type === 'EXPENSE' && !t.exclude_from_reports)
       .reduce((s, t) => s + Number(t.amount || 0), 0);
   }, [transactions]);
-
-  // 6 Jars Configuration & Stats
-  const jarsConfig = [
-    {
-      key: 'NECESSITY',
-      name: 'Hũ Thiết Yếu (NEC)',
-      percent: 55,
-      color: '#10b981',
-      bgBar: 'bg-emerald-500',
-      desc: 'Chi phí sinh hoạt tối cần thiết: Ăn uống, thuê/mua nhà, hóa đơn điện nước, xăng xe, bảo dưỡng xe Mazda 2, học phí',
-    },
-    {
-      key: 'SAVINGS',
-      name: 'Hũ Tiết Kiệm Dài Hạn (LTSS)',
-      percent: 10,
-      color: '#0ea5e9',
-      bgBar: 'bg-sky-500',
-      desc: 'Quỹ dự phòng khẩn cấp 3-6 tháng, mua sắm lớn trong tương lai, bảo hiểm nhân thọ',
-    },
-    {
-      key: 'EDUCATION',
-      name: 'Hũ Giáo Dục & Học Tập (EDU)',
-      percent: 10,
-      color: '#8b5cf6',
-      bgBar: 'bg-purple-500',
-      desc: 'Học phí con cái, sách vở, khóa học nâng cao kỹ năng cho bố mẹ',
-    },
-    {
-      key: 'PLAY',
-      name: 'Hũ Hưởng Thụ & Du Lịch (PLAY)',
-      percent: 10,
-      color: '#f59e0b',
-      bgBar: 'bg-amber-500',
-      desc: 'Du lịch cuối tuần, ăn ngoài nhà hàng cao cấp, mua sắm giải trí, spa (chi tiêu không hối tiếc)',
-    },
-    {
-      key: 'INVESTMENT',
-      name: 'Hũ Tự Do Tài Chính (FFA)',
-      percent: 10,
-      color: '#6366f1',
-      bgBar: 'bg-indigo-500',
-      desc: 'Đầu tư sinh lời: Cổ phiếu, trái phiếu, kinh doanh phụ, tạo dòng thu nhập thụ động',
-    },
-    {
-      key: 'GIVE',
-      name: 'Hũ Cho Đi & Biếu Tặng (GIVE)',
-      percent: 5,
-      color: '#f43f5e',
-      bgBar: 'bg-rose-500',
-      desc: 'Biếu ông bà cha mẹ, từ thiện, quà sinh nhật hiếu hỉ người thân',
-    },
-  ];
 
   const jarList = useMemo(() => {
     return jarsConfig.map((jar) => {
@@ -216,6 +194,31 @@ export default function BudgetsManagementPage() {
     } catch (err) {
       alert('Lưu ngân sách thất bại');
     }
+  };
+
+  const tempTotalPercent = useMemo(() => {
+    return tempJarsConfig.reduce((s, j) => s + (Number(j.percent) || 0), 0);
+  }, [tempJarsConfig]);
+
+  const handleSaveJarsConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (tempTotalPercent !== 100) {
+      setJarsErrorMsg(`Tổng tỷ lệ các hũ phải bằng đúng 100% (Hiện tại là ${tempTotalPercent}%)`);
+      return;
+    }
+    const incomeNum = parseInt(tempBaseIncomeStr.replace(/[^0-9]/g, ''), 10) || 50000000;
+    save6JarsConfig(tempJarsConfig);
+    saveBaseMonthlyIncome(incomeNum);
+    setJarsConfig([...tempJarsConfig]);
+    setBaseIncome(incomeNum);
+    setIsJarsModalOpen(false);
+  };
+
+  const handleResetJarsConfig = () => {
+    const def = reset6JarsConfig();
+    setTempJarsConfig(def);
+    setTempBaseIncomeStr((50000000).toLocaleString('vi-VN'));
+    setJarsErrorMsg('');
   };
 
   return (
@@ -315,10 +318,48 @@ export default function BudgetsManagementPage() {
           TAB 1: 6 JARS VIEW
          ───────────────────────────────────────────────────────────── */}
       {activeTab === '6_JARS' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {jarList.map((jar) => {
-            const isOver = jar.ratio > 100;
-            const isWarning = jar.ratio >= 80 && !isOver;
+        <div className="space-y-4">
+          {/* 6 Jars Header & Config Card */}
+          <div className="bg-gradient-to-r from-sky-500/10 via-indigo-500/10 to-purple-500/10 dark:from-sky-950/40 dark:via-indigo-950/40 dark:to-purple-950/40 rounded-2xl border border-sky-200/60 dark:border-sky-800/60 p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-sky-500/20 text-sky-600 dark:text-sky-400 shrink-0">
+                <Sliders className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                    Cơ chế phân bổ 6 Chiếc Hũ (T. Harv Eker)
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                    Hệ thống tự động tính từ thu nhập
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                  Ngân sách được tính tự động từ dòng thu nhập thực tế tháng này ({fmt(monthlyIncome)} ₫).
+                  Mọi khoản chi xăng xe, bảo dưỡng xe Mazda 2 được tự động hạch toán vào Hũ Thiết Yếu (NEC).
+                  Bạn có thể tùy biến tỷ lệ % hoặc đổi mức thu nhập cơ sở theo mục tiêu riêng của gia đình.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setTempJarsConfig([...jarsConfig]);
+                setTempBaseIncomeStr(baseIncome.toLocaleString('vi-VN'));
+                setJarsErrorMsg('');
+                setIsJarsModalOpen(true);
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shadow-md shadow-sky-600/20 transition-all shrink-0 hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Settings2 className="w-4 h-4" />
+              Cấu hình tỷ lệ 6 Hũ
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {jarList.map((jar) => {
+              const isOver = jar.ratio > 100;
+              const isWarning = jar.ratio >= 80 && !isOver;
 
             return (
               <div
@@ -402,6 +443,7 @@ export default function BudgetsManagementPage() {
               </div>
             );
           })}
+          </div>
         </div>
       )}
 
@@ -658,6 +700,134 @@ export default function BudgetsManagementPage() {
             >
               Lưu hạn mức
             </button>
+          </div>
+        </form>
+      </DraggableModal>
+
+      {/* 6 Jars Percentage Configuration Modal */}
+      <DraggableModal
+        isOpen={isJarsModalOpen}
+        onClose={() => setIsJarsModalOpen(false)}
+        title="⚙️ Cấu hình tỷ lệ 6 Chiếc Hũ & Thu nhập cơ sở"
+        className="max-w-xl w-full"
+      >
+        <form onSubmit={handleSaveJarsConfig} className="p-5 space-y-4 text-xs">
+          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+            <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
+              <Info className="w-4 h-4 text-sky-500 shrink-0" />
+              Cơ chế phân bổ tự động theo phương pháp 6 Chiếc Hũ (T. Harv Eker)
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+              Khi bạn ghi chép nguồn thu (Lương, Thưởng, Cổ tức...), hệ thống sẽ tự động phân bổ theo % từng hũ để tính định mức chi tiêu an toàn.
+              Mọi chi phí xe (xăng xe, bảo dưỡng, cầu đường) được tự động trừ vào Hũ Thiết Yếu (NEC). Tổng tỷ lệ 6 hũ bắt buộc phải bằng <strong>100%</strong>.
+            </p>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Mức thu nhập cơ sở ước tính hàng tháng (VNĐ)
+            </label>
+            <input
+              type="text"
+              required
+              value={tempBaseIncomeStr}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^0-9]/g, '');
+                setTempBaseIncomeStr(raw ? parseInt(raw, 10).toLocaleString('vi-VN') : '');
+              }}
+              className="w-full px-3 py-2 text-sm font-mono font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+              placeholder="VD: 50,000,000"
+            />
+            <p className="text-[11px] text-slate-400 mt-1">
+              Áp dụng làm mốc ngân sách chuẩn khi tháng mới chưa ghi chép đủ dòng tiền vào.
+            </p>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="font-semibold text-slate-700 dark:text-slate-300">
+                Tỷ lệ phân bổ 6 Hũ (%)
+              </label>
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-xs font-mono font-bold ${
+                  tempTotalPercent === 100
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                    : 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+                }`}
+              >
+                Tổng: {tempTotalPercent}% {tempTotalPercent === 100 ? '✓ Hợp lệ 100%' : `(Cần điều chỉnh về 100%)`}
+              </span>
+            </div>
+
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {tempJarsConfig.map((jar, idx) => (
+                <div
+                  key={jar.key}
+                  className="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: jar.color }} />
+                    <div className="truncate">
+                      <div className="font-bold text-slate-800 dark:text-slate-200 truncate text-[11px]">
+                        {jar.name}
+                      </div>
+                      <div className="text-[10px] text-slate-400 truncate max-w-sm">{jar.desc}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={jar.percent}
+                      onChange={(e) => {
+                        const val = Math.max(0, Math.min(100, parseInt(e.target.value, 10) || 0));
+                        const next = [...tempJarsConfig];
+                        next[idx] = { ...next[idx], percent: val };
+                        setTempJarsConfig(next);
+                      }}
+                      className="w-16 px-2 py-1 text-center font-mono font-bold text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    />
+                    <span className="text-slate-400 font-bold">%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {jarsErrorMsg && (
+            <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 text-xs font-semibold">
+              {jarsErrorMsg}
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={handleResetJarsConfig}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Khôi phục chuẩn 55/10/10/10/10/5
+            </button>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => setIsJarsModalOpen(false)}
+                className="px-4 py-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+              >
+                Đóng
+              </button>
+              <button
+                type="submit"
+                disabled={tempTotalPercent !== 100}
+                className="px-5 py-2 font-bold text-white bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-md shadow-sky-600/20"
+              >
+                Lưu cấu hình 6 Hũ
+              </button>
+            </div>
           </div>
         </form>
       </DraggableModal>

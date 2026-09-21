@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, X, Save, Menu } from 'lucide-react';
+import { ShieldCheck, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, X, Save, Menu, BookOpen } from 'lucide-react';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { createClient } from '@/lib/supabase/client';
@@ -285,6 +285,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Sliders className="w-4 h-4 shrink-0" />
           </button>
 
+          {/* User Guide & About */}
+          <Link
+            href="/about"
+            className="p-2 sm:p-2.5 rounded-xl transition active:scale-95 flex items-center justify-center"
+            style={{ background: 'var(--bg-hover)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
+            title={isEn ? 'User Guide & System Docs' : 'Cẩm nang & Hướng dẫn sử dụng'}
+            aria-label="User Guide"
+          >
+            <BookOpen className="w-4 h-4 shrink-0" />
+          </Link>
+
           {/* User Profile Trigger */}
           <div className="relative pl-1 sm:pl-2 border-l" style={{ borderColor: 'var(--border-default)' }}>
             <button
@@ -368,6 +379,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                         </button>
                         <Link href="/settings/users" onClick={() => setShowProfileMenu(false)} className="text-xs font-bold text-blue-400 hover:underline block text-left">
                           👥 {isEn ? 'Manage Members & Roles' : 'Quản lý thành viên & phân quyền'}
+                        </Link>
+                        <Link href="/about" onClick={() => setShowProfileMenu(false)} className="text-xs font-bold text-amber-400 hover:underline block text-left">
+                          📖 {isEn ? 'User Guide & System Docs' : 'Cẩm nang & Hướng dẫn sử dụng'}
                         </Link>
                       </div>
                     </div>

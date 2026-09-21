@@ -8,6 +8,9 @@ import {
   FamilyLoanSchedule,
   TransactionType,
 } from '@/types/finance';
+import { getExpenses, createExpense, deleteExpense } from './expenseService';
+import { mapExpenseCategoryToFamilyCategory, mapFamilyCategoryToExpenseCategory } from './financeSyncMapper';
+import { getAssets } from './assetService';
 
 const supabase = createClient();
 
@@ -176,7 +179,29 @@ export interface TransactionFilter {
   type?: TransactionType;
 }
 
+function getLocalCustomTransactions(): FamilyTransaction[] {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('ffms_custom_transactions');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+  }
+  return [];
+}
+
+function saveLocalCustomTransactions(txs: FamilyTransaction[]) {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('ffms_custom_transactions', JSON.stringify(txs));
+    } catch {}
+  }
+}
+
 export async function getFamilyTransactions(filter?: TransactionFilter): Promise<FamilyTransaction[]> {
+  let dbList: FamilyTransaction[] = [];
   try {
     let query = supabase
       .from('family_transactions')
@@ -189,57 +214,205 @@ export async function getFamilyTransactions(filter?: TransactionFilter): Promise
       .order('date', { ascending: false })
       .order('created_at', { ascending: false });
 
-    if (filter?.walletId) {
-      query = query.or(`wallet_id.eq.${filter.walletId},to_wallet_id.eq.${filter.walletId}`);
-    }
-    if (filter?.categoryId) {
-      query = query.eq('category_id', filter.categoryId);
-    }
-    if (filter?.assetId) {
-      query = query.eq('asset_id', filter.assetId);
-    }
-    if (filter?.type) {
-      query = query.eq('transaction_type', filter.type);
-    }
-    if (filter?.startDate) {
-      query = query.gte('date', filter.startDate);
-    }
-    if (filter?.endDate) {
-      query = query.lte('date', filter.endDate);
-    }
-
     const { data, error } = await query;
-    if (error) {
-      console.warn('getFamilyTransactions error, falling back:', error.message);
-      return [];
+    if (!error && data && data.length > 0) {
+      dbList = data as FamilyTransaction[];
     }
-    return (data as FamilyTransaction[]) || [];
   } catch (err) {
-    console.error('getFamilyTransactions exception:', err);
-    return [];
+    console.warn('getFamilyTransactions DB query warning:', err);
   }
+
+  // 1. Gộp các giao dịch lưu trữ cục bộ (nếu có)
+  const localTxs = getLocalCustomTransactions();
+  const allTxs: FamilyTransaction[] = [...dbList];
+  localTxs.forEach((ltx) => {
+    if (!allTxs.some((t) => t.id === ltx.id)) {
+      allTxs.push(ltx);
+    }
+  });
+
+  // 2. Tự động đồng bộ toàn bộ chi phí từ xe ô tô (Mobility & Fleet) vào Sổ tài chính chung
+  try {
+    const [vehicleExpenses, assetsList, categoriesList, walletsList] = await Promise.all([
+      getExpenses(filter?.assetId).catch(() => []),
+      getAssets().catch(() => []),
+      getCategories().catch(() => []),
+      getWallets().catch(() => []),
+    ]);
+
+    const assetNameMap: Record<string, string> = {};
+    assetsList.forEach((a) => {
+      assetNameMap[a.id] = `${a.name}${a.license_plate ? ` (${a.license_plate})` : ''}`;
+    });
+
+    const defaultWallet = walletsList.find((w) => w.id === 'w-tcb-01') || walletsList[0] || {
+      id: 'w-tcb-01',
+      name: 'Techcombank Chi tiêu',
+      wallet_type: 'BANK' as const,
+      initial_balance: 38500000,
+      current_balance: 38500000,
+      currency: 'VND',
+      is_excluded_from_total: false,
+      status: 'ACTIVE' as const,
+    };
+
+    // Chuyển đổi và hợp nhất các bản ghi chi phí xe vào danh sách giao dịch gia đình
+    vehicleExpenses.forEach((exp) => {
+      const isAlreadyInTxs = allTxs.some((tx) => {
+        if (tx.id === `exp_${exp.id}` || tx.id === exp.id || tx.id === `ft_${exp.id}`) return true;
+        const sameAsset = tx.asset_id === exp.asset_id;
+        const sameDate = (tx.date || '').slice(0, 10) === (exp.date || '').slice(0, 10);
+        const sameAmount = Math.abs(Number(tx.amount || 0) - exp.amount) < 100;
+        return sameAsset && sameDate && sameAmount;
+      });
+
+      if (!isAlreadyInTxs) {
+        const mappedCat = mapExpenseCategoryToFamilyCategory(exp.category, exp.subcategory, exp.description);
+        const foundCategory = categoriesList.find((c) => c.id === mappedCat.categoryId);
+
+        allTxs.push({
+          id: `exp_${exp.id}`,
+          wallet_id: defaultWallet.id,
+          category_id: mappedCat.categoryId,
+          asset_id: exp.asset_id,
+          transaction_type: 'EXPENSE',
+          amount: exp.amount,
+          date: exp.date,
+          payee_vendor: exp.vendor || 'Dịch vụ xe ô tô',
+          description: exp.description || exp.subcategory || mappedCat.categoryName,
+          notes: `[Tự động đồng bộ từ xe] ${exp.odometer_km ? `ODO: ${Number(exp.odometer_km).toLocaleString('vi-VN')} km - ` : ''}${exp.description || ''}`,
+          is_essential: mappedCat.bucket === 'NECESSITY',
+          exclude_from_reports: false,
+          asset_name: assetNameMap[exp.asset_id] || (exp.asset_id ? 'Mazda 2AT 2026 (19B-213.87)' : undefined),
+          wallet: defaultWallet,
+          category: foundCategory || {
+            id: mappedCat.categoryId,
+            name: mappedCat.categoryName,
+            type: 'EXPENSE',
+            budget_bucket: mappedCat.bucket,
+            color: mappedCat.color,
+            icon: mappedCat.icon,
+            is_essential: mappedCat.bucket === 'NECESSITY',
+            is_system: true,
+            display_order: 300,
+          },
+        });
+      } else {
+        // Đảm bảo tên xe hiển thị đầy đủ trên giao diện
+        const matchedTx = allTxs.find((tx) =>
+          tx.id === `exp_${exp.id}` ||
+          tx.id === exp.id ||
+          (tx.asset_id === exp.asset_id && (tx.date || '').slice(0, 10) === (exp.date || '').slice(0, 10) && Math.abs(Number(tx.amount || 0) - exp.amount) < 100)
+        );
+        if (matchedTx && !matchedTx.asset_name && matchedTx.asset_id) {
+          matchedTx.asset_name = assetNameMap[matchedTx.asset_id] || 'Mazda 2AT 2026 (19B-213.87)';
+        }
+      }
+    });
+  } catch (syncErr) {
+    console.warn('Bidirectional sync vehicle expenses error:', syncErr);
+  }
+
+  // 3. Áp dụng các bộ lọc (Filter)
+  let filtered = allTxs;
+  if (filter?.walletId) {
+    filtered = filtered.filter((t) => t.wallet_id === filter.walletId || t.to_wallet_id === filter.walletId);
+  }
+  if (filter?.categoryId) {
+    filtered = filtered.filter((t) => t.category_id === filter.categoryId || t.category?.parent_id === filter.categoryId);
+  }
+  if (filter?.assetId) {
+    filtered = filtered.filter((t) => t.asset_id === filter.assetId);
+  }
+  if (filter?.type) {
+    filtered = filtered.filter((t) => t.transaction_type === filter.type);
+  }
+  if (filter?.startDate) {
+    filtered = filtered.filter((t) => (t.date || '') >= filter.startDate!);
+  }
+  if (filter?.endDate) {
+    filtered = filtered.filter((t) => (t.date || '') <= filter.endDate!);
+  }
+
+  // Sắp xếp giảm dần theo ngày
+  return filtered.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
 export async function createFamilyTransaction(
   tx: Omit<FamilyTransaction, 'id' | 'created_at' | 'updated_at'>
 ): Promise<FamilyTransaction> {
-  const { data, error } = await supabase
-    .from('family_transactions')
-    .insert([tx])
-    .select(`
-      *,
-      wallet:wallets!wallet_id(*),
-      category:transaction_categories!category_id(*)
-    `)
-    .single();
+  let createdTx: FamilyTransaction;
+  try {
+    const { data, error } = await supabase
+      .from('family_transactions')
+      .insert([tx])
+      .select(`
+        *,
+        wallet:wallets!wallet_id(*),
+        category:transaction_categories!category_id(*)
+      `)
+      .single();
 
-  if (error) throw error;
-  return data as FamilyTransaction;
+    if (!error && data) {
+      createdTx = data as FamilyTransaction;
+    } else {
+      throw error || new Error('DB insert failed');
+    }
+  } catch (dbErr) {
+    // Lưu vào lưu trữ cục bộ nếu DB bận hoặc gặp sự cố
+    const newId = `ft_local_${Date.now()}`;
+    createdTx = {
+      ...tx,
+      id: newId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as FamilyTransaction;
+    const local = getLocalCustomTransactions();
+    local.unshift(createdTx);
+    saveLocalCustomTransactions(local);
+  }
+
+  // ── ĐỒNG BỘ 2 CHIỀU: Nếu là CHI TIÊU có gắn Xe, tự động đồng bộ sang chi phí xe ──
+  if (tx.asset_id && tx.transaction_type === 'EXPENSE') {
+    try {
+      const expCategory = mapFamilyCategoryToExpenseCategory(tx.category_id);
+      await createExpense(
+        {
+          asset_id: tx.asset_id,
+          date: tx.date,
+          category: expCategory,
+          subcategory: tx.description || 'Chi tiêu gia đình',
+          amount: tx.amount,
+          vendor: tx.payee_vendor,
+          description: tx.notes || tx.description || 'Ghi chép từ Sổ Thu Chi Gia Đình',
+        },
+        false // Cho phép tự động liên kết sang fuel_logs hoặc maintenance_records nếu là xăng/bảo dưỡng
+      );
+    } catch (expSyncErr) {
+      console.warn('Failed to sync family transaction to vehicle expense:', expSyncErr);
+    }
+  }
+
+  return createdTx;
 }
 
 export async function deleteFamilyTransaction(id: string): Promise<boolean> {
-  const { error } = await supabase.from('family_transactions').delete().eq('id', id);
-  if (error) throw error;
+  try {
+    await supabase.from('family_transactions').delete().eq('id', id);
+  } catch {}
+
+  const local = getLocalCustomTransactions();
+  const filtered = local.filter((t) => t.id !== id);
+  if (filtered.length !== local.length) {
+    saveLocalCustomTransactions(filtered);
+  }
+
+  // Nếu giao dịch này bắt nguồn hoặc liên kết với xe, đồng bộ xóa bên xe
+  try {
+    const expenseId = id.startsWith('exp_') ? id.replace('exp_', '') : id.startsWith('ft_') ? id.replace('ft_', '') : id;
+    await deleteExpense(expenseId);
+  } catch {}
+
   return true;
 }
 
