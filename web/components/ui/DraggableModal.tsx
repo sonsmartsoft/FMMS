@@ -42,6 +42,8 @@ export default function DraggableModal({
       setSize({ w: 0, h: 0 });
       setIsMinimized(false);
       setIsMaximized(false);
+      setIsDragging(false);
+      setResizeDir(null);
     }
   }, [isOpen]);
 
@@ -52,8 +54,6 @@ export default function DraggableModal({
     if (isOpen) window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
 
   // Snapshot current rect to pixel coords
   const snapshotRect = () => {
@@ -203,6 +203,8 @@ export default function DraggableModal({
 
   const currentCursor = resizeDir ? CURSOR_MAP[resizeDir] : isDragging ? 'grabbing' : 'auto';
   const showSize = isMoved && size.w > 0;
+
+  if (!isOpen) return null;
 
   return (
     <div
