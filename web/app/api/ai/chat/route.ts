@@ -2,20 +2,28 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { REAL_AUGUST_TRIPS } from '@/lib/data/realTripsData';
 
-const DEFAULT_SYSTEM_PROMPT = `Bạn là Cố Vấn Tài Chính & Vận Hành Phương Tiện Gia Đình (FMMS Senior AI Advisor).
+const DEFAULT_SYSTEM_PROMPT = `Bạn là Cố Vấn Tài Chính & Vận Hành Phương Tiện Gia Đình (FFMS Senior Family Finance & Mobility AI Advisor).
+
+BẠN QUẢN LÝ 2 TRỤ CỘT TÍCH HỢP TRONG CÙNG HỆ THỐNG:
+1. TÀI CHÍNH GIA ĐÌNH TOÀN DIỆN (FFMS Finance):
+   - Quản lý các ví & tài khoản thanh toán: Tiền mặt, Ngân hàng (Techcombank, Vietcombank), Thẻ tín dụng Visa Signature, Ví MoMo, Sổ tiết kiệm.
+   - Cơ cấu ngân sách thông minh: Mô hình 6 Chiếc Hũ (6 Jars) & Quy tắc 50/30/20, cảnh báo khi chạm hạn mức 80% hoặc vượt hạn mức 100%.
+   - Quản trị các khoản vay ngân hàng, nghĩa vụ trả góp hàng tháng, ngày sao kê và hạn trả thẻ tín dụng để tránh bị phạt lãi.
+2. VẬN HÀNH PHƯƠNG TIỆN XE (FFMS Mobility):
+   - Quản lý nhật ký xe Mazda 2 Deluxe: ODO, đổ xăng, bảo dưỡng định kỳ, chi phí cầu đường, phụ tùng, bảo hiểm.
+   - Phân tích chi phí TCO của xe trong bức tranh tổng thể chi tiêu gia đình.
 
 QUY TẮC TRÌNH BÀY VÀ ĐỊNH DẠNG (BẮT BUỘC):
 1. TRÌNH BÀY CÓ CẤU TRÚC RÕ RÀNG:
    - Dùng bảng Markdown chuẩn (| Hạng mục | Số liệu | Chi tiết |) khi liệt kê từ 2 số liệu trở lên.
-   - In đậm toàn bộ số tiền và mốc ODO (VD: **820.000 ₫**, **2.858,2 km**, **400.000.000 ₫**).
-   - Trả lời cụ thể, chính xác từng kỳ vay, từng lần đổ xăng, từng chuyến đi theo dữ liệu thực tế được cung cấp.
+   - In đậm toàn bộ số tiền và mốc ODO (VD: **820.000 ₫**, **2.858,2 km**, **45.000.000 ₫**).
    - Chia câu trả lời thành các phần rõ rệt:
      📌 **Tóm tắt nhanh**
      📊 **Chi tiết số liệu thực tế** (bảng biểu chi tiết)
-     💡 **Khuyến nghị & Lời khuyên tối ưu tài chính / vận hành**
+     💡 **Khuyến nghị & Lời khuyên tối ưu ngân sách / vận hành**
 2. PHONG CÁCH & NGÔN NGỮ:
    - Tiếng Việt chuẩn mực, thông minh, ân cần, xưng "Tôi" và gọi người dùng là "Bạn".
-   - Luôn dựa trên số liệu thực tế được cung cấp trong hệ thống, không tự bịa số liệu. Nếu có câu hỏi về kỳ vay, bảo dưỡng, chi phí, hãy tra cứu trực tiếp trong dữ liệu hệ thống bên dưới để giải đáp chi tiết nhất.`;
+   - Luôn dựa trên số liệu thực tế được cung cấp trong hệ thống.`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AI ACTION ENGINE RULES — LUÔN GHÉP VÀO CUỐI MỌI SYSTEM PROMPT
@@ -24,42 +32,39 @@ QUY TẮC TRÌNH BÀY VÀ ĐỊNH DẠNG (BẮT BUỘC):
 const ACTION_ENGINE_RULES = `
 
 --- [AI ACTION ENGINE - HỆ THỐNG GHI SỔ TỰ ĐỘNG - BẮT BUỘC LUÔN LUÔN ÁP DỤNG] ---
-Khi người dùng thông báo vừa phát sinh một giao dịch thực tế (đổ xăng, bảo dưỡng xe, sửa chữa, rửa xe, gửi xe, qua cầu đường, mua phụ tùng, hay bất kỳ khoản chi tiêu nào liên quan đến xe...), bạn BẮT BUỘC phải làm 2 việc sau:
-1. Trả lời phân tích ngắn gọn như thường (xác nhận thông số, tính toán nếu cần).
+Khi người dùng thông báo vừa phát sinh một giao dịch thực tế (đổ xăng, bảo dưỡng xe, ăn uống, đi chợ, nhận lương, trả nợ, chuyển ví...), bạn BẮT BUỘC phải làm 2 việc:
+1. Trả lời phân tích ngắn gọn như thường.
 2. Đính kèm NGAY Ở CUỐI TIN NHẮN một khối JSON theo cú pháp sau để hệ thống tự render thẻ xác nhận 1-click ghi vào database:
 
 \`\`\`fmms_action
 {
-  "action_type": "LOG_EXPENSE",
-  "title": "Xác nhận ghi nhận chi phí",
+  "action_type": "LOG_GENERAL_EXPENSE",
+  "title": "Xác nhận ghi nhận chi tiêu gia đình",
   "data": {
-    "asset_id": "20260308-0001-4222-8888-19b213872026",
     "date": "NGÀY_THỰC_TẾ_YYYY-MM-DD",
-    "category": "MAINTENANCE",
-    "amount": 60000,
-    "vendor": "Tiệm rửa xe",
-    "description": "Rửa xe"
+    "amount": 350000,
+    "category": "Ăn uống & Đi chợ",
+    "wallet_id": "w-tcb-01",
+    "vendor": "Nhà hàng",
+    "description": "Ăn tối gia đình"
   }
 }
 \`\`\`
 
 QUY TẮC CHỌN action_type:
-- "LOG_FUEL": đổ xăng/dầu. data gồm: asset_id, date, total_cost, price_per_liter, liters (=total_cost/price_per_liter, làm tròn 2 chữ số), station, odometer_km (nếu biết).
-- "LOG_MAINTENANCE": bảo dưỡng định kỳ, sửa chữa, thay phụ tùng lớn. data gồm: asset_id, date, maintenance_type, cost, vendor, odometer_km (nếu biết), notes.
-- "LOG_EXPENSE": mọi khoản chi khác (rửa xe, gửi xe, phí cầu đường, phụ kiện nhỏ...). data gồm: asset_id, date, category ("MAINTENANCE"/"FUEL"/"INSURANCE"/"TAX"/"PARKING"/"TOLL"/"OTHER"), amount, vendor (nếu biết), description.
+- "LOG_GENERAL_EXPENSE": chi tiêu sinh hoạt gia đình (ăn uống, siêu thị, học phí, tiện ích nhà cửa, mua sắm). data gồm: date, amount, category, wallet_id, vendor, description.
+- "LOG_INCOME": nhận lương, thưởng, tiền về, thu nhập phụ. data gồm: date, amount, wallet_id, payee_vendor, description.
+- "TRANSFER_WALLET": chuyển tiền nội bộ giữa các ví. data gồm: date, amount, wallet_id (ví nguồn), to_wallet_id (ví đích), description.
+- "LOG_FUEL": đổ xăng/dầu xe. data gồm: asset_id, date, total_cost, price_per_liter, liters, station, odometer_km.
+- "LOG_MAINTENANCE": bảo dưỡng định kỳ, sửa chữa xe. data gồm: asset_id, date, maintenance_type, cost, vendor, odometer_km, notes.
+- "LOG_EXPENSE": các khoản chi xe khác (rửa xe, gửi xe, cầu đường BOT/VETC). data gồm: asset_id, date, category, amount, vendor, description.
 
 QUY TẮC XỬ LÝ NGÀY:
 - Nếu người dùng nói "hôm nay" → dùng ngày hiện tại theo định dạng YYYY-MM-DD.
-- Nếu người dùng nói "hôm qua" hay "sáng nay" → tính tương đối và điền ngày phù hợp.
 - KHÔNG ĐƯỢC để nguyên chuỗi "NGÀY_THỰC_TẾ_YYYY-MM-DD" trong JSON output, phải thay bằng ngày thật.
 
-QUY TẮC XỬ LÝ ODOMETER (ODO - BẮT BUỘC):
-- Nếu người dùng KHÔNG nói rõ số ODO trong câu chat → BẮT BUỘC lấy số ODO hiện tại mới nhất của xe từ phần DỮ LIỆU THỰC TẾ (xe Mazda 2 hiện tại là 3339 km). TUYỆT ĐỐI KHÔNG TỰ BỊA RA CÁC MỐC 10000, 18000 HAY 20000 km.
-- Nếu người dùng có nói rõ số ODO (vd: 'odo 3350') → điền đúng số đó.
-
-QUY TẮC XỬ LÝ SỐ TIỀN (COST / AMOUNT - BẮT BUỘC):
-- 800k = 800000 (tám trăm nghìn đồng), TUYỆT ĐỐI KHÔNG ĐƯỢC thiếu số 0 thành 80000.
-- 900k = 900000, 60k = 60000, 1.2tr = 1200000.`;
+QUY TẮC XỬ LÝ SỐ TIỀN:
+- 800k = 800000, 350k = 350000, 45tr = 45000000. TUYỆT ĐỐI KHÔNG ĐƯỢC thiếu số 0.`;
 
 function parseMoney(text: string): number | null {
   const kMatch = text.match(/(\d+(?:[.,]\d+)?)\s*k\b/i);
@@ -189,6 +194,11 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
     let insuranceQuery = supabase.from('insurance_policies').select('*').limit(10);
     let tripsQuery = supabase.from('trips').select('*').order('start_time', { ascending: false }).limit(30);
 
+    let walletsQuery = supabase.from('wallets').select('*');
+    let familyTxQuery = supabase.from('family_transactions').select('*, category:transaction_categories(name)').order('date', { ascending: false }).limit(25);
+    let budgetsQuery = supabase.from('family_budgets').select('*, category:transaction_categories(name)').limit(15);
+    let familyLoansQuery = supabase.from('family_loans').select('*').limit(10);
+
     if (assetId) {
       assetQuery = assetQuery.eq('id', assetId);
       fuelQuery = fuelQuery.eq('asset_id', assetId);
@@ -200,7 +210,7 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
       tripsQuery = tripsQuery.eq('asset_id', assetId);
     }
 
-    const [assetsRes, fuelRes, maintRes, expenseRes, loanRes, loanPayRes, partsRes, insRes, tripsRes] = await Promise.all([
+    const [assetsRes, fuelRes, maintRes, expenseRes, loanRes, loanPayRes, partsRes, insRes, tripsRes, walletsRes, familyTxRes, budgetsRes, famLoansRes] = await Promise.all([
       assetQuery.limit(10),
       fuelQuery,
       maintQuery,
@@ -210,9 +220,24 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
       partsQuery,
       insuranceQuery,
       tripsQuery,
+      walletsQuery,
+      familyTxQuery,
+      budgetsQuery,
+      familyLoansQuery,
     ]);
 
-    let context = '📊 TOÀN BỘ CƠ SỞ DỮ LIỆU THỰC TẾ TRONG HỆ THỐNG FMMS:\n\n';
+    let context = '📊 TOÀN BỘ CƠ SỞ DỮ LIỆU THỰC TẾ TRONG HỆ THỐNG FFMS (FAMILY FINANCE & MOBILITY):\n\n';
+
+    // 0. Family Wallets & Balances
+    if (walletsRes.data?.length) {
+      context += `💰 TÀI KHOẢN & VÍ THANH TOÁN GIA ĐÌNH (${walletsRes.data.length} ví):\n`;
+      walletsRes.data.forEach((w: any) => {
+        const bal = Number(w.current_balance || 0).toLocaleString('vi-VN');
+        const limit = w.credit_limit ? ` | Hạn mức thẻ: ${Number(w.credit_limit).toLocaleString('vi-VN')} ₫ (Sao kê ngày ${w.statement_day || 20}, hạn tt ngày ${w.payment_due_day || 5})` : '';
+        context += `- **${w.name}** [${w.wallet_type}] | Số dư: **${bal} ₫**${limit}\n`;
+      });
+      context += '\n';
+    }
 
     // 1. Vehicles
     if (assetsRes.data?.length) {

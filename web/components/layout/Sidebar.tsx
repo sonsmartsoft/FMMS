@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Car, Bike, Fuel, Wrench, DollarSign,
-  FileText, BarChart3, Settings, Activity, Sparkles, Award, MapPin, Radio, ChevronRight, X
+  FileText, BarChart3, Settings, Activity, Sparkles, Award, MapPin, Radio, ChevronRight, X,
+  Wallet, PieChart, CreditCard, Receipt
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getAssets } from '@/lib/services/assetService';
@@ -163,23 +164,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const NAV_SECTIONS = [
     {
-      title: isEn ? 'Mobility Management' : 'Quản lý Mobility',
+      title: isEn ? 'Family Finance' : 'Tài chính gia đình',
       items: [
-        { name: isEn ? 'Dashboard' : 'Dashboard', href: '/', icon: LayoutDashboard },
+        { name: isEn ? 'Overview' : 'Tổng quan tài chính', href: '/family-finance', icon: LayoutDashboard },
+        { name: isEn ? 'Daily Expenses' : 'Sổ thu chi', href: '/family-finance/transactions', icon: Receipt },
+        { name: isEn ? 'Wallets & Cards' : 'Ví & Thẻ tín dụng', href: '/family-finance/wallets', icon: Wallet },
+        { name: isEn ? 'Smart Budgets' : 'Ngân sách 6 Hũ', href: '/family-finance/budgets', icon: PieChart },
+        { name: isEn ? 'Loans & Debts' : 'Khoản vay & Trả góp', href: '/family-finance/loans', icon: CreditCard },
+      ],
+    },
+    {
+      title: isEn ? 'Mobility & Vehicles' : 'Phương tiện & Đi lại',
+      items: [
+        { name: isEn ? 'Mobility Dashboard' : 'Dashboard Xe', href: '/', icon: Car },
         { name: isEn ? 'GPS Map' : 'Bản đồ GPS', href: '/map', icon: MapPin },
-        { name: isEn ? 'Vehicles' : 'Phương tiện', href: '/assets', icon: Car },
+        { name: isEn ? 'Vehicles' : 'Đội xe gia đình', href: '/assets', icon: Car },
         { name: isEn ? 'Fuel & Battery' : 'Nhiên liệu & Pin', href: '/fuel', icon: Fuel },
         { name: isEn ? 'Maintenance & Parts' : 'Bảo dưỡng & Phụ tùng', href: '/maintenance', icon: Wrench },
-        { name: isEn ? 'Finance & Loans' : 'Chi phí & Khoản vay', href: '/finance', icon: DollarSign },
+        { name: isEn ? 'Vehicle TCO' : 'Chi phí & TCO Xe', href: '/finance', icon: DollarSign },
         { name: isEn ? 'Docs & Insurance' : 'Giấy tờ & Bảo hiểm', href: '/documents', icon: FileText },
         { name: isEn ? 'Warranty & Claims' : 'Sổ Bảo hành & Claim', href: '/warranties', icon: Award },
-        { name: isEn ? 'Reports & Analytics' : 'Báo cáo & Phân tích', href: '/analytics', icon: BarChart3 },
+        { name: isEn ? 'Mobility Analytics' : 'Báo cáo & Phân tích', href: '/analytics', icon: BarChart3 },
       ],
     },
     {
       title: isEn ? 'System & AI' : 'Hệ thống & AI',
       items: [
-        { name: 'AI Center', href: '/ai-center', icon: Sparkles },
+        { name: 'AI Center Studio', href: '/ai-center', icon: Sparkles },
         { name: isEn ? 'OBD Devices' : 'Thiết bị Tracker', href: '/settings/devices', icon: Radio },
         { name: isEn ? 'System Settings' : 'Cài đặt hệ thống', href: '/settings', icon: Settings },
         { name: 'System Health', href: '/settings/health', icon: Activity },

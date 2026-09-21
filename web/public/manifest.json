@@ -1,0 +1,39 @@
+{
+  "name": "FFMS - Family Finance & Mobility System",
+  "short_name": "FFMS Thu Chi",
+  "description": "Hệ thống quản lý tài chính gia đình thông minh & giám sát phương tiện xe",
+  "start_url": "/family-finance",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0284c7",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Sổ Thu Chi Gia Đình",
+      "short_name": "Thu Chi",
+      "description": "Ghi chép chi tiêu bỏ túi nhanh chóng",
+      "url": "/family-finance/transactions"
+    },
+    {
+      "name": "Ví & Tài Khoản",
+      "short_name": "Ví Tiền",
+      "description": "Xem số dư tài khoản & thẻ tín dụng",
+      "url": "/family-finance/wallets"
+    },
+    {
+      "name": "Xe Mazda 2 (FMMS)",
+      "short_name": "Xe Cộ",
+      "description": "Xem chi phí nhiên liệu & bảo dưỡng xe",
+      "url": "/fuel"
+    }
+  ]
+}

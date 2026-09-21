@@ -1,15 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check } from 'lucide-react';
+import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Wallet } from 'lucide-react';
 import { createFuelLog } from '@/lib/services/fuelService';
 import { createExpense } from '@/lib/services/expenseService';
 import { createMaintenanceRecord } from '@/lib/services/maintenanceService';
+import { createFamilyTransaction } from '@/lib/services/familyFinanceService';
 
 export interface ActionPayload {
-  action_type: 'LOG_FUEL' | 'LOG_EXPENSE' | 'LOG_MAINTENANCE';
+  action_type: 'LOG_FUEL' | 'LOG_EXPENSE' | 'LOG_MAINTENANCE' | 'LOG_GENERAL_EXPENSE' | 'LOG_INCOME' | 'TRANSFER_WALLET';
   title?: string;
   data: {
+    wallet_id?: string;
+    to_wallet_id?: string;
+    category_id?: string;
     asset_id?: string;
     asset_name?: string;
     date?: string;
@@ -21,6 +25,7 @@ export interface ActionPayload {
     fuel_liters?: number;
     station?: string;
     vendor?: string;
+    payee_vendor?: string;
     odometer_km?: number;
     notes?: string;
     category?: string;
@@ -29,6 +34,8 @@ export interface ActionPayload {
     maintenance_type?: string;
     next_due_km?: number;
     next_due_date?: string;
+    wallet_name?: string;
+    to_wallet_name?: string;
   };
 }
 
@@ -103,6 +110,48 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           next_due_date: data.next_due_date,
         });
         setResultMsg(`Đã ghi nhận bảo dưỡng "${editType}" (${fmtMoney(editCost)}) ở mốc ODO ${editOdo.toLocaleString('vi-VN')} km!`);
+      } else if (action_type === 'LOG_GENERAL_EXPENSE') {
+        await createFamilyTransaction({
+          wallet_id: data.wallet_id || 'w-tcb-01',
+          category_id: data.category_id || 'cat-food',
+          asset_id: data.asset_id || null,
+          transaction_type: 'EXPENSE',
+          amount: Number(editCost),
+          date: editDate,
+          payee_vendor: editVendor || data.payee_vendor,
+          description: editType || 'Chi tiêu qua AI Cố vấn',
+          notes: data.notes,
+          is_essential: true,
+          exclude_from_reports: false,
+        });
+        setResultMsg(`Đã ghi sổ chi tiêu ${fmtMoney(editCost)} (${editType}) vào ví gia đình!`);
+      } else if (action_type === 'LOG_INCOME') {
+        await createFamilyTransaction({
+          wallet_id: data.wallet_id || 'w-vcb-01',
+          category_id: data.category_id || 'cat-inc-salary',
+          transaction_type: 'INCOME',
+          amount: Number(editCost),
+          date: editDate,
+          payee_vendor: editVendor || data.payee_vendor || 'Nguồn thu',
+          description: editType || 'Thu nhập qua AI Cố vấn',
+          notes: data.notes,
+          is_essential: true,
+          exclude_from_reports: false,
+        });
+        setResultMsg(`Đã ghi nhận thu nhập +${fmtMoney(editCost)} (${editType}) vào ví gia đình!`);
+      } else if (action_type === 'TRANSFER_WALLET') {
+        await createFamilyTransaction({
+          wallet_id: data.wallet_id || 'w-tcb-01',
+          to_wallet_id: data.to_wallet_id || 'w-momo-01',
+          category_id: 'cat-transfer',
+          transaction_type: 'TRANSFER',
+          amount: Number(editCost),
+          date: editDate,
+          description: `Chuyển ví qua AI: ${data.wallet_name || 'Ví nguồn'} ➔ ${data.to_wallet_name || 'Ví đích'}`,
+          is_essential: false,
+          exclude_from_reports: false,
+        });
+        setResultMsg(`Đã thực hiện chuyển ${fmtMoney(editCost)} thành công!`);
       } else {
         let mappedCat: any = data.category || 'Running';
         let mappedSubcat: string | undefined = data.subcategory;
@@ -132,7 +181,24 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           odometer_km: Number(editOdo) || undefined,
           description: editType || 'Ghi nhận chi phí qua AI Cố vấn',
         });
-        setResultMsg(`Đã ghi nhận khoản chi ${fmtMoney(editCost)} (${mappedSubcat || mappedCat}) vào sổ chi phí!`);
+
+        // Mirror to family finance transactions as vehicle expense
+        try {
+          await createFamilyTransaction({
+            wallet_id: 'w-tcb-01',
+            category_id: 'cat-mobility',
+            asset_id: assetId,
+            transaction_type: 'EXPENSE',
+            amount: Number(editCost),
+            date: editDate,
+            payee_vendor: editVendor,
+            description: editType || mappedSubcat || 'Chi phí vận hành xe',
+            is_essential: true,
+            exclude_from_reports: false,
+          });
+        } catch {}
+
+        setResultMsg(`Đã ghi nhận khoản chi ${fmtMoney(editCost)} (${mappedSubcat || mappedCat}) vào sổ xe và tài chính gia đình!`);
       }
 
       setStatus('success');
@@ -183,6 +249,9 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
   // Config UI by action type
   const isFuel = action_type === 'LOG_FUEL';
   const isMaint = action_type === 'LOG_MAINTENANCE';
+  const isIncome = action_type === 'LOG_INCOME';
+  const isGeneralExp = action_type === 'LOG_GENERAL_EXPENSE';
+  const isTransfer = action_type === 'TRANSFER_WALLET';
 
   const themeConfig = isFuel
     ? {
@@ -203,6 +272,36 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
         border: 'border-amber-500/30 hover:border-amber-500/60',
         badge: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800',
         accentBtn: 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-500/20',
+      }
+    : isIncome
+    ? {
+        icon: ArrowDownLeft,
+        colorHex: '#10b981',
+        title: payload.title || 'XÁC NHẬN GHI NHẬN THU NHẬP',
+        bg: 'from-emerald-500/10 via-teal-500/5 to-transparent',
+        border: 'border-emerald-500/30 hover:border-emerald-500/60',
+        badge: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
+        accentBtn: 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/20',
+      }
+    : isTransfer
+    ? {
+        icon: ArrowRightLeft,
+        colorHex: '#0284c7',
+        title: payload.title || 'XÁC NHẬN CHUYỂN TIỀN VÍ',
+        bg: 'from-sky-500/10 via-blue-500/5 to-transparent',
+        border: 'border-sky-500/30 hover:border-sky-500/60',
+        badge: 'bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/50 dark:text-sky-300 dark:border-sky-800',
+        accentBtn: 'bg-sky-600 hover:bg-sky-500 text-white shadow-sky-500/20',
+      }
+    : isGeneralExp
+    ? {
+        icon: ArrowUpRight,
+        colorHex: '#f43f5e',
+        title: payload.title || 'XÁC NHẬN GHI SỔ CHI TIÊU GIA ĐÌNH',
+        bg: 'from-rose-500/10 via-pink-500/5 to-transparent',
+        border: 'border-rose-500/30 hover:border-rose-500/60',
+        badge: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-800',
+        accentBtn: 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-500/20',
       }
     : {
         icon: CreditCard,

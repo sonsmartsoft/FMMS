@@ -9,21 +9,22 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'FMMS — Family Mobility Management System',
-  description: 'Hệ thống quản lý toàn bộ phương tiện gia đình — theo dõi nhiên liệu, bảo dưỡng, chi phí và khoản vay theo thời gian thực.',
+  title: 'FFMS — Family Finance & Mobility System',
+  description: 'Hệ thống quản lý tài chính gia đình thông minh & giám sát phương tiện xe theo thời gian thực.',
   metadataBase: new URL('https://fmms.vercel.app'),
+  manifest: '/manifest.json',
   openGraph: {
-    title: 'FMMS — Family Mobility Management System',
-    description: 'Theo dõi & phân tích xe hơi, xe đạp, xe điện, mô tô gia đình. AI-powered insights.',
+    title: 'FFMS — Family Finance & Mobility System',
+    description: 'Quản lý tài chính gia đình thông minh, ngân sách 6 chiếc hũ, khoản vay và phương tiện xe.',
     url: 'https://fmms.vercel.app',
-    siteName: 'FMMS',
+    siteName: 'FFMS',
     locale: 'vi_VN',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'FMMS — Family Mobility Management',
-    description: 'Quản lý phương tiện gia đình thông minh',
+    title: 'FFMS — Family Finance & Mobility System',
+    description: 'Quản lý tài chính gia đình & phương tiện xe thông minh',
   },
   robots: { index: false, follow: false },
   icons: {
