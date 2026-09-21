@@ -32,7 +32,21 @@ import {
   Settings2,
   Info,
   RotateCcw,
+  BarChart3,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as ReTooltip,
+  Legend,
+  PieChart as RePieChart,
+  Pie,
+  Cell,
+  CartesianGrid,
+} from 'recharts';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
 import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 import {
@@ -69,9 +83,11 @@ export default function BudgetsManagementPage() {
   const [tempJarsConfig, setTempJarsConfig] = useState<JarItemConfig[]>(DEFAULT_6JARS_CONFIG);
   const [tempBaseIncomeStr, setTempBaseIncomeStr] = useState('50,000,000');
   const [jarsErrorMsg, setJarsErrorMsg] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
 
   // Initial load of 6 jars config
   useEffect(() => {
+    setIsMounted(true);
     setJarsConfig(get6JarsConfig());
     const bInc = getBaseMonthlyIncome();
     setBaseIncome(bInc);
@@ -168,6 +184,75 @@ export default function BudgetsManagementPage() {
         };
       });
   }, [categories, budgets, transactions]);
+
+  // ── Chart Data Calculations ──
+  const jarsBarData = useMemo(() => {
+    return jarList.map((j) => ({
+      name: j.name.replace('Hũ ', '').replace(/ \(.*\)/, ''),
+      fullName: j.name,
+      'Hạn mức định mức': j.budgetCap,
+      'Đã chi thực tế': j.spent,
+    }));
+  }, [jarList]);
+
+  const jarsPieData = useMemo(() => {
+    return jarList.map((j) => ({
+      name: j.name,
+      value: j.budgetCap,
+      spent: j.spent,
+      percent: j.percent,
+      color: j.color,
+    }));
+  }, [jarList]);
+
+  const rule503020Data = useMemo(() => {
+    const needsBudget = monthlyIncome * 0.5;
+    const wantsBudget = monthlyIncome * 0.3;
+    const savingsBudget = monthlyIncome * 0.2;
+
+    const needsSpent = transactions
+      .filter((t) => t.transaction_type === 'EXPENSE' && (t.is_essential || t.category?.budget_bucket === 'NECESSITY'))
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+
+    const wantsSpent = transactions
+      .filter((t) => t.transaction_type === 'EXPENSE' && !t.is_essential && t.category?.budget_bucket !== 'NECESSITY')
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+
+    const savingsSpent = Math.max(0, monthlyIncome - totalExpense);
+
+    return [
+      {
+        name: 'Thiết yếu (50%)',
+        'Định mức chuẩn': needsBudget,
+        'Thực tế': needsSpent,
+        color: '#0ea5e9',
+      },
+      {
+        name: 'Mong muốn (30%)',
+        'Định mức chuẩn': wantsBudget,
+        'Thực tế': wantsSpent,
+        color: '#f59e0b',
+      },
+      {
+        name: 'Tiết kiệm (20%)',
+        'Định mức chuẩn': savingsBudget,
+        'Thực tế': savingsSpent,
+        color: '#10b981',
+      },
+    ];
+  }, [monthlyIncome, totalExpense, transactions]);
+
+  const topCategoriesChartData = useMemo(() => {
+    return [...categoryBudgets]
+      .filter((item) => item.target > 0 || item.spent > 0)
+      .sort((a, b) => (b.spent || b.target) - (a.spent || a.target))
+      .slice(0, 8)
+      .map((item) => ({
+        name: item.category.name,
+        'Hạn mức đặt ra': item.target,
+        'Đã chi': item.spent,
+      }));
+  }, [categoryBudgets]);
 
   const openEditCategoryBudget = (cat: TransactionCategory, currentTarget: number, currentThresh: number) => {
     setEditingCategory(cat);
@@ -356,6 +441,143 @@ export default function BudgetsManagementPage() {
             </button>
           </div>
 
+          {/* 6 Jars Interactive Analysis Charts */}
+          {isMounted && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              {/* Chart 1: Grouped Bar Chart - Budget vs Actual */}
+              <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500">
+                      <BarChart3 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                        So sánh Hạn Mức Hũ vs Đã Chi Thực Tế
+                      </h3>
+                      <p className="text-[10px] text-slate-400">Đơn vị: VNĐ (Biểu đồ cột so sánh)</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] font-bold">
+                    <span className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Hạn mức
+                    </span>
+                    <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" /> Đã chi
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={jarsBarData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        stroke="#94a3b8"
+                        fontSize={11}
+                        fontWeight={600}
+                        tickLine={false}
+                        interval={0}
+                      />
+                      <YAxis
+                        stroke="#94a3b8"
+                        fontSize={10}
+                        tickLine={false}
+                        tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
+                      />
+                      <ReTooltip
+                        formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                        contentStyle={{
+                          background: 'rgba(15, 23, 42, 0.94)',
+                          borderColor: 'rgba(56, 189, 248, 0.3)',
+                          borderRadius: '12px',
+                          color: '#ffffff',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                        }}
+                      />
+                      <Bar dataKey="Hạn mức định mức" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Đã chi thực tế" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Chart 2: Donut Chart - 6 Jars Allocation */}
+              <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-500">
+                      <PieChart className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                        Cơ Cấu Phân Bổ 6 Chiếc Hũ
+                      </h3>
+                      <p className="text-[10px] text-slate-400">Theo chuẩn Harv Eker &amp; tùy biến</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    100% Thu nhập
+                  </span>
+                </div>
+
+                <div className="h-56 w-full relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RePieChart>
+                      <Pie
+                        data={jarsPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={80}
+                        paddingAngle={3}
+                        dataKey="value"
+                        nameKey="name"
+                      >
+                        {jarsPieData.map((entry, idx) => (
+                          <Cell key={`jar-pie-${idx}`} fill={entry.color} stroke="transparent" />
+                        ))}
+                      </Pie>
+                      <ReTooltip
+                        formatter={(val: any, name: any, props: any) => [
+                          `${fmt(Number(val))} ₫ (${props.payload.percent}%)`,
+                          name,
+                        ]}
+                        contentStyle={{
+                          background: 'rgba(15, 23, 42, 0.94)',
+                          borderColor: 'rgba(99, 102, 241, 0.3)',
+                          borderRadius: '12px',
+                          color: '#ffffff',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                        }}
+                      />
+                    </RePieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Tổng định mức</span>
+                    <span className="text-xs font-black font-mono text-slate-900 dark:text-white">
+                      {fmt(monthlyIncome)} ₫
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1.5 pt-1 text-[10px]">
+                  {jarsPieData.map((j) => (
+                    <div key={j.name} className="flex items-center gap-1.5 truncate">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: j.color }} />
+                      <span className="text-slate-600 dark:text-slate-300 truncate">
+                        {j.name.split(' (')[0]}: <b>{j.percent}%</b>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {jarList.map((jar) => {
               const isOver = jar.ratio > 100;
@@ -451,7 +673,141 @@ export default function BudgetsManagementPage() {
           TAB 2: 50/30/20 VIEW
          ───────────────────────────────────────────────────────────── */}
       {activeTab === '50_30_20' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="space-y-6">
+          {/* Interactive Chart for 50/30/20 Rule */}
+          {isMounted && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              {/* Bar Chart 50/30/20 */}
+              <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
+                      <BarChart3 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                        Đối Sánh Quy Tắc 50/30/20 vs Thực Tế
+                      </h3>
+                      <p className="text-[10px] text-slate-400">Đơn vị: VNĐ (Định mức chuẩn vs Thực tế tháng)</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] font-bold">
+                    <span className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Định mức
+                    </span>
+                    <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block" /> Thực tế
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={rule503020Data} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} fontWeight={600} tickLine={false} />
+                      <YAxis
+                        stroke="#94a3b8"
+                        fontSize={10}
+                        tickLine={false}
+                        tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
+                      />
+                      <ReTooltip
+                        formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                        contentStyle={{
+                          background: 'rgba(15, 23, 42, 0.94)',
+                          borderColor: 'rgba(245, 158, 11, 0.3)',
+                          borderRadius: '12px',
+                          color: '#ffffff',
+                          fontSize: '12px',
+                          fontWeight: '600',
+                        }}
+                      />
+                      <Bar dataKey="Định mức chuẩn" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Thực tế" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Donut Chart 50/30/20 */}
+              <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500">
+                      <PieChart className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                        Cơ Cấu Chuẩn 50 / 30 / 20
+                      </h3>
+                      <p className="text-[10px] text-slate-400">Tỷ trọng khuyến nghị từ chuyên gia</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
+                    {fmt(monthlyIncome)} ₫
+                  </span>
+                </div>
+
+                <div className="h-56 w-full relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RePieChart>
+                      <Pie
+                        data={[
+                          { name: 'Nhu cầu Thiết yếu (50%)', value: monthlyIncome * 0.5, color: '#0ea5e9' },
+                          { name: 'Mong muốn Linh hoạt (30%)', value: monthlyIncome * 0.3, color: '#f59e0b' },
+                          { name: 'Tiết kiệm & Trả nợ (20%)', value: monthlyIncome * 0.2, color: '#10b981' },
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={80}
+                        paddingAngle={4}
+                        dataKey="value"
+                        nameKey="name"
+                      >
+                        <Cell fill="#0ea5e9" stroke="transparent" />
+                        <Cell fill="#f59e0b" stroke="transparent" />
+                        <Cell fill="#10b981" stroke="transparent" />
+                      </Pie>
+                      <ReTooltip
+                        formatter={(val: any) => [`${fmt(Number(val))} ₫`, 'Định mức']}
+                        contentStyle={{
+                          background: 'rgba(15, 23, 42, 0.94)',
+                          borderColor: 'rgba(14, 165, 233, 0.3)',
+                          borderRadius: '12px',
+                          color: '#ffffff',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                        }}
+                      />
+                    </RePieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">Mô hình</span>
+                    <span className="text-sm font-black text-slate-900 dark:text-white">50 / 30 / 20</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-1 text-center text-[10px]">
+                  <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-100 dark:border-sky-900">
+                    <span className="text-sky-600 dark:text-sky-400 font-bold block">50% Needs</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">{fmt(monthlyIncome * 0.5)} ₫</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-900">
+                    <span className="text-amber-600 dark:text-amber-400 font-bold block">30% Wants</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">{fmt(monthlyIncome * 0.3)} ₫</span>
+                  </div>
+                  <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-900">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold block">20% Savings</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300">{fmt(monthlyIncome * 0.2)} ₫</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Needs 50% */}
           <div
             className="p-6 rounded-2xl border shadow-sm space-y-4 relative overflow-hidden group hover:shadow-md transition-all"
@@ -539,7 +895,70 @@ export default function BudgetsManagementPage() {
           TAB 3: CATEGORY BUDGETS LIST
          ───────────────────────────────────────────────────────────── */}
       {activeTab === 'CATEGORIES' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="space-y-6">
+          {/* Interactive Chart for Categories Budget vs Spent */}
+          {isMounted && topCategoriesChartData.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                    <BarChart3 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                      So Sánh Hạn Mức Đặt Ra vs Đã Chi Theo Danh Mục
+                    </h3>
+                    <p className="text-[10px] text-slate-400">Top danh mục chi tiêu lớn nhất trong tháng (Đơn vị: VNĐ)</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 text-[11px] font-bold">
+                  <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Hạn mức
+                  </span>
+                  <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" /> Đã chi
+                  </span>
+                </div>
+              </div>
+
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={topCategoriesChartData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      stroke="#94a3b8"
+                      fontSize={11}
+                      fontWeight={600}
+                      tickLine={false}
+                      interval={0}
+                    />
+                    <YAxis
+                      stroke="#94a3b8"
+                      fontSize={10}
+                      tickLine={false}
+                      tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
+                    />
+                    <ReTooltip
+                      formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                      contentStyle={{
+                        background: 'rgba(15, 23, 42, 0.94)',
+                        borderColor: 'rgba(16, 185, 129, 0.3)',
+                        borderRadius: '12px',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                      }}
+                    />
+                    <Bar dataKey="Hạn mức đặt ra" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Đã chi" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700/60">
@@ -641,6 +1060,7 @@ export default function BudgetsManagementPage() {
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       )}
 

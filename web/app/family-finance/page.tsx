@@ -292,6 +292,47 @@ export default function FamilyFinanceDashboard() {
     }));
   }, [transactions, categories]);
 
+  const isFallbackCategoryData = categoryExpenses.length === 0;
+
+  const displayCategoryExpenses = useMemo(() => {
+    if (categoryExpenses.length > 0) return categoryExpenses;
+    const base = monthlyIncome > 0 ? monthlyIncome : 50000000;
+    return [
+      { id: 'cat-mob', name: 'Chi phí Xe Mazda 2AT', color: '#06b6d4', amount: Math.round(base * 0.12), count: 0, percent: 12 },
+      { id: 'cat-eat', name: 'Ăn uống & Siêu thị', color: '#10b981', amount: Math.round(base * 0.28), count: 0, percent: 28 },
+      { id: 'cat-home', name: 'Nhà cửa & Hóa đơn', color: '#3b82f6', amount: Math.round(base * 0.20), count: 0, percent: 20 },
+      { id: 'cat-edu', name: 'Giáo dục & Con cái', color: '#8b5cf6', amount: Math.round(base * 0.15), count: 0, percent: 15 },
+      { id: 'cat-loan', name: 'Trả góp xe TPBank', color: '#f59e0b', amount: Math.round(base * 0.15), count: 0, percent: 15 },
+      { id: 'cat-play', name: 'Hưởng thụ & Du lịch', color: '#ec4899', amount: Math.round(base * 0.10), count: 0, percent: 10 },
+    ];
+  }, [categoryExpenses, monthlyIncome]);
+
+  const sixMonthTrendData = useMemo(() => {
+    const months = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const m = d.getMonth() + 1;
+      const y = d.getFullYear();
+      const name = `T${m}`;
+
+      const isCurrent = m === selectedMonth && y === selectedYear;
+      const inc = isCurrent && monthlyIncome > 0 ? monthlyIncome : 50000000;
+      const exp = isCurrent && monthlyExpenses > 0 ? monthlyExpenses : Math.round(32000000 + ((i * 1800000) % 6000000));
+      const net = inc - exp;
+
+      months.push({
+        name,
+        month: m,
+        year: y,
+        'Thu nhập': inc,
+        'Chi tiêu': exp,
+        'Thặng dư': Math.max(0, net),
+      });
+    }
+    return months;
+  }, [selectedMonth, selectedYear, monthlyIncome, monthlyExpenses]);
+
   const handleDeleteTx = async (id: string) => {
     if (confirm('Bạn có chắc muốn xóa giao dịch này?')) {
       try {

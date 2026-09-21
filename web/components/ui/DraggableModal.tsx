@@ -210,7 +210,7 @@ export default function DraggableModal({
     <div
       ref={modalRef}
       onPointerDown={handlePointerDown}
-      className={`fixed z-[9999] shadow-2xl overflow-hidden ${className}`}
+      className={`fixed z-[9999] shadow-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 ${className}`}
       style={{
         left: isMoved ? `${position.x}px` : '50%',
         top: isMoved ? `${position.y}px` : '140px',

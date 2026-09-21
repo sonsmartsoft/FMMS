@@ -198,6 +198,36 @@ export default function FamilyFinancialReportsPage() {
   const vehicleTotalMonthly = vehicleExpense + monthlyLoanObligation;
   const mobilityBurdenRatio = benchmarkIncome > 0 ? Math.round((vehicleTotalMonthly / benchmarkIncome) * 100) : 0;
 
+  const [isMounted, setIsMounted] = useState(false);
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // ── Chart Data Preparations ──
+  const cashflowChartData = useMemo(() => [
+    { name: 'Dòng tiền vào (Thu nhập)', amount: totalIncome, fill: '#10b981' },
+    { name: 'Dòng tiền ra (Chi tiêu)', amount: totalExpense, fill: '#f43f5e' },
+    { name: 'Thặng dư ròng (Net)', amount: Math.max(0, netCashFlow), fill: '#0ea5e9' },
+  ], [totalIncome, totalExpense, netCashFlow]);
+
+  const expenseStructurePieData = useMemo(() => [
+    { name: 'Sinh hoạt gia đình', value: generalExpense, color: '#0ea5e9' },
+    { name: 'Phương tiện (Mazda 2AT)', value: vehicleExpense, color: '#06b6d4' },
+    { name: 'Nợ vay mua xe (TPBank)', value: monthlyLoanObligation, color: '#f59e0b' },
+  ].filter(i => i.value > 0), [generalExpense, vehicleExpense, monthlyLoanObligation]);
+
+  const assetsPieData = useMemo(() => [
+    { name: 'Tài khoản thanh toán & Tiền mặt', value: liquidAssets, color: '#0ea5e9' },
+    { name: 'Tiết kiệm & Đầu tư', value: savingsAssets, color: '#10b981' },
+    { name: 'Xe ô tô Mazda 2AT', value: vehicleAssetValue, color: '#6366f1' },
+  ].filter(i => i.value > 0), [liquidAssets, savingsAssets, vehicleAssetValue]);
+
+  const balanceComparisonData = useMemo(() => [
+    { name: 'Tổng Tài Sản', amount: totalAssets, fill: '#10b981' },
+    { name: 'Tổng Dư Nợ', amount: totalLiabilities, fill: '#f43f5e' },
+    { name: 'Tài Sản Ròng (Net Worth)', amount: netWorth, fill: '#0ea5e9' },
+  ], [totalAssets, totalLiabilities, netWorth]);
+
   // Print report
   const handlePrint = () => {
     window.print();
@@ -390,6 +420,103 @@ export default function FamilyFinancialReportsPage() {
                 </div>
               </div>
 
+              {/* Cashflow Charts Section */}
+              {isMounted && (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pb-4">
+                  {/* Chart 1: Cashflow Overview Bar Chart */}
+                  <div className="lg:col-span-7 bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between pb-1">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                        <BarChart3 className="w-4 h-4 text-emerald-500" />
+                        Lưu Chuyển Dòng Tiền (Vào / Ra / Thặng Dư)
+                      </span>
+                    </div>
+                    <div className="h-56 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={cashflowChartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+                          <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                          <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} fontWeight={600} tickLine={false} />
+                          <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} />
+                          <ReTooltip
+                            formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                            contentStyle={{
+                              background: 'rgba(15, 23, 42, 0.94)',
+                              borderColor: 'rgba(16, 185, 129, 0.3)',
+                              borderRadius: '12px',
+                              color: '#ffffff',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                            }}
+                          />
+                          <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
+                            {cashflowChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Chart 2: Expense Structure Donut Chart */}
+                  <div className="lg:col-span-5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-2">
+                    <div className="flex items-center justify-between pb-1">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                        <PieChart className="w-4 h-4 text-sky-500" />
+                        Cơ Cấu Chi Phí & Trả Nợ
+                      </span>
+                      <span className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400">
+                        {fmt(totalExpense)} ₫
+                      </span>
+                    </div>
+                    <div className="h-44 w-full relative">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RePieChart>
+                          <Pie
+                            data={expenseStructurePieData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={45}
+                            outerRadius={68}
+                            paddingAngle={4}
+                            dataKey="value"
+                            nameKey="name"
+                          >
+                            {expenseStructurePieData.map((entry, index) => (
+                              <Cell key={`cell-exp-${index}`} fill={entry.color} stroke="transparent" />
+                            ))}
+                          </Pie>
+                          <ReTooltip
+                            formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                            contentStyle={{
+                              background: 'rgba(15, 23, 42, 0.94)',
+                              borderColor: 'rgba(56, 189, 248, 0.3)',
+                              borderRadius: '12px',
+                              color: '#ffffff',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                            }}
+                          />
+                        </RePieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="space-y-1 text-[10px]">
+                      {expenseStructurePieData.map((item) => (
+                        <div key={item.name} className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                            {item.name}
+                          </span>
+                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                            {fmt(item.value)} ₫ ({totalExpense > 0 ? Math.round((item.value / totalExpense) * 100) : 0}%)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Cashflow Table */}
               <div className="overflow-x-auto">
                 <table className="w-full text-xs text-left">
@@ -488,6 +615,117 @@ export default function FamilyFinancialReportsPage() {
            ───────────────────────────────────────────────────────────── */}
         {activeReportTab === 'NET_WORTH' && (
           <div className="space-y-6">
+            {/* Interactive Charts for Net Worth */}
+            {isMounted && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pb-2">
+                {/* Bar Chart: Balance Comparison */}
+                <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                        <BarChart3 className="w-4 h-4" />
+                      </div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                        Cân Đối Tài Sản vs Dư Nợ Gia Đình
+                      </h3>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
+                      Tỷ lệ nợ/tài sản: {debtToAssetRatio}%
+                    </span>
+                  </div>
+
+                  <div className="h-56 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={balanceComparisonData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} fontWeight={600} tickLine={false} />
+                        <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} />
+                        <ReTooltip
+                          formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                          contentStyle={{
+                            background: 'rgba(15, 23, 42, 0.94)',
+                            borderColor: 'rgba(16, 185, 129, 0.3)',
+                            borderRadius: '12px',
+                            color: '#ffffff',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                          }}
+                        />
+                        <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
+                          {balanceComparisonData.map((entry, index) => (
+                            <Cell key={`bal-cell-${index}`} fill={entry.fill} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Donut Chart: Asset Composition */}
+                <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500">
+                        <PieChart className="w-4 h-4" />
+                      </div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                        Cơ Cấu Danh Mục Tài Sản
+                      </h3>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      {fmt(totalAssets)} ₫
+                    </span>
+                  </div>
+
+                  <div className="h-44 w-full relative">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RePieChart>
+                        <Pie
+                          data={assetsPieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={68}
+                          paddingAngle={4}
+                          dataKey="value"
+                          nameKey="name"
+                        >
+                          {assetsPieData.map((entry, index) => (
+                            <Cell key={`asset-pie-${index}`} fill={entry.color} stroke="transparent" />
+                          ))}
+                        </Pie>
+                        <ReTooltip
+                          formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                          contentStyle={{
+                            background: 'rgba(15, 23, 42, 0.94)',
+                            borderColor: 'rgba(14, 165, 233, 0.3)',
+                            borderRadius: '12px',
+                            color: '#ffffff',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                          }}
+                        />
+                      </RePieChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="space-y-1 text-[10px]">
+                    {assetsPieData.map((item) => (
+                      <div key={item.name} className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                          {item.name}
+                        </span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
+                          {fmt(item.value)} ₫ ({totalAssets > 0 ? Math.round((item.value / totalAssets) * 100) : 0}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Assets Column */}
               <div className="lg:col-span-6 p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
@@ -608,6 +846,63 @@ export default function FamilyFinancialReportsPage() {
            ───────────────────────────────────────────────────────────── */}
         {activeReportTab === 'HEALTH' && (
           <div className="space-y-6">
+            {/* Health Scorecard Chart */}
+            {isMounted && (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
+                      <BarChart3 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                        Thang Điểm Chỉ Số Sức Khỏe Tài Chính Thực Tế vs Ngưỡng Chuẩn
+                      </h3>
+                      <p className="text-[10px] text-slate-400">Đánh giá độ an toàn tài chính của gia đình bạn</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] font-bold">
+                    <span className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Điểm số thực tế
+                    </span>
+                    <span className="flex items-center gap-1.5 text-slate-400">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-slate-400 inline-block" /> Ngưỡng chuẩn khuyến nghị
+                    </span>
+                  </div>
+                </div>
+
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={[
+                        { name: 'Tỷ lệ Tiết kiệm (%)', 'Thực tế': savingsRate, 'Chuẩn': 20 },
+                        { name: 'Gánh nặng nợ DTI (%)', 'Thực tế': dtiRatio, 'Chuẩn': 30 },
+                        { name: 'Quỹ khẩn cấp (x10)', 'Thực tế': Math.min(100, emergencyFundMonths * 10), 'Chuẩn': 60 },
+                        { name: 'Gánh nặng nuôi xe (%)', 'Thực tế': mobilityBurdenRatio, 'Chuẩn': 15 },
+                      ]}
+                      margin={{ top: 10, right: 10, left: 10, bottom: 10 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} fontWeight={600} tickLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
+                      <ReTooltip
+                        contentStyle={{
+                          background: 'rgba(15, 23, 42, 0.94)',
+                          borderColor: 'rgba(16, 185, 129, 0.3)',
+                          borderRadius: '12px',
+                          color: '#ffffff',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                        }}
+                      />
+                      <Bar dataKey="Thực tế" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Chuẩn" fill="#94a3b8" opacity={0.4} radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Metric 1: Emergency Fund */}
               <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
