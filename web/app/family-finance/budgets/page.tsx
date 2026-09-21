@@ -29,8 +29,8 @@ import {
   Tag,
   ShieldAlert,
 } from 'lucide-react';
-
-const fmt = (n: number) => n.toLocaleString('vi-VN');
+import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
+import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 
 export default function BudgetsManagementPage() {
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
@@ -219,8 +219,9 @@ export default function BudgetsManagementPage() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
+    <FinanceErrorBoundary fallbackTitle="Không thể tải ngân sách thông minh">
+      <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <Link
@@ -322,14 +323,16 @@ export default function BudgetsManagementPage() {
             return (
               <div
                 key={jar.key}
-                className={`p-5 rounded-2xl bg-white dark:bg-slate-900 border shadow-sm flex flex-col justify-between transition-all ${
-                  isOver
-                    ? 'border-rose-300 dark:border-rose-900/60 ring-1 ring-rose-500/20'
-                    : isWarning
-                    ? 'border-amber-300 dark:border-amber-900/60'
-                    : 'border-slate-200 dark:border-slate-800'
-                }`}
+                className="p-5 rounded-2xl border shadow-sm flex flex-col justify-between transition-all group relative overflow-hidden hover:shadow-md hover:-translate-y-0.5"
+                style={{
+                  background: `linear-gradient(135deg, ${jar.color}0d, var(--bg-surface, #ffffff))`,
+                  borderColor: isOver ? '#f43f5e' : isWarning ? '#f59e0b' : `${jar.color}45`,
+                }}
               >
+                <div
+                  className="absolute -top-10 -right-10 w-28 h-28 rounded-full blur-2xl pointer-events-none opacity-25"
+                  style={{ backgroundColor: jar.color }}
+                />
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -408,7 +411,14 @@ export default function BudgetsManagementPage() {
       {activeTab === '50_30_20' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Needs 50% */}
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div
+            className="p-6 rounded-2xl border shadow-sm space-y-4 relative overflow-hidden group hover:shadow-md transition-all"
+            style={{
+              background: 'linear-gradient(135deg, rgba(14,165,233,0.06), var(--bg-surface, #ffffff))',
+              borderColor: 'rgba(14,165,233,0.35)',
+            }}
+          >
+            <div className="absolute -top-10 -right-10 w-28 h-28 bg-sky-400/20 rounded-full blur-2xl pointer-events-none" />
             <div className="flex items-center justify-between">
               <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-sky-100 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
                 50% Ngân sách
@@ -417,7 +427,7 @@ export default function BudgetsManagementPage() {
             </div>
             <h2 className="text-xl font-black text-slate-900 dark:text-white">Nhu Cầu Thiết Yếu</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Chi phí không thể trì hoãn: Tiền thuê/mua nhà, thực phẩm, hóa đơn điện nước thoại, xăng xe & bảo dưỡng định kỳ xe ô tô Mazda 2.
+              Chi phí không thể trì hoãn: Tiền thuê/mua nhà, thực phẩm, hóa đơn điện nước thoại, xăng xe &amp; bảo dưỡng định kỳ xe ô tô Mazda 2AT.
             </p>
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
               <span className="text-xs text-slate-400">Hạn mức gợi ý:</span>
@@ -428,7 +438,14 @@ export default function BudgetsManagementPage() {
           </div>
 
           {/* Wants 30% */}
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div
+            className="p-6 rounded-2xl border shadow-sm space-y-4 relative overflow-hidden group hover:shadow-md transition-all"
+            style={{
+              background: 'linear-gradient(135deg, rgba(245,158,11,0.06), var(--bg-surface, #ffffff))',
+              borderColor: 'rgba(245,158,11,0.35)',
+            }}
+          >
+            <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-400/20 rounded-full blur-2xl pointer-events-none" />
             <div className="flex items-center justify-between">
               <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
                 30% Ngân sách
@@ -448,16 +465,23 @@ export default function BudgetsManagementPage() {
           </div>
 
           {/* Savings 20% */}
-          <div className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div
+            className="p-6 rounded-2xl border shadow-sm space-y-4 relative overflow-hidden group hover:shadow-md transition-all"
+            style={{
+              background: 'linear-gradient(135deg, rgba(16,185,129,0.06), var(--bg-surface, #ffffff))',
+              borderColor: 'rgba(16,185,129,0.35)',
+            }}
+          >
+            <div className="absolute -top-10 -right-10 w-28 h-28 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none" />
             <div className="flex items-center justify-between">
               <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
                 20% Ngân sách
               </span>
-              <span className="text-xs text-slate-400">Savings & Debt</span>
+              <span className="text-xs text-slate-400">Savings &amp; Debt</span>
             </div>
-            <h2 className="text-xl font-black text-slate-900 dark:text-white">Tiết Kiệm & Trả Nợ</h2>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white">Tiết Kiệm &amp; Trả Nợ</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Tạo lập nền tảng an toàn: Trả nợ gốc khoản vay mua xe, tích lũy vào sổ tiết kiệm ngân hàng, đầu tư cổ phiếu dài hạn.
+              Tạo lập nền tảng an toàn: Trả nợ gốc khoản vay mua xe, tích lũy vào sổ tiết kiệm ngân hàng, đầu tư sinh lời dài hạn.
             </p>
             <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
               <span className="text-xs text-slate-400">Mục tiêu tích lũy:</span>
@@ -637,6 +661,7 @@ export default function BudgetsManagementPage() {
           </div>
         </form>
       </DraggableModal>
-    </div>
+      </div>
+    </FinanceErrorBoundary>
   );
 }

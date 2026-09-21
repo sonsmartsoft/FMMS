@@ -30,13 +30,8 @@ import {
   Check,
 } from 'lucide-react';
 import KpiGradientCard from '@/components/ui/KpiGradientCard';
-
-const fmt = (n: number) => n.toLocaleString('vi-VN');
-const fmtDate = (d: string) => {
-  const parts = d.split('-');
-  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  return d;
-};
+import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
+import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 
 export default function LoansManagementPage() {
   const [loans, setLoans] = useState<FamilyLoan[]>([]);
@@ -199,8 +194,9 @@ export default function LoansManagementPage() {
   }, [loans]);
 
   return (
-    <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Header */}
+    <FinanceErrorBoundary fallbackTitle="Không thể tải sổ quản lý khoản vay">
+      <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <Link
@@ -294,8 +290,13 @@ export default function LoansManagementPage() {
           return (
             <div
               key={loan.id}
-              className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition-all"
+              className="p-6 rounded-2xl border shadow-sm space-y-4 hover:shadow-md transition-all group relative overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, rgba(244,63,94,0.03), rgba(6,182,212,0.03), var(--bg-surface, #ffffff))',
+                borderColor: 'rgba(244,63,94,0.22)',
+              }}
             >
+              <div className="absolute -top-12 -right-12 w-32 h-32 bg-gradient-to-br from-rose-500/10 to-transparent rounded-full blur-2xl pointer-events-none" />
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -583,6 +584,7 @@ export default function LoansManagementPage() {
           </div>
         </form>
       </DraggableModal>
-    </div>
+      </div>
+    </FinanceErrorBoundary>
   );
 }

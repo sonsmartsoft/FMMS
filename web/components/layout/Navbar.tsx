@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Car, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, X, Save, Menu } from 'lucide-react';
+import { ShieldCheck, Cpu, Sliders, Sparkles, Moon, Sun, LogOut, User, X, Save, Menu } from 'lucide-react';
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { createClient } from '@/lib/supabase/client';
@@ -209,8 +209,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-1.5 sm:space-x-2.5 group min-w-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20 group-hover:scale-105 transition-transform shrink-0">
-              <span className="text-white font-black text-xs sm:text-sm tracking-tighter">FFMS</span>
+            <div className="w-8 h-8 sm:w-9 sm:h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center shadow-md shadow-cyan-500/25 group-hover:scale-105 transition-transform shrink-0 relative overflow-hidden">
+              <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-white drop-shadow" />
             </div>
             <div className="min-w-0">
               <span className="text-xs sm:text-base md:text-lg font-extrabold gradient-text tracking-tight sm:tracking-wide block leading-tight truncate">

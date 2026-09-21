@@ -33,13 +33,9 @@ import {
   Download,
   ChevronLeft,
 } from 'lucide-react';
-
-const fmt = (n: number) => n.toLocaleString('vi-VN');
-const fmtDate = (d: string) => {
-  const parts = d.split('-');
-  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  return d;
-};
+import KpiGradientCard from '@/components/ui/KpiGradientCard';
+import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
+import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 
 export default function TransactionsLedgerPage() {
   const [transactions, setTransactions] = useState<FamilyTransaction[]>([]);
@@ -154,8 +150,9 @@ export default function TransactionsLedgerPage() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Top Breadcrumb & Actions */}
+    <FinanceErrorBoundary fallbackTitle="Không thể tải sổ thu chi gia đình">
+      <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        {/* Top Breadcrumb & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <Link
@@ -234,52 +231,51 @@ export default function TransactionsLedgerPage() {
         </div>
       </div>
 
-      {/* Summary Ribbon */}
+      {/* Summary Ribbon with QMS KpiGradientCards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-            <ArrowDownLeft className="w-4 h-4" />
-            Tổng thu (Lọc)
-          </span>
-          <div className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1">
-            +{fmt(summary.income)} ₫
-          </div>
-        </div>
+        <KpiGradientCard
+          title="TỔNG THU NHẬP (LỌC)"
+          value={`+${fmt(summary.income)}`}
+          unit="₫"
+          subtitle={`Tháng ${selectedMonth}/${selectedYear} (Dòng tiền vào)`}
+          colorType="emerald"
+          icon={ArrowDownLeft}
+          badgeText="Thu vào"
+          badgeType="success"
+        />
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-            <ArrowUpRight className="w-4 h-4" />
-            Tổng chi (Lọc)
-          </span>
-          <div className="text-xl font-black font-mono text-rose-600 dark:text-rose-400 mt-1">
-            -{fmt(summary.expense)} ₫
-          </div>
-        </div>
+        <KpiGradientCard
+          title="TỔNG CHI TIÊU (LỌC)"
+          value={`-${fmt(summary.expense)}`}
+          unit="₫"
+          subtitle="Bao gồm sinh hoạt & phương tiện"
+          colorType="rose"
+          icon={ArrowUpRight}
+          badgeText="Chi ra"
+          badgeType="danger"
+        />
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs font-semibold text-cyan-600 dark:text-cyan-400 flex items-center gap-1.5">
-            <Car className="w-4 h-4" />
-            Chi phí Xe cộ
-          </span>
-          <div className="text-xl font-black font-mono text-cyan-600 dark:text-cyan-400 mt-1">
-            {fmt(summary.mobilityExpense)} ₫
-          </div>
-        </div>
+        <KpiGradientCard
+          title="CHI PHÍ XE CỘ (MOBILITY)"
+          value={fmt(summary.mobilityExpense)}
+          unit="₫"
+          subtitle="Xăng dầu, bảo dưỡng, phí cầu đường"
+          colorType="cyan"
+          icon={Car}
+          badgeText="Xe gia đình"
+          badgeType="info"
+        />
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
-          <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
-            <WalletIcon className="w-4 h-4" />
-            Chênh lệch Thu - Chi
-          </span>
-          <div
-            className={`text-xl font-black font-mono mt-1 ${
-              summary.balance >= 0 ? 'text-sky-600 dark:text-sky-400' : 'text-rose-600 dark:text-rose-400'
-            }`}
-          >
-            {summary.balance >= 0 ? '+' : ''}
-            {fmt(summary.balance)} ₫
-          </div>
-        </div>
+        <KpiGradientCard
+          title="DÒNG TIỀN RÒNG (THU - CHI)"
+          value={`${summary.balance >= 0 ? '+' : ''}${fmt(summary.balance)}`}
+          unit="₫"
+          subtitle={summary.balance >= 0 ? 'Thặng dư ngân sách tháng' : 'Cảnh báo thâm hụt ngân sách'}
+          colorType={summary.balance >= 0 ? 'cyan' : 'amber'}
+          icon={WalletIcon}
+          badgeText={summary.balance >= 0 ? 'Thặng dư' : 'Thâm hụt'}
+          badgeType={summary.balance >= 0 ? 'success' : 'warning'}
+        />
       </div>
 
       {/* Filter Bar */}
@@ -535,6 +531,7 @@ export default function TransactionsLedgerPage() {
         onSuccess={loadData}
         defaultType={modalDefaultType}
       />
-    </div>
+      </div>
+    </FinanceErrorBoundary>
   );
 }

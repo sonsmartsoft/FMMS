@@ -202,32 +202,32 @@ export default function LoginPage() {
       }}>
         <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
           <div style={{
-            width: '48px',
-            height: '48px',
-            background: 'var(--btn-primary-bg, #3b82f6)',
-            borderRadius: '12px',
+            width: '56px',
+            height: '56px',
+            background: 'linear-gradient(135deg, #06b6d4, #2563eb)',
+            borderRadius: '16px',
             margin: '0 auto 1rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+            boxShadow: '0 8px 20px -4px rgba(6, 182, 212, 0.4)'
           }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-              <polyline points="9 22 9 12 15 12 15 22"></polyline>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <polyline points="9 12 11 14 15 10"></polyline>
             </svg>
           </div>
           <h1 style={{ 
             fontSize: '1.5rem', 
-            fontWeight: '700', 
-            letterSpacing: '0.05em',
+            fontWeight: '800', 
+            letterSpacing: '0.04em',
             marginBottom: '0.5rem',
             color: 'var(--text-primary, #ffffff)'
           }}>
-            FAMILY MOBILITY
+            FAMILY FINANCE &amp; MOBILITY
           </h1>
           <p style={{ color: 'var(--text-secondary, #9ca3af)', fontSize: '0.875rem' }}>
-            Hệ thống Quản lý Di chuyển Gia đình
+            Hệ thống Quản trị Tài chính &amp; Phương tiện Gia đình (FFMS)
           </p>
         </div>
 

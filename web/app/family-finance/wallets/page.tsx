@@ -30,8 +30,8 @@ import {
   Calendar,
 } from 'lucide-react';
 import KpiGradientCard from '@/components/ui/KpiGradientCard';
-
-const fmt = (n: number) => n.toLocaleString('vi-VN');
+import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
+import { safeFormatCurrency as fmt, safeMaskAccount } from '@/lib/utils/formatters';
 
 export default function WalletsManagementPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -194,8 +194,9 @@ export default function WalletsManagementPage() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* Top Header */}
+    <FinanceErrorBoundary fallbackTitle="Không thể tải sổ ví & tài khoản">
+      <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+        {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
           <Link
@@ -288,8 +289,16 @@ export default function WalletsManagementPage() {
             return (
               <div
                 key={w.id}
-                className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:border-slate-300 dark:hover:border-slate-700 transition-all"
+                className="p-5 rounded-2xl border shadow-sm flex flex-col justify-between transition-all group relative overflow-hidden hover:shadow-md hover:-translate-y-0.5"
+                style={{
+                  background: `linear-gradient(135deg, ${w.color || '#10b981'}0f, var(--bg-surface, #ffffff))`,
+                  borderColor: `${w.color || '#10b981'}40`,
+                }}
               >
+                <div
+                  className="absolute -top-10 -right-10 w-28 h-28 rounded-full blur-2xl pointer-events-none opacity-20"
+                  style={{ backgroundColor: w.color || '#10b981' }}
+                />
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div
@@ -372,7 +381,7 @@ export default function WalletsManagementPage() {
 
                   <h3 className="text-base font-bold tracking-wide">{w.name}</h3>
                   <p className="text-xs text-indigo-200/80 font-mono mt-0.5">
-                    **** **** **** {w.account_number ? w.account_number.slice(-4) : '8888'}
+                    {safeMaskAccount(w.account_number)}
                   </p>
                 </div>
 
@@ -426,8 +435,13 @@ export default function WalletsManagementPage() {
           {savingsWallets.map((w) => (
             <div
               key={w.id}
-              className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between"
+              className="p-5 rounded-2xl border shadow-sm flex flex-col justify-between transition-all group relative overflow-hidden hover:shadow-md hover:-translate-y-0.5"
+              style={{
+                background: 'linear-gradient(135deg, rgba(56,189,248,0.08), rgba(245,158,11,0.05), var(--bg-surface, #ffffff))',
+                borderColor: 'rgba(56,189,248,0.3)',
+              }}
             >
+              <div className="absolute -top-10 -right-10 w-28 h-28 bg-sky-400/15 rounded-full blur-2xl pointer-events-none" />
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-10 h-10 rounded-xl bg-sky-500 text-white flex items-center justify-center">
@@ -619,6 +633,7 @@ export default function WalletsManagementPage() {
         onSuccess={loadWallets}
         defaultType="TRANSFER"
       />
-    </div>
+      </div>
+    </FinanceErrorBoundary>
   );
 }

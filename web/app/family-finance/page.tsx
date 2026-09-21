@@ -41,14 +41,17 @@ import {
   RefreshCw,
   ExternalLink,
   ShieldAlert,
+  BarChart3,
 } from 'lucide-react';
-
-const fmt = (n: number) => n.toLocaleString('vi-VN');
-const fmtDate = (d: string) => {
-  const parts = d.split('-');
-  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  return d;
-};
+import {
+  ResponsiveContainer,
+  PieChart as RePieChart,
+  Pie,
+  Cell,
+  Tooltip as ReTooltip,
+} from 'recharts';
+import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
+import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 
 export default function FamilyFinanceDashboard() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
@@ -226,6 +229,56 @@ export default function FamilyFinanceDashboard() {
     ];
   }, [monthlyIncome, monthlyExpenses, transactions]);
 
+  // Category breakdown calculation for Donut Chart
+  const categoryExpenses = useMemo(() => {
+    const expenseTxs = transactions.filter((t) => t.transaction_type === 'EXPENSE' && !t.exclude_from_reports);
+    const catMap = new Map<string, { id: string; name: string; color: string; amount: number; count: number }>();
+
+    // Default palette for categories without color
+    const palette = ['#06b6d4', '#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ec4899', '#6366f1', '#14b8a6', '#f97316'];
+
+    expenseTxs.forEach((t) => {
+      const cat = t.category || categories.find((c) => c.id === t.category_id);
+      let groupName = 'Chi tiêu sinh hoạt khác';
+      let groupColor = '#64748b';
+      let groupId = 'other';
+
+      if (cat) {
+        if (cat.parent_id) {
+          const parent = categories.find((c) => c.id === cat.parent_id);
+          groupName = parent?.name || cat.name;
+          groupColor = parent?.color || cat.color || '#06b6d4';
+          groupId = parent?.id || cat.id;
+        } else {
+          groupName = cat.name;
+          groupColor = cat.color || '#06b6d4';
+          groupId = cat.id;
+        }
+      } else if (t.asset_id) {
+        groupName = 'Phương tiện & Xe cộ (FMMS)';
+        groupColor = '#06b6d4';
+        groupId = 'cat-vehicle';
+      }
+
+      const existing = catMap.get(groupId) || { id: groupId, name: groupName, color: groupColor, amount: 0, count: 0 };
+      existing.amount += Number(t.amount || 0);
+      existing.count += 1;
+      catMap.set(groupId, existing);
+    });
+
+    const list = Array.from(catMap.values())
+      .filter((c) => c.amount > 0)
+      .sort((a, b) => b.amount - a.amount);
+
+    const total = list.reduce((s, c) => s + c.amount, 0);
+
+    return list.map((c, idx) => ({
+      ...c,
+      color: c.color || palette[idx % palette.length],
+      percent: total > 0 ? Math.round((c.amount / total) * 100) : 0,
+    }));
+  }, [transactions, categories]);
+
   const handleDeleteTx = async (id: string) => {
     if (confirm('Bạn có chắc muốn xóa giao dịch này?')) {
       try {
@@ -248,7 +301,8 @@ export default function FamilyFinanceDashboard() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <FinanceErrorBoundary fallbackTitle="Không thể tải tổng quan tài chính gia đình">
+      <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* ─────────────────────────────────────────────────────────────
           1. HEADER & EXECUTIVE ACTIONS
          ───────────────────────────────────────────────────────────── */}
@@ -618,7 +672,153 @@ export default function FamilyFinanceDashboard() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-          4. WALLETS & PAYMENT ACCOUNTS STRIP
+          4. CATEGORY EXPENSE BREAKDOWN CHART & PROFESSIONAL REPORTS LINK
+         ───────────────────────────────────────────────────────────── */}
+      <div className="p-5 md:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-5 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <PieChart className="w-4 h-4 text-sky-500" />
+              Phân Tích Chi Tiêu Theo Danh Mục Master
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Cơ cấu chi phí sinh hoạt gia đình &amp; phương tiện xe cộ tháng {selectedMonth}/{selectedYear}
+            </p>
+          </div>
+
+          <Link
+            href="/family-finance/reports"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:opacity-95 shadow-md shadow-sky-600/20 active:scale-95 transition-all self-start sm:self-auto"
+          >
+            <BarChart3 className="w-4 h-4" />
+            Báo Cáo Tài Chính Chuyên Nghiệp ➔
+          </Link>
+        </div>
+
+        {categoryExpenses.length === 0 ? (
+          <div className="text-center py-12 text-slate-400 text-xs">
+            Chưa ghi nhận khoản chi tiêu nào trong tháng {selectedMonth}/{selectedYear}.{' '}
+            <button
+              onClick={() => {
+                setModalDefaultType('EXPENSE');
+                setIsModalOpen(true);
+              }}
+              className="text-sky-600 font-bold underline"
+            >
+              Ghi chép chi tiêu ngay
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+            {/* Donut Chart */}
+            <div className="lg:col-span-5 flex flex-col items-center justify-center relative">
+              <div className="w-full h-64 sm:h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RePieChart>
+                    <Pie
+                      data={categoryExpenses}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={65}
+                      outerRadius={95}
+                      paddingAngle={4}
+                      dataKey="amount"
+                      nameKey="name"
+                    >
+                      {categoryExpenses.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
+                      ))}
+                    </Pie>
+                    <ReTooltip
+                      formatter={(val: any) => [`${fmt(Number(val))} ₫`, 'Chi tiêu']}
+                      contentStyle={{
+                        background: 'rgba(15, 23, 42, 0.92)',
+                        borderColor: 'rgba(56, 189, 248, 0.3)',
+                        borderRadius: '12px',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                      }}
+                    />
+                  </RePieChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Center Donut Info */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
+                  Tổng Chi
+                </span>
+                <span className="text-base sm:text-lg font-black font-mono text-slate-900 dark:text-white block">
+                  {fmt(monthlyExpenses)}
+                </span>
+                <span className="text-[10px] font-semibold text-slate-400">₫</span>
+              </div>
+            </div>
+
+            {/* Breakdown List */}
+            <div className="lg:col-span-7 space-y-3">
+              {categoryExpenses.map((item) => (
+                <div key={item.id} className="space-y-1.5 group">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      <span className="font-bold text-slate-800 dark:text-slate-200 truncate">
+                        {item.name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 shrink-0">
+                        ({item.count} khoản)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 font-mono font-medium shrink-0">
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {fmt(item.amount)} ₫
+                      </span>
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                        style={{
+                          backgroundColor: `${item.color}20`,
+                          color: item.color,
+                        }}
+                      >
+                        {item.percent}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${item.percent}%`,
+                        backgroundColor: item.color,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+
+              <div className="pt-2 flex justify-end">
+                <Link
+                  href="/family-finance/transactions?type=EXPENSE"
+                  className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline flex items-center gap-1"
+                >
+                  Xem chi tiết các khoản chi trong sổ
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────
+          5. WALLETS & PAYMENT ACCOUNTS STRIP
          ───────────────────────────────────────────────────────────── */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -645,8 +845,16 @@ export default function FamilyFinanceDashboard() {
             return (
               <div
                 key={wallet.id}
-                className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between hover:border-sky-400 dark:hover:border-sky-600 transition-all group"
+                className="p-3.5 rounded-xl border shadow-sm flex flex-col justify-between transition-all group relative overflow-hidden hover:shadow-md hover:-translate-y-0.5"
+                style={{
+                  background: `linear-gradient(135deg, ${wallet.color || '#0284c7'}10, var(--bg-surface, #ffffff))`,
+                  borderColor: `${wallet.color || '#0284c7'}35`,
+                }}
               >
+                <div
+                  className="absolute -top-6 -right-6 w-16 h-16 rounded-full blur-xl pointer-events-none opacity-25"
+                  style={{ backgroundColor: wallet.color || '#0284c7' }}
+                />
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <div
@@ -822,6 +1030,7 @@ export default function FamilyFinanceDashboard() {
         onSuccess={loadData}
         defaultType={modalDefaultType}
       />
-    </div>
+      </div>
+    </FinanceErrorBoundary>
   );
 }

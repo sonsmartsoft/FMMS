@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Car, Bike, Fuel, Wrench, DollarSign,
   FileText, BarChart3, Settings, Activity, Sparkles, Award, MapPin, Radio, ChevronRight, X,
-  Wallet, PieChart, CreditCard, Receipt
+  Wallet, PieChart, CreditCard, Receipt, ShieldCheck
 } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { getAssets } from '@/lib/services/assetService';
@@ -167,6 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: isEn ? 'Family Finance' : 'Tài chính gia đình',
       items: [
         { name: isEn ? 'Overview' : 'Tổng quan tài chính', href: '/family-finance', icon: LayoutDashboard },
+        { name: isEn ? 'Financial Reports' : 'Báo cáo tài chính', href: '/family-finance/reports', icon: BarChart3 },
         { name: isEn ? 'Daily Expenses' : 'Sổ thu chi', href: '/family-finance/transactions', icon: Receipt },
         { name: isEn ? 'Wallets & Cards' : 'Ví & Thẻ tín dụng', href: '/family-finance/wallets', icon: Wallet },
         { name: isEn ? 'Smart Budgets' : 'Ngân sách 6 Hũ', href: '/family-finance/budgets', icon: PieChart },
@@ -416,12 +417,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <div className="flex items-center space-x-2.5">
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-md">
-                  <Car className="w-4 h-4 text-white" />
+                  <ShieldCheck className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <span className="text-sm font-extrabold gradient-text tracking-wide">FMMS MENU</span>
+                  <span className="text-sm font-extrabold gradient-text tracking-wide">FFMS MENU</span>
                   <p className="text-[9px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>
-                    Điều hướng hệ thống
+                    Tài chính &amp; Xe gia đình
                   </p>
                 </div>
               </div>
