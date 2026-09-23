@@ -668,7 +668,7 @@ export default function BudgetsManagementPage() {
                     <div key={j.name} className="flex items-center gap-1.5 truncate">
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: j.color }} />
                       <span className="text-slate-600 dark:text-slate-300 truncate">
-                        {j.name.split(' (')[0]}: <b>{j.percent}%</b>
+                        {j.name.split(' (')[0]}: <b>{j.targetPercent}%</b>
                       </span>
                     </div>
                   ))}
