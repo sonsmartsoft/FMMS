@@ -46,7 +46,10 @@ import {
   Pie,
   Cell,
   CartesianGrid,
+  LabelList,
 } from 'recharts';
+import { useTheme } from '@/lib/theme/ThemeContext';
+import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartLabelToggle';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
 import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 import {
@@ -60,7 +63,22 @@ import {
   DEFAULT_BASE_INCOME,
 } from '@/lib/utils/jarsConfig';
 
+const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
+
 export default function BudgetsManagementPage() {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const axisColor = isDark ? '#94A3B8' : '#64748B';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tooltipBg = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.98)';
+  const tooltipBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)';
+  const tooltipText = isDark ? '#F8FAFC' : '#0F172A';
+
+  const [showJarsBarLabels, toggleJarsBarLabels] = useChartLabelState('ffms_budgets_jars_bar_labels', false);
+  const [showJarsDonutLabels, toggleJarsDonutLabels] = useChartLabelState('ffms_budgets_jars_donut_labels', false);
+  const [showRuleBarLabels, toggleRuleBarLabels] = useChartLabelState('ffms_budgets_rule_bar_labels', false);
+  const [showRuleDonutLabels, toggleRuleDonutLabels] = useChartLabelState('ffms_budgets_rule_donut_labels', false);
+  const [showCatBarLabels, toggleCatBarLabels] = useChartLabelState('ffms_budgets_cat_bar_labels', false);
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
   const [budgets, setBudgets] = useState<FamilyBudget[]>([]);
   const [transactions, setTransactions] = useState<FamilyTransaction[]>([]);
@@ -471,47 +489,77 @@ export default function BudgetsManagementPage() {
                       <p className="text-[10px] text-slate-400">Đơn vị: VNĐ (Biểu đồ cột so sánh)</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 text-[11px] font-bold">
-                    <span className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Hạn mức
-                    </span>
-                    <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" /> Đã chi
-                    </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2.5 text-[11px] font-bold">
+                      <span className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
+                        <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Hạn mức
+                      </span>
+                      <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                        <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" /> Đã chi
+                      </span>
+                    </div>
+                    <ChartLabelToggle
+                      showLabels={showJarsBarLabels}
+                      onToggle={toggleJarsBarLabels}
+                      size="small"
+                    />
                   </div>
                 </div>
 
-                <div className="h-64 w-full">
+                <div style={{ height: showJarsBarLabels ? 275 : 256 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={jarsBarData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                    <BarChart data={jarsBarData} margin={{ top: showJarsBarLabels ? 20 : 10, right: 10, left: -10, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
                       <XAxis
                         dataKey="name"
-                        stroke="#94a3b8"
-                        fontSize={11}
-                        fontWeight={600}
+                        tick={{ fill: axisColor, fontSize: 11, fontWeight: 600 }}
+                        axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
                         tickLine={false}
                         interval={0}
                       />
                       <YAxis
-                        stroke="#94a3b8"
-                        fontSize={10}
+                        tick={{ fill: axisColor, fontSize: 10 }}
+                        axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
                         tickLine={false}
-                        tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
+                        tickFormatter={(v) => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'}
+                        width={40}
                       />
                       <ReTooltip
-                        formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                        formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
                         contentStyle={{
-                          background: 'rgba(15, 23, 42, 0.94)',
-                          borderColor: 'rgba(56, 189, 248, 0.3)',
-                          borderRadius: '12px',
-                          color: '#ffffff',
-                          fontSize: '12px',
-                          fontWeight: '600',
+                          background: tooltipBg,
+                          border: `1px solid ${tooltipBorder}`,
+                          borderRadius: 12,
+                          color: tooltipText,
+                          fontSize: 11,
+                          boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                         }}
                       />
-                      <Bar dataKey="Hạn mức định mức" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="Đã chi thực tế" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Hạn mức định mức" fill="#0EA5E9" radius={[4, 4, 0, 0]}>
+                        {showJarsBarLabels && (
+                          <LabelList
+                            dataKey="Hạn mức định mức"
+                            position="top"
+                            formatter={(v: any) => fmtM(Number(v))}
+                            style={{ fill: isDark ? '#38BDF8' : '#0284C7', fontSize: 9, fontWeight: 700 }}
+                            offset={4}
+                          />
+                        )}
+                      </Bar>
+                      <Bar dataKey="Đã chi thực tế" fill="#F43F5E" radius={[4, 4, 0, 0]}>
+                        {showJarsBarLabels && (
+                          <LabelList
+                            dataKey="Đã chi thực tế"
+                            position="top"
+                            formatter={(v: any) => {
+                              const n = Number(v) || 0;
+                              return n > 0 ? fmtM(n) : '';
+                            }}
+                            style={{ fill: isDark ? '#FB7185' : '#E11D48', fontSize: 9, fontWeight: 700 }}
+                            offset={4}
+                          />
+                        )}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -531,9 +579,16 @@ export default function BudgetsManagementPage() {
                       <p className="text-[10px] text-slate-400">Theo chuẩn Harv Eker &amp; tùy biến</p>
                     </div>
                   </div>
-                  <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                    100% Thu nhập
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <ChartLabelToggle
+                      showLabels={showJarsDonutLabels}
+                      onToggle={toggleJarsDonutLabels}
+                      size="small"
+                    />
+                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      100% Thu nhập
+                    </span>
+                  </div>
                 </div>
 
                 <div className="h-56 w-full relative">
@@ -548,6 +603,30 @@ export default function BudgetsManagementPage() {
                         paddingAngle={3}
                         dataKey="value"
                         nameKey="name"
+                        labelLine={false}
+                        label={
+                          showJarsDonutLabels
+                            ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                if (!percent || percent < 0.05) return null;
+                                const RADIAN = Math.PI / 180;
+                                const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
+                                const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                                const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                                return (
+                                  <text
+                                    x={x}
+                                    y={y}
+                                    fill="#FFFFFF"
+                                    textAnchor="middle"
+                                    dominantBaseline="central"
+                                    style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                                  >
+                                    {`${Math.round(percent * 100)}%`}
+                                  </text>
+                                );
+                              }
+                            : false
+                        }
                       >
                         {jarsPieData.map((entry, idx) => (
                           <Cell key={`jar-pie-${idx}`} fill={entry.color} stroke="transparent" />
@@ -559,12 +638,12 @@ export default function BudgetsManagementPage() {
                           name,
                         ]}
                         contentStyle={{
-                          background: 'rgba(15, 23, 42, 0.94)',
-                          borderColor: 'rgba(99, 102, 241, 0.3)',
-                          borderRadius: '12px',
-                          color: '#ffffff',
-                          fontSize: '11px',
-                          fontWeight: '600',
+                          background: tooltipBg,
+                          border: `1px solid ${tooltipBorder}`,
+                          borderRadius: 12,
+                          color: tooltipText,
+                          fontSize: 11,
+                          boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                         }}
                       />
                     </RePieChart>
@@ -704,40 +783,76 @@ export default function BudgetsManagementPage() {
                       <p className="text-[10px] text-slate-400">Đơn vị: VNĐ (Định mức chuẩn vs Thực tế tháng)</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 text-[11px] font-bold">
-                    <span className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Định mức
-                    </span>
-                    <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block" /> Thực tế
-                    </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2.5 text-[11px] font-bold">
+                      <span className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
+                        <span className="w-2.5 h-2.5 rounded-sm bg-sky-500 inline-block" /> Định mức
+                      </span>
+                      <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+                        <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block" /> Thực tế
+                      </span>
+                    </div>
+                    <ChartLabelToggle
+                      showLabels={showRuleBarLabels}
+                      onToggle={toggleRuleBarLabels}
+                      size="small"
+                    />
                   </div>
                 </div>
 
-                <div className="h-64 w-full">
+                <div style={{ height: showRuleBarLabels ? 275 : 256 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={rule503020Data} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
-                      <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} fontWeight={600} tickLine={false} />
-                      <YAxis
-                        stroke="#94a3b8"
-                        fontSize={10}
+                    <BarChart data={rule503020Data} margin={{ top: showRuleBarLabels ? 20 : 10, right: 10, left: -10, bottom: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fill: axisColor, fontSize: 11, fontWeight: 600 }}
+                        axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
                         tickLine={false}
-                        tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
+                      />
+                      <YAxis
+                        tick={{ fill: axisColor, fontSize: 10 }}
+                        axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
+                        tickLine={false}
+                        tickFormatter={(v) => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'}
+                        width={40}
                       />
                       <ReTooltip
-                        formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                        formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
                         contentStyle={{
-                          background: 'rgba(15, 23, 42, 0.94)',
-                          borderColor: 'rgba(245, 158, 11, 0.3)',
-                          borderRadius: '12px',
-                          color: '#ffffff',
-                          fontSize: '12px',
-                          fontWeight: '600',
+                          background: tooltipBg,
+                          border: `1px solid ${tooltipBorder}`,
+                          borderRadius: 12,
+                          color: tooltipText,
+                          fontSize: 11,
+                          boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                         }}
                       />
-                      <Bar dataKey="Định mức chuẩn" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="Thực tế" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Định mức chuẩn" fill="#0EA5E9" radius={[4, 4, 0, 0]}>
+                        {showRuleBarLabels && (
+                          <LabelList
+                            dataKey="Định mức chuẩn"
+                            position="top"
+                            formatter={(v: any) => fmtM(Number(v))}
+                            style={{ fill: isDark ? '#38BDF8' : '#0284C7', fontSize: 9, fontWeight: 700 }}
+                            offset={4}
+                          />
+                        )}
+                      </Bar>
+                      <Bar dataKey="Thực tế" fill="#F59E0B" radius={[4, 4, 0, 0]}>
+                        {showRuleBarLabels && (
+                          <LabelList
+                            dataKey="Thực tế"
+                            position="top"
+                            formatter={(v: any) => {
+                              const n = Number(v) || 0;
+                              return n > 0 ? fmtM(n) : '';
+                            }}
+                            style={{ fill: isDark ? '#FBBF24' : '#D97706', fontSize: 9, fontWeight: 700 }}
+                            offset={4}
+                          />
+                        )}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -757,9 +872,16 @@ export default function BudgetsManagementPage() {
                       <p className="text-[10px] text-slate-400">Tỷ trọng khuyến nghị từ chuyên gia</p>
                     </div>
                   </div>
-                  <span className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
-                    {fmt(monthlyIncome)} ₫
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <ChartLabelToggle
+                      showLabels={showRuleDonutLabels}
+                      onToggle={toggleRuleDonutLabels}
+                      size="small"
+                    />
+                    <span className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
+                      {fmt(monthlyIncome)} ₫
+                    </span>
+                  </div>
                 </div>
 
                 <div className="h-56 w-full relative">
@@ -778,20 +900,44 @@ export default function BudgetsManagementPage() {
                         paddingAngle={4}
                         dataKey="value"
                         nameKey="name"
+                        labelLine={false}
+                        label={
+                          showRuleDonutLabels
+                            ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                if (!percent || percent < 0.05) return null;
+                                const RADIAN = Math.PI / 180;
+                                const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
+                                const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                                const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                                return (
+                                  <text
+                                    x={x}
+                                    y={y}
+                                    fill="#FFFFFF"
+                                    textAnchor="middle"
+                                    dominantBaseline="central"
+                                    style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                                  >
+                                    {`${Math.round(percent * 100)}%`}
+                                  </text>
+                                );
+                              }
+                            : false
+                        }
                       >
                         <Cell fill="#0ea5e9" stroke="transparent" />
                         <Cell fill="#f59e0b" stroke="transparent" />
                         <Cell fill="#10b981" stroke="transparent" />
                       </Pie>
                       <ReTooltip
-                        formatter={(val: any) => [`${fmt(Number(val))} ₫`, 'Định mức']}
+                        formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
                         contentStyle={{
-                          background: 'rgba(15, 23, 42, 0.94)',
-                          borderColor: 'rgba(14, 165, 233, 0.3)',
-                          borderRadius: '12px',
-                          color: '#ffffff',
-                          fontSize: '11px',
-                          fontWeight: '600',
+                          background: tooltipBg,
+                          border: `1px solid ${tooltipBorder}`,
+                          borderRadius: 12,
+                          color: tooltipText,
+                          fontSize: 11,
+                          boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                         }}
                       />
                     </RePieChart>
@@ -925,47 +1071,77 @@ export default function BudgetsManagementPage() {
                     <p className="text-[10px] text-slate-400">Top danh mục chi tiêu lớn nhất trong tháng (Đơn vị: VNĐ)</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-[11px] font-bold">
-                  <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Hạn mức
-                  </span>
-                  <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
-                    <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" /> Đã chi
-                  </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2.5 text-[11px] font-bold">
+                    <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Hạn mức
+                    </span>
+                    <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                      <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 inline-block" /> Đã chi
+                    </span>
+                  </div>
+                  <ChartLabelToggle
+                    showLabels={showCatBarLabels}
+                    onToggle={toggleCatBarLabels}
+                    size="small"
+                  />
                 </div>
               </div>
 
-              <div className="h-64 w-full">
+              <div style={{ height: showCatBarLabels ? 275 : 256 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topCategoriesChartData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
+                  <BarChart data={topCategoriesChartData} margin={{ top: showCatBarLabels ? 20 : 10, right: 10, left: -10, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
                     <XAxis
                       dataKey="name"
-                      stroke="#94a3b8"
-                      fontSize={11}
-                      fontWeight={600}
+                      tick={{ fill: axisColor, fontSize: 11, fontWeight: 600 }}
+                      axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
                       tickLine={false}
                       interval={0}
                     />
                     <YAxis
-                      stroke="#94a3b8"
-                      fontSize={10}
+                      tick={{ fill: axisColor, fontSize: 10 }}
+                      axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
                       tickLine={false}
-                      tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
+                      tickFormatter={(v) => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'}
+                      width={40}
                     />
                     <ReTooltip
-                      formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                      formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
                       contentStyle={{
-                        background: 'rgba(15, 23, 42, 0.94)',
-                        borderColor: 'rgba(16, 185, 129, 0.3)',
-                        borderRadius: '12px',
-                        color: '#ffffff',
-                        fontSize: '12px',
-                        fontWeight: '600',
+                        background: tooltipBg,
+                        border: `1px solid ${tooltipBorder}`,
+                        borderRadius: 12,
+                        color: tooltipText,
+                        fontSize: 11,
+                        boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                       }}
                     />
-                    <Bar dataKey="Hạn mức đặt ra" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Đã chi" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="Hạn mức đặt ra" fill="#10B981" radius={[4, 4, 0, 0]}>
+                      {showCatBarLabels && (
+                        <LabelList
+                          dataKey="Hạn mức đặt ra"
+                          position="top"
+                          formatter={(v: any) => fmtM(Number(v))}
+                          style={{ fill: isDark ? '#34D399' : '#059669', fontSize: 9, fontWeight: 700 }}
+                          offset={4}
+                        />
+                      )}
+                    </Bar>
+                    <Bar dataKey="Đã chi" fill="#F43F5E" radius={[4, 4, 0, 0]}>
+                      {showCatBarLabels && (
+                        <LabelList
+                          dataKey="Đã chi"
+                          position="top"
+                          formatter={(v: any) => {
+                            const n = Number(v) || 0;
+                            return n > 0 ? fmtM(n) : '';
+                          }}
+                          style={{ fill: isDark ? '#FB7185' : '#E11D48', fontSize: 9, fontWeight: 700 }}
+                          offset={4}
+                        />
+                      )}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>

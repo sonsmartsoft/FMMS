@@ -58,11 +58,27 @@ import {
   Legend,
   AreaChart,
   Area,
+  LabelList,
 } from 'recharts';
+import { useTheme } from '@/lib/theme/ThemeContext';
+import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartLabelToggle';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
 import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 
+const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
+
 export default function FamilyFinanceDashboard() {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const axisColor = isDark ? '#94A3B8' : '#64748B';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tooltipBg = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.98)';
+  const tooltipBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)';
+  const tooltipText = isDark ? '#F8FAFC' : '#0F172A';
+
+  const [showCashflowLabels, toggleCashflowLabels] = useChartLabelState('ffms_dash_cashflow_labels', false);
+  const [showCategoryLabels, toggleCategoryLabels] = useChartLabelState('ffms_dash_cat_labels', false);
+
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [transactions, setTransactions] = useState<FamilyTransaction[]>([]);
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
@@ -529,44 +545,91 @@ export default function FamilyFinanceDashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 text-xs font-bold">
-              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                <span className="w-3 h-3 rounded bg-emerald-500 inline-block" /> Thu nhập
-              </span>
-              <span className="flex items-center gap-1.5 text-rose-500 dark:text-rose-400">
-                <span className="w-3 h-3 rounded bg-rose-500 inline-block" /> Chi tiêu
-              </span>
-              <span className="flex items-center gap-1.5 text-sky-500 dark:text-sky-400">
-                <span className="w-3 h-3 rounded bg-sky-500 inline-block" /> Thặng dư
-              </span>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-2.5 text-xs font-bold">
+                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                  <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block" /> Thu nhập
+                </span>
+                <span className="flex items-center gap-1 text-rose-500 dark:text-rose-400">
+                  <span className="w-2.5 h-2.5 rounded bg-rose-500 inline-block" /> Chi tiêu
+                </span>
+                <span className="flex items-center gap-1 text-sky-500 dark:text-sky-400">
+                  <span className="w-2.5 h-2.5 rounded bg-sky-500 inline-block" /> Thặng dư
+                </span>
+              </div>
+              <ChartLabelToggle
+                showLabels={showCashflowLabels}
+                onToggle={toggleCashflowLabels}
+                size="small"
+              />
+              <span className="text-[10px] font-mono text-slate-400 shrink-0">Đơn vị: Triệu ₫ (M)</span>
             </div>
           </div>
 
-          <div className="h-64 sm:h-72 w-full">
+          <div style={{ height: showCashflowLabels ? 285 : 265 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sixMonthTrendData} margin={{ top: 15, right: 10, left: 10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.12} vertical={false} />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} fontWeight={600} tickLine={false} />
-                <YAxis
-                  stroke="#94a3b8"
-                  fontSize={10}
+              <BarChart data={sixMonthTrendData} margin={{ top: showCashflowLabels ? 22 : 12, right: 10, left: -5, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fill: axisColor, fontSize: 11, fontWeight: 600 }}
+                  axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
                   tickLine={false}
-                  tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}tr`}
+                />
+                <YAxis
+                  tick={{ fill: axisColor, fontSize: 10 }}
+                  axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
+                  tickLine={false}
+                  tickFormatter={(v) => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'}
+                  width={45}
                 />
                 <ReTooltip
-                  formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                  formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
                   contentStyle={{
-                    background: 'rgba(15, 23, 42, 0.95)',
-                    borderColor: 'rgba(56, 189, 248, 0.3)',
-                    borderRadius: '12px',
-                    color: '#ffffff',
-                    fontSize: '12px',
-                    fontWeight: '600',
+                    background: tooltipBg,
+                    border: `1px solid ${tooltipBorder}`,
+                    borderRadius: 12,
+                    color: tooltipText,
+                    fontSize: 11,
+                    boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                   }}
                 />
-                <Bar dataKey="Thu nhập" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Chi tiêu" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Thặng dư" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Thu nhập" fill="#10B981" radius={[4, 4, 0, 0]}>
+                  {showCashflowLabels && (
+                    <LabelList
+                      dataKey="Thu nhập"
+                      position="top"
+                      formatter={(v: any) => fmtM(Number(v))}
+                      style={{ fill: isDark ? '#34D399' : '#059669', fontSize: 9, fontWeight: 700 }}
+                      offset={4}
+                    />
+                  )}
+                </Bar>
+                <Bar dataKey="Chi tiêu" fill="#F43F5E" radius={[4, 4, 0, 0]}>
+                  {showCashflowLabels && (
+                    <LabelList
+                      dataKey="Chi tiêu"
+                      position="top"
+                      formatter={(v: any) => fmtM(Number(v))}
+                      style={{ fill: isDark ? '#FB7185' : '#E11D48', fontSize: 9, fontWeight: 700 }}
+                      offset={4}
+                    />
+                  )}
+                </Bar>
+                <Bar dataKey="Thặng dư" fill="#0EA5E9" radius={[4, 4, 0, 0]}>
+                  {showCashflowLabels && (
+                    <LabelList
+                      dataKey="Thặng dư"
+                      position="top"
+                      formatter={(v: any) => {
+                        const n = Number(v) || 0;
+                        return n > 0 ? fmtM(n) : '';
+                      }}
+                      style={{ fill: isDark ? '#38BDF8' : '#0284C7', fontSize: 9, fontWeight: 700 }}
+                      offset={4}
+                    />
+                  )}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -817,13 +880,20 @@ export default function FamilyFinanceDashboard() {
             </p>
           </div>
 
-          <Link
-            href="/family-finance/reports"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:opacity-95 shadow-md shadow-sky-600/20 active:scale-95 transition-all self-start sm:self-auto"
-          >
-            <BarChart3 className="w-4 h-4" />
-            Báo Cáo Tài Chính Chuyên Nghiệp ➔
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            <ChartLabelToggle
+              showLabels={showCategoryLabels}
+              onToggle={toggleCategoryLabels}
+              size="small"
+            />
+            <Link
+              href="/family-finance/reports"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-sky-600 via-blue-600 to-indigo-600 hover:opacity-95 shadow-md shadow-sky-600/20 active:scale-95 transition-all self-start sm:self-auto"
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Báo Cáo Tài Chính ➔
+            </Link>
+          </div>
         </div>
 
         {isFallbackCategoryData && (
@@ -862,20 +932,44 @@ export default function FamilyFinanceDashboard() {
                       paddingAngle={4}
                       dataKey="amount"
                       nameKey="name"
+                      labelLine={false}
+                      label={
+                        showCategoryLabels
+                          ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                              if (!percent || percent < 0.05) return null;
+                              const RADIAN = Math.PI / 180;
+                              const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
+                              const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                              const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                              return (
+                                <text
+                                  x={x}
+                                  y={y}
+                                  fill="#FFFFFF"
+                                  textAnchor="middle"
+                                  dominantBaseline="central"
+                                  style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                                >
+                                  {`${Math.round(percent * 100)}%`}
+                                </text>
+                              );
+                            }
+                          : false
+                      }
                     >
                       {displayCategoryExpenses.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
                       ))}
                     </Pie>
                     <ReTooltip
-                      formatter={(val: any) => [`${fmt(Number(val))} ₫`, 'Chi tiêu']}
+                      formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
                       contentStyle={{
-                        background: 'rgba(15, 23, 42, 0.92)',
-                        borderColor: 'rgba(56, 189, 248, 0.3)',
-                        borderRadius: '12px',
-                        color: '#ffffff',
-                        fontSize: '12px',
-                        fontWeight: '600',
+                        background: tooltipBg,
+                        border: `1px solid ${tooltipBorder}`,
+                        borderRadius: 12,
+                        color: tooltipText,
+                        fontSize: 11,
+                        boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                       }}
                     />
                   </RePieChart>

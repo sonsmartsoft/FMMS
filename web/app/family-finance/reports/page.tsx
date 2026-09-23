@@ -59,9 +59,27 @@ import {
   Cell,
   AreaChart,
   Area,
+  LabelList,
 } from 'recharts';
+import { useTheme } from '@/lib/theme/ThemeContext';
+import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartLabelToggle';
+
+const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
 
 export default function FamilyFinancialReportsPage() {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const axisColor = isDark ? '#94A3B8' : '#64748B';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tooltipBg = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.98)';
+  const tooltipBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)';
+  const tooltipText = isDark ? '#F8FAFC' : '#0F172A';
+
+  const [showCashflowBarLabels, toggleCashflowBarLabels] = useChartLabelState('ffms_rep_cashflow_bar_labels', false);
+  const [showCashflowPieLabels, toggleCashflowPieLabels] = useChartLabelState('ffms_rep_cashflow_pie_labels', false);
+  const [showNetWorthBarLabels, toggleNetWorthBarLabels] = useChartLabelState('ffms_rep_networth_bar_labels', false);
+  const [showAssetPieLabels, toggleAssetPieLabels] = useChartLabelState('ffms_rep_asset_pie_labels', false);
+
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [transactions, setTransactions] = useState<FamilyTransaction[]>([]);
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
@@ -425,33 +443,58 @@ export default function FamilyFinancialReportsPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pb-4">
                   {/* Chart 1: Cashflow Overview Bar Chart */}
                   <div className="lg:col-span-7 bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between pb-1">
+                    <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                         <BarChart3 className="w-4 h-4 text-emerald-500" />
                         Lưu Chuyển Dòng Tiền (Vào / Ra / Thặng Dư)
                       </span>
+                      <ChartLabelToggle
+                        showLabels={showCashflowBarLabels}
+                        onToggle={toggleCashflowBarLabels}
+                        size="small"
+                      />
                     </div>
-                    <div className="h-56 w-full">
+                    <div style={{ height: showCashflowBarLabels ? 245 : 224 }} className="w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={cashflowChartData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
-                          <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
-                          <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} fontWeight={600} tickLine={false} />
-                          <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} />
+                        <BarChart data={cashflowChartData} margin={{ top: showCashflowBarLabels ? 20 : 10, right: 10, left: -10, bottom: 10 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                          <XAxis
+                            dataKey="name"
+                            tick={{ fill: axisColor, fontSize: 10, fontWeight: 600 }}
+                            axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            tick={{ fill: axisColor, fontSize: 10 }}
+                            axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
+                            tickLine={false}
+                            tickFormatter={(v) => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'}
+                            width={40}
+                          />
                           <ReTooltip
-                            formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                            formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
                             contentStyle={{
-                              background: 'rgba(15, 23, 42, 0.94)',
-                              borderColor: 'rgba(16, 185, 129, 0.3)',
-                              borderRadius: '12px',
-                              color: '#ffffff',
-                              fontSize: '11px',
-                              fontWeight: '600',
+                              background: tooltipBg,
+                              border: `1px solid ${tooltipBorder}`,
+                              borderRadius: 12,
+                              color: tooltipText,
+                              fontSize: 11,
+                              boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                             }}
                           />
                           <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
                             {cashflowChartData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.fill} />
                             ))}
+                            {showCashflowBarLabels && (
+                              <LabelList
+                                dataKey="amount"
+                                position="top"
+                                formatter={(v: any) => fmtM(Number(v))}
+                                style={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 9, fontWeight: 700 }}
+                                offset={4}
+                              />
+                            )}
                           </Bar>
                         </BarChart>
                       </ResponsiveContainer>
@@ -460,14 +503,21 @@ export default function FamilyFinancialReportsPage() {
 
                   {/* Chart 2: Expense Structure Donut Chart */}
                   <div className="lg:col-span-5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-2">
-                    <div className="flex items-center justify-between pb-1">
+                    <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                         <PieChart className="w-4 h-4 text-sky-500" />
                         Cơ Cấu Chi Phí & Trả Nợ
                       </span>
-                      <span className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400">
-                        {fmt(totalExpense)} ₫
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <ChartLabelToggle
+                          showLabels={showCashflowPieLabels}
+                          onToggle={toggleCashflowPieLabels}
+                          size="small"
+                        />
+                        <span className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400">
+                          {fmt(totalExpense)} ₫
+                        </span>
+                      </div>
                     </div>
                     <div className="h-44 w-full relative">
                       <ResponsiveContainer width="100%" height="100%">
@@ -481,20 +531,44 @@ export default function FamilyFinancialReportsPage() {
                             paddingAngle={4}
                             dataKey="value"
                             nameKey="name"
+                            labelLine={false}
+                            label={
+                              showCashflowPieLabels
+                                ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                    if (!percent || percent < 0.05) return null;
+                                    const RADIAN = Math.PI / 180;
+                                    const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
+                                    const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                                    const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                                    return (
+                                      <text
+                                        x={x}
+                                        y={y}
+                                        fill="#FFFFFF"
+                                        textAnchor="middle"
+                                        dominantBaseline="central"
+                                        style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                                      >
+                                        {`${Math.round(percent * 100)}%`}
+                                      </text>
+                                    );
+                                  }
+                                : false
+                            }
                           >
                             {expenseStructurePieData.map((entry, index) => (
                               <Cell key={`cell-exp-${index}`} fill={entry.color} stroke="transparent" />
                             ))}
                           </Pie>
                           <ReTooltip
-                            formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                            formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
                             contentStyle={{
-                              background: 'rgba(15, 23, 42, 0.94)',
-                              borderColor: 'rgba(56, 189, 248, 0.3)',
-                              borderRadius: '12px',
-                              color: '#ffffff',
-                              fontSize: '11px',
-                              fontWeight: '600',
+                              background: tooltipBg,
+                              border: `1px solid ${tooltipBorder}`,
+                              borderRadius: 12,
+                              color: tooltipText,
+                              fontSize: 11,
+                              boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                             }}
                           />
                         </RePieChart>
@@ -620,7 +694,7 @@ export default function FamilyFinancialReportsPage() {
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pb-2">
                 {/* Bar Chart: Balance Comparison */}
                 <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-2">
                     <div className="flex items-center gap-2">
                       <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500">
                         <BarChart3 className="w-4 h-4" />
@@ -629,32 +703,59 @@ export default function FamilyFinancialReportsPage() {
                         Cân Đối Tài Sản vs Dư Nợ Gia Đình
                       </h3>
                     </div>
-                    <span className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
-                      Tỷ lệ nợ/tài sản: {debtToAssetRatio}%
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <ChartLabelToggle
+                        showLabels={showNetWorthBarLabels}
+                        onToggle={toggleNetWorthBarLabels}
+                        size="small"
+                      />
+                      <span className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
+                        Tỷ lệ nợ/tài sản: {debtToAssetRatio}%
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="h-56 w-full">
+                  <div style={{ height: showNetWorthBarLabels ? 245 : 224 }} className="w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={balanceComparisonData} margin={{ top: 10, right: 10, left: 10, bottom: 10 }}>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} vertical={false} />
-                        <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} fontWeight={600} tickLine={false} />
-                        <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`} />
+                      <BarChart data={balanceComparisonData} margin={{ top: showNetWorthBarLabels ? 20 : 10, right: 10, left: -10, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fill: axisColor, fontSize: 11, fontWeight: 600 }}
+                          axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fill: axisColor, fontSize: 10 }}
+                          axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
+                          tickLine={false}
+                          tickFormatter={(v) => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'}
+                          width={40}
+                        />
                         <ReTooltip
-                          formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                          formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
                           contentStyle={{
-                            background: 'rgba(15, 23, 42, 0.94)',
-                            borderColor: 'rgba(16, 185, 129, 0.3)',
-                            borderRadius: '12px',
-                            color: '#ffffff',
-                            fontSize: '11px',
-                            fontWeight: '600',
+                            background: tooltipBg,
+                            border: `1px solid ${tooltipBorder}`,
+                            borderRadius: 12,
+                            color: tooltipText,
+                            fontSize: 11,
+                            boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                           }}
                         />
                         <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
                           {balanceComparisonData.map((entry, index) => (
                             <Cell key={`bal-cell-${index}`} fill={entry.fill} />
                           ))}
+                          {showNetWorthBarLabels && (
+                            <LabelList
+                              dataKey="amount"
+                              position="top"
+                              formatter={(v: any) => fmtM(Number(v))}
+                              style={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 9, fontWeight: 700 }}
+                              offset={4}
+                            />
+                          )}
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -663,7 +764,7 @@ export default function FamilyFinancialReportsPage() {
 
                 {/* Donut Chart: Asset Composition */}
                 <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-between space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 flex-wrap gap-2">
                     <div className="flex items-center gap-2">
                       <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-500">
                         <PieChart className="w-4 h-4" />
@@ -672,9 +773,16 @@ export default function FamilyFinancialReportsPage() {
                         Cơ Cấu Danh Mục Tài Sản
                       </h3>
                     </div>
-                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                      {fmt(totalAssets)} ₫
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <ChartLabelToggle
+                        showLabels={showAssetPieLabels}
+                        onToggle={toggleAssetPieLabels}
+                        size="small"
+                      />
+                      <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {fmt(totalAssets)} ₫
+                      </span>
+                    </div>
                   </div>
 
                   <div className="h-44 w-full relative">
@@ -689,20 +797,44 @@ export default function FamilyFinancialReportsPage() {
                           paddingAngle={4}
                           dataKey="value"
                           nameKey="name"
+                          labelLine={false}
+                          label={
+                            showAssetPieLabels
+                              ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                  if (!percent || percent < 0.05) return null;
+                                  const RADIAN = Math.PI / 180;
+                                  const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
+                                  const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                                  const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                                  return (
+                                    <text
+                                      x={x}
+                                      y={y}
+                                      fill="#FFFFFF"
+                                      textAnchor="middle"
+                                      dominantBaseline="central"
+                                      style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                                    >
+                                      {`${Math.round(percent * 100)}%`}
+                                    </text>
+                                  );
+                                }
+                              : false
+                          }
                         >
                           {assetsPieData.map((entry, index) => (
                             <Cell key={`asset-pie-${index}`} fill={entry.color} stroke="transparent" />
                           ))}
                         </Pie>
                         <ReTooltip
-                          formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                          formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
                           contentStyle={{
-                            background: 'rgba(15, 23, 42, 0.94)',
-                            borderColor: 'rgba(14, 165, 233, 0.3)',
-                            borderRadius: '12px',
-                            color: '#ffffff',
-                            fontSize: '11px',
-                            fontWeight: '600',
+                            background: tooltipBg,
+                            border: `1px solid ${tooltipBorder}`,
+                            borderRadius: 12,
+                            color: tooltipText,
+                            fontSize: 11,
+                            boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
                           }}
                         />
                       </RePieChart>
