@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Wallet, Trash2, RotateCcw, Tag, Layers } from 'lucide-react';
+import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Wallet, Trash2, RotateCcw, Tag, Layers, Car } from 'lucide-react';
 import { createFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
 import { createExpense, deleteExpense } from '@/lib/services/expenseService';
 import { createMaintenanceRecord, deleteMaintenanceRecord } from '@/lib/services/maintenanceService';
 import { createFamilyTransaction, deleteFamilyTransaction, getCategories, getWallets } from '@/lib/services/familyFinanceService';
+import { getAssets } from '@/lib/services/assetService';
 import { SAMPLE_FAMILY_CATEGORIES } from '@/lib/data/sampleFinanceCategories';
-import { TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
+import { TAXONOMY, getDynamicTaxonomy, Asset } from '@/types/mobility';
 import { getMasterMaintenanceCategories, DEFAULT_MAINT_CATEGORIES } from '@/lib/services/masterDataService';
 import { TransactionCategory, Wallet as WalletType } from '@/types/finance';
 
@@ -58,12 +59,25 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
 
   const { action_type, data } = payload;
 
+  // Action type flags
+  const isFuel = action_type === 'LOG_FUEL';
+  const isMaint = action_type === 'LOG_MAINTENANCE';
+  const isIncome = action_type === 'LOG_INCOME';
+  const isGeneralExp = action_type === 'LOG_GENERAL_EXPENSE';
+  const isTransfer = action_type === 'TRANSFER_WALLET';
+  const isVehicleExpense = action_type === 'LOG_EXPENSE';
+
+  // Chỉ hành động phương tiện mới có thể gắn ODO (chủ yếu là Đổ xăng & Bảo dưỡng)
+  // TUYỆT ĐỐI KHÔNG gắn ODO cho chi tiêu sinh hoạt gia đình (Đi chợ, Siêu thị, Mua sắm...), Thu nhập hay Chuyển khoản ví
+  const isVehicleAction = isFuel || isMaint || isVehicleExpense;
+  const needsOdo = isFuel || isMaint || (isVehicleExpense && Boolean(data.odometer_km));
+
   const fmtMoney = (n?: number) => (n != null ? Number(n).toLocaleString('vi-VN') + ' ₫' : '—');
   const todayStr = new Date().toISOString().slice(0, 10);
   const recordDate = data.date || todayStr;
   const assetId = data.asset_id || '20260308-0001-4222-8888-19b213872026'; // Mazda 2 default
 
-  // Chuẩn hóa ODO: Nếu bị AI đoán mò > 10.000 km trong khi xe mới chạy ~3.338 km -> đưa về 3.339 km
+  // Chuẩn hóa ODO: Chỉ áp dụng khi giao dịch thực sự cần ODO
   const rawOdo = data.odometer_km;
   const initialOdo = (rawOdo && rawOdo < 10000 && rawOdo > 1000) ? rawOdo : 3339;
 
@@ -80,6 +94,8 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
   // Master Data state
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
   const [wallets, setWallets] = useState<WalletType[]>([]);
+  const [assetsList, setAssetsList] = useState<Asset[]>([]);
+  const [selectedAssetId, setSelectedAssetId] = useState<string>(data.asset_id || '20260308-0001-4222-8888-19b213872026');
   const [taxonomy, setTaxonomy] = useState(TAXONOMY);
   const [maintCats, setMaintCats] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
 
@@ -110,8 +126,15 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
       getCategories(),
       getWallets(),
       getMasterMaintenanceCategories(),
-    ]).then(([cList, wList, mList]) => {
+      getAssets(),
+    ]).then(([cList, wList, mList, aList]) => {
       if (!isMounted) return;
+      if (aList && aList.length > 0) {
+        setAssetsList(aList);
+        if (!data.asset_id) {
+          setSelectedAssetId(aList[0].id);
+        }
+      }
 
       // Flatten fallback categories if needed
       let loadedCats: TransactionCategory[] = [];
@@ -269,6 +292,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
   const currentParentCat = categories.find((c) => c.id === selectedParentId);
   const currentSubCat = categories.find((c) => c.id === selectedSubId);
   const currentWallet = wallets.find((w) => w.id === selectedWalletId);
+  const currentAsset = assetsList.find((a) => a.id === selectedAssetId) || assetsList[0];
 
   const handleConfirm = async () => {
     setStatus('executing');
@@ -277,7 +301,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
     try {
       if (action_type === 'LOG_FUEL') {
         const created = await createFuelLog({
-          asset_id: assetId,
+          asset_id: selectedAssetId || assetId,
           date: editDate,
           liters: Number(editLiters),
           price_per_liter: Number(editPrice),
@@ -292,7 +316,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
       } else if (action_type === 'LOG_MAINTENANCE') {
         const finalType = selectedMaintType || data.maintenance_type || 'Bảo dưỡng định kỳ';
         const created = await createMaintenanceRecord({
-          asset_id: assetId,
+          asset_id: selectedAssetId || assetId,
           maintenance_type: finalType,
           date: editDate,
           cost: Number(editCost),
@@ -311,7 +335,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
         const created = await createFamilyTransaction({
           wallet_id: selectedWalletId || data.wallet_id || 'w-tcb-01',
           category_id: finalCatId,
-          asset_id: data.asset_id || null,
+          asset_id: null, // Chi tiêu gia đình thuần túy, không gắn với xe
           transaction_type: 'EXPENSE',
           amount: Number(editCost),
           date: editDate,
@@ -362,7 +386,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
         const finalDesc = editDescription || `${mappedSubcatLabel} (${taxonomy[mobCatKey]?.label || mobCatKey})`;
 
         const created = await createExpense({
-          asset_id: assetId,
+          asset_id: selectedAssetId || assetId,
           date: editDate,
           category: mobCatKey,
           subcategory: mobSubKey,
@@ -635,27 +659,97 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           )}
         </div>
 
-        {/* ODO */}
-        <div>
-          <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-            <Gauge className="w-3 h-3 text-slate-400" /> ODO hiện tại:
-          </span>
-          {isEditing ? (
-            <input
-              type="number"
-              value={editOdo}
-              onChange={(e) => setEditOdo(Number(e.target.value) || 0)}
-              placeholder="VD: 3339"
-              className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-bold text-cyan-600 focus:outline-none"
-            />
-          ) : (
-            <span className="font-bold text-slate-700 dark:text-slate-200 text-xs">{editOdo.toLocaleString('vi-VN')} km</span>
-          )}
-        </div>
+        {/* Slot 3 ở hàng 1: ODO (nếu cần), hoặc Ví thanh toán (nếu chi tiêu gia đình), hoặc Phương tiện (nếu chi phí xe không đo ODO) */}
+        {needsOdo ? (
+          <div>
+            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <Gauge className="w-3 h-3 text-slate-400" /> ODO hiện tại:
+            </span>
+            {isEditing ? (
+              <input
+                type="number"
+                value={editOdo}
+                onChange={(e) => setEditOdo(Number(e.target.value) || 0)}
+                placeholder="VD: 3339"
+                className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-bold text-cyan-600 focus:outline-none"
+              />
+            ) : (
+              <span className="font-bold text-slate-700 dark:text-slate-200 text-xs">{editOdo.toLocaleString('vi-VN')} km</span>
+            )}
+          </div>
+        ) : (isGeneralExp || isIncome) ? (
+          <div>
+            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <Wallet className="w-3 h-3 text-slate-400" /> Tài khoản / Ví:
+            </span>
+            {isEditing ? (
+              <select
+                value={selectedWalletId}
+                onChange={(e) => setSelectedWalletId(e.target.value)}
+                className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+              >
+                {wallets.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name} ({fmtMoney(w.current_balance)})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">
+                {currentWallet?.name || 'Techcombank Everyday'}
+              </span>
+            )}
+          </div>
+        ) : isVehicleAction ? (
+          <div>
+            <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <Car className="w-3 h-3 text-slate-400" /> Phương tiện:
+            </span>
+            {isEditing && assetsList.length > 1 ? (
+              <select
+                value={selectedAssetId}
+                onChange={(e) => setSelectedAssetId(e.target.value)}
+                className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+              >
+                {assetsList.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} {a.license_plate ? `(${a.license_plate})` : ''}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">
+                {currentAsset?.name || 'Mazda 2 Luxury'}
+              </span>
+            )}
+          </div>
+        ) : null}
 
         {/* Thông số đặc thù: Xăng dầu */}
         {isFuel && (
           <>
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Car className="w-3 h-3 text-slate-400" /> Xe được đổ xăng:
+              </span>
+              {isEditing && assetsList.length > 1 ? (
+                <select
+                  value={selectedAssetId}
+                  onChange={(e) => setSelectedAssetId(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {assetsList.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} {a.license_plate ? `(${a.license_plate})` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">
+                  {currentAsset?.name || 'Mazda 2 Luxury'}
+                </span>
+              )}
+            </div>
             <div>
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Thể tích xăng:</span>
               {isEditing ? (
@@ -694,7 +788,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           </>
         )}
 
-        {/* Thông số đặc thù: Thu chi gia đình (Ăn uống, Sinh hoạt, Con cái, Thu nhập...) */}
+        {/* Thông số đặc thù: Thu chi gia đình (Ăn uống, Đi chợ, Siêu thị, Mua sắm, Sinh hoạt...) */}
         {(isGeneralExp || isIncome) && (
           <>
             <div className="col-span-2 sm:col-span-1">
@@ -749,29 +843,6 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
 
             <div className="col-span-2 sm:col-span-1">
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                <Wallet className="w-3 h-3 text-slate-400" /> Tài khoản / Ví:
-              </span>
-              {isEditing ? (
-                <select
-                  value={selectedWalletId}
-                  onChange={(e) => setSelectedWalletId(e.target.value)}
-                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
-                >
-                  {wallets.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name} ({fmtMoney(w.current_balance)})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">
-                  {currentWallet?.name || 'Techcombank Everyday'}
-                </span>
-              )}
-            </div>
-
-            <div className="col-span-2 sm:col-span-1">
-              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
                 <Building className="w-3 h-3 text-slate-400" /> {isIncome ? 'Nguồn chi trả:' : 'Đơn vị / Cửa hàng:'}
               </span>
               {isEditing ? (
@@ -779,6 +850,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
                   type="text"
                   value={editVendor}
                   onChange={(e) => setEditVendor(e.target.value)}
+                  placeholder={isIncome ? 'Tên nguồn thu...' : 'Chợ / Siêu thị...'}
                   className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
                 />
               ) : (
@@ -788,7 +860,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
               )}
             </div>
 
-            <div className="col-span-2 sm:col-span-2">
+            <div className="col-span-2 sm:col-span-3">
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Nội dung ghi chú:</span>
               {isEditing ? (
                 <input
@@ -810,9 +882,31 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
         {/* Thông số đặc thù: Bảo dưỡng xe (LOG_MAINTENANCE) */}
         {isMaint && (
           <>
-            <div className="col-span-2 sm:col-span-2">
+            <div className="col-span-2 sm:col-span-1">
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                <Wrench className="w-3 h-3 text-amber-500" /> Hạng mục bảo dưỡng (Master Data):
+                <Car className="w-3 h-3 text-slate-400" /> Xe được bảo dưỡng:
+              </span>
+              {isEditing && assetsList.length > 1 ? (
+                <select
+                  value={selectedAssetId}
+                  onChange={(e) => setSelectedAssetId(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {assetsList.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} {a.license_plate ? `(${a.license_plate})` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">
+                  {currentAsset?.name || 'Mazda 2 Luxury'}
+                </span>
+              )}
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Wrench className="w-3 h-3 text-amber-500" /> Hạng mục bảo dưỡng:
               </span>
               {isEditing ? (
                 <select
@@ -832,7 +926,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
                 </span>
               )}
             </div>
-            <div>
+            <div className="col-span-2 sm:col-span-1">
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
                 <Building className="w-3 h-3 text-slate-400" /> Gara / Đơn vị:
               </span>

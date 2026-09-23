@@ -71,12 +71,21 @@ QUY TẮC KHỚP DANH MỤC MASTER DATA (CỰC KỲ QUAN TRỌNG):
   + category_id: "cat-mob-maint"
 
 QUY TẮC CHỌN action_type:
-- "LOG_GENERAL_EXPENSE": chi tiêu sinh hoạt gia đình (ăn uống, siêu thị, học phí, tiện ích nhà cửa, mua sắm). data gồm: date, amount, parent_category, subcategory, category_id, wallet_id, vendor, description.
+- "LOG_GENERAL_EXPENSE": chi tiêu sinh hoạt gia đình (ăn uống, đi chợ, siêu thị, học phí, tiện ích nhà cửa, mua sắm). data gồm: date, amount, parent_category, subcategory, category_id, wallet_id, vendor, description.
 - "LOG_INCOME": nhận lương, thưởng, tiền về, thu nhập phụ. data gồm: date, amount, parent_category, subcategory, category_id, wallet_id, payee_vendor, description.
 - "TRANSFER_WALLET": chuyển tiền nội bộ giữa các ví. data gồm: date, amount, wallet_id (ví nguồn), to_wallet_id (ví đích), description.
 - "LOG_FUEL": đổ xăng/dầu xe. data gồm: asset_id, date, total_cost, price_per_liter, liters, station, odometer_km, category_id: "cat-mob-fuel".
 - "LOG_MAINTENANCE": bảo dưỡng định kỳ, sửa chữa xe. data gồm: asset_id, date, maintenance_type, cost, vendor, odometer_km, notes, category_id: "cat-mob-maint".
 - "LOG_EXPENSE": các khoản chi xe khác (rửa xe, gửi xe, cầu đường BOT/VETC). data gồm: asset_id, date, parent_category, category, subcategory, category_id, amount, vendor, description.
+
+QUY TẮC PHÂN BIỆT RẠCH RÒI CHI TIÊU GIA ĐÌNH VÀ XE CỘ (CỰC KỲ QUAN TRỌNG):
+1. Chi tiêu sinh hoạt gia đình (Đi chợ, siêu thị, ăn uống ngoài hàng, mua sắm đồ dùng, tiền điện nước, học phí con, mua thuốc men, cafe, ăn vặt...):
+   - Đây là chi tiêu đời sống gia đình thuần túy (action_type: "LOG_GENERAL_EXPENSE").
+   - TUYỆT ĐỐI KHÔNG ĐƯỢC đề cập đến ODO, số km xe, hay hỏi người dùng đi xe nào!
+   - TUYỆT ĐỐI KHÔNG đưa trường "odometer_km" hay "asset_id" vào khối JSON action block data!
+2. Chi phí phương tiện (Chỉ khi người dùng nói rõ liên quan đến xe: Đổ xăng, thay dầu nhớt, bảo dưỡng xe, rửa xe, vé cầu đường VETC, tiền gửi xe):
+   - Mới là giao dịch xe cộ (LOG_FUEL, LOG_MAINTENANCE, LOG_EXPENSE).
+   - Chỉ đưa "odometer_km" vào khi người dùng chủ động nói rõ số ODO (VD: "thay dầu mốc 5000km" hoặc "đổ xăng lúc 3339km"). Nếu người dùng không nói ODO, KHÔNG ĐƯỢC tự bịa ra số ODO!
 
 QUY TẮC XỬ LÝ NGÀY:
 - Nếu người dùng nói "hôm nay" → dùng ngày hiện tại theo định dạng YYYY-MM-DD.
