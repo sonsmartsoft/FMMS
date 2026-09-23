@@ -517,13 +517,6 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
     );
   }
 
-  // Config UI by action type
-  const isFuel = action_type === 'LOG_FUEL';
-  const isMaint = action_type === 'LOG_MAINTENANCE';
-  const isIncome = action_type === 'LOG_INCOME';
-  const isGeneralExp = action_type === 'LOG_GENERAL_EXPENSE';
-  const isTransfer = action_type === 'TRANSFER_WALLET';
-
   const themeConfig = isFuel
     ? {
         icon: Fuel,
