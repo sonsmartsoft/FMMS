@@ -67,6 +67,12 @@ import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/util
 
 const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
 
+const getPieLabelPercent = (percent: any) => {
+  const n = Number(percent);
+  if (isNaN(n) || n <= 0) return 0;
+  return Math.round(n > 1 ? n : n * 100);
+};
+
 export default function FamilyFinanceDashboard() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -936,7 +942,8 @@ export default function FamilyFinanceDashboard() {
                       label={
                         showCategoryLabels
                           ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-                              if (!percent || percent < 0.05) return null;
+                              const pct = getPieLabelPercent(percent);
+                              if (pct < 3) return null;
                               const RADIAN = Math.PI / 180;
                               const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
                               const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
@@ -950,7 +957,7 @@ export default function FamilyFinanceDashboard() {
                                   dominantBaseline="central"
                                   style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
                                 >
-                                  {`${Math.round(percent * 100)}%`}
+                                  {`${pct}%`}
                                 </text>
                               );
                             }

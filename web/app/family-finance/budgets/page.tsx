@@ -65,6 +65,12 @@ import {
 
 const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
 
+const getPieLabelPercent = (percent: any) => {
+  const n = Number(percent);
+  if (isNaN(n) || n <= 0) return 0;
+  return Math.round(n > 1 ? n : n * 100);
+};
+
 export default function BudgetsManagementPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -218,7 +224,7 @@ export default function BudgetsManagementPage() {
       name: j.name,
       value: j.budgetCap,
       spent: j.spent,
-      percent: j.percent,
+      targetPercent: j.percent,
       color: j.color,
     }));
   }, [jarList]);
@@ -607,7 +613,8 @@ export default function BudgetsManagementPage() {
                         label={
                           showJarsDonutLabels
                             ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-                                if (!percent || percent < 0.05) return null;
+                                const pct = getPieLabelPercent(percent);
+                                if (pct < 3) return null;
                                 const RADIAN = Math.PI / 180;
                                 const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
                                 const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
@@ -621,7 +628,7 @@ export default function BudgetsManagementPage() {
                                     dominantBaseline="central"
                                     style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
                                   >
-                                    {`${Math.round(percent * 100)}%`}
+                                    {`${pct}%`}
                                   </text>
                                 );
                               }
@@ -634,7 +641,7 @@ export default function BudgetsManagementPage() {
                       </Pie>
                       <ReTooltip
                         formatter={(val: any, name: any, props: any) => [
-                          `${fmt(Number(val))} ₫ (${props.payload.percent}%)`,
+                          `${fmt(Number(val))} ₫ (${props.payload.targetPercent || getPieLabelPercent(props.payload.percent)}%)`,
                           name,
                         ]}
                         contentStyle={{
@@ -904,7 +911,8 @@ export default function BudgetsManagementPage() {
                         label={
                           showRuleDonutLabels
                             ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-                                if (!percent || percent < 0.05) return null;
+                                const pct = getPieLabelPercent(percent);
+                                if (pct < 3) return null;
                                 const RADIAN = Math.PI / 180;
                                 const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
                                 const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
@@ -918,7 +926,7 @@ export default function BudgetsManagementPage() {
                                     dominantBaseline="central"
                                     style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
                                   >
-                                    {`${Math.round(percent * 100)}%`}
+                                    {`${pct}%`}
                                   </text>
                                 );
                               }

@@ -52,6 +52,12 @@ const SectionHeader = ({ icon: Icon, title, sub, color = 'var(--accent-cyan)', a
 const CHART_COLORS = ['#3B82F6', '#F59E0B', '#06B6D4', '#8B5CF6', '#10B981', '#EC4899', '#F97316'];
 const MONTHS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
 
+const getPieLabelPercent = (percent: any) => {
+  const n = Number(percent);
+  if (isNaN(n) || n <= 0) return 0;
+  return Math.round(n > 1 ? n : n * 100);
+};
+
 export default function AnalyticsPage() {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -483,7 +489,8 @@ export default function AnalyticsPage() {
                         label={
                           showCategoryLabels
                             ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-                                if (!percent || percent < 0.05) return null;
+                                const pct = getPieLabelPercent(percent);
+                                if (pct < 3) return null;
                                 const RADIAN = Math.PI / 180;
                                 const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
                                 const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
@@ -497,7 +504,7 @@ export default function AnalyticsPage() {
                                     dominantBaseline="central"
                                     style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
                                   >
-                                    {`${Math.round(percent * 100)}%`}
+                                    {`${pct}%`}
                                   </text>
                                 );
                               }

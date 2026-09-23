@@ -114,6 +114,12 @@ function generateLoanSchedule(loan: any, payments: any[]) {
   return schedule;
 }
 
+const getPieLabelPercent = (percent: any) => {
+  const n = Number(percent);
+  if (isNaN(n) || n <= 0) return 0;
+  return Math.round(n > 1 ? n : n * 100);
+};
+
 /* ── Shared Modal Wrapper ─────────────────────────────────────── */
 function Modal({ title, onClose, children, maxWidth = 'max-w-2xl' }: { title: string; onClose: () => void; children: React.ReactNode; maxWidth?: string }) {
   return (
@@ -5602,27 +5608,28 @@ export default function AssetDetailPage() {
                               stroke="none"
                               labelLine={false}
                               label={
-                                showTcoDonutLabels
-                                  ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-                                      if (!percent || percent < 0.05) return null;
-                                      const RADIAN = Math.PI / 180;
-                                      const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
-                                      const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
-                                      const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
-                                      return (
-                                        <text
-                                          x={x}
-                                          y={y}
-                                          fill="#FFFFFF"
-                                          textAnchor="middle"
-                                          dominantBaseline="central"
-                                          style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
-                                        >
-                                          {`${Math.round(percent * 100)}%`}
-                                        </text>
-                                      );
-                                    }
-                                  : false
+                                  showTcoDonutLabels
+                                    ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                                        const pct = getPieLabelPercent(percent);
+                                        if (pct < 3) return null;
+                                        const RADIAN = Math.PI / 180;
+                                        const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
+                                        const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
+                                        const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
+                                        return (
+                                          <text
+                                            x={x}
+                                            y={y}
+                                            fill="#FFFFFF"
+                                            textAnchor="middle"
+                                            dominantBaseline="central"
+                                            style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                                          >
+                                            {`${pct}%`}
+                                          </text>
+                                        );
+                                      }
+                                    : false
                               }
                             >
                               {tcoDonutData.map((entry, index) => (
