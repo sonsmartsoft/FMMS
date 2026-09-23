@@ -398,16 +398,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {/* ── Desktop Persistent Sidebar (≥ 1024px) ── */}
       <aside
-        className="w-60 hidden lg:flex flex-col glass-panel shrink-0"
+        className="w-60 hidden lg:flex flex-col glass-panel shrink-0 h-full overflow-hidden"
         style={{
           borderRight: '1px solid var(--border-default)',
-          minHeight: 'calc(100dvh - var(--header-height, 60px))',
-          padding: '1rem',
+          padding: '1rem 0.75rem 1rem 1rem',
           justifyContent: 'space-between',
         }}
       >
-        {renderNavSections(false)}
-        <div className="mt-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain pr-1">
+          {renderNavSections(false)}
+        </div>
+        <div className="mt-3 shrink-0 pr-1">
           {renderVehicleStatusFooter(false)}
         </div>
       </aside>

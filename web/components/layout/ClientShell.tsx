@@ -46,14 +46,14 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   if (isStandalone) {
     return (
-      <body className="min-h-[100dvh]" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+      <body className="min-h-[100dvh] overflow-y-auto" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
         {children}
       </body>
     );
   }
 
   return (
-    <body className="min-h-[100dvh] flex flex-col transition-colors duration-300" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
+    <body className="h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col transition-colors duration-300" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}>
       <Navbar
         onOpenSettings={() => setIsSettingsOpen(true)}
         onToggleAiChat={() => setIsAiOpen((prev) => !prev)}
@@ -61,7 +61,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
         onToggleMobileNav={() => setIsMobileNavOpen((prev) => !prev)}
       />
 
-      <div className="flex flex-1 relative">
+      <div className="flex flex-1 overflow-hidden relative h-[calc(100dvh-var(--header-height,60px))]">
         <Sidebar
           isMobileOpen={isMobileNavOpen}
           onCloseMobile={() => setIsMobileNavOpen(false)}
@@ -69,8 +69,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
         <main
           className={
             pathname === '/ai-center'
-              ? 'flex-1 p-3.5 sm:p-5 lg:p-6 overflow-hidden w-full h-[calc(100dvh-var(--header-height,60px))] flex flex-col'
-              : 'flex-1 p-3.5 sm:p-5 lg:p-6 xl:p-8 overflow-y-auto w-full min-h-[calc(100dvh-var(--header-height,60px))]'
+              ? 'flex-1 p-3.5 sm:p-5 lg:p-6 overflow-hidden w-full h-full flex flex-col min-h-0'
+              : 'flex-1 p-3.5 sm:p-5 lg:p-6 xl:p-8 overflow-y-auto w-full h-full'
           }
         >
           {children}
