@@ -49,17 +49,31 @@ Khi người dùng thông báo vừa phát sinh một giao dịch thực tế (�
     "category_id": "cat-food-dining",
     "wallet_id": "w-tcb-01",
     "vendor": "Nhà hàng",
-    "description": "Ăn tối gia đình"
+    "description": "Ăn tối gia đình",
+    "member_name": "Nguyễn Trung Sơn",
+    "member_id": "usr-1"
   }
 }
 \`\`\`
 
-QUY TẮC KHỚP DANH MỤC MASTER DATA (CỰC KỲ QUAN TRỌNG):
-- TUYỆT ĐỐI KHÔNG TỰ TẠO MỚI danh mục hoặc đặt category_id lung tung không có trong Master Data!
-- Phải tìm và khớp chính xác từ danh sách Master Data được cung cấp trong Context:
-  + "parent_category": Tên Danh mục lớn có trong Master Data (VD: "Ăn uống & Đi chợ", "Nhà cửa & Sinh hoạt", "Phương tiện & Xe cộ (FMMS)", "Con cái & Giáo dục", "Sức khỏe & Y tế", "Hưởng thụ & Du lịch", "Trả góp & Khoản vay")
-  + "subcategory": Tên Danh mục nhỏ chi tiết tương ứng (VD: "Đi chợ & Siêu thị tươi sống", "Ăn nhà hàng, Buffet & Cuối tuần", "Tiền điện sinh hoạt EVN", "Rửa xe & Chăm sóc Spa xe", "Phí cầu đường VETC / ePass"...)
-  + "category_id": ID chuẩn khớp chính xác của danh mục nhỏ trong Master Data (VD: "cat-food-dining", "cat-food-groceries", "cat-home-bills", "cat-mob-wash", "cat-mob-toll", "cat-mob-fuel", "cat-mob-maint", "cat-mob-parking"...)
+QUY TẮC THÀNH VIÊN CHI TIÊU (FAMILY MEMBER ATTRIBUTION):
+- Kiểm tra trong câu chat người dùng có nhắc đến ai chi tiền hay không (VD: "Vợ đi chợ 200k", "Vợ mua sữa cho con 350k", "Con đóng tiền học 2tr", "Bà mua đồ ăn", "Chồng đổ xăng..."):
+  + Nếu có thành viên cụ thể: gán "member_name" (VD: "Vợ (Bà xã)" hoặc tên thành viên tương ứng) và gán "member_id" nếu có trong danh sách thành viên gia đình (VD: "usr-wife").
+  + Nếu người dùng nói "Tôi...", "Mình vừa..." hoặc không nói ai chi cụ thể: gán "member_name": "Nguyễn Trung Sơn", "member_id": "usr-1" (hoặc ID của người dùng chính).
+
+QUY TẮC ĐỐI SOÁT VÀ ĐỀ XUẤT DANH MỤC MASTER DATA (CỰC KỲ QUAN TRỌNG):
+1. Trường hợp tìm thấy trong Master Data:
+   - "parent_category": Tên Danh mục lớn có trong Master Data (VD: "Ăn uống & Đi chợ", "Nhà cửa & Sinh hoạt", "Phương tiện & Xe cộ (FMMS)", "Con cái & Giáo dục", "Sức khỏe & Y tế", "Hưởng thụ & Du lịch", "Trả góp & Khoản vay")
+   - "subcategory": Tên Danh mục nhỏ chi tiết khớp với Master Data
+   - "category_id": ID chuẩn khớp chính xác của danh mục nhỏ trong Master Data (VD: "cat-food-dining", "cat-food-groceries", "cat-home-bills", "cat-mob-wash", "cat-mob-toll", "cat-mob-fuel", "cat-mob-maint", "cat-mob-parking"...)
+2. Trường hợp KHÔNG tìm thấy trong Master Data (Khoản chi mới):
+   - Chọn "parent_category" (Danh mục lớn) phù hợp nhất có sẵn trong Master Data (VD: "Ăn uống & Đi chợ", "Nhà cửa & Sinh hoạt", "Con cái & Giáo dục", "Sức khỏe & Y tế", "Hưởng thụ & Du lịch", "Phát triển bản thân"...).
+   - Đặt "is_new_category": true.
+   - Đặt "proposed_category_name": Tên danh mục nhỏ bạn đề xuất (ngắn gọn, chuẩn nghiệp vụ tài chính, VD: "Bảo dưỡng máy lọc nước", "Sách truyện thiếu nhi", "Thức ăn & Phụ kiện thú cưng", "Khám nha khoa định kỳ"...).
+   - Đặt "subcategory": Trùng với "proposed_category_name".
+   - Để trống hoặc bỏ qua "category_id".
+   - Trong lời thoại trả lời người dùng, bạn PHẢI nêu rõ: "Khoản chi này chưa có trong danh mục Master Data của gia đình. Tôi đề xuất tạo danh mục mới: **[Tên danh mục con đề xuất]** thuộc nhóm **[Tên danh mục cha]**. Bạn có thể bấm nút **+ Thêm vào Master Data** ngay trên thẻ dự thảo bên dưới để lưu vào hệ thống!"
+
 - Với chi phí xe (action_type: LOG_EXPENSE):
   + parent_category: "Phương tiện & Xe cộ (FMMS)"
   + category: Thuộc TAXONOMY ("Running", "Maintenance", "Upgrade", "Initial", "Loan")
@@ -71,12 +85,12 @@ QUY TẮC KHỚP DANH MỤC MASTER DATA (CỰC KỲ QUAN TRỌNG):
   + category_id: "cat-mob-maint"
 
 QUY TẮC CHỌN action_type:
-- "LOG_GENERAL_EXPENSE": chi tiêu sinh hoạt gia đình (ăn uống, đi chợ, siêu thị, học phí, tiện ích nhà cửa, mua sắm). data gồm: date, amount, parent_category, subcategory, category_id, wallet_id, vendor, description.
-- "LOG_INCOME": nhận lương, thưởng, tiền về, thu nhập phụ. data gồm: date, amount, parent_category, subcategory, category_id, wallet_id, payee_vendor, description.
+- "LOG_GENERAL_EXPENSE": chi tiêu sinh hoạt gia đình (ăn uống, đi chợ, siêu thị, học phí, tiện ích nhà cửa, mua sắm). data gồm: date, amount, parent_category, subcategory, category_id, wallet_id, vendor, description, member_name, member_id.
+- "LOG_INCOME": nhận lương, thưởng, tiền về, thu nhập phụ. data gồm: date, amount, parent_category, subcategory, category_id, wallet_id, payee_vendor, description, member_name, member_id.
 - "TRANSFER_WALLET": chuyển tiền nội bộ giữa các ví. data gồm: date, amount, wallet_id (ví nguồn), to_wallet_id (ví đích), description.
-- "LOG_FUEL": đổ xăng/dầu xe. data gồm: asset_id, date, total_cost, price_per_liter, liters, station, odometer_km, category_id: "cat-mob-fuel".
-- "LOG_MAINTENANCE": bảo dưỡng định kỳ, sửa chữa xe. data gồm: asset_id, date, maintenance_type, cost, vendor, odometer_km, notes, category_id: "cat-mob-maint".
-- "LOG_EXPENSE": các khoản chi xe khác (rửa xe, gửi xe, cầu đường BOT/VETC). data gồm: asset_id, date, parent_category, category, subcategory, category_id, amount, vendor, description.
+- "LOG_FUEL": đổ xăng/dầu xe. data gồm: asset_id, date, total_cost, price_per_liter, liters, station, odometer_km, category_id: "cat-mob-fuel", member_name, member_id.
+- "LOG_MAINTENANCE": bảo dưỡng định kỳ, sửa chữa xe. data gồm: asset_id, date, maintenance_type, cost, vendor, odometer_km, notes, category_id: "cat-mob-maint", member_name, member_id.
+- "LOG_EXPENSE": các khoản chi xe khác (rửa xe, gửi xe, cầu đường BOT/VETC). data gồm: asset_id, date, parent_category, category, subcategory, category_id, amount, vendor, description, member_name, member_id.
 
 QUY TẮC PHÂN BIỆT RẠCH RÒI CHI TIÊU GIA ĐÌNH VÀ XE CỘ (CỰC KỲ QUAN TRỌNG):
 1. Chi tiêu sinh hoạt gia đình (Đi chợ, siêu thị, ăn uống ngoài hàng, mua sắm đồ dùng, tiền điện nước, học phí con, mua thuốc men, cafe, ăn vặt...):
@@ -267,6 +281,7 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
     let budgetsQuery = supabase.from('family_budgets').select('*, category:transaction_categories(name)').limit(15);
     let familyLoansQuery = supabase.from('family_loans').select('*').limit(10);
     let categoriesQuery = supabase.from('transaction_categories').select('*').order('display_order', { ascending: true });
+    let userMembersQuery = supabase.from('user_members').select('*').order('created_at', { ascending: true });
 
     if (assetId) {
       assetQuery = assetQuery.eq('id', assetId);
@@ -279,7 +294,7 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
       tripsQuery = tripsQuery.eq('asset_id', assetId);
     }
 
-    const [assetsRes, fuelRes, maintRes, expenseRes, loanRes, loanPayRes, partsRes, insRes, tripsRes, walletsRes, familyTxRes, budgetsRes, famLoansRes, categoriesRes] = await Promise.all([
+    const [assetsRes, fuelRes, maintRes, expenseRes, loanRes, loanPayRes, partsRes, insRes, tripsRes, walletsRes, familyTxRes, budgetsRes, famLoansRes, categoriesRes, userMembersRes] = await Promise.all([
       assetQuery.limit(10),
       fuelQuery,
       maintQuery,
@@ -294,9 +309,24 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
       budgetsQuery,
       familyLoansQuery,
       categoriesQuery,
+      userMembersQuery,
     ]);
 
     let context = '📊 TOÀN BỘ CƠ SỞ DỮ LIỆU THỰC TẾ TRONG HỆ THỐNG FFMS (FAMILY FINANCE & MOBILITY):\n\n';
+
+    // 0. Family Members
+    const rawMembers = (userMembersRes.data && userMembersRes.data.length > 0)
+      ? userMembersRes.data
+      : [
+          { id: 'usr-1', name: 'Nguyễn Trung Sơn', role: 'ADMIN' },
+          { id: 'usr-wife', name: 'Vợ (Bà xã)', role: 'MEMBER' },
+          { id: 'usr-3', name: 'Trần Văn A (Thành viên)', role: 'MEMBER' },
+        ];
+    context += `👨‍👩‍👧‍👦 DANH SÁCH THÀNH VIÊN GIA ĐÌNH:\n`;
+    rawMembers.forEach((m: any) => {
+      context += `- **${m.name}** | ID: \`${m.id}\` | Vai trò: ${m.role || 'MEMBER'}\n`;
+    });
+    context += '\n';
 
     // 0. Master Data: Danh mục thu chi chuẩn của hệ thống (BẮT BUỘC KHỚP VỚI CƠ CẤU NÀY KHI ĐỀ XUẤT ACTION)
     let allCats: any[] = [];

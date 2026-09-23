@@ -16,6 +16,7 @@ import {
   deleteFamilyTransaction,
 } from '@/lib/services/familyFinanceService';
 import { getAssets } from '@/lib/services/assetService';
+import { getUserMembers, UserMember } from '@/lib/services/userService';
 import QuickTransactionModal from '@/components/finance/QuickTransactionModal';
 import {
   ArrowDownLeft,
@@ -33,6 +34,7 @@ import {
   Pencil,
   Download,
   ChevronLeft,
+  User,
 } from 'lucide-react';
 import KpiGradientCard from '@/components/ui/KpiGradientCard';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
@@ -43,6 +45,7 @@ export default function TransactionsLedgerPage() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [members, setMembers] = useState<UserMember[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -50,6 +53,7 @@ export default function TransactionsLedgerPage() {
   const [walletFilter, setWalletFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [assetFilter, setAssetFilter] = useState<string>('ALL');
+  const [memberFilter, setMemberFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
@@ -62,14 +66,16 @@ export default function TransactionsLedgerPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [wList, cList, aList] = await Promise.all([
+      const [wList, cList, aList, mList] = await Promise.all([
         getWallets(),
         getCategories(),
         getAssets(),
+        getUserMembers(),
       ]);
       setWallets(wList);
       setCategories(cList);
       setAssets(aList);
+      setMembers(mList);
 
       const startStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
       const endDay = new Date(selectedYear, selectedMonth, 0).getDate();
@@ -101,6 +107,16 @@ export default function TransactionsLedgerPage() {
         if (assetFilter === 'NONE' && tx.asset_id) return false;
         if (assetFilter !== 'NONE' && tx.asset_id !== assetFilter) return false;
       }
+      if (memberFilter !== 'ALL') {
+        const targetMember = members.find((m) => m.id === memberFilter);
+        const targetName = targetMember ? targetMember.name.toLowerCase() : '';
+        const matchesId = tx.created_by === memberFilter;
+        const matchesNotes = targetName && (
+          (tx.notes || '').toLowerCase().includes(targetName) ||
+          (tx.description || '').toLowerCase().includes(targetName)
+        );
+        if (!matchesId && !matchesNotes) return false;
+      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchPayee = tx.payee_vendor?.toLowerCase().includes(q);
@@ -111,7 +127,7 @@ export default function TransactionsLedgerPage() {
       }
       return true;
     });
-  }, [transactions, typeFilter, walletFilter, categoryFilter, assetFilter, searchQuery]);
+  }, [transactions, typeFilter, walletFilter, categoryFilter, assetFilter, memberFilter, searchQuery, members]);
 
   // Financial summary
   const summary = useMemo(() => {
@@ -343,7 +359,7 @@ export default function TransactionsLedgerPage() {
         </div>
 
         {/* Dropdown Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
           {/* Wallet Filter */}
           <div className="flex items-center gap-2">
             <span className="text-slate-400 shrink-0">Ví:</span>
@@ -406,6 +422,23 @@ export default function TransactionsLedgerPage() {
             </select>
           </div>
 
+          {/* Member Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-slate-400 shrink-0">Người chi:</span>
+            <select
+              value={memberFilter}
+              onChange={(e) => setMemberFilter(e.target.value)}
+              className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none"
+            >
+              <option value="ALL">Tất cả thành viên</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  👤 {m.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Vehicle Link Filter */}
           <div className="flex items-center gap-2">
             <span className="text-slate-400 shrink-0">Xe (FMMS):</span>
@@ -457,16 +490,29 @@ export default function TransactionsLedgerPage() {
                         {fmtDate(tx.date)}
                       </td>
                       <td className="py-3 px-4">
-                        <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                        <div className="font-semibold text-slate-900 dark:text-white flex items-center gap-2 flex-wrap">
                           <span
                             className="w-2 h-2 rounded-full shrink-0"
                             style={{ backgroundColor: tx.category?.color || '#94a3b8' }}
                           />
-                          {tx.category?.name || 'Khác'}
+                          <span>{tx.category?.name || 'Khác'}</span>
+                          {(() => {
+                            const memberObj = tx.created_by ? members.find((m) => m.id === tx.created_by) : null;
+                            const noteMatch = tx.notes?.match(/\[Người chi:\s*([^\]]+)\]/);
+                            const displayName = memberObj ? memberObj.name : noteMatch ? noteMatch[1] : null;
+                            if (!displayName) return null;
+                            return (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/60 shrink-0">
+                                <User className="w-2.5 h-2.5" />
+                                {displayName}
+                              </span>
+                            );
+                          })()}
                         </div>
-                        {tx.payee_vendor && (
+                        {(tx.payee_vendor || tx.notes) && (
                           <div className="text-[11px] text-slate-400 truncate max-w-sm mt-0.5">
-                            {tx.payee_vendor} {tx.notes ? `• ${tx.notes}` : ''}
+                            {tx.payee_vendor ? `${tx.payee_vendor} ` : ''}
+                            {tx.notes ? `• ${tx.notes.replace(/\[Người chi:[^\]]+\]/g, '').trim()}` : ''}
                           </div>
                         )}
                       </td>

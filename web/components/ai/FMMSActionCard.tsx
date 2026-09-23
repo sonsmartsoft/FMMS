@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Wallet, Trash2, RotateCcw, Tag, Layers, Car } from 'lucide-react';
+import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Wallet, Trash2, RotateCcw, Tag, Layers, Car, User, Plus } from 'lucide-react';
 import { createFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
 import { createExpense, deleteExpense } from '@/lib/services/expenseService';
 import { createMaintenanceRecord, deleteMaintenanceRecord } from '@/lib/services/maintenanceService';
-import { createFamilyTransaction, deleteFamilyTransaction, getCategories, getWallets } from '@/lib/services/familyFinanceService';
+import { createFamilyTransaction, deleteFamilyTransaction, getCategories, getWallets, createCategory } from '@/lib/services/familyFinanceService';
 import { getAssets } from '@/lib/services/assetService';
+import { getUserMembers, getCurrentUserMember, UserMember } from '@/lib/services/userService';
 import { SAMPLE_FAMILY_CATEGORIES } from '@/lib/data/sampleFinanceCategories';
 import { TAXONOMY, getDynamicTaxonomy, Asset } from '@/types/mobility';
 import { getMasterMaintenanceCategories, DEFAULT_MAINT_CATEGORIES } from '@/lib/services/masterDataService';
@@ -42,6 +43,10 @@ export interface ActionPayload {
     next_due_date?: string;
     wallet_name?: string;
     to_wallet_name?: string;
+    member_name?: string;
+    member_id?: string;
+    is_new_category?: boolean;
+    proposed_category_name?: string;
   };
 }
 
@@ -98,6 +103,20 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
   const [selectedAssetId, setSelectedAssetId] = useState<string>(data.asset_id || '20260308-0001-4222-8888-19b213872026');
   const [taxonomy, setTaxonomy] = useState(TAXONOMY);
   const [maintCats, setMaintCats] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
+
+  // Family Members & Attribution state
+  const [members, setMembers] = useState<UserMember[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserMember | null>(null);
+  const [selectedMemberId, setSelectedMemberId] = useState<string>(data.member_id || 'usr-1');
+
+  // Proposed New Category (if not found in Master Data)
+  const [proposedNewCat, setProposedNewCat] = useState<{ name: string; parentId: string; parentName: string } | null>(null);
+  const [isAddingCat, setIsAddingCat] = useState(false);
+  const [catAddSuccess, setCatAddSuccess] = useState(false);
+
+  // Custom inline subcategory add mode
+  const [isCustomCatMode, setIsCustomCatMode] = useState(false);
+  const [customCatInput, setCustomCatInput] = useState('');
 
   // Selected Category IDs from Master Data
   const [selectedParentId, setSelectedParentId] = useState<string>('cat-food');
@@ -229,6 +248,20 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
         if (childOfDef.length > 0) setSelectedSubId(childOfDef[0].id);
       }
 
+      // Kiểm tra đề xuất danh mục mới nếu không tìm thấy trong Master Data
+      const rawProposedName = (data.proposed_category_name || data.subcategory || '').trim();
+      const isExplicitNew = Boolean(data.is_new_category);
+      const isKnownInMaster = rawProposedName ? subs.some((s) => s.name.toLowerCase() === rawProposedName.toLowerCase() || s.id === data.category_id) : true;
+
+      if ((isExplicitNew || (!isKnownInMaster && !matchedSub)) && rawProposedName && (isGeneralExp || isIncome)) {
+        const parentTarget = matchedParent || (parents.find((p) => p.name.toLowerCase().includes((data.parent_category || '').toLowerCase())) || (action_type === 'LOG_INCOME' ? parents.find(p => p.type === 'INCOME') : parents[0]));
+        setProposedNewCat({
+          name: rawProposedName,
+          parentId: parentTarget ? parentTarget.id : 'cat-food',
+          parentName: parentTarget ? parentTarget.name : (data.parent_category || 'Ăn uống & Đi chợ'),
+        });
+      }
+
       // Match Mobility Taxonomy
       const rawCat = data.category || '';
       const rawSub = data.subcategory || '';
@@ -268,6 +301,28 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
       }
     });
 
+    // Load Family Members & Current Authenticated Member
+    getUserMembers().then((mList) => {
+      if (!isMounted) return;
+      if (mList && mList.length > 0) setMembers(mList);
+    });
+
+    getCurrentUserMember().then((curr) => {
+      if (!isMounted) return;
+      setCurrentUser(curr);
+      if (data.member_id) {
+        setSelectedMemberId(data.member_id);
+      } else if (data.member_name) {
+        getUserMembers().then((mList) => {
+          const match = mList.find((m) => m.name.toLowerCase().includes((data.member_name || '').toLowerCase()));
+          if (match) setSelectedMemberId(match.id);
+          else if (curr) setSelectedMemberId(curr.id);
+        });
+      } else if (curr) {
+        setSelectedMemberId(curr.id);
+      }
+    });
+
     return () => { isMounted = false; };
   }, [action_type, data]);
 
@@ -289,16 +344,58 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
     }
   };
 
+  const handleQuickCreateCategory = async (catName?: string) => {
+    const targetName = (catName || proposedNewCat?.name || customCatInput || '').trim();
+    if (!targetName) return;
+    setIsAddingCat(true);
+    try {
+      const pId = selectedParentId || proposedNewCat?.parentId || 'cat-food';
+      const pCat = categories.find((c) => c.id === pId);
+      const newCat = await createCategory({
+        name: targetName,
+        parent_id: pId,
+        type: isIncome ? 'INCOME' : 'EXPENSE',
+        color: pCat?.color || '#06b6d4',
+        icon: pCat?.icon || 'Tag',
+        budget_bucket: pCat?.budget_bucket || 'NECESSITY',
+        is_essential: true,
+        is_system: false,
+        display_order: categories.length + 1,
+      });
+
+      setCategories((prev) => [...prev, newCat]);
+      setSelectedSubId(newCat.id);
+      setCatAddSuccess(true);
+      setIsCustomCatMode(false);
+      setCustomCatInput('');
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fmms_data_updated', { detail: { type: 'CATEGORY_ADDED' } }));
+      }
+    } catch (err: any) {
+      console.error('Error creating category:', err);
+      alert('Không thể tạo danh mục: ' + (err?.message || 'Có lỗi xảy ra'));
+    } finally {
+      setIsAddingCat(false);
+    }
+  };
+
   const currentParentCat = categories.find((c) => c.id === selectedParentId);
   const currentSubCat = categories.find((c) => c.id === selectedSubId);
   const currentWallet = wallets.find((w) => w.id === selectedWalletId);
   const currentAsset = assetsList.find((a) => a.id === selectedAssetId) || assetsList[0];
+  const selectedMember = members.find((m) => m.id === selectedMemberId) || currentUser;
 
   const handleConfirm = async () => {
     setStatus('executing');
     setErrorMsg('');
 
     try {
+      const memberLabel = selectedMember?.name || 'Nguyễn Trung Sơn';
+      const baseNotes = editDescription || data.notes || '';
+      const memberTag = `[Người chi: ${memberLabel}]`;
+      const finalNotes = baseNotes ? (baseNotes.includes('[Người chi:') ? baseNotes : `${baseNotes} • ${memberTag}`) : memberTag;
+
       if (action_type === 'LOG_FUEL') {
         const created = await createFuelLog({
           asset_id: selectedAssetId || assetId,
@@ -308,7 +405,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           total_cost: Number(editCost),
           odometer_km: Number(editOdo) || 0,
           station: editVendor || data.station || 'Cây xăng',
-          notes: editDescription || data.notes || 'Ghi nhận tự động qua AI Cố vấn',
+          notes: finalNotes,
         });
         if (created?.id) setSavedId(created.id);
         setSavedType('LOG_FUEL');
@@ -322,7 +419,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           cost: Number(editCost),
           odometer_km: Number(editOdo) || 0,
           vendor: editVendor,
-          notes: editDescription || data.notes || data.description || 'Ghi nhận tự động qua AI Cố vấn',
+          notes: finalNotes,
           next_due_km: data.next_due_km,
           next_due_date: data.next_due_date,
         });
@@ -341,13 +438,14 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           date: editDate,
           payee_vendor: editVendor || data.payee_vendor,
           description: finalDesc,
-          notes: data.notes,
+          notes: finalNotes,
+          created_by: selectedMemberId,
           is_essential: true,
           exclude_from_reports: false,
         });
         if (created?.id) setSavedId(created.id);
         setSavedType('LOG_GENERAL_EXPENSE');
-        setResultMsg(`Đã ghi sổ chi tiêu ${fmtMoney(editCost)} [${currentSubCat?.name || finalDesc}] vào ví gia đình!`);
+        setResultMsg(`Đã ghi sổ chi tiêu ${fmtMoney(editCost)} [${currentSubCat?.name || finalDesc}] cho ${memberLabel}!`);
       } else if (action_type === 'LOG_INCOME') {
         const finalCatId = selectedSubId || selectedParentId || 'cat-inc-salary';
         const finalDesc = editDescription || currentSubCat?.name || 'Thu nhập gia đình';
@@ -359,13 +457,14 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           date: editDate,
           payee_vendor: editVendor || data.payee_vendor || 'Nguồn thu',
           description: finalDesc,
-          notes: data.notes,
+          notes: finalNotes,
+          created_by: selectedMemberId,
           is_essential: true,
           exclude_from_reports: false,
         });
         if (created?.id) setSavedId(created.id);
         setSavedType('LOG_INCOME');
-        setResultMsg(`Đã ghi nhận thu nhập +${fmtMoney(editCost)} [${currentSubCat?.name || finalDesc}] vào ví gia đình!`);
+        setResultMsg(`Đã ghi nhận thu nhập +${fmtMoney(editCost)} [${currentSubCat?.name || finalDesc}] của ${memberLabel}!`);
       } else if (action_type === 'TRANSFER_WALLET') {
         const created = await createFamilyTransaction({
           wallet_id: data.wallet_id || 'w-tcb-01',
@@ -375,6 +474,8 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           amount: Number(editCost),
           date: editDate,
           description: `Chuyển ví qua AI: ${data.wallet_name || 'Ví nguồn'} ➔ ${data.to_wallet_name || 'Ví đích'}`,
+          notes: finalNotes,
+          created_by: selectedMemberId,
           is_essential: false,
           exclude_from_reports: false,
         });
@@ -393,12 +494,12 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           amount: Number(editCost),
           vendor: editVendor,
           odometer_km: Number(editOdo) || undefined,
-          description: finalDesc,
+          description: `${finalDesc} • ${memberTag}`,
         });
         if (created?.id) setSavedId(created.id);
         setSavedType('LOG_EXPENSE');
 
-        setResultMsg(`Đã ghi nhận khoản chi ${fmtMoney(editCost)} [${mappedSubcatLabel}] vào sổ xe và tài chính gia đình!`);
+        setResultMsg(`Đã ghi nhận khoản chi ${fmtMoney(editCost)} [${mappedSubcatLabel}] vào sổ xe (${memberLabel})!`);
       }
 
       setStatus('success');
@@ -618,6 +719,57 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
         </div>
       </div>
 
+      {/* 1.5. Đề xuất Danh mục mới nếu chưa có trong Master Data */}
+      {proposedNewCat && !catAddSuccess && (
+        <div className="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-start gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-bold text-amber-900 dark:text-amber-100">
+                  Khoản chi này chưa có trong Master Data
+                </span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-semibold">
+                  Đề xuất AI
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5">
+                Tạo danh mục mới: <strong className="font-bold text-amber-950 dark:text-white">"{proposedNewCat.name}"</strong> nằm ở mục lớn <strong>"{currentParentCat?.name || proposedNewCat.parentName}"</strong>
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleQuickCreateCategory()}
+            disabled={isAddingCat}
+            className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/20 flex items-center justify-center gap-1.5 transition shrink-0 disabled:opacity-50"
+          >
+            {isAddingCat ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Đang thêm...</span>
+              </>
+            ) : (
+              <>
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Thêm vào Master Data</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {catAddSuccess && (
+        <div className="mb-3 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-700 dark:text-emerald-300 flex items-center gap-2 animate-fadeIn">
+          <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+          <span>
+            Đã thêm danh mục mới vào Master Data & tự động chọn cho phiếu chi này!
+          </span>
+        </div>
+      )}
+
       {/* 2. Body Details Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-slate-100/70 dark:bg-black/30 border border-slate-200/70 dark:border-slate-800/70 text-xs mb-3">
         {/* Số tiền */}
@@ -778,6 +930,28 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
                 <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{editVendor}</span>
               )}
             </div>
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <User className="w-3 h-3 text-cyan-500" /> Người chi tiền:
+              </span>
+              {isEditing || members.length > 1 ? (
+                <select
+                  value={selectedMemberId}
+                  onChange={(e) => setSelectedMemberId(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} {m.id === currentUser?.id ? '(Tôi)' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-slate-800 dark:text-slate-100 text-xs block truncate">
+                  {selectedMember?.name || 'Nguyễn Trung Sơn'}
+                </span>
+              )}
+            </div>
           </>
         )}
 
@@ -810,10 +984,48 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
             </div>
 
             <div className="col-span-2 sm:col-span-1">
-              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                <Tag className="w-3 h-3 text-cyan-500" /> Danh mục nhỏ (chi tiết):
-              </span>
-              {isEditing ? (
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  <Tag className="w-3 h-3 text-cyan-500" /> Danh mục nhỏ (chi tiết):
+                </span>
+                {isEditing && !isCustomCatMode && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomCatMode(true)}
+                    className="text-[10px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-0.5"
+                  >
+                    <Plus className="w-2.5 h-2.5" />
+                    <span>Tạo mới</span>
+                  </button>
+                )}
+              </div>
+              {isCustomCatMode ? (
+                <div className="mt-0.5 flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={customCatInput}
+                    onChange={(e) => setCustomCatInput(e.target.value)}
+                    placeholder="Nhập tên mục mới..."
+                    className="w-full px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleQuickCreateCategory(customCatInput)}
+                    disabled={!customCatInput.trim() || isAddingCat}
+                    className="px-2 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold transition disabled:opacity-50 shrink-0"
+                  >
+                    {isAddingCat ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Lưu'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsCustomCatMode(false); setCustomCatInput(''); }}
+                    className="px-1.5 py-1 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-500 text-[11px] transition shrink-0"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              ) : isEditing ? (
                 <select
                   value={selectedSubId}
                   onChange={(e) => setSelectedSubId(e.target.value)}
@@ -830,6 +1042,30 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
               ) : (
                 <span className="font-bold text-cyan-600 dark:text-cyan-400 text-xs block truncate">
                   {currentSubCat?.name || currentParentCat?.name || 'Mặc định'}
+                </span>
+              )}
+            </div>
+
+            {/* Thành viên / Người chi tiền */}
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <User className="w-3 h-3 text-cyan-500" /> {isIncome ? 'Người nhận / Thành viên:' : 'Người chi tiền:'}
+              </span>
+              {isEditing || members.length > 1 ? (
+                <select
+                  value={selectedMemberId}
+                  onChange={(e) => setSelectedMemberId(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} {m.id === currentUser?.id ? '(Tôi)' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-slate-800 dark:text-slate-100 text-xs block truncate">
+                  {selectedMember?.name || 'Nguyễn Trung Sơn'}
                 </span>
               )}
             </div>
@@ -853,7 +1089,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
               )}
             </div>
 
-            <div className="col-span-2 sm:col-span-3">
+            <div className="col-span-2 sm:col-span-2">
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Nội dung ghi chú:</span>
               {isEditing ? (
                 <input
@@ -934,7 +1170,29 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
                 <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{editVendor}</span>
               )}
             </div>
-            <div className="col-span-2 sm:col-span-3">
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <User className="w-3 h-3 text-cyan-500" /> Người chi tiền:
+              </span>
+              {isEditing || members.length > 1 ? (
+                <select
+                  value={selectedMemberId}
+                  onChange={(e) => setSelectedMemberId(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} {m.id === currentUser?.id ? '(Tôi)' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-slate-800 dark:text-slate-100 text-xs block truncate">
+                  {selectedMember?.name || 'Nguyễn Trung Sơn'}
+                </span>
+              )}
+            </div>
+            <div className="col-span-2 sm:col-span-2">
               <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Ghi chú phụ tùng / công thợ:</span>
               {isEditing ? (
                 <input
@@ -1015,6 +1273,29 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
                 />
               ) : (
                 <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{editVendor}</span>
+              )}
+            </div>
+
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <User className="w-3 h-3 text-cyan-500" /> Người chi tiền:
+              </span>
+              {isEditing || members.length > 1 ? (
+                <select
+                  value={selectedMemberId}
+                  onChange={(e) => setSelectedMemberId(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} {m.id === currentUser?.id ? '(Tôi)' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-slate-800 dark:text-slate-100 text-xs block truncate">
+                  {selectedMember?.name || 'Nguyễn Trung Sơn'}
+                </span>
               )}
             </div>
 

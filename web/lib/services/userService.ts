@@ -44,6 +44,16 @@ export const INITIAL_DEFAULT_USERS: UserMember[] = [
     created_at: '2026-01-16T00:00:00.000Z',
   },
   {
+    id: 'usr-wife',
+    name: 'Vợ (Bà xã)',
+    email: 'vo@fmms.com',
+    phone: '0987654321',
+    role: 'MEMBER',
+    status: 'ACTIVE',
+    assigned_asset_ids: [],
+    created_at: '2026-02-01T00:00:00.000Z',
+  },
+  {
     id: 'usr-3',
     name: 'Trần Văn A (Thành viên)',
     email: 'thanhvien@utivina.com',
