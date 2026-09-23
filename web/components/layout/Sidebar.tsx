@@ -204,6 +204,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ? vehicleStatuses[activeVehicleIdx % vehicleStatuses.length]
     : null;
 
+  // Compute the single best-matching active navigation item.
+  // Using longest-prefix match ensures that nested paths (e.g. /family-finance/reports)
+  // activate ONLY their specific menu item, without leaving parent items (e.g. /family-finance or /settings) highlighted.
+  const activeHref = React.useMemo(() => {
+    let matchedHref: string | null = null;
+    let maxLength = -1;
+
+    for (const section of NAV_SECTIONS) {
+      for (const item of section.items) {
+        const isMatch = item.href === '/'
+          ? pathname === '/'
+          : pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+        if (isMatch && item.href.length > maxLength) {
+          maxLength = item.href.length;
+          matchedHref = item.href;
+        }
+      }
+    }
+    return matchedHref;
+  }, [pathname, isEn]);
+
   // Render navigation links (shared between desktop sidebar and mobile drawer)
   const renderNavSections = (isMobile = false) => (
     <div className="space-y-6">
@@ -218,9 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <nav className="space-y-1">
             {section.items.map((item) => {
               const Icon = item.icon;
-              const isActive = item.href === '/'
-                ? pathname === '/'
-                : pathname.startsWith(item.href);
+              const isActive = item.href === activeHref;
               return (
                 <Link
                   key={item.name}
