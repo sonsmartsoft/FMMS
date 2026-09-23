@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase/server';
 import { REAL_AUGUST_TRIPS } from '@/lib/data/realTripsData';
+import { SAMPLE_FAMILY_CATEGORIES } from '@/lib/data/sampleFinanceCategories';
 
 const DEFAULT_SYSTEM_PROMPT = `Bạn là Cố Vấn Tài Chính & Vận Hành Phương Tiện Gia Đình (FFMS Senior Family Finance & Mobility AI Advisor).
 
@@ -32,7 +33,7 @@ QUY TẮC TRÌNH BÀY VÀ ĐỊNH DẠNG (BẮT BUỘC):
 const ACTION_ENGINE_RULES = `
 
 --- [AI ACTION ENGINE - HỆ THỐNG GHI SỔ TỰ ĐỘNG - BẮT BUỘC LUÔN LUÔN ÁP DỤNG] ---
-Khi người dùng thông báo vừa phát sinh một giao dịch thực tế (đổ xăng, bảo dưỡng xe, ăn uống, đi chợ, nhận lương, trả nợ, chuyển ví...), bạn BẮT BUỘC phải làm 2 việc:
+Khi người dùng thông báo vừa phát sinh một giao dịch thực tế (đổ xăng, bảo dưỡng xe, ăn uống, đi chợ, nhận lương, trả nợ, chuyển ví, rửa xe, gửi xe, cầu đường...), bạn BẮT BUỘC phải làm 2 việc:
 1. Trả lời phân tích ngắn gọn như thường.
 2. Đính kèm NGAY Ở CUỐI TIN NHẮN một khối JSON theo cú pháp sau để hệ thống tự render thẻ xác nhận 1-click ghi vào database:
 
@@ -43,7 +44,9 @@ Khi người dùng thông báo vừa phát sinh một giao dịch thực tế (�
   "data": {
     "date": "NGÀY_THỰC_TẾ_YYYY-MM-DD",
     "amount": 350000,
-    "category": "Ăn uống & Đi chợ",
+    "parent_category": "Ăn uống & Đi chợ",
+    "subcategory": "Ăn nhà hàng, Buffet & Cuối tuần",
+    "category_id": "cat-food-dining",
     "wallet_id": "w-tcb-01",
     "vendor": "Nhà hàng",
     "description": "Ăn tối gia đình"
@@ -51,13 +54,29 @@ Khi người dùng thông báo vừa phát sinh một giao dịch thực tế (�
 }
 \`\`\`
 
+QUY TẮC KHỚP DANH MỤC MASTER DATA (CỰC KỲ QUAN TRỌNG):
+- TUYỆT ĐỐI KHÔNG TỰ TẠO MỚI danh mục hoặc đặt category_id lung tung không có trong Master Data!
+- Phải tìm và khớp chính xác từ danh sách Master Data được cung cấp trong Context:
+  + "parent_category": Tên Danh mục lớn có trong Master Data (VD: "Ăn uống & Đi chợ", "Nhà cửa & Sinh hoạt", "Phương tiện & Xe cộ (FMMS)", "Con cái & Giáo dục", "Sức khỏe & Y tế", "Hưởng thụ & Du lịch", "Trả góp & Khoản vay")
+  + "subcategory": Tên Danh mục nhỏ chi tiết tương ứng (VD: "Đi chợ & Siêu thị tươi sống", "Ăn nhà hàng, Buffet & Cuối tuần", "Tiền điện sinh hoạt EVN", "Rửa xe & Chăm sóc Spa xe", "Phí cầu đường VETC / ePass"...)
+  + "category_id": ID chuẩn khớp chính xác của danh mục nhỏ trong Master Data (VD: "cat-food-dining", "cat-food-groceries", "cat-home-bills", "cat-mob-wash", "cat-mob-toll", "cat-mob-fuel", "cat-mob-maint", "cat-mob-parking"...)
+- Với chi phí xe (action_type: LOG_EXPENSE):
+  + parent_category: "Phương tiện & Xe cộ (FMMS)"
+  + category: Thuộc TAXONOMY ("Running", "Maintenance", "Upgrade", "Initial", "Loan")
+  + subcategory: Danh mục nhỏ trong TAXONOMY ("Car Wash", "Parking", "Epass Fee", "Fuel", v.v.)
+  + category_id: Mã tương ứng ("cat-mob-wash", "cat-mob-parking", "cat-mob-toll"...)
+- Với bảo dưỡng xe (action_type: LOG_MAINTENANCE):
+  + parent_category: "Phương tiện & Xe cộ (FMMS)"
+  + maintenance_type: Khớp với danh mục bảo dưỡng trong Master Data ("Thay dầu máy", "Thay lọc dầu / Lọc nhớt", "Thay lọc gió động cơ", "Bảo dưỡng định kỳ", v.v.)
+  + category_id: "cat-mob-maint"
+
 QUY TẮC CHỌN action_type:
-- "LOG_GENERAL_EXPENSE": chi tiêu sinh hoạt gia đình (ăn uống, siêu thị, học phí, tiện ích nhà cửa, mua sắm). data gồm: date, amount, category, wallet_id, vendor, description.
-- "LOG_INCOME": nhận lương, thưởng, tiền về, thu nhập phụ. data gồm: date, amount, wallet_id, payee_vendor, description.
+- "LOG_GENERAL_EXPENSE": chi tiêu sinh hoạt gia đình (ăn uống, siêu thị, học phí, tiện ích nhà cửa, mua sắm). data gồm: date, amount, parent_category, subcategory, category_id, wallet_id, vendor, description.
+- "LOG_INCOME": nhận lương, thưởng, tiền về, thu nhập phụ. data gồm: date, amount, parent_category, subcategory, category_id, wallet_id, payee_vendor, description.
 - "TRANSFER_WALLET": chuyển tiền nội bộ giữa các ví. data gồm: date, amount, wallet_id (ví nguồn), to_wallet_id (ví đích), description.
-- "LOG_FUEL": đổ xăng/dầu xe. data gồm: asset_id, date, total_cost, price_per_liter, liters, station, odometer_km.
-- "LOG_MAINTENANCE": bảo dưỡng định kỳ, sửa chữa xe. data gồm: asset_id, date, maintenance_type, cost, vendor, odometer_km, notes.
-- "LOG_EXPENSE": các khoản chi xe khác (rửa xe, gửi xe, cầu đường BOT/VETC). data gồm: asset_id, date, category, amount, vendor, description.
+- "LOG_FUEL": đổ xăng/dầu xe. data gồm: asset_id, date, total_cost, price_per_liter, liters, station, odometer_km, category_id: "cat-mob-fuel".
+- "LOG_MAINTENANCE": bảo dưỡng định kỳ, sửa chữa xe. data gồm: asset_id, date, maintenance_type, cost, vendor, odometer_km, notes, category_id: "cat-mob-maint".
+- "LOG_EXPENSE": các khoản chi xe khác (rửa xe, gửi xe, cầu đường BOT/VETC). data gồm: asset_id, date, parent_category, category, subcategory, category_id, amount, vendor, description.
 
 QUY TẮC XỬ LÝ NGÀY:
 - Nếu người dùng nói "hôm nay" → dùng ngày hiện tại theo định dạng YYYY-MM-DD.
@@ -68,7 +87,7 @@ QUY TẮC XỬ LÝ SỐ TIỀN:
 
 QUY TẮC PHÁT NGÔN VỀ DỰ THẢO (BẮT BUỘC):
 - TUYỆT ĐỐI KHÔNG ĐƯỢC nói "Tôi đã ghi nhận...", "Tôi đã lưu..." hoặc "Đã lưu vào cơ sở dữ liệu...". Vì giao dịch CHƯA hề được lưu cho đến khi người dùng ấn nút xác nhận!
-- BẠN PHẢI NÓI: "Tôi đã lập dự thảo ghi nhận giao dịch [tên giao dịch, số tiền]. Bạn vui lòng kiểm tra thông tin trên thẻ dự thảo bên dưới và bấm **Xác nhận Lưu vào Lịch sử** để ghi vào sổ cái."`;
+- BẠN PHẢI NÓI: "Tôi đã lập dự thảo ghi nhận giao dịch [tên giao dịch, số tiền] thuộc danh mục [danh mục lớn > danh mục nhỏ]. Bạn vui lòng kiểm tra thông tin trên thẻ dự thảo bên dưới và bấm **Xác nhận Lưu vào Lịch sử** để ghi vào sổ cái."`;
 
 function parseMoney(text: string): number | null {
   const kMatch = text.match(/(\d+(?:[.,]\d+)?)\s*k\b/i);
@@ -108,10 +127,14 @@ function ensureActionBlock(reply: string, prompt: string, todayIso: string): str
   "data": {
     "asset_id": "20260308-0001-4222-8888-19b213872026",
     "date": "${todayIso}",
+    "parent_category": "Phương tiện & Xe cộ (FMMS)",
+    "category": "Running",
+    "subcategory": "Fuel",
+    "category_id": "cat-mob-fuel",
     "total_cost": ${cost},
     "price_per_liter": ${price},
     "liters": ${liters},
-    "station": "Cây xăng"
+    "station": "Cây xăng Petrolimex"
   }
 }
 \`\`\``;
@@ -128,8 +151,10 @@ function ensureActionBlock(reply: string, prompt: string, todayIso: string): str
   "data": {
     "asset_id": "20260308-0001-4222-8888-19b213872026",
     "date": "${todayIso}",
+    "parent_category": "Phương tiện & Xe cộ (FMMS)",
     "category": "Running",
     "subcategory": "Car Wash",
+    "category_id": "cat-mob-wash",
     "amount": ${cost},
     "total_cost": ${cost},
     "description": "Rửa xe chăm sóc nội ngoại thất"
@@ -148,7 +173,11 @@ function ensureActionBlock(reply: string, prompt: string, todayIso: string): str
   "data": {
     "asset_id": "20260308-0001-4222-8888-19b213872026",
     "date": "${todayIso}",
-    "maintenance_type": "Bảo dưỡng thay dầu định kỳ",
+    "parent_category": "Phương tiện & Xe cộ (FMMS)",
+    "category": "Maintenance",
+    "subcategory": "General Service",
+    "category_id": "cat-mob-maint",
+    "maintenance_type": "Thay dầu máy",
     "cost": ${cost},
     "total_cost": ${cost},
     "vendor": "Gara sửa chữa",
@@ -170,11 +199,37 @@ function ensureActionBlock(reply: string, prompt: string, todayIso: string): str
   "data": {
     "asset_id": "20260308-0001-4222-8888-19b213872026",
     "date": "${todayIso}",
+    "parent_category": "Phương tiện & Xe cộ (FMMS)",
     "category": "Running",
     "subcategory": "${isParking ? 'Parking' : 'Epass Fee'}",
+    "category_id": "${isParking ? 'cat-mob-parking' : 'cat-mob-toll'}",
     "amount": ${cost},
     "total_cost": ${cost},
     "description": "${isParking ? 'Chi phí gửi xe' : 'Phí cầu đường VETC/ePass'}"
+  }
+}
+\`\`\``;
+    }
+  }
+
+  // 5. Nhận diện ăn uống / đi chợ
+  if (/ăn\s*uống|ăn\s*tối|ăn\s*trưa|ăn\s*sáng|đi\s*chợ|siêu\s*thị|cafe|cà\s*phê/i.test(combined)) {
+    const cost = parseMoney(prompt) || parseMoney(reply);
+    if (cost && cost > 0) {
+      const isGroceries = /chợ|siêu thị|mua rau|thịt|cá/i.test(combined);
+      return reply + `\n\n\`\`\`fmms_action
+{
+  "action_type": "LOG_GENERAL_EXPENSE",
+  "title": "Xác nhận ghi nhận chi tiêu gia đình",
+  "data": {
+    "date": "${todayIso}",
+    "amount": ${cost},
+    "parent_category": "Ăn uống & Đi chợ",
+    "subcategory": "${isGroceries ? 'Đi chợ & Siêu thị tươi sống' : 'Ăn nhà hàng, Buffet & Cuối tuần'}",
+    "category_id": "${isGroceries ? 'cat-food-groceries' : 'cat-food-dining'}",
+    "wallet_id": "w-tcb-01",
+    "vendor": "${isGroceries ? 'Siêu thị' : 'Nhà hàng'}",
+    "description": "${isGroceries ? 'Đi chợ mua thực phẩm tươi sống' : 'Ăn uống ngoài hàng'}"
   }
 }
 \`\`\``;
@@ -202,6 +257,7 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
     let familyTxQuery = supabase.from('family_transactions').select('*, category:transaction_categories(name)').order('date', { ascending: false }).limit(25);
     let budgetsQuery = supabase.from('family_budgets').select('*, category:transaction_categories(name)').limit(15);
     let familyLoansQuery = supabase.from('family_loans').select('*').limit(10);
+    let categoriesQuery = supabase.from('transaction_categories').select('*').order('display_order', { ascending: true });
 
     if (assetId) {
       assetQuery = assetQuery.eq('id', assetId);
@@ -214,7 +270,7 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
       tripsQuery = tripsQuery.eq('asset_id', assetId);
     }
 
-    const [assetsRes, fuelRes, maintRes, expenseRes, loanRes, loanPayRes, partsRes, insRes, tripsRes, walletsRes, familyTxRes, budgetsRes, famLoansRes] = await Promise.all([
+    const [assetsRes, fuelRes, maintRes, expenseRes, loanRes, loanPayRes, partsRes, insRes, tripsRes, walletsRes, familyTxRes, budgetsRes, famLoansRes, categoriesRes] = await Promise.all([
       assetQuery.limit(10),
       fuelQuery,
       maintQuery,
@@ -228,11 +284,46 @@ async function buildContext(supabase: any, assetId?: string): Promise<string> {
       familyTxQuery,
       budgetsQuery,
       familyLoansQuery,
+      categoriesQuery,
     ]);
 
     let context = '📊 TOÀN BỘ CƠ SỞ DỮ LIỆU THỰC TẾ TRONG HỆ THỐNG FFMS (FAMILY FINANCE & MOBILITY):\n\n';
 
-    // 0. Family Wallets & Balances
+    // 0. Master Data: Danh mục thu chi chuẩn của hệ thống (BẮT BUỘC KHỚP VỚI CƠ CẤU NÀY KHI ĐỀ XUẤT ACTION)
+    let allCats: any[] = [];
+    if (categoriesRes.data && categoriesRes.data.length > 0) {
+      allCats = categoriesRes.data;
+    } else {
+      SAMPLE_FAMILY_CATEGORIES.forEach(p => {
+        allCats.push({ id: p.id, name: p.name, type: p.type, parent_id: null });
+        if (p.children) {
+          p.children.forEach(c => {
+            allCats.push({ id: c.id, name: c.name, type: c.type, parent_id: p.id });
+          });
+        }
+      });
+    }
+
+    const parentCats = allCats.filter((c: any) => !c.parent_id);
+    const childCats = allCats.filter((c: any) => !!c.parent_id);
+
+    context += `📁 MASTER DATA DANH MỤC THU CHI CHÍNH THỨC CỦA GIA ĐÌNH:\n`;
+    parentCats.forEach((p: any) => {
+      const subs = childCats.filter((c: any) => c.parent_id === p.id);
+      context += `- [DANH MỤC LỚN: ${p.name}] (ID: \`${p.id}\` | Loại: ${p.type})\n`;
+      subs.forEach((s: any) => {
+        context += `  └─ [Danh mục nhỏ]: **${s.name}** | ID: \`${s.id}\`\n`;
+      });
+    });
+    context += '\n';
+
+    context += `🚗 MASTER DATA TAXONOMY CHI PHÍ XE (MOBILITY):\n`;
+    context += `- [Initial] Mua xe & Lăn bánh: Purchase (Tiền xe), Registration (Đăng kiểm/Biển số), Insurance (Bảo hiểm), Loan Fee (Phí vay)\n`;
+    context += `- [Upgrade] Nâng cấp & Đồ chơi: Screen, Mirror Folding, Control button, TPMS, Accessorie\n`;
+    context += `- [Running] Chi phí vận hành: Fuel (Nhiên liệu/Xăng), Epass Fee (Phí trạm VETC/ePass), Parking (Gửi xe), Car Wash (Rửa xe), Running Fine (Phạt vi phạm)\n`;
+    context += `- [Maintenance] Bảo dưỡng xe: Thay dầu máy, Thay lọc dầu / Lọc nhớt, Thay lọc gió động cơ, Thay lọc gió điều hòa, Thay bugi đánh lửa, Thay lốp xe, Kiểm tra & Thay má phanh, Thay ắc-quy, Nước làm mát, Thay dầu hộp số, Sửa chữa & Khác\n\n`;
+
+    // 0.1 Family Wallets & Balances
     if (walletsRes.data?.length) {
       context += `💰 TÀI KHOẢN & VÍ THANH TOÁN GIA ĐÌNH (${walletsRes.data.length} ví):\n`;
       walletsRes.data.forEach((w: any) => {

@@ -66,7 +66,13 @@ function AppShell({ children }: { children: React.ReactNode }) {
           isMobileOpen={isMobileNavOpen}
           onCloseMobile={() => setIsMobileNavOpen(false)}
         />
-        <main className="flex-1 p-3.5 sm:p-5 lg:p-6 xl:p-8 overflow-y-auto w-full min-h-[calc(100dvh-var(--header-height,60px))]">
+        <main
+          className={
+            pathname === '/ai-center'
+              ? 'flex-1 p-3.5 sm:p-5 lg:p-6 overflow-hidden w-full h-[calc(100dvh-var(--header-height,60px))] flex flex-col'
+              : 'flex-1 p-3.5 sm:p-5 lg:p-6 xl:p-8 overflow-y-auto w-full min-h-[calc(100dvh-var(--header-height,60px))]'
+          }
+        >
           {children}
         </main>
       </div>

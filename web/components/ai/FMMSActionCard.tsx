@@ -1,11 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Wallet, Trash2, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Wallet, Trash2, RotateCcw, Tag, Layers } from 'lucide-react';
 import { createFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
 import { createExpense, deleteExpense } from '@/lib/services/expenseService';
 import { createMaintenanceRecord, deleteMaintenanceRecord } from '@/lib/services/maintenanceService';
-import { createFamilyTransaction, deleteFamilyTransaction } from '@/lib/services/familyFinanceService';
+import { createFamilyTransaction, deleteFamilyTransaction, getCategories, getWallets } from '@/lib/services/familyFinanceService';
+import { SAMPLE_FAMILY_CATEGORIES } from '@/lib/data/sampleFinanceCategories';
+import { TAXONOMY, getDynamicTaxonomy } from '@/types/mobility';
+import { getMasterMaintenanceCategories, DEFAULT_MAINT_CATEGORIES } from '@/lib/services/masterDataService';
+import { TransactionCategory, Wallet as WalletType } from '@/types/finance';
 
 export interface ActionPayload {
   action_type: 'LOG_FUEL' | 'LOG_EXPENSE' | 'LOG_MAINTENANCE' | 'LOG_GENERAL_EXPENSE' | 'LOG_INCOME' | 'TRANSFER_WALLET';
@@ -14,6 +18,7 @@ export interface ActionPayload {
     wallet_id?: string;
     to_wallet_id?: string;
     category_id?: string;
+    parent_category?: string;
     asset_id?: string;
     asset_name?: string;
     date?: string;
@@ -72,15 +77,198 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
   const initialLiters = data.liters ?? data.fuel_liters ?? (data.price_per_liter && rawCost ? +(rawCost / data.price_per_liter).toFixed(2) : 0);
   const initialPrice = data.price_per_liter ?? (initialLiters > 0 && rawCost > 0 ? Math.round(rawCost / initialLiters) : 0);
 
+  // Master Data state
+  const [categories, setCategories] = useState<TransactionCategory[]>([]);
+  const [wallets, setWallets] = useState<WalletType[]>([]);
+  const [taxonomy, setTaxonomy] = useState(TAXONOMY);
+  const [maintCats, setMaintCats] = useState<string[]>(DEFAULT_MAINT_CATEGORIES);
+
+  // Selected Category IDs from Master Data
+  const [selectedParentId, setSelectedParentId] = useState<string>('cat-food');
+  const [selectedSubId, setSelectedSubId] = useState<string>('cat-food-dining');
+  const [selectedWalletId, setSelectedWalletId] = useState<string>(data.wallet_id || 'w-tcb-01');
+
+  // Mobility Taxonomy selections
+  const [mobCatKey, setMobCatKey] = useState<string>('Running');
+  const [mobSubKey, setMobSubKey] = useState<string>('Car Wash');
+  const [selectedMaintType, setSelectedMaintType] = useState<string>('Thay dầu máy');
+
   // Trạng thái cho phép người dùng chỉnh sửa trực tiếp trên thẻ
   const [isEditing, setIsEditing] = useState(false);
   const [editCost, setEditCost] = useState<number>(rawCost);
   const [editOdo, setEditOdo] = useState<number>(initialOdo);
   const [editDate, setEditDate] = useState<string>(recordDate);
-  const [editVendor, setEditVendor] = useState<string>(data.vendor || (action_type === 'LOG_MAINTENANCE' ? 'Gara sửa chữa' : 'Tiệm dịch vụ'));
-  const [editType, setEditType] = useState<string>(data.maintenance_type || data.category || (action_type === 'LOG_MAINTENANCE' ? 'Bảo dưỡng thay dầu định kỳ' : 'Rửa xe'));
+  const [editVendor, setEditVendor] = useState<string>(data.vendor || data.payee_vendor || (action_type === 'LOG_MAINTENANCE' ? 'Gara sửa chữa' : 'Tiệm dịch vụ'));
+  const [editDescription, setEditDescription] = useState<string>(data.description || data.notes || '');
   const [editLiters, setEditLiters] = useState<number>(initialLiters);
   const [editPrice, setEditPrice] = useState<number>(initialPrice);
+
+  // Load Master Data & Smart Match
+  useEffect(() => {
+    let isMounted = true;
+    Promise.all([
+      getCategories(),
+      getWallets(),
+      getMasterMaintenanceCategories(),
+    ]).then(([cList, wList, mList]) => {
+      if (!isMounted) return;
+
+      // Flatten fallback categories if needed
+      let loadedCats: TransactionCategory[] = [];
+      if (cList && cList.length > 0) {
+        loadedCats = cList;
+      } else {
+        SAMPLE_FAMILY_CATEGORIES.forEach((p) => {
+          loadedCats.push({
+            id: p.id,
+            name: p.name,
+            type: p.type,
+            parent_id: null,
+            color: p.color,
+            icon: p.icon,
+            budget_bucket: p.budget_bucket,
+            is_essential: p.is_essential,
+            is_system: p.is_system,
+            display_order: p.display_order,
+          });
+          if (p.children) {
+            p.children.forEach((c) => {
+              loadedCats.push({
+                id: c.id,
+                name: c.name,
+                type: c.type,
+                parent_id: p.id,
+                color: c.color,
+                icon: c.icon,
+                budget_bucket: c.budget_bucket,
+                is_essential: c.is_essential,
+                is_system: c.is_system,
+                display_order: c.display_order,
+              });
+            });
+          }
+        });
+      }
+      setCategories(loadedCats);
+      if (wList && wList.length > 0) setWallets(wList);
+      if (mList && mList.length > 0) setMaintCats(mList);
+      const tax = getDynamicTaxonomy();
+      setTaxonomy(tax);
+
+      const parents = loadedCats.filter((c) => !c.parent_id);
+      const subs = loadedCats.filter((c) => !!c.parent_id);
+
+      // Match category by ID or hint text
+      let matchedSub = data.category_id ? subs.find((c) => c.id === data.category_id) : null;
+      let matchedParent = matchedSub ? parents.find((p) => p.id === matchedSub!.parent_id) : null;
+
+      if (!matchedSub) {
+        const textHints = `${data.parent_category || ''} ${data.category || ''} ${data.subcategory || ''} ${data.description || ''} ${data.maintenance_type || ''}`.toLowerCase();
+        if (textHints.includes('rửa') || textHints.includes('wash')) {
+          matchedSub = subs.find((c) => c.id === 'cat-mob-wash') || subs.find((c) => c.name.toLowerCase().includes('rửa'));
+        } else if (textHints.includes('xăng') || textHints.includes('fuel')) {
+          matchedSub = subs.find((c) => c.id === 'cat-mob-fuel') || subs.find((c) => c.name.toLowerCase().includes('xăng'));
+        } else if (textHints.includes('bảo dưỡng') || textHints.includes('thay dầu') || textHints.includes('maint')) {
+          matchedSub = subs.find((c) => c.id === 'cat-mob-maint') || subs.find((c) => c.name.toLowerCase().includes('bảo dưỡng'));
+        } else if (textHints.includes('gửi xe') || textHints.includes('đỗ xe') || textHints.includes('parking')) {
+          matchedSub = subs.find((c) => c.id === 'cat-mob-parking') || subs.find((c) => c.name.toLowerCase().includes('gửi xe'));
+        } else if (textHints.includes('cầu đường') || textHints.includes('bot') || textHints.includes('vetc') || textHints.includes('toll')) {
+          matchedSub = subs.find((c) => c.id === 'cat-mob-toll') || subs.find((c) => c.name.toLowerCase().includes('cầu đường'));
+        } else if (textHints.includes('chợ') || textHints.includes('siêu thị')) {
+          matchedSub = subs.find((c) => c.id === 'cat-food-groceries');
+        } else if (textHints.includes('ăn') || textHints.includes('uống') || textHints.includes('nhà hàng') || textHints.includes('buffet')) {
+          matchedSub = subs.find((c) => c.id === 'cat-food-dining');
+        } else if (textHints.includes('điện')) {
+          matchedSub = subs.find((c) => c.id === 'cat-home-bills');
+        } else if (textHints.includes('nước')) {
+          matchedSub = subs.find((c) => c.id === 'cat-home-water');
+        } else if (textHints.includes('học')) {
+          matchedSub = subs.find((c) => c.id === 'cat-edu-tuition');
+        } else if (textHints.includes('thuốc') || textHints.includes('khám')) {
+          matchedSub = subs.find((c) => c.id === 'cat-health-hospital' || c.id === 'cat-health-meds');
+        } else if (textHints.includes('lương')) {
+          matchedSub = subs.find((c) => c.id === 'cat-inc-salary');
+        }
+      }
+
+      if (matchedSub) {
+        matchedParent = parents.find((p) => p.id === matchedSub!.parent_id) || null;
+        if (matchedParent) {
+          setSelectedParentId(matchedParent.id);
+          setSelectedSubId(matchedSub.id);
+        }
+      } else if (parents.length > 0) {
+        const defP = action_type === 'LOG_INCOME'
+          ? parents.find((p) => p.type === 'INCOME') || parents[0]
+          : parents.find((p) => p.id === 'cat-food') || parents[0];
+        setSelectedParentId(defP.id);
+        const childOfDef = subs.filter((c) => c.parent_id === defP.id);
+        if (childOfDef.length > 0) setSelectedSubId(childOfDef[0].id);
+      }
+
+      // Match Mobility Taxonomy
+      const rawCat = data.category || '';
+      const rawSub = data.subcategory || '';
+      if (rawCat && tax[rawCat]) {
+        setMobCatKey(rawCat);
+        if (rawSub && tax[rawCat].subcategories[rawSub]) {
+          setMobSubKey(rawSub);
+        } else {
+          setMobSubKey(Object.keys(tax[rawCat].subcategories)[0] || 'Car Wash');
+        }
+      } else {
+        const textHints = `${data.description || ''} ${data.maintenance_type || ''} ${data.category || ''}`.toLowerCase();
+        if (textHints.includes('rửa')) {
+          setMobCatKey('Running'); setMobSubKey('Car Wash');
+        } else if (textHints.includes('gửi') || textHints.includes('đỗ')) {
+          setMobCatKey('Running'); setMobSubKey('Parking');
+        } else if (textHints.includes('cầu') || textHints.includes('bot') || textHints.includes('epass')) {
+          setMobCatKey('Running'); setMobSubKey('Epass Fee');
+        } else if (textHints.includes('xăng')) {
+          setMobCatKey('Running'); setMobSubKey('Fuel');
+        } else if (textHints.includes('bảo dưỡng') || textHints.includes('dầu')) {
+          setMobCatKey('Maintenance'); setMobSubKey('General Service');
+        }
+      }
+
+      // Match Maintenance type
+      if (data.maintenance_type) {
+        const found = mList?.find((m: string) => m.toLowerCase().includes(data.maintenance_type!.toLowerCase()));
+        if (found) setSelectedMaintType(found);
+        else setSelectedMaintType(data.maintenance_type);
+      } else {
+        const textHints = `${data.description || ''}`.toLowerCase();
+        if (textHints.includes('nhớt') || textHints.includes('dầu')) setSelectedMaintType('Thay dầu máy');
+        else if (textHints.includes('lọc gió')) setSelectedMaintType('Thay lọc gió động cơ');
+        else if (textHints.includes('lốp')) setSelectedMaintType('Thay lốp xe');
+        else if (textHints.includes('phanh')) setSelectedMaintType('Kiểm tra & Thay má phanh');
+      }
+    });
+
+    return () => { isMounted = false; };
+  }, [action_type, data]);
+
+  const handleParentCatChange = (newParentId: string) => {
+    setSelectedParentId(newParentId);
+    const subs = categories.filter((c) => c.parent_id === newParentId);
+    if (subs.length > 0) {
+      setSelectedSubId(subs[0].id);
+    } else {
+      setSelectedSubId(newParentId);
+    }
+  };
+
+  const handleMobCatChange = (newCatKey: string) => {
+    setMobCatKey(newCatKey);
+    const subKeys = Object.keys(taxonomy[newCatKey]?.subcategories || {});
+    if (subKeys.length > 0) {
+      setMobSubKey(subKeys[0]);
+    }
+  };
+
+  const currentParentCat = categories.find((c) => c.id === selectedParentId);
+  const currentSubCat = categories.find((c) => c.id === selectedSubId);
+  const currentWallet = wallets.find((w) => w.id === selectedWalletId);
 
   const handleConfirm = async () => {
     setStatus('executing');
@@ -96,59 +284,64 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           total_cost: Number(editCost),
           odometer_km: Number(editOdo) || 0,
           station: editVendor || data.station || 'Cây xăng',
-          notes: data.notes || 'Ghi nhận tự động qua AI Cố vấn',
+          notes: editDescription || data.notes || 'Ghi nhận tự động qua AI Cố vấn',
         });
         if (created?.id) setSavedId(created.id);
         setSavedType('LOG_FUEL');
         setResultMsg(`Đã lưu thành công ${editLiters}L (${fmtMoney(editCost)}) vào sổ xăng!`);
       } else if (action_type === 'LOG_MAINTENANCE') {
+        const finalType = selectedMaintType || data.maintenance_type || 'Bảo dưỡng định kỳ';
         const created = await createMaintenanceRecord({
           asset_id: assetId,
-          maintenance_type: editType,
+          maintenance_type: finalType,
           date: editDate,
           cost: Number(editCost),
           odometer_km: Number(editOdo) || 0,
           vendor: editVendor,
-          notes: data.notes || data.description || 'Ghi nhận tự động qua AI Cố vấn',
+          notes: editDescription || data.notes || data.description || 'Ghi nhận tự động qua AI Cố vấn',
           next_due_km: data.next_due_km,
           next_due_date: data.next_due_date,
         });
         if (created?.id) setSavedId(created.id);
         setSavedType('LOG_MAINTENANCE');
-        setResultMsg(`Đã ghi nhận bảo dưỡng "${editType}" (${fmtMoney(editCost)}) ở mốc ODO ${editOdo.toLocaleString('vi-VN')} km!`);
+        setResultMsg(`Đã ghi nhận bảo dưỡng "${finalType}" (${fmtMoney(editCost)}) ở mốc ODO ${editOdo.toLocaleString('vi-VN')} km!`);
       } else if (action_type === 'LOG_GENERAL_EXPENSE') {
+        const finalCatId = selectedSubId || selectedParentId || 'cat-food-dining';
+        const finalDesc = editDescription || currentSubCat?.name || currentParentCat?.name || 'Chi tiêu gia đình';
         const created = await createFamilyTransaction({
-          wallet_id: data.wallet_id || 'w-tcb-01',
-          category_id: data.category_id || 'cat-food',
+          wallet_id: selectedWalletId || data.wallet_id || 'w-tcb-01',
+          category_id: finalCatId,
           asset_id: data.asset_id || null,
           transaction_type: 'EXPENSE',
           amount: Number(editCost),
           date: editDate,
           payee_vendor: editVendor || data.payee_vendor,
-          description: editType || 'Chi tiêu qua AI Cố vấn',
+          description: finalDesc,
           notes: data.notes,
           is_essential: true,
           exclude_from_reports: false,
         });
         if (created?.id) setSavedId(created.id);
         setSavedType('LOG_GENERAL_EXPENSE');
-        setResultMsg(`Đã ghi sổ chi tiêu ${fmtMoney(editCost)} (${editType}) vào ví gia đình!`);
+        setResultMsg(`Đã ghi sổ chi tiêu ${fmtMoney(editCost)} [${currentSubCat?.name || finalDesc}] vào ví gia đình!`);
       } else if (action_type === 'LOG_INCOME') {
+        const finalCatId = selectedSubId || selectedParentId || 'cat-inc-salary';
+        const finalDesc = editDescription || currentSubCat?.name || 'Thu nhập gia đình';
         const created = await createFamilyTransaction({
-          wallet_id: data.wallet_id || 'w-vcb-01',
-          category_id: data.category_id || 'cat-inc-salary',
+          wallet_id: selectedWalletId || data.wallet_id || 'w-vcb-01',
+          category_id: finalCatId,
           transaction_type: 'INCOME',
           amount: Number(editCost),
           date: editDate,
           payee_vendor: editVendor || data.payee_vendor || 'Nguồn thu',
-          description: editType || 'Thu nhập qua AI Cố vấn',
+          description: finalDesc,
           notes: data.notes,
           is_essential: true,
           exclude_from_reports: false,
         });
         if (created?.id) setSavedId(created.id);
         setSavedType('LOG_INCOME');
-        setResultMsg(`Đã ghi nhận thu nhập +${fmtMoney(editCost)} (${editType}) vào ví gia đình!`);
+        setResultMsg(`Đã ghi nhận thu nhập +${fmtMoney(editCost)} [${currentSubCat?.name || finalDesc}] vào ví gia đình!`);
       } else if (action_type === 'TRANSFER_WALLET') {
         const created = await createFamilyTransaction({
           wallet_id: data.wallet_id || 'w-tcb-01',
@@ -165,38 +358,23 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
         setSavedType('TRANSFER_WALLET');
         setResultMsg(`Đã thực hiện chuyển ${fmtMoney(editCost)} thành công!`);
       } else {
-        let mappedCat: any = data.category || 'Running';
-        let mappedSubcat: string | undefined = data.subcategory;
-        const descLower = (editType || data.description || data.notes || '').toLowerCase();
-
-        if (descLower.includes('rửa') || descLower.includes('rua')) {
-          mappedCat = 'Running';
-          mappedSubcat = 'Car Wash';
-        } else if (descLower.includes('gửi') || descLower.includes('gui') || descLower.includes('đỗ') || descLower.includes('do xe')) {
-          mappedCat = 'Running';
-          mappedSubcat = 'Parking';
-        } else if (descLower.includes('cầu đường') || descLower.includes('bot') || descLower.includes('vetc') || descLower.includes('epass')) {
-          mappedCat = 'Running';
-          mappedSubcat = 'Epass Fee';
-        } else if (descLower.includes('phạt') || descLower.includes('phat')) {
-          mappedCat = 'Running';
-          mappedSubcat = 'Running Fine';
-        }
+        const mappedSubcatLabel = taxonomy[mobCatKey]?.subcategories[mobSubKey] || mobSubKey;
+        const finalDesc = editDescription || `${mappedSubcatLabel} (${taxonomy[mobCatKey]?.label || mobCatKey})`;
 
         const created = await createExpense({
           asset_id: assetId,
           date: editDate,
-          category: mappedCat,
-          subcategory: mappedSubcat,
+          category: mobCatKey,
+          subcategory: mobSubKey,
           amount: Number(editCost),
           vendor: editVendor,
           odometer_km: Number(editOdo) || undefined,
-          description: editType || 'Ghi nhận chi phí qua AI Cố vấn',
+          description: finalDesc,
         });
         if (created?.id) setSavedId(created.id);
         setSavedType('LOG_EXPENSE');
 
-        setResultMsg(`Đã ghi nhận khoản chi ${fmtMoney(editCost)} (${mappedSubcat || mappedCat}) vào sổ xe và tài chính gia đình!`);
+        setResultMsg(`Đã ghi nhận khoản chi ${fmtMoney(editCost)} [${mappedSubcatLabel}] vào sổ xe và tài chính gia đình!`);
       }
 
       setStatus('success');
@@ -516,21 +694,141 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           </>
         )}
 
-        {/* Thông số đặc thù: Bảo dưỡng / Chi phí */}
-        {!isFuel && (
+        {/* Thông số đặc thù: Thu chi gia đình (Ăn uống, Sinh hoạt, Con cái, Thu nhập...) */}
+        {(isGeneralExp || isIncome) && (
           <>
-            <div className="col-span-2 sm:col-span-2">
-              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Hạng mục:</span>
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Layers className="w-3 h-3 text-cyan-500" /> Danh mục lớn:
+              </span>
+              {isEditing ? (
+                <select
+                  value={selectedParentId}
+                  onChange={(e) => handleParentCatChange(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {categories
+                    .filter((c) => !c.parent_id && (isIncome ? c.type === 'INCOME' : c.type !== 'INCOME'))
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </select>
+              ) : (
+                <span className="font-bold text-slate-800 dark:text-slate-100 text-xs block truncate">
+                  {currentParentCat?.name || (isIncome ? 'Thu nhập' : 'Ăn uống & Đi chợ')}
+                </span>
+              )}
+            </div>
+
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Tag className="w-3 h-3 text-cyan-500" /> Danh mục nhỏ (chi tiết):
+              </span>
+              {isEditing ? (
+                <select
+                  value={selectedSubId}
+                  onChange={(e) => setSelectedSubId(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {categories
+                    .filter((c) => c.parent_id === selectedParentId)
+                    .map((sub) => (
+                      <option key={sub.id} value={sub.id}>
+                        {sub.name}
+                      </option>
+                    ))}
+                </select>
+              ) : (
+                <span className="font-bold text-cyan-600 dark:text-cyan-400 text-xs block truncate">
+                  {currentSubCat?.name || currentParentCat?.name || 'Mặc định'}
+                </span>
+              )}
+            </div>
+
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Wallet className="w-3 h-3 text-slate-400" /> Tài khoản / Ví:
+              </span>
+              {isEditing ? (
+                <select
+                  value={selectedWalletId}
+                  onChange={(e) => setSelectedWalletId(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {wallets.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({fmtMoney(w.current_balance)})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">
+                  {currentWallet?.name || 'Techcombank Everyday'}
+                </span>
+              )}
+            </div>
+
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Building className="w-3 h-3 text-slate-400" /> {isIncome ? 'Nguồn chi trả:' : 'Đơn vị / Cửa hàng:'}
+              </span>
               {isEditing ? (
                 <input
                   type="text"
-                  value={editType}
-                  onChange={(e) => setEditType(e.target.value)}
+                  value={editVendor}
+                  onChange={(e) => setEditVendor(e.target.value)}
                   className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
                 />
               ) : (
-                <span className="font-bold text-slate-800 dark:text-slate-100 text-xs block truncate">
-                  {editType}
+                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">
+                  {editVendor || '—'}
+                </span>
+              )}
+            </div>
+
+            <div className="col-span-2 sm:col-span-2">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Nội dung ghi chú:</span>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Nhập nội dung diễn giải..."
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                />
+              ) : (
+                <span className="font-medium text-slate-600 dark:text-slate-300 text-xs truncate block italic">
+                  {editDescription || data.description || 'Chi tiêu qua AI Cố vấn'}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Thông số đặc thù: Bảo dưỡng xe (LOG_MAINTENANCE) */}
+        {isMaint && (
+          <>
+            <div className="col-span-2 sm:col-span-2">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Wrench className="w-3 h-3 text-amber-500" /> Hạng mục bảo dưỡng (Master Data):
+              </span>
+              {isEditing ? (
+                <select
+                  value={selectedMaintType}
+                  onChange={(e) => setSelectedMaintType(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {maintCats.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-amber-700 dark:text-amber-300 text-xs block truncate">
+                  {selectedMaintType}
                 </span>
               )}
             </div>
@@ -547,6 +845,106 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
                 />
               ) : (
                 <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{editVendor}</span>
+              )}
+            </div>
+            <div className="col-span-2 sm:col-span-3">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Ghi chú phụ tùng / công thợ:</span>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Ghi chú chi tiết bảo dưỡng..."
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                />
+              ) : (
+                <span className="font-medium text-slate-600 dark:text-slate-300 text-xs truncate block italic">
+                  {editDescription || data.notes || data.description || 'Bảo dưỡng định kỳ'}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Thông số đặc thù: Chi phí xe khác (LOG_EXPENSE - Taxonomy: Rửa xe, Gửi xe, BOT, Nâng cấp...) */}
+        {!isFuel && !isMaint && !isGeneralExp && !isIncome && !isTransfer && (
+          <>
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Layers className="w-3 h-3 text-cyan-500" /> Nhóm chi phí xe (Taxonomy):
+              </span>
+              {isEditing ? (
+                <select
+                  value={mobCatKey}
+                  onChange={(e) => handleMobCatChange(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {Object.entries(taxonomy).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-slate-800 dark:text-slate-100 text-xs block truncate">
+                  {taxonomy[mobCatKey]?.label || mobCatKey}
+                </span>
+              )}
+            </div>
+
+            <div className="col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Tag className="w-3 h-3 text-cyan-500" /> Chi tiết hạng mục:
+              </span>
+              {isEditing ? (
+                <select
+                  value={mobSubKey}
+                  onChange={(e) => setMobSubKey(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                >
+                  {Object.entries(taxonomy[mobCatKey]?.subcategories || {}).map(([sk, sv]) => (
+                    <option key={sk} value={sk}>
+                      {sv}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="font-bold text-cyan-600 dark:text-cyan-400 text-xs block truncate">
+                  {taxonomy[mobCatKey]?.subcategories[mobSubKey] || mobSubKey}
+                </span>
+              )}
+            </div>
+
+            <div>
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Building className="w-3 h-3 text-slate-400" /> Gara / Đơn vị:
+              </span>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editVendor}
+                  onChange={(e) => setEditVendor(e.target.value)}
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                />
+              ) : (
+                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{editVendor}</span>
+              )}
+            </div>
+
+            <div className="col-span-2 sm:col-span-3">
+              <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 block">Nội dung chi phí:</span>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Nhập nội dung chi phí..."
+                  className="w-full mt-0.5 px-2 py-1 rounded-lg border border-cyan-500/50 bg-white dark:bg-slate-800 text-xs font-semibold focus:outline-none"
+                />
+              ) : (
+                <span className="font-medium text-slate-600 dark:text-slate-300 text-xs truncate block italic">
+                  {editDescription || data.description || 'Chi phí vận hành'}
+                </span>
               )}
             </div>
           </>

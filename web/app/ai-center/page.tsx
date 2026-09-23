@@ -46,9 +46,9 @@ export default function AiCenterPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-130px)] animate-fadeIn">
+    <div className="flex flex-col flex-1 h-full min-h-0 animate-fadeIn">
       {/* Header */}
-      <div className="mb-4 flex items-center justify-between flex-wrap gap-3">
+      <div className="mb-3 flex items-center justify-between flex-wrap gap-3 shrink-0">
         <div>
           <h1 className="text-2xl font-extrabold flex items-center space-x-3" style={{ color: 'var(--text-primary)' }}>
             <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-tr from-cyan-500 to-blue-600 text-white shadow-md">
@@ -87,7 +87,7 @@ export default function AiCenterPage() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto space-y-4 p-4 rounded-2xl mb-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4 p-4 rounded-2xl mb-3 overscroll-contain" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-default)' }}>
         {messages.map((msg) => (
           <div key={msg.id} className={`flex items-start space-x-3 ${msg.sender === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
             <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
@@ -148,7 +148,7 @@ export default function AiCenterPage() {
       </div>
 
       {/* Quick Prompts */}
-      <div className="flex flex-wrap gap-2 mb-3">
+      <div className="flex flex-wrap gap-2 mb-3 shrink-0">
         {QUICK_PROMPTS.map(({ label, icon: Icon }) => (
           <button key={label} onClick={() => handleSend(label)}
             className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition hover:opacity-80 cursor-pointer"
@@ -160,7 +160,7 @@ export default function AiCenterPage() {
       </div>
 
       {/* Input */}
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2 shrink-0">
         <input
           type="text"
           value={input}

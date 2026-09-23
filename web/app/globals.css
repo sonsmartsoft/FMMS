@@ -145,6 +145,12 @@
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
+/* Cross-browser thin scrollbar support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
 /* ================================================
    Animations
    ================================================ */
