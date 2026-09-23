@@ -207,60 +207,73 @@ export default function DraggableModal({
   if (!isOpen) return null;
 
   return (
-    <div
-      ref={modalRef}
-      onPointerDown={handlePointerDown}
-      className={`fixed z-[9999] shadow-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 ${className}`}
-      style={{
-        left: isMoved ? `${position.x}px` : '50%',
-        top: isMoved ? `${position.y}px` : '140px',
-        transform: isMoved ? 'none' : 'translateX(-50%)',
-        width: showSize ? `${size.w}px` : undefined,
-        height: isMinimized ? '40px' : (showSize ? `${size.h}px` : undefined),
-        touchAction: 'none',
-        cursor: currentCursor,
-        borderRadius: isMaximized ? 0 : '16px',
-        transition: isMinimized ? 'height 0.18s ease' : undefined,
-      }}
-    >
-      {/* Content */}
-      <div style={{ width: '100%', height: '100%', overflow: 'hidden' }} className={`flex flex-col ${showSize ? 'modal-resized' : ''}`}>
-        <style dangerouslySetInnerHTML={{__html: `
-          .modal-resized > .draggable-modal-wrapper > div {
-            width: 100% !important;
-            height: 100% !important;
-            max-width: none !important;
-            max-height: none !important;
-            flex: 1 1 auto;
-          }
-        `}} />
-        
-        {/* Simple Title Bar IF title is provided */}
-        {title && (
+    <>
+      {/* Backdrop Dimmer Overlay to guarantee background opacity and focus */}
+      <div
+        className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-[9990] transition-opacity duration-200"
+        onClick={onClose}
+      />
+      <div
+        ref={modalRef}
+        onPointerDown={handlePointerDown}
+        className={`fixed z-[9999] shadow-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 ${className}`}
+        style={{
+          left: isMoved ? `${position.x}px` : '50%',
+          top: isMoved ? `${position.y}px` : '140px',
+          transform: isMoved ? 'none' : 'translateX(-50%)',
+          width: showSize ? `${size.w}px` : undefined,
+          height: isMinimized ? '40px' : (showSize ? `${size.h}px` : undefined),
+          touchAction: 'none',
+          cursor: currentCursor,
+          borderRadius: isMaximized ? 0 : '16px',
+          transition: isMinimized ? 'height 0.18s ease' : undefined,
+          backgroundColor: 'var(--bg-secondary, #ffffff)',
+        }}
+      >
+        {/* Content */}
+        <div 
+          style={{ width: '100%', height: '100%', overflow: 'hidden', backgroundColor: 'var(--bg-secondary, #ffffff)' }} 
+          className={`flex flex-col bg-white dark:bg-slate-900 ${showSize ? 'modal-resized' : ''}`}
+        >
+          <style dangerouslySetInnerHTML={{__html: `
+            .modal-resized > .draggable-modal-wrapper > div {
+              width: 100% !important;
+              height: 100% !important;
+              max-width: none !important;
+              max-height: none !important;
+              flex: 1 1 auto;
+            }
+          `}} />
+          
+          {/* Simple Title Bar IF title is provided */}
+          {title && (
+            <div 
+              className="flex items-center justify-between px-4 shrink-0 select-none cursor-grab active:cursor-grabbing border-b"
+              style={{ height: '48px', background: 'var(--bg-secondary, #ffffff)', borderColor: 'var(--border-default)' }}
+            >
+              <span className="text-sm font-extrabold truncate" style={{ color: 'var(--text-primary)' }}>
+                {title}
+              </span>
+              {onClose && (
+                <button
+                  onClick={e => { e.stopPropagation(); onClose(); }}
+                  className="no-drag p-2 -mr-2 rounded-xl transition hover:bg-black/5 dark:hover:bg-white/10"
+                  style={{ color: 'var(--text-muted)' }}
+                  title="Đóng"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              )}
+            </div>
+          )}
+          
           <div 
-            className="flex items-center justify-between px-4 shrink-0 select-none cursor-grab active:cursor-grabbing border-b"
-            style={{ height: '48px', background: 'var(--bg-secondary)', borderColor: 'var(--border-default)' }}
+            className="flex-1 overflow-auto draggable-modal-wrapper flex flex-col relative w-full h-full bg-white dark:bg-slate-900"
+            style={{ backgroundColor: 'var(--bg-secondary, #ffffff)' }}
           >
-            <span className="text-sm font-extrabold truncate" style={{ color: 'var(--text-primary)' }}>
-              {title}
-            </span>
-            {onClose && (
-              <button
-                onClick={e => { e.stopPropagation(); onClose(); }}
-                className="no-drag p-2 -mr-2 rounded-xl transition hover:bg-black/5 dark:hover:bg-white/10"
-                style={{ color: 'var(--text-muted)' }}
-                title="Đóng"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
-            )}
+            {children}
           </div>
-        )}
-        
-        <div className="flex-1 overflow-auto draggable-modal-wrapper flex flex-col relative w-full h-full">
-          {children}
         </div>
-      </div>
 
       {/* Resize handles */}
       {!isMaximized && !isMinimized && (
@@ -284,5 +297,6 @@ export default function DraggableModal({
         </>
       )}
     </div>
+    </>
   );
 }

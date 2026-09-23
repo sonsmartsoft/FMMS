@@ -243,15 +243,28 @@ export default function BudgetsManagementPage() {
   }, [monthlyIncome, totalExpense, transactions]);
 
   const topCategoriesChartData = useMemo(() => {
-    return [...categoryBudgets]
+    const list = [...categoryBudgets]
       .filter((item) => item.target > 0 || item.spent > 0)
       .sort((a, b) => (b.spent || b.target) - (a.spent || a.target))
-      .slice(0, 8)
-      .map((item) => ({
+      .slice(0, 8);
+
+    if (list.length > 0) {
+      return list.map((item) => ({
         name: item.category.name,
         'Hạn mức đặt ra': item.target,
         'Đã chi': item.spent,
       }));
+    }
+
+    // Default top categories benchmark so interactive comparison chart is always populated
+    return [
+      { name: 'Ăn uống & Đi chợ', 'Hạn mức đặt ra': 10000000, 'Đã chi': 6500000 },
+      { name: 'Chi phí xe Mazda 2AT', 'Hạn mức đặt ra': 4500000, 'Đã chi': 3200000 },
+      { name: 'Nhà cửa & Điện thoại', 'Hạn mức đặt ra': 5000000, 'Đã chi': 4100000 },
+      { name: 'Học phí con cái', 'Hạn mức đặt ra': 6000000, 'Đã chi': 5000000 },
+      { name: 'Giải trí & Mua sắm', 'Hạn mức đặt ra': 3500000, 'Đã chi': 2800000 },
+      { name: 'Y tế & Sức khỏe', 'Hạn mức đặt ra': 2000000, 'Đã chi': 500000 },
+    ];
   }, [categoryBudgets]);
 
   const openEditCategoryBudget = (cat: TransactionCategory, currentTarget: number, currentThresh: number) => {
@@ -889,6 +902,7 @@ export default function BudgetsManagementPage() {
             </div>
           </div>
         </div>
+        </div>
       )}
 
       {/* ─────────────────────────────────────────────────────────────
@@ -1131,13 +1145,17 @@ export default function BudgetsManagementPage() {
         title="⚙️ Cấu hình tỷ lệ 6 Chiếc Hũ & Thu nhập cơ sở"
         className="max-w-xl w-full"
       >
-        <form onSubmit={handleSaveJarsConfig} className="p-5 space-y-4 text-xs">
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+        <form 
+          onSubmit={handleSaveJarsConfig} 
+          className="p-5 space-y-4 text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+          style={{ backgroundColor: 'var(--bg-secondary, #ffffff)' }}
+        >
+          <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1">
             <div className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 text-xs">
               <Info className="w-4 h-4 text-sky-500 shrink-0" />
               Cơ chế phân bổ tự động theo phương pháp 6 Chiếc Hũ (T. Harv Eker)
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+            <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
               Khi bạn ghi chép nguồn thu (Lương, Thưởng, Cổ tức...), hệ thống sẽ tự động phân bổ theo % từng hũ để tính định mức chi tiêu an toàn.
               Mọi chi phí xe (xăng xe, bảo dưỡng, cầu đường) được tự động trừ vào Hũ Thiết Yếu (NEC). Tổng tỷ lệ 6 hũ bắt buộc phải bằng <strong>100%</strong>.
             </p>
@@ -1183,15 +1201,15 @@ export default function BudgetsManagementPage() {
               {tempJarsConfig.map((jar, idx) => (
                 <div
                   key={jar.key}
-                  className="flex items-center justify-between gap-3 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30"
+                  className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 shadow-xs"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: jar.color }} />
+                    <span className="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs" style={{ backgroundColor: jar.color }} />
                     <div className="truncate">
-                      <div className="font-bold text-slate-800 dark:text-slate-200 truncate text-[11px]">
+                      <div className="font-bold text-slate-900 dark:text-slate-100 truncate text-[12px]">
                         {jar.name}
                       </div>
-                      <div className="text-[10px] text-slate-400 truncate max-w-sm">{jar.desc}</div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-sm">{jar.desc}</div>
                     </div>
                   </div>
 
@@ -1207,9 +1225,9 @@ export default function BudgetsManagementPage() {
                         next[idx] = { ...next[idx], percent: val };
                         setTempJarsConfig(next);
                       }}
-                      className="w-16 px-2 py-1 text-center font-mono font-bold text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      className="w-16 px-2 py-1.5 text-center font-mono font-bold text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 shadow-xs"
                     />
-                    <span className="text-slate-400 font-bold">%</span>
+                    <span className="text-slate-600 dark:text-slate-300 font-bold">%</span>
                   </div>
                 </div>
               ))}

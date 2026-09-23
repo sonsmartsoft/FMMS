@@ -50,6 +50,14 @@ import {
   Pie,
   Cell,
   Tooltip as ReTooltip,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+  AreaChart,
+  Area,
 } from 'recharts';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
 import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
@@ -69,6 +77,11 @@ export default function FamilyFinanceDashboard() {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalDefaultType, setModalDefaultType] = useState<'EXPENSE' | 'INCOME' | 'TRANSFER'>('EXPENSE');
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Load all finance data
   const loadData = async () => {
@@ -497,6 +510,70 @@ export default function FamilyFinanceDashboard() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
+          2B. SIX-MONTH CASHFLOW TREND CHART (THU NHẬP vs CHI TIÊU vs THẶNG DƯ)
+         ───────────────────────────────────────────────────────────── */}
+      {isMounted && (
+        <div className="p-5 md:p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-sky-500/10 text-sky-500">
+                <BarChart3 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Xu Hướng Dòng Tiền 6 Tháng Gần Nhất
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Đối sánh Dòng tiền vào (Thu nhập) vs Dòng tiền ra (Chi tiêu) &amp; Tích lũy ròng gia đình
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 text-xs font-bold">
+              <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                <span className="w-3 h-3 rounded bg-emerald-500 inline-block" /> Thu nhập
+              </span>
+              <span className="flex items-center gap-1.5 text-rose-500 dark:text-rose-400">
+                <span className="w-3 h-3 rounded bg-rose-500 inline-block" /> Chi tiêu
+              </span>
+              <span className="flex items-center gap-1.5 text-sky-500 dark:text-sky-400">
+                <span className="w-3 h-3 rounded bg-sky-500 inline-block" /> Thặng dư
+              </span>
+            </div>
+          </div>
+
+          <div className="h-64 sm:h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={sixMonthTrendData} margin={{ top: 15, right: 10, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.12} vertical={false} />
+                <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} fontWeight={600} tickLine={false} />
+                <YAxis
+                  stroke="#94a3b8"
+                  fontSize={10}
+                  tickLine={false}
+                  tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}tr`}
+                />
+                <ReTooltip
+                  formatter={(val: any) => [`${fmt(Number(val))} ₫`, '']}
+                  contentStyle={{
+                    background: 'rgba(15, 23, 42, 0.95)',
+                    borderColor: 'rgba(56, 189, 248, 0.3)',
+                    borderRadius: '12px',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                  }}
+                />
+                <Bar dataKey="Thu nhập" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Chi tiêu" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Thặng dư" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
           3. TWO-COLUMN ANALYTICS: SMART BUDGET ALLOCATION & MOBILITY TCO
          ───────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -749,20 +826,27 @@ export default function FamilyFinanceDashboard() {
           </Link>
         </div>
 
-        {categoryExpenses.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 text-xs">
-            Chưa ghi nhận khoản chi tiêu nào trong tháng {selectedMonth}/{selectedYear}.{' '}
+        {isFallbackCategoryData && (
+          <div className="p-3 rounded-xl bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse shrink-0" />
+              <span className="text-sky-800 dark:text-sky-300 text-[11px]">
+                Chưa có chi tiêu thực tế trong tháng {selectedMonth}/{selectedYear}. Biểu đồ đang trực quan hóa tỷ lệ định mức mẫu chuẩn gia đình.
+              </span>
+            </div>
             <button
               onClick={() => {
                 setModalDefaultType('EXPENSE');
                 setIsModalOpen(true);
               }}
-              className="text-sky-600 font-bold underline"
+              className="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs shrink-0 shadow-sm transition-all"
             >
-              Ghi chép chi tiêu ngay
+              + Ghi chi tiêu thực tế
             </button>
           </div>
-        ) : (
+        )}
+
+        {isMounted && (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
             {/* Donut Chart */}
             <div className="lg:col-span-5 flex flex-col items-center justify-center relative">
@@ -770,7 +854,7 @@ export default function FamilyFinanceDashboard() {
                 <ResponsiveContainer width="100%" height="100%">
                   <RePieChart>
                     <Pie
-                      data={categoryExpenses}
+                      data={displayCategoryExpenses}
                       cx="50%"
                       cy="50%"
                       innerRadius={65}
@@ -779,7 +863,7 @@ export default function FamilyFinanceDashboard() {
                       dataKey="amount"
                       nameKey="name"
                     >
-                      {categoryExpenses.map((entry, index) => (
+                      {displayCategoryExpenses.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
                       ))}
                     </Pie>
@@ -801,10 +885,10 @@ export default function FamilyFinanceDashboard() {
               {/* Center Donut Info */}
               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
-                  Tổng Chi
+                  {isFallbackCategoryData ? 'Định Mức Chuẩn' : 'Tổng Chi'}
                 </span>
                 <span className="text-base sm:text-lg font-black font-mono text-slate-900 dark:text-white block">
-                  {fmt(monthlyExpenses)}
+                  {fmt(isFallbackCategoryData ? (monthlyIncome > 0 ? monthlyIncome : 50000000) : monthlyExpenses)}
                 </span>
                 <span className="text-[10px] font-semibold text-slate-400">₫</span>
               </div>
@@ -812,7 +896,7 @@ export default function FamilyFinanceDashboard() {
 
             {/* Breakdown List */}
             <div className="lg:col-span-7 space-y-3">
-              {categoryExpenses.map((item) => (
+              {displayCategoryExpenses.map((item) => (
                 <div key={item.id} className="space-y-1.5 group">
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 min-w-0">
