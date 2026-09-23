@@ -10,6 +10,7 @@ import {
 import { Asset } from '@/types/mobility';
 import {
   createFamilyTransaction,
+  updateFamilyTransaction,
   getCategories,
   getWallets,
 } from '@/lib/services/familyFinanceService';
@@ -37,6 +38,7 @@ interface QuickTransactionModalProps {
   defaultType?: TransactionType;
   defaultWalletId?: string;
   defaultAssetId?: string;
+  transactionToEdit?: FamilyTransaction | null;
 }
 
 export default function QuickTransactionModal({
@@ -46,7 +48,9 @@ export default function QuickTransactionModal({
   defaultType = 'EXPENSE',
   defaultWalletId,
   defaultAssetId,
+  transactionToEdit,
 }: QuickTransactionModalProps) {
+  const isEditing = Boolean(transactionToEdit);
   const [type, setType] = useState<TransactionType>(defaultType);
   const [amountStr, setAmountStr] = useState('');
   const [walletId, setWalletId] = useState(defaultWalletId || '');
@@ -66,14 +70,28 @@ export default function QuickTransactionModal({
 
   useEffect(() => {
     if (isOpen) {
-      setType(defaultType);
-      setWalletId(defaultWalletId || '');
-      setAssetId(defaultAssetId || '');
-      setDate(new Date().toISOString().split('T')[0]);
-      setAmountStr('');
-      setPayee('');
-      setNotes('');
-      setErrorMsg('');
+      if (transactionToEdit) {
+        setType(transactionToEdit.transaction_type);
+        setWalletId(transactionToEdit.wallet_id || '');
+        setToWalletId(transactionToEdit.to_wallet_id || '');
+        setCategoryId(transactionToEdit.category_id || '');
+        setAssetId(transactionToEdit.asset_id || '');
+        setDate(transactionToEdit.date ? transactionToEdit.date.slice(0, 10) : new Date().toISOString().split('T')[0]);
+        setAmountStr(transactionToEdit.amount ? Number(transactionToEdit.amount).toLocaleString('vi-VN') : '');
+        setPayee(transactionToEdit.payee_vendor || transactionToEdit.description || '');
+        setNotes(transactionToEdit.notes || '');
+        setIsEssential(transactionToEdit.is_essential ?? true);
+        setErrorMsg('');
+      } else {
+        setType(defaultType);
+        setWalletId(defaultWalletId || '');
+        setAssetId(defaultAssetId || '');
+        setDate(new Date().toISOString().split('T')[0]);
+        setAmountStr('');
+        setPayee('');
+        setNotes('');
+        setErrorMsg('');
+      }
 
       // Load supporting data
       Promise.all([getWallets(), getCategories(), getAssets()])
@@ -82,21 +100,23 @@ export default function QuickTransactionModal({
           setCategories(cList);
           setAssets(aList);
 
-          if (!defaultWalletId && wList.length > 0) {
-            setWalletId(wList[0].id);
+          if (!transactionToEdit) {
+            if (!defaultWalletId && wList.length > 0) {
+              setWalletId(wList[0].id);
+            }
+            if (wList.length > 1) {
+              setToWalletId(wList[1].id);
+            }
+            // Default category
+            const defCat = cList.find((c) => c.type === defaultType);
+            if (defCat) setCategoryId(defCat.id);
           }
-          if (wList.length > 1) {
-            setToWalletId(wList[1].id);
-          }
-          // Default category
-          const defCat = cList.find((c) => c.type === defaultType);
-          if (defCat) setCategoryId(defCat.id);
         })
         .catch((err) => {
           console.error('Failed to load transaction metadata:', err);
         });
     }
-  }, [isOpen, defaultType, defaultWalletId, defaultAssetId]);
+  }, [isOpen, defaultType, defaultWalletId, defaultAssetId, transactionToEdit]);
 
   // When type switches, pick first matching category
   const handleTypeChange = (newType: TransactionType) => {
@@ -147,20 +167,36 @@ export default function QuickTransactionModal({
 
     setLoading(true);
     try {
-      await createFamilyTransaction({
-        wallet_id: walletId,
-        to_wallet_id: type === 'TRANSFER' ? toWalletId : null,
-        category_id: categoryId || null,
-        asset_id: assetId || null,
-        transaction_type: type,
-        amount: amt,
-        date: date,
-        payee_vendor: payee.trim() || undefined,
-        description: payee.trim() || undefined,
-        notes: notes.trim() || undefined,
-        is_essential: isEssential,
-        exclude_from_reports: false,
-      });
+      if (transactionToEdit) {
+        await updateFamilyTransaction(transactionToEdit.id, {
+          wallet_id: walletId,
+          to_wallet_id: type === 'TRANSFER' ? toWalletId : null,
+          category_id: categoryId || null,
+          asset_id: assetId || null,
+          transaction_type: type,
+          amount: amt,
+          date: date,
+          payee_vendor: payee.trim() || undefined,
+          description: payee.trim() || undefined,
+          notes: notes.trim() || undefined,
+          is_essential: isEssential,
+        });
+      } else {
+        await createFamilyTransaction({
+          wallet_id: walletId,
+          to_wallet_id: type === 'TRANSFER' ? toWalletId : null,
+          category_id: categoryId || null,
+          asset_id: assetId || null,
+          transaction_type: type,
+          amount: amt,
+          date: date,
+          payee_vendor: payee.trim() || undefined,
+          description: payee.trim() || undefined,
+          notes: notes.trim() || undefined,
+          is_essential: isEssential,
+          exclude_from_reports: false,
+        });
+      }
 
       onSuccess();
       onClose();
@@ -176,7 +212,7 @@ export default function QuickTransactionModal({
     <DraggableModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Ghi chép Thu / Chi / Chuyển khoản"
+      title={isEditing ? 'Chỉnh sửa Giao dịch' : 'Ghi chép Thu / Chi / Chuyển khoản'}
       className="max-w-xl w-full"
     >
       <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -459,7 +495,7 @@ export default function QuickTransactionModal({
             className="flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-500 active:scale-[0.98] rounded-lg shadow-md shadow-sky-600/20 transition-all disabled:opacity-50"
           >
             <Check className="w-4 h-4" />
-            {loading ? 'Đang lưu...' : 'Lưu giao dịch'}
+            {loading ? 'Đang lưu...' : isEditing ? 'Cập nhật giao dịch' : 'Lưu giao dịch'}
           </button>
         </div>
       </form>

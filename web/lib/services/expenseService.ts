@@ -274,26 +274,59 @@ export async function createExpense(data: ExpenseInput, skipAutoLinks = false): 
 export async function updateExpense(id: string, data: Partial<ExpenseInput>): Promise<ExpenseRecord> {
   const realAssetId = data.asset_id ? resolveAssetId(data.asset_id) : undefined;
   const supabase = createClient();
-
-  const updatePayload: any = {};
-  if (data.date) updatePayload.date = data.date;
-  if (data.category) updatePayload.category = data.category;
-  if (data.subcategory !== undefined) {
-    updatePayload.subcategory = data.subcategory;
-    updatePayload.sub_category = data.subcategory;
-  }
-  if (data.amount !== undefined) updatePayload.amount = data.amount;
-  if (data.currency) updatePayload.currency = data.currency;
-  if (data.vendor !== undefined) updatePayload.vendor = data.vendor;
-  if (data.odometer_km !== undefined) updatePayload.odometer_km = data.odometer_km;
-  if (data.description !== undefined) updatePayload.description = data.description;
-  if (realAssetId) updatePayload.asset_id = realAssetId;
+  const cleanFtId = id.startsWith('ft_') ? id.replace('ft_', '') : null;
+  const cleanMaintId = id.startsWith('maint_exp_') ? id.replace('maint_exp_', '') : null;
 
   try {
-    if (Object.keys(updatePayload).length > 0) {
-      await supabase.from('expenses').update(updatePayload).eq('id', id);
+    if (cleanMaintId) {
+      const maintPayload: any = {};
+      if (data.amount !== undefined) maintPayload.cost = data.amount;
+      if (data.date) maintPayload.date = data.date;
+      if (data.vendor !== undefined) maintPayload.vendor = data.vendor;
+      if (data.odometer_km !== undefined) maintPayload.odometer_km = data.odometer_km;
+      if (data.description !== undefined) maintPayload.notes = data.description;
+      if (data.subcategory !== undefined) maintPayload.maintenance_type = data.subcategory;
+      if (Object.keys(maintPayload).length > 0) {
+        await supabase.from('maintenance_records').update(maintPayload).eq('id', cleanMaintId);
+      }
+    } else if (cleanFtId) {
+      const ftPayload: any = {};
+      if (data.amount !== undefined) ftPayload.amount = data.amount;
+      if (data.date) ftPayload.date = data.date;
+      if (data.vendor !== undefined) ftPayload.payee_vendor = data.vendor;
+      if (data.description !== undefined) ftPayload.description = data.description;
+      if (Object.keys(ftPayload).length > 0) {
+        await supabase.from('family_transactions').update(ftPayload).eq('id', cleanFtId);
+      }
+    } else {
+      const updatePayload: any = {};
+      if (data.date) updatePayload.date = data.date;
+      if (data.category) updatePayload.category = data.category;
+      if (data.subcategory !== undefined) {
+        updatePayload.subcategory = data.subcategory;
+        updatePayload.sub_category = data.subcategory;
+      }
+      if (data.amount !== undefined) updatePayload.amount = data.amount;
+      if (data.currency) updatePayload.currency = data.currency;
+      if (data.vendor !== undefined) updatePayload.vendor = data.vendor;
+      if (data.odometer_km !== undefined) updatePayload.odometer_km = data.odometer_km;
+      if (data.description !== undefined) updatePayload.description = data.description;
+      if (realAssetId) updatePayload.asset_id = realAssetId;
+
+      if (Object.keys(updatePayload).length > 0) {
+        await supabase.from('expenses').update(updatePayload).eq('id', id);
+        // Đồng bộ cập nhật sang family_transactions nếu có bản ghi liên quan
+        await supabase.from('family_transactions').update({
+          amount: data.amount,
+          date: data.date,
+          payee_vendor: data.vendor,
+          description: data.description || data.subcategory,
+        }).or(`id.eq.exp_${id},id.eq.${id}`);
+      }
     }
-  } catch {}
+  } catch (err) {
+    console.warn('[updateExpense] DB error:', err);
+  }
 
   if (typeof window !== 'undefined') {
     try {
@@ -306,6 +339,8 @@ export async function updateExpense(id: string, data: Partial<ExpenseInput>): Pr
         id,
         ...(realAssetId ? { asset_id: realAssetId } : {}),
       };
+      if (cleanFtId) customMap[cleanFtId] = { ...customMap[id], id: cleanFtId };
+      if (cleanMaintId) customMap[cleanMaintId] = { ...customMap[id], id: cleanMaintId };
       localStorage.setItem('fmms_custom_expenses', JSON.stringify(customMap));
     } catch {}
   }
@@ -314,12 +349,23 @@ export async function updateExpense(id: string, data: Partial<ExpenseInput>): Pr
 }
 
 export async function deleteExpense(id: string): Promise<boolean> {
+  const supabase = createClient();
+  const cleanFtId = id.startsWith('ft_') ? id.replace('ft_', '') : null;
+  const cleanMaintId = id.startsWith('maint_exp_') ? id.replace('maint_exp_', '') : null;
+
   try {
-    const supabase = createClient();
-    await supabase.from('expenses').delete().eq('id', id);
-    // Đồng bộ xóa cả bên family_transactions nếu có bản ghi liên quan
-    await supabase.from('family_transactions').delete().or(`id.eq.exp_${id},id.eq.${id}`);
-  } catch {}
+    if (cleanMaintId) {
+      await supabase.from('maintenance_records').delete().eq('id', cleanMaintId);
+    } else if (cleanFtId) {
+      await supabase.from('family_transactions').delete().eq('id', cleanFtId);
+    } else {
+      await supabase.from('expenses').delete().eq('id', id);
+      // Đồng bộ xóa cả bên family_transactions nếu có bản ghi liên quan
+      await supabase.from('family_transactions').delete().or(`id.eq.exp_${id},id.eq.${id}`);
+    }
+  } catch (err) {
+    console.warn('[deleteExpense] DB error:', err);
+  }
 
   if (typeof window !== 'undefined') {
     try {
@@ -327,6 +373,8 @@ export async function deleteExpense(id: string): Promise<boolean> {
       if (stored) {
         const customMap = JSON.parse(stored);
         delete customMap[id];
+        if (cleanFtId) delete customMap[cleanFtId];
+        if (cleanMaintId) delete customMap[cleanMaintId];
         localStorage.setItem('fmms_custom_expenses', JSON.stringify(customMap));
       }
     } catch {}

@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Wallet } from 'lucide-react';
-import { createFuelLog } from '@/lib/services/fuelService';
-import { createExpense } from '@/lib/services/expenseService';
-import { createMaintenanceRecord } from '@/lib/services/maintenanceService';
-import { createFamilyTransaction } from '@/lib/services/familyFinanceService';
+import { Fuel, Wrench, CreditCard, CheckCircle2, XCircle, Loader2, Sparkles, Calendar, Gauge, Building, DollarSign, Pencil, Check, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, Wallet, Trash2, RotateCcw } from 'lucide-react';
+import { createFuelLog, deleteFuelLog } from '@/lib/services/fuelService';
+import { createExpense, deleteExpense } from '@/lib/services/expenseService';
+import { createMaintenanceRecord, deleteMaintenanceRecord } from '@/lib/services/maintenanceService';
+import { createFamilyTransaction, deleteFamilyTransaction } from '@/lib/services/familyFinanceService';
 
 export interface ActionPayload {
   action_type: 'LOG_FUEL' | 'LOG_EXPENSE' | 'LOG_MAINTENANCE' | 'LOG_GENERAL_EXPENSE' | 'LOG_INCOME' | 'TRANSFER_WALLET';
@@ -48,6 +48,8 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
   const [status, setStatus] = useState<'idle' | 'executing' | 'success' | 'cancelled' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [resultMsg, setResultMsg] = useState('');
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [savedType, setSavedType] = useState<string | null>(null);
 
   const { action_type, data } = payload;
 
@@ -86,7 +88,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
 
     try {
       if (action_type === 'LOG_FUEL') {
-        await createFuelLog({
+        const created = await createFuelLog({
           asset_id: assetId,
           date: editDate,
           liters: Number(editLiters),
@@ -96,9 +98,11 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           station: editVendor || data.station || 'Cây xăng',
           notes: data.notes || 'Ghi nhận tự động qua AI Cố vấn',
         });
+        if (created?.id) setSavedId(created.id);
+        setSavedType('LOG_FUEL');
         setResultMsg(`Đã lưu thành công ${editLiters}L (${fmtMoney(editCost)}) vào sổ xăng!`);
       } else if (action_type === 'LOG_MAINTENANCE') {
-        await createMaintenanceRecord({
+        const created = await createMaintenanceRecord({
           asset_id: assetId,
           maintenance_type: editType,
           date: editDate,
@@ -109,9 +113,11 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           next_due_km: data.next_due_km,
           next_due_date: data.next_due_date,
         });
+        if (created?.id) setSavedId(created.id);
+        setSavedType('LOG_MAINTENANCE');
         setResultMsg(`Đã ghi nhận bảo dưỡng "${editType}" (${fmtMoney(editCost)}) ở mốc ODO ${editOdo.toLocaleString('vi-VN')} km!`);
       } else if (action_type === 'LOG_GENERAL_EXPENSE') {
-        await createFamilyTransaction({
+        const created = await createFamilyTransaction({
           wallet_id: data.wallet_id || 'w-tcb-01',
           category_id: data.category_id || 'cat-food',
           asset_id: data.asset_id || null,
@@ -124,9 +130,11 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           is_essential: true,
           exclude_from_reports: false,
         });
+        if (created?.id) setSavedId(created.id);
+        setSavedType('LOG_GENERAL_EXPENSE');
         setResultMsg(`Đã ghi sổ chi tiêu ${fmtMoney(editCost)} (${editType}) vào ví gia đình!`);
       } else if (action_type === 'LOG_INCOME') {
-        await createFamilyTransaction({
+        const created = await createFamilyTransaction({
           wallet_id: data.wallet_id || 'w-vcb-01',
           category_id: data.category_id || 'cat-inc-salary',
           transaction_type: 'INCOME',
@@ -138,9 +146,11 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           is_essential: true,
           exclude_from_reports: false,
         });
+        if (created?.id) setSavedId(created.id);
+        setSavedType('LOG_INCOME');
         setResultMsg(`Đã ghi nhận thu nhập +${fmtMoney(editCost)} (${editType}) vào ví gia đình!`);
       } else if (action_type === 'TRANSFER_WALLET') {
-        await createFamilyTransaction({
+        const created = await createFamilyTransaction({
           wallet_id: data.wallet_id || 'w-tcb-01',
           to_wallet_id: data.to_wallet_id || 'w-momo-01',
           category_id: 'cat-transfer',
@@ -151,6 +161,8 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           is_essential: false,
           exclude_from_reports: false,
         });
+        if (created?.id) setSavedId(created.id);
+        setSavedType('TRANSFER_WALLET');
         setResultMsg(`Đã thực hiện chuyển ${fmtMoney(editCost)} thành công!`);
       } else {
         let mappedCat: any = data.category || 'Running';
@@ -171,7 +183,7 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           mappedSubcat = 'Running Fine';
         }
 
-        await createExpense({
+        const created = await createExpense({
           asset_id: assetId,
           date: editDate,
           category: mappedCat,
@@ -181,22 +193,8 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
           odometer_km: Number(editOdo) || undefined,
           description: editType || 'Ghi nhận chi phí qua AI Cố vấn',
         });
-
-        // Mirror to family finance transactions as vehicle expense
-        try {
-          await createFamilyTransaction({
-            wallet_id: 'w-tcb-01',
-            category_id: 'cat-mobility',
-            asset_id: assetId,
-            transaction_type: 'EXPENSE',
-            amount: Number(editCost),
-            date: editDate,
-            payee_vendor: editVendor,
-            description: editType || mappedSubcat || 'Chi phí vận hành xe',
-            is_essential: true,
-            exclude_from_reports: false,
-          });
-        } catch {}
+        if (created?.id) setSavedId(created.id);
+        setSavedType('LOG_EXPENSE');
 
         setResultMsg(`Đã ghi nhận khoản chi ${fmtMoney(editCost)} (${mappedSubcat || mappedCat}) vào sổ xe và tài chính gia đình!`);
       }
@@ -218,30 +216,101 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
     setStatus('cancelled');
   };
 
+  const handleDeleteSaved = async () => {
+    if (!confirm('Bạn có chắc muốn xóa và hoàn tác giao dịch này khỏi sổ cái?')) return;
+    try {
+      if (savedId) {
+        if (savedType === 'LOG_FUEL') await deleteFuelLog(savedId);
+        else if (savedType === 'LOG_MAINTENANCE') await deleteMaintenanceRecord(savedId);
+        else if (savedType === 'LOG_GENERAL_EXPENSE' || savedType === 'LOG_INCOME' || savedType === 'TRANSFER_WALLET') {
+          await deleteFamilyTransaction(savedId);
+        } else {
+          await deleteExpense(savedId);
+        }
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fmms_data_updated', { detail: { type: action_type } }));
+      }
+      setStatus('cancelled');
+    } catch (e: any) {
+      alert('Không thể xóa: ' + (e?.message || 'Có lỗi xảy ra'));
+    }
+  };
+
+  const handleEditSaved = async () => {
+    if (savedId) {
+      try {
+        if (savedType === 'LOG_FUEL') await deleteFuelLog(savedId);
+        else if (savedType === 'LOG_MAINTENANCE') await deleteMaintenanceRecord(savedId);
+        else if (savedType === 'LOG_GENERAL_EXPENSE' || savedType === 'LOG_INCOME' || savedType === 'TRANSFER_WALLET') {
+          await deleteFamilyTransaction(savedId);
+        } else {
+          await deleteExpense(savedId);
+        }
+      } catch {}
+    }
+    setStatus('idle');
+    setIsEditing(true);
+  };
+
   if (status === 'cancelled') {
     return (
-      <div className="my-2.5 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-900/40 text-xs text-slate-400 italic flex items-center gap-2">
-        <XCircle className="w-4 h-4" />
-        <span>Đã hủy thao tác ghi nhận giao dịch.</span>
+      <div className="my-2.5 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-100/50 dark:bg-slate-900/40 text-xs text-slate-400 italic flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <XCircle className="w-4 h-4" />
+          <span>Đã hủy thao tác ghi nhận giao dịch.</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setStatus('idle')}
+          className="text-[11px] font-semibold text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-1"
+        >
+          <RotateCcw className="w-3 h-3" />
+          <span>Mở lại dự thảo</span>
+        </button>
       </div>
     );
   }
 
   if (status === 'success') {
     return (
-      <div className="my-2.5 p-3.5 rounded-2xl border border-emerald-500/40 bg-emerald-50/80 dark:bg-emerald-950/40 text-xs shadow-sm flex items-center justify-between gap-3 animate-fadeIn">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-4 h-4" />
+      <div className="my-2.5 p-3.5 rounded-2xl border border-emerald-500/40 bg-emerald-50/90 dark:bg-emerald-950/40 text-xs shadow-sm space-y-2.5 animate-fadeIn">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold text-emerald-800 dark:text-emerald-200 text-xs">Ghi nhận hoàn tất!</p>
+              <p className="text-emerald-600 dark:text-emerald-400 text-[11px] truncate">{resultMsg}</p>
+            </div>
           </div>
-          <div>
-            <p className="font-bold text-emerald-800 dark:text-emerald-200 text-xs">Ghi nhận hoàn tất!</p>
-            <p className="text-emerald-600 dark:text-emerald-400 text-[11px] truncate">{resultMsg}</p>
-          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0">
+            ĐÃ LƯU DATABASE ✓
+          </span>
         </div>
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-          ĐÃ LƯU DATABASE ✓
-        </span>
+
+        {/* Thao tác Sửa / Xóa Hoàn tác sau khi lưu */}
+        <div className="flex items-center justify-end gap-2 pt-1 border-t border-emerald-500/20">
+          <button
+            type="button"
+            onClick={handleEditSaved}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 flex items-center gap-1 transition"
+            title="Chỉnh sửa lại số liệu vừa lưu"
+          >
+            <Pencil className="w-3 h-3" />
+            <span>Sửa lại số liệu</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteSaved}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-1 transition"
+            title="Xóa giao dịch này khỏi sổ cái"
+          >
+            <Trash2 className="w-3 h-3" />
+            <span>Xóa / Hoàn tác</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -344,9 +413,14 @@ export const FMMSActionCard: React.FC<FMMSActionCardProps> = ({ payload, onSucce
             </p>
           </div>
         </div>
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${themeConfig.badge}`}>
-          DỰ THẢO 1-CLICK
-        </span>
+        <div className="flex flex-col items-end shrink-0">
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${themeConfig.badge}`}>
+            DỰ THẢO CHỜ XÁC NHẬN
+          </span>
+          <span className="text-[9px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
+            (Chưa lưu vào sổ cái)
+          </span>
+        </div>
       </div>
 
       {/* 2. Body Details Grid */}

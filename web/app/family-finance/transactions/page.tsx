@@ -30,6 +30,7 @@ import {
   Tag,
   RefreshCw,
   Trash2,
+  Pencil,
   Download,
   ChevronLeft,
 } from 'lucide-react';
@@ -56,6 +57,7 @@ export default function TransactionsLedgerPage() {
   // Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalDefaultType, setModalDefaultType] = useState<TransactionType>('EXPENSE');
+  const [transactionToEdit, setTransactionToEdit] = useState<FamilyTransaction | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -201,6 +203,7 @@ export default function TransactionsLedgerPage() {
 
           <button
             onClick={() => {
+              setTransactionToEdit(null);
               setModalDefaultType('EXPENSE');
               setIsModalOpen(true);
             }}
@@ -212,6 +215,7 @@ export default function TransactionsLedgerPage() {
 
           <button
             onClick={() => {
+              setTransactionToEdit(null);
               setModalDefaultType('INCOME');
               setIsModalOpen(true);
             }}
@@ -508,13 +512,25 @@ export default function TransactionsLedgerPage() {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <button
-                          onClick={() => handleDelete(tx.id)}
-                          className="p-1 text-slate-400 hover:text-rose-600 transition-colors rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                          title="Xóa giao dịch"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => {
+                              setTransactionToEdit(tx);
+                              setIsModalOpen(true);
+                            }}
+                            className="p-1 text-slate-400 hover:text-sky-500 transition-colors rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                            title="Chỉnh sửa giao dịch"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(tx.id)}
+                            className="p-1 text-slate-400 hover:text-rose-600 transition-colors rounded hover:bg-slate-100 dark:hover:bg-slate-800"
+                            title="Xóa giao dịch"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -527,9 +543,13 @@ export default function TransactionsLedgerPage() {
 
       <QuickTransactionModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setTransactionToEdit(null);
+        }}
         onSuccess={loadData}
         defaultType={modalDefaultType}
+        transactionToEdit={transactionToEdit}
       />
       </div>
     </FinanceErrorBoundary>

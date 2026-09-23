@@ -64,7 +64,11 @@ QUY TẮC XỬ LÝ NGÀY:
 - KHÔNG ĐƯỢC để nguyên chuỗi "NGÀY_THỰC_TẾ_YYYY-MM-DD" trong JSON output, phải thay bằng ngày thật.
 
 QUY TẮC XỬ LÝ SỐ TIỀN:
-- 800k = 800000, 350k = 350000, 45tr = 45000000. TUYỆT ĐỐI KHÔNG ĐƯỢC thiếu số 0.`;
+- 800k = 800000, 350k = 350000, 45tr = 45000000. TUYỆT ĐỐI KHÔNG ĐƯỢC thiếu số 0.
+
+QUY TẮC PHÁT NGÔN VỀ DỰ THẢO (BẮT BUỘC):
+- TUYỆT ĐỐI KHÔNG ĐƯỢC nói "Tôi đã ghi nhận...", "Tôi đã lưu..." hoặc "Đã lưu vào cơ sở dữ liệu...". Vì giao dịch CHƯA hề được lưu cho đến khi người dùng ấn nút xác nhận!
+- BẠN PHẢI NÓI: "Tôi đã lập dự thảo ghi nhận giao dịch [tên giao dịch, số tiền]. Bạn vui lòng kiểm tra thông tin trên thẻ dự thảo bên dưới và bấm **Xác nhận Lưu vào Lịch sử** để ghi vào sổ cái."`;
 
 function parseMoney(text: string): number | null {
   const kMatch = text.match(/(\d+(?:[.,]\d+)?)\s*k\b/i);
@@ -498,7 +502,7 @@ export async function POST(req: NextRequest) {
     const activeSystemPrompt = basePrompt + ACTION_ENGINE_RULES + `\n[THÔNG TIN THỜI GIAN THỰC TẾ]: Hôm nay là ngày ${todayIso}. Khi điền trường 'date', hãy dùng chính xác '${todayIso}'.`;
 
     const isTx = /đổ\s*xăng|xăng|rửa\s*xe|rua\s*xe|thay\s*dầu|thay\s*nhớt|bảo\s*dưỡng|gửi\s*xe|vé\s*cầu|chi\s*phí|\d+k|\d+\s*nghìn|\d+\s*triệu/i.test(prompt);
-    const tailNote = isTx ? `\n\n[LƯU Ý BẮT BUỘC]: Người dùng đang thông báo về một giao dịch/chi phí phát sinh ("${prompt}"). Sau câu trả lời phân tích, ở DÒNG CUỐI CÙNG bạn BẮT BUỘC phải đính kèm khối mã \`\`\`fmms_action { ... } \`\`\` theo đúng hướng dẫn để hệ thống hiển thị nút bấm lưu vào Database cho người dùng.` : '';
+    const tailNote = isTx ? `\n\n[LƯU Ý BẮT BUỘC]: Người dùng đang thông báo về một giao dịch/chi phí phát sinh ("${prompt}"). Bạn CHƯA ĐƯỢC NÓI là "Tôi đã ghi nhận/đã lưu vào sổ cái". Bạn PHẢI nói là: "Tôi đã lập dự thảo ghi nhận... Bạn vui lòng kiểm tra và ấn Xác nhận Lưu bên dưới". Sau câu trả lời, ở DÒNG CUỐI CÙNG bạn BẮT BUỘC phải đính kèm khối mã \`\`\`fmms_action { ... } \`\`\` theo đúng hướng dẫn để hệ thống hiển thị thẻ dự thảo cho người dùng xác nhận.` : '';
     const fullPrompt = `[HỆ THỐNG VAI TRÒ & QUY TẮC PHÂN TÍCH]:\n${activeSystemPrompt}\n\n${contextText}\n${historyText}[CÂU HỎI HIỆN TẠI CỦA NGƯỜI DÙNG]:\n${prompt}${tailNote}`;
 
     // ─────────────────────────────────────────────────────────────

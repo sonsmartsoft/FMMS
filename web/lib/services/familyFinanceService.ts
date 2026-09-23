@@ -8,7 +8,7 @@ import {
   FamilyLoanSchedule,
   TransactionType,
 } from '@/types/finance';
-import { getExpenses, createExpense, deleteExpense } from './expenseService';
+import { getExpenses, createExpense, updateExpense, deleteExpense } from './expenseService';
 import { mapExpenseCategoryToFamilyCategory, mapFamilyCategoryToExpenseCategory } from './financeSyncMapper';
 import { getAssets } from './assetService';
 
@@ -396,21 +396,95 @@ export async function createFamilyTransaction(
   return createdTx;
 }
 
-export async function deleteFamilyTransaction(id: string): Promise<boolean> {
+export async function updateFamilyTransaction(
+  id: string,
+  updates: Partial<FamilyTransaction>
+): Promise<FamilyTransaction> {
+  const cleanId = id.startsWith('ft_') ? id.replace('ft_', '') : id;
+  const updatePayload: any = { ...updates };
+  delete updatePayload.id;
+  delete updatePayload.created_at;
+  delete updatePayload.wallet;
+  delete updatePayload.category;
+  delete updatePayload.asset;
+  updatePayload.updated_at = new Date().toISOString();
+
+  let updatedTx: FamilyTransaction | null = null;
+
   try {
-    await supabase.from('family_transactions').delete().eq('id', id);
-  } catch {}
+    const { data, error } = await supabase
+      .from('family_transactions')
+      .update(updatePayload)
+      .eq('id', cleanId)
+      .select(`
+        *,
+        wallet:wallets!wallet_id(*),
+        category:transaction_categories!category_id(*)
+      `)
+      .single();
+
+    if (!error && data) {
+      updatedTx = data as FamilyTransaction;
+    }
+  } catch (err) {
+    console.warn('[updateFamilyTransaction] DB update failed, checking local:', err);
+  }
+
+  // Update in local storage if present
+  const local = getLocalCustomTransactions();
+  const index = local.findIndex((t) => t.id === id || t.id === cleanId);
+  if (index !== -1) {
+    local[index] = { ...local[index], ...updates, updated_at: new Date().toISOString() };
+    saveLocalCustomTransactions(local);
+    if (!updatedTx) updatedTx = local[index];
+  }
+
+  // Sync updates to linked vehicle expense if applicable
+  if (updates.amount !== undefined || updates.date || updates.payee_vendor || updates.notes) {
+    try {
+      await updateExpense(cleanId, {
+        amount: updates.amount,
+        date: updates.date,
+        vendor: updates.payee_vendor,
+        description: updates.notes || updates.description,
+      });
+    } catch {}
+  }
+
+  return (updatedTx || { id, ...updates }) as FamilyTransaction;
+}
+
+export async function deleteFamilyTransaction(id: string): Promise<boolean> {
+  const cleanId = id.startsWith('ft_local_')
+    ? id
+    : id.startsWith('ft_')
+    ? id.replace('ft_', '')
+    : id.startsWith('exp_')
+    ? id.replace('exp_', '')
+    : id;
+
+  try {
+    const { error } = await supabase
+      .from('family_transactions')
+      .delete()
+      .or(`id.eq.${cleanId},id.eq.${id}`);
+    if (error) {
+      console.warn('[deleteFamilyTransaction] Supabase delete warning:', error.message);
+    }
+  } catch (err) {
+    console.warn('[deleteFamilyTransaction] DB error:', err);
+  }
 
   const local = getLocalCustomTransactions();
-  const filtered = local.filter((t) => t.id !== id);
+  const filtered = local.filter((t) => t.id !== id && t.id !== cleanId);
   if (filtered.length !== local.length) {
     saveLocalCustomTransactions(filtered);
   }
 
   // Nếu giao dịch này bắt nguồn hoặc liên kết với xe, đồng bộ xóa bên xe
   try {
-    const expenseId = id.startsWith('exp_') ? id.replace('exp_', '') : id.startsWith('ft_') ? id.replace('ft_', '') : id;
-    await deleteExpense(expenseId);
+    await deleteExpense(cleanId);
+    await deleteExpense(id);
   } catch {}
 
   return true;
