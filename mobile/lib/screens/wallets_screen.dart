@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../models/finance_model.dart';
 import '../services/finance_service.dart';
 import '../widgets/fintech_card.dart';
+import 'loans_screen.dart';
 
 class WalletsScreen extends StatefulWidget {
   const WalletsScreen({super.key});
@@ -422,6 +423,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
     final totalBalance = _wallets.fold(0.0, (sum, w) => sum + (w.walletType != WalletType.CREDIT_CARD ? w.currentBalance : 0));
     final creditWallets = _wallets.where((w) => w.walletType == WalletType.CREDIT_CARD).toList();
     final totalCreditDebt = creditWallets.fold(0.0, (sum, w) => sum + (w.currentBalance < 0 ? -w.currentBalance : 0));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -430,6 +432,13 @@ class _WalletsScreenState extends State<WalletsScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.handshake_outlined, color: Color(0xFF0284C7)),
+            tooltip: 'Khoản vay & Trả góp',
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const LoansScreen()));
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.swap_horiz, color: Color(0xFF0284C7)),
             tooltip: 'Chuyển tiền nội bộ',
@@ -502,6 +511,59 @@ class _WalletsScreenState extends State<WalletsScreen> {
                           ),
                         ],
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Loan & Installment Quick Banner
+                  InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const LoansScreen()));
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                              : [const Color(0xFF0284C7).withValues(alpha: 0.08), const Color(0xFF0EA5E9).withValues(alpha: 0.14)],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.handshake_outlined, color: Color(0xFF0284C7), size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Khoản Vay & Trả Góp Gia Đình',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Vay mua xe Mazda, trả góp 0%, theo dõi hạn trả nợ...',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.chevron_right, color: Color(0xFF0284C7), size: 20),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),

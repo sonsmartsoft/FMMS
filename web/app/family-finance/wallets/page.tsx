@@ -53,6 +53,7 @@ export default function WalletsManagementPage() {
   const [formDueDay, setFormDueDay] = useState('5');
   const [formColor, setFormColor] = useState('#0284c7');
   const [formExcluded, setFormExcluded] = useState(false);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const loadWallets = async () => {
     setLoading(true);
@@ -87,59 +88,71 @@ export default function WalletsManagementPage() {
 
   const openEditModal = (w: Wallet) => {
     setEditingWallet(w);
-    setFormName(w.name);
-    setFormType(w.wallet_type);
+    setFormName(w.name || '');
+    setFormType(w.wallet_type || 'BANK');
     setFormBankName(w.bank_name || '');
     setFormAccountNumber(w.account_number || '');
-    setFormBalance(w.current_balance.toString());
-    setFormCreditLimit((w.credit_limit || 0).toString());
-    setFormStatementDay((w.statement_day || 20).toString());
-    setFormDueDay((w.payment_due_day || 5).toString());
+    setFormBalance((w.current_balance ?? 0).toString());
+    setFormCreditLimit((w.credit_limit ?? 50000000).toString());
+    setFormStatementDay((w.statement_day ?? 20).toString());
+    setFormDueDay((w.payment_due_day ?? 5).toString());
     setFormColor(w.color || '#0284c7');
-    setFormExcluded(w.is_excluded_from_total);
+    setFormExcluded(Boolean(w.is_excluded_from_total));
     setIsEditModalOpen(true);
   };
 
   const handleSaveWallet = async (e: React.FormEvent) => {
     e.preventDefault();
-    const bal = parseInt(formBalance.replace(/[^0-9-]/g, ''), 10) || 0;
-    const limit = parseInt(formCreditLimit.replace(/[^0-9]/g, ''), 10) || 0;
+    const bal = parseInt(String(formBalance || '0').replace(/[^0-9-]/g, ''), 10) || 0;
+    const limit = parseInt(String(formCreditLimit || '0').replace(/[^0-9]/g, ''), 10) || 0;
+    const stmtDay = Math.min(31, Math.max(1, parseInt(String(formStatementDay || '20'), 10) || 20));
+    const dueDay = Math.min(31, Math.max(1, parseInt(String(formDueDay || '5'), 10) || 5));
 
     try {
       if (editingWallet) {
-        await updateWallet(editingWallet.id, {
-          name: formName,
+        const updated = await updateWallet(editingWallet.id, {
+          name: formName.trim() || editingWallet.name,
           wallet_type: formType,
-          bank_name: formBankName || undefined,
-          account_number: formAccountNumber || undefined,
+          bank_name: formBankName.trim() || undefined,
+          account_number: formAccountNumber.trim() || undefined,
           current_balance: bal,
           credit_limit: formType === 'CREDIT_CARD' ? limit : undefined,
-          statement_day: formType === 'CREDIT_CARD' ? parseInt(formStatementDay, 10) : undefined,
-          payment_due_day: formType === 'CREDIT_CARD' ? parseInt(formDueDay, 10) : undefined,
+          statement_day: formType === 'CREDIT_CARD' ? stmtDay : undefined,
+          payment_due_day: formType === 'CREDIT_CARD' ? dueDay : undefined,
           color: formColor,
           is_excluded_from_total: formExcluded,
         });
+
+        // Instant UI update
+        setWallets((prev) => prev.map((w) => (w.id === updated.id ? updated : w)));
       } else {
-        await createWallet({
-          name: formName,
+        const created = await createWallet({
+          name: formName.trim() || 'Ví mới',
           wallet_type: formType,
-          bank_name: formBankName || undefined,
-          account_number: formAccountNumber || undefined,
+          bank_name: formBankName.trim() || undefined,
+          account_number: formAccountNumber.trim() || undefined,
           initial_balance: bal,
           current_balance: bal,
           currency: 'VND',
           credit_limit: formType === 'CREDIT_CARD' ? limit : undefined,
-          statement_day: formType === 'CREDIT_CARD' ? parseInt(formStatementDay, 10) : undefined,
-          payment_due_day: formType === 'CREDIT_CARD' ? parseInt(formDueDay, 10) : undefined,
+          statement_day: formType === 'CREDIT_CARD' ? stmtDay : undefined,
+          payment_due_day: formType === 'CREDIT_CARD' ? dueDay : undefined,
           color: formColor,
           is_excluded_from_total: formExcluded,
           status: 'ACTIVE',
         });
+
+        // Instant UI update
+        setWallets((prev) => [...prev, created]);
       }
+
       setIsEditModalOpen(false);
-      loadWallets();
-    } catch (err) {
-      alert('Lưu ví thất bại');
+      setNotification({ message: '✓ Đã lưu cấu hình tài khoản / thẻ thành công!', type: 'success' });
+      setTimeout(() => setNotification(null), 3500);
+    } catch (err: any) {
+      console.error('Save wallet error:', err);
+      setNotification({ message: 'Lưu thất bại: ' + (err?.message || 'Lỗi dữ liệu'), type: 'error' });
+      setTimeout(() => setNotification(null), 3500);
     }
   };
 
@@ -147,7 +160,9 @@ export default function WalletsManagementPage() {
     if (confirm('Bạn có chắc chắn muốn xóa tài khoản/ví này? Các giao dịch liên quan có thể bị ảnh hưởng.')) {
       try {
         await deleteWallet(id);
-        loadWallets();
+        setWallets((prev) => prev.filter((w) => w.id !== id));
+        setNotification({ message: '✓ Đã xóa tài khoản / ví thành công!', type: 'success' });
+        setTimeout(() => setNotification(null), 3000);
       } catch (err) {
         alert('Xóa ví thất bại');
       }
@@ -240,6 +255,23 @@ export default function WalletsManagementPage() {
           </button>
         </div>
       </div>
+
+      {notification && (
+        <div
+          className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center gap-2 transition-all ${
+            notification.type === 'success'
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+              : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+          }`}
+        >
+          {notification.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          ) : (
+            <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
+          )}
+          <span>{notification.message}</span>
+        </div>
+      )}
 
       {/* Summary Row with QMS Gradient KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -413,10 +445,44 @@ export default function WalletsManagementPage() {
                     </div>
                   </div>
 
-                  {/* Statement Alerts */}
-                  <div className="flex justify-between text-[11px] text-indigo-200 bg-white/5 px-2.5 py-1.5 rounded-lg">
-                    <span>📅 Sao kê: <b>Ngày {w.statement_day || 20}</b></span>
-                    <span>⏰ Hạn tt: <b>Ngày {w.payment_due_day || 5}</b></span>
+                  {/* Statement & Due Date Clarification */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex justify-between items-center text-[11px] text-indigo-200 bg-white/10 px-3 py-2 rounded-xl">
+                      <div>
+                        <span className="text-indigo-300 block text-[10px]">NGÀY SAO KÊ</span>
+                        <span className="font-bold font-mono">Ngày {w.statement_day || 20}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-indigo-300 block text-[10px]">HẠN TẤT TOÁN</span>
+                        <span className="font-bold font-mono text-amber-300">Ngày {w.payment_due_day || 5}</span>
+                      </div>
+                    </div>
+
+                    {/* Cycle Status */}
+                    {(() => {
+                      const today = new Date().getDate();
+                      const stmtDay = w.statement_day || 20;
+                      const dueDay = w.payment_due_day || 5;
+
+                      if (today <= stmtDay) {
+                        const daysLeft = stmtDay - today;
+                        return (
+                          <div className="flex items-center gap-1.5 text-[10.5px] text-indigo-300 px-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            <span>Đang trong kỳ chi tiêu (còn <b>{daysLeft === 0 ? 'hôm nay' : `${daysLeft} ngày`}</b> chốt sao kê)</span>
+                          </div>
+                        );
+                      } else {
+                        const daysToDue = dueDay >= today ? (dueDay - today) : (30 - today + dueDay);
+                        const isUrgent = daysToDue <= 5;
+                        return (
+                          <div className={`flex items-center gap-1.5 text-[10.5px] px-1 ${isUrgent ? 'text-rose-400 font-bold' : 'text-amber-300'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isUrgent ? 'bg-rose-500 animate-ping' : 'bg-amber-400'}`} />
+                            <span>Đã chốt sao kê! Còn <b>{daysToDue} ngày</b> đến hạn tất toán (miễn lãi)</span>
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                 </div>
               </div>
@@ -562,25 +628,33 @@ export default function WalletsManagementPage() {
           </div>
 
           {formType === 'CREDIT_CARD' && (
-            <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 space-y-3">
-              <span className="font-bold text-indigo-900 dark:text-indigo-200">
-                Thông tin Thẻ Tín Dụng
-              </span>
+            <div className="p-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/80 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                  <CreditCard className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  Cấu hình Thẻ Tín Dụng & Chu kỳ Miễn lãi
+                </span>
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-200/60 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 font-medium">
+                  Miễn lãi tối đa ~{Math.max(45, (30 - (parseInt(formStatementDay, 10) || 20) + (parseInt(formDueDay, 10) || 5) + 30) % 30 + 30)} ngày
+                </span>
+              </div>
+
               <div>
                 <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Hạn mức tín dụng (VNĐ)
+                  Hạn mức tín dụng được cấp (VNĐ)
                 </label>
                 <input
                   type="text"
                   value={formCreditLimit}
                   onChange={(e) => setFormCreditLimit(e.target.value)}
-                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono"
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-mono focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
+
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Ngày sao kê hàng tháng
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300">
+                    📅 Ngày sao kê hàng tháng
                   </label>
                   <input
                     type="number"
@@ -588,12 +662,16 @@ export default function WalletsManagementPage() {
                     max="31"
                     value={formStatementDay}
                     onChange={(e) => setFormStatementDay(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-semibold"
                   />
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                    Ngày ngân hàng <b>chốt hóa đơn chi tiêu</b> trong kỳ (VD: Ngày 20).
+                  </p>
                 </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    Ngày hạn thanh toán
+
+                <div className="space-y-1">
+                  <label className="block font-semibold text-slate-700 dark:text-slate-300">
+                    ⏰ Ngày tất toán (Hạn trả nợ)
                   </label>
                   <input
                     type="number"
@@ -601,8 +679,26 @@ export default function WalletsManagementPage() {
                     max="31"
                     value={formDueDay}
                     onChange={(e) => setFormDueDay(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white font-semibold"
                   />
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                    Hạn chót <b>nộp tiền trả nợ</b> để được <b>miễn lãi 0%</b> (VD: Ngày 5 tháng sau).
+                  </p>
+                </div>
+              </div>
+
+              {/* Explanatory Box */}
+              <div className="p-2.5 rounded-lg bg-white/70 dark:bg-slate-900/70 border border-indigo-100 dark:border-indigo-900 text-[11px] space-y-1 text-slate-600 dark:text-slate-300">
+                <div className="font-semibold text-indigo-700 dark:text-indigo-300 flex items-center gap-1">
+                  💡 Cách vận hành chu kỳ thẻ tín dụng:
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded">
+                    <b>1. Ngày sao kê (Ngày {formStatementDay || '20'}):</b> Mọi chi tiêu phát sinh trước ngày này sẽ được chốt lại thành số dư cần thanh toán.
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/60 p-2 rounded">
+                    <b>2. Ngày tất toán (Ngày {formDueDay || '5'}):</b> Bạn có thêm {(parseInt(formDueDay, 10) || 5) <= (parseInt(formStatementDay, 10) || 20) ? (30 - (parseInt(formStatementDay, 10) || 20) + (parseInt(formDueDay, 10) || 5)) : ((parseInt(formDueDay, 10) || 5) - (parseInt(formStatementDay, 10) || 20))} ngày để thanh toán dư nợ mà không phát sinh lãi.
+                  </div>
                 </div>
               </div>
             </div>

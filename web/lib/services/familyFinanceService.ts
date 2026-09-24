@@ -24,11 +24,11 @@ export async function getWallets(): Promise<Wallet[]> {
       .select('*')
       .order('created_at', { ascending: true });
 
-    if (error) {
-      console.warn('getWallets query error, falling back to local defaults:', error.message);
-      return getLocalWallets();
+    if (!error && data && data.length > 0) {
+      saveLocalWallets(data as Wallet[]);
+      return data as Wallet[];
     }
-    return (data as Wallet[]) || [];
+    return getLocalWallets();
   } catch (err) {
     console.error('getWallets exception:', err);
     return getLocalWallets();
@@ -36,31 +36,108 @@ export async function getWallets(): Promise<Wallet[]> {
 }
 
 export async function createWallet(wallet: Omit<Wallet, 'id' | 'created_at' | 'updated_at'>): Promise<Wallet> {
-  const { data, error } = await supabase
-    .from('wallets')
-    .insert([wallet])
-    .select()
-    .single();
+  const local = getLocalWallets();
+  const isBrowser = typeof window !== 'undefined';
+  const newId = (isBrowser && window.crypto && typeof window.crypto.randomUUID === 'function')
+    ? window.crypto.randomUUID()
+    : `w-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
-  if (error) throw error;
-  return data as Wallet;
+  const now = new Date().toISOString();
+  const cleanWallet: Wallet = {
+    ...wallet,
+    id: newId,
+    initial_balance: Number(wallet.initial_balance) || 0,
+    current_balance: Number(wallet.current_balance) || 0,
+    credit_limit: wallet.credit_limit !== undefined ? Number(wallet.credit_limit) : undefined,
+    statement_day: wallet.statement_day !== undefined ? Number(wallet.statement_day) : undefined,
+    payment_due_day: wallet.payment_due_day !== undefined ? Number(wallet.payment_due_day) : undefined,
+    created_at: now,
+    updated_at: now,
+  };
+
+  try {
+    const { data, error } = await supabase
+      .from('wallets')
+      .insert([cleanWallet])
+      .select()
+      .single();
+
+    if (!error && data) {
+      local.push(data as Wallet);
+      saveLocalWallets(local);
+      return data as Wallet;
+    }
+  } catch (_) {}
+
+  // Fallback to local persistence
+  local.push(cleanWallet);
+  saveLocalWallets(local);
+  return cleanWallet;
 }
 
 export async function updateWallet(id: string, updates: Partial<Wallet>): Promise<Wallet> {
-  const { data, error } = await supabase
-    .from('wallets')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
+  const local = getLocalWallets();
+  const idx = local.findIndex((w) => w.id === id);
+  const now = new Date().toISOString();
 
-  if (error) throw error;
-  return data as Wallet;
+  // Validate if id is a standard UUID format before querying Supabase
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+
+  if (isUUID) {
+    try {
+      const { data, error } = await supabase
+        .from('wallets')
+        .update({ ...updates, updated_at: now })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (!error && data) {
+        if (idx !== -1) {
+          local[idx] = data as Wallet;
+        } else {
+          local.push(data as Wallet);
+        }
+        saveLocalWallets(local);
+        return data as Wallet;
+      }
+    } catch (_) {}
+  }
+
+  // Fallback to local persistence
+  if (idx !== -1) {
+    local[idx] = { ...local[idx], ...updates, updated_at: now };
+    saveLocalWallets(local);
+    return local[idx];
+  }
+
+  const fallbackWallet: Wallet = {
+    id,
+    name: updates.name || 'Ví tài chính',
+    wallet_type: updates.wallet_type || 'BANK',
+    initial_balance: updates.current_balance ?? 0,
+    current_balance: updates.current_balance ?? 0,
+    currency: updates.currency || 'VND',
+    is_excluded_from_total: updates.is_excluded_from_total || false,
+    status: updates.status || 'ACTIVE',
+    ...updates,
+    updated_at: now,
+  };
+  local.push(fallbackWallet);
+  saveLocalWallets(local);
+  return fallbackWallet;
 }
 
 export async function deleteWallet(id: string): Promise<boolean> {
-  const { error } = await supabase.from('wallets').delete().eq('id', id);
-  if (error) throw error;
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+  if (isUUID) {
+    try {
+      await supabase.from('wallets').delete().eq('id', id);
+    } catch (_) {}
+  }
+  const local = getLocalWallets();
+  const filtered = local.filter((w) => w.id !== id);
+  saveLocalWallets(filtered);
   return true;
 }
 
@@ -621,14 +698,31 @@ export async function deleteFamilyLoan(id: string): Promise<boolean> {
 // LOCAL DEFAULTS / FALLBACKS
 // ─────────────────────────────────────────────────────────────────────────────
 function getLocalWallets(): Wallet[] {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('ffms_wallets');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+  }
   return [
-    { id: 'w-cash-01', name: 'Tiền mặt gia đình', wallet_type: 'CASH', initial_balance: 15000000, current_balance: 15000000, currency: 'VND', color: '#10b981', icon: 'Banknote', is_excluded_from_total: false, status: 'ACTIVE' },
+    { id: 'w-cash-01', name: 'Tiền mặt gia đình', wallet_type: 'CASH', initial_balance: 15400000, current_balance: 15400000, currency: 'VND', color: '#10b981', icon: 'Banknote', is_excluded_from_total: false, status: 'ACTIVE' },
     { id: 'w-tcb-01', name: 'Techcombank Chi tiêu', wallet_type: 'BANK', bank_name: 'Techcombank', initial_balance: 38500000, current_balance: 38500000, currency: 'VND', color: '#ef4444', icon: 'Building2', is_excluded_from_total: false, status: 'ACTIVE' },
-    { id: 'w-vcb-01', name: 'Vietcombank Lương & Dự phòng', wallet_type: 'BANK', bank_name: 'Vietcombank', initial_balance: 85000000, current_balance: 85000000, currency: 'VND', color: '#059669', icon: 'CreditCard', is_excluded_from_total: false, status: 'ACTIVE' },
-    { id: 'w-tcb-credit', name: 'Techcombank Visa Signature', wallet_type: 'CREDIT_CARD', bank_name: 'Techcombank', initial_balance: 0, current_balance: 0, currency: 'VND', credit_limit: 100000000, statement_day: 20, payment_due_day: 5, color: '#6366f1', icon: 'CreditCard', is_excluded_from_total: false, status: 'ACTIVE' },
-    { id: 'w-momo-01', name: 'Ví MoMo', wallet_type: 'E_WALLET', initial_balance: 2500000, current_balance: 2500000, currency: 'VND', color: '#ec4899', icon: 'Smartphone', is_excluded_from_total: false, status: 'ACTIVE' },
+    { id: 'w-vcb-01', name: 'Vietcombank Lương & Dự phòng', wallet_type: 'BANK', bank_name: 'Vietcombank', initial_balance: 85200000, current_balance: 85200000, currency: 'VND', color: '#059669', icon: 'CreditCard', is_excluded_from_total: false, status: 'ACTIVE' },
+    { id: 'w-tcb-credit', name: 'Techcombank Visa Signature', wallet_type: 'CREDIT_CARD', bank_name: 'Techcombank', initial_balance: 0, current_balance: -4850000, currency: 'VND', credit_limit: 100000000, statement_day: 20, payment_due_day: 5, color: '#6366f1', icon: 'CreditCard', is_excluded_from_total: false, status: 'ACTIVE' },
+    { id: 'w-momo-01', name: 'Ví MoMo', wallet_type: 'E_WALLET', initial_balance: 1250000, current_balance: 1250000, currency: 'VND', color: '#ec4899', icon: 'Smartphone', is_excluded_from_total: false, status: 'ACTIVE' },
     { id: 'w-savings-01', name: 'Sổ tiết kiệm ngân hàng', wallet_type: 'SAVINGS', bank_name: 'Techcombank', initial_balance: 150000000, current_balance: 150000000, currency: 'VND', color: '#38bdf8', icon: 'PiggyBank', is_excluded_from_total: false, status: 'ACTIVE' },
   ];
+}
+
+function saveLocalWallets(wallets: Wallet[]) {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('ffms_wallets', JSON.stringify(wallets));
+    } catch {}
+  }
 }
 
 function getLocalCategories(): TransactionCategory[] {

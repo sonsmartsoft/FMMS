@@ -8,6 +8,7 @@ import '../services/finance_service.dart';
 import '../widgets/fintech_card.dart';
 import '../widgets/member_spending_bar.dart';
 import 'ai_chat_screen.dart';
+import 'loans_screen.dart';
 import 'login_profile_screen.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
@@ -188,6 +189,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     }
 
     final stats = _stats!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -445,6 +447,120 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             currencyFmt: _currencyFmt,
                           ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Family Loans & Installments Overview Card
+                    InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => const LoansScreen()));
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isDark
+                                ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                                : [const Color(0xFFF8FAFC), Colors.white],
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Icon(Icons.handshake_outlined, size: 18, color: Color(0xFF0284C7)),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Khoản Vay & Trả Góp',
+                                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                        ),
+                                        Text(
+                                          'Vay mua xe Mazda, trả góp tín dụng...',
+                                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF0284C7).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Text('Chi tiết', style: TextStyle(fontSize: 11, color: Color(0xFF0284C7), fontWeight: FontWeight.bold)),
+                                      Icon(Icons.chevron_right, size: 14, color: Color(0xFF0284C7)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            const Divider(height: 1),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Dư nợ còn lại', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                      SizedBox(height: 3),
+                                      Text(
+                                        '282.918.368 ₫',
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFFEF4444)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(width: 1, height: 28, color: Colors.grey.withValues(alpha: 0.2)),
+                                const SizedBox(width: 14),
+                                const Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Hạn trả tiếp theo', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                      SizedBox(height: 3),
+                                      Text(
+                                        'Ngày 28 (còn 4 ngày)',
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFF59E0B)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),

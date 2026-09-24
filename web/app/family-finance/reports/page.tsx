@@ -25,6 +25,7 @@ import {
   BarChart3,
   Calendar,
   ChevronLeft,
+  ChevronRight,
   Printer,
   TrendingUp,
   TrendingDown,
@@ -44,6 +45,12 @@ import {
   Sparkles,
   HelpCircle,
   FileSpreadsheet,
+  Clock,
+  Users,
+  Tag,
+  ArrowRight,
+  Activity,
+  Flame,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -95,6 +102,8 @@ export default function FamilyFinancialReportsPage() {
 
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedWalletId, setSelectedWalletId] = useState<string>('ALL');
+  const [selectedCategoryDetail, setSelectedCategoryDetail] = useState<string | null>(null);
   const [activeReportTab, setActiveReportTab] = useState<'CASHFLOW' | 'NET_WORTH' | 'HEALTH'>('CASHFLOW');
 
   const loadData = async () => {
@@ -132,31 +141,217 @@ export default function FamilyFinancialReportsPage() {
     loadData();
   }, [selectedMonth, selectedYear]);
 
+  // Filtered transactions by selected wallet
+  const filteredTransactions = useMemo(() => {
+    if (selectedWalletId === 'ALL') return transactions;
+    return transactions.filter(
+      (t) => t.wallet_id === selectedWalletId || t.to_wallet_id === selectedWalletId
+    );
+  }, [transactions, selectedWalletId]);
+
   // Calculations:
   // 1. Inflows
   const totalIncome = useMemo(() => {
-    return transactions
+    return filteredTransactions
       .filter((t) => t.transaction_type === 'INCOME' && !t.exclude_from_reports)
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   // 2. Outflows
   const totalExpense = useMemo(() => {
-    return transactions
+    return filteredTransactions
       .filter((t) => t.transaction_type === 'EXPENSE' && !t.exclude_from_reports)
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-  }, [transactions]);
+  }, [filteredTransactions]);
 
-  // Net Cash Flow
+  // Net Cash Flow & Savings Rate
   const netCashFlow = totalIncome - totalExpense;
   const savingsRate = totalIncome > 0 ? Math.round((netCashFlow / totalIncome) * 100) : 0;
 
+  // Spendee Velocity Metrics (Average daily expense, Busiest day, Transactions count)
+  const daysInMonth = useMemo(() => new Date(selectedYear, selectedMonth, 0).getDate(), [selectedMonth, selectedYear]);
+  const isCurrentMonth = useMemo(() => {
+    const now = new Date();
+    return now.getMonth() + 1 === selectedMonth && now.getFullYear() === selectedYear;
+  }, [selectedMonth, selectedYear]);
+  const daysElapsed = isCurrentMonth ? Math.min(daysInMonth, new Date().getDate()) : daysInMonth;
+  const avgDailyExpense = Math.round(totalExpense / Math.max(1, daysElapsed));
+
+  const busiestDayInfo = useMemo(() => {
+    const dayOfWeekTotals: { [key: string]: number } = {
+      'Thứ Hai': 0, 'Thứ Ba': 0, 'Thứ Tư': 0, 'Thứ Năm': 0, 'Thứ Sáu': 0, 'Thứ Bảy': 0, 'Chủ Nhật': 0,
+    };
+    const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+    const dateTotals: { [key: string]: number } = {};
+
+    filteredTransactions
+      .filter((t) => t.transaction_type === 'EXPENSE' && !t.exclude_from_reports)
+      .forEach((t) => {
+        const amt = Number(t.amount || 0);
+        dateTotals[t.date] = (dateTotals[t.date] || 0) + amt;
+        const d = new Date(t.date);
+        if (!isNaN(d.getTime())) {
+          const dow = dayNames[d.getDay()];
+          dayOfWeekTotals[dow] = (dayOfWeekTotals[dow] || 0) + amt;
+        }
+      });
+
+    let maxDow = 'Chủ Nhật';
+    let maxDowAmt = 0;
+    Object.entries(dayOfWeekTotals).forEach(([dow, amt]) => {
+      if (amt > maxDowAmt) {
+        maxDowAmt = amt;
+        maxDow = dow;
+      }
+    });
+
+    let maxDate = '';
+    let maxDateAmt = 0;
+    Object.entries(dateTotals).forEach(([dt, amt]) => {
+      if (amt > maxDateAmt) {
+        maxDateAmt = amt;
+        maxDate = dt;
+      }
+    });
+
+    return {
+      dow: maxDowAmt > 0 ? maxDow : 'N/A',
+      dowAmt: maxDowAmt,
+      date: maxDate ? `Ngày ${parseInt(maxDate.split('-')[2], 10)}` : 'N/A',
+      dateAmt: maxDateAmt,
+    };
+  }, [filteredTransactions]);
+
+  const totalExpenseCount = useMemo(() => {
+    return filteredTransactions.filter((t) => t.transaction_type === 'EXPENSE' && !t.exclude_from_reports).length;
+  }, [filteredTransactions]);
+
+  // Spendee & MISA Multi-Category Detailed Breakdown
+  const categoryBreakdown = useMemo(() => {
+    const expTxs = filteredTransactions.filter((t) => t.transaction_type === 'EXPENSE' && !t.exclude_from_reports);
+    const total = expTxs.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    const map = new Map<string, {
+      id: string;
+      name: string;
+      color: string;
+      icon: string;
+      amount: number;
+      count: number;
+      subcategories: { [key: string]: { name: string; amount: number; count: number } };
+      members: { [key: string]: { name: string; amount: number; count: number } };
+      transactions: FamilyTransaction[];
+    }>();
+
+    const defaultColors = ['#f59e0b', '#3b82f6', '#06b6d4', '#ec4899', '#8b5cf6', '#10b981', '#6366f1', '#f43f5e', '#64748b'];
+
+    expTxs.forEach((t) => {
+      const catName = t.category?.name || 'Chi tiêu khác';
+      const catId = t.category_id || t.category?.id || catName;
+      const color = t.category?.color || defaultColors[map.size % defaultColors.length];
+      const icon = t.category?.icon || 'Tag';
+      const amt = Number(t.amount || 0);
+
+      if (!map.has(catId)) {
+        map.set(catId, {
+          id: catId,
+          name: catName,
+          color,
+          icon,
+          amount: 0,
+          count: 0,
+          subcategories: {},
+          members: {},
+          transactions: [],
+        });
+      }
+
+      const catItem = map.get(catId)!;
+      catItem.amount += amt;
+      catItem.count += 1;
+      catItem.transactions.push(t);
+
+      // Subcategory breakdown
+      const subName = t.description?.split('-')[0]?.trim() || t.payee_vendor || 'Chi phí tiêu chuẩn';
+      if (!catItem.subcategories[subName]) {
+        catItem.subcategories[subName] = { name: subName, amount: 0, count: 0 };
+      }
+      catItem.subcategories[subName].amount += amt;
+      catItem.subcategories[subName].count += 1;
+
+      // Member breakdown
+      const memName = (t as any).user_member?.full_name || (t as any).created_by || 'Gia đình chung';
+      if (!catItem.members[memName]) {
+        catItem.members[memName] = { name: memName, amount: 0, count: 0 };
+      }
+      catItem.members[memName].amount += amt;
+      catItem.members[memName].count += 1;
+    });
+
+    const list = Array.from(map.values())
+      .sort((a, b) => b.amount - a.amount)
+      .map((c, i) => ({
+        ...c,
+        color: c.color || defaultColors[i % defaultColors.length],
+        percentage: total > 0 ? Math.round((c.amount / total) * 100) : 0,
+      }));
+
+    return { list, total };
+  }, [filteredTransactions]);
+
+  // Spendee Daily Cashflow (31 days)
+  const dailyCashflowData = useMemo(() => {
+    const days = new Date(selectedYear, selectedMonth, 0).getDate();
+    const arr = [];
+    for (let d = 1; d <= days; d++) {
+      const dayStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dayTxs = filteredTransactions.filter((t) => t.date === dayStr && !t.exclude_from_reports);
+      const income = dayTxs.filter((t) => t.transaction_type === 'INCOME').reduce((s, t) => s + Number(t.amount || 0), 0);
+      const expense = dayTxs.filter((t) => t.transaction_type === 'EXPENSE').reduce((s, t) => s + Number(t.amount || 0), 0);
+      arr.push({
+        day: `N${d}`,
+        dayNum: d,
+        date: dayStr,
+        income,
+        expense,
+        net: income - expense,
+      });
+    }
+    return arr;
+  }, [filteredTransactions, selectedMonth, selectedYear]);
+
+  // Drilldown category detail
+  const activeCategory = useMemo(() => {
+    if (!selectedCategoryDetail) return null;
+    return categoryBreakdown.list.find(
+      (c) => c.id === selectedCategoryDetail || c.name === selectedCategoryDetail
+    ) || null;
+  }, [selectedCategoryDetail, categoryBreakdown]);
+
+  // Active category daily trend
+  const activeCategoryDailyData = useMemo(() => {
+    if (!activeCategory) return [];
+    const days = new Date(selectedYear, selectedMonth, 0).getDate();
+    const arr = [];
+    for (let d = 1; d <= days; d++) {
+      const dayStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dayTxs = activeCategory.transactions.filter((t) => t.date === dayStr);
+      const amount = dayTxs.reduce((s, t) => s + Number(t.amount || 0), 0);
+      arr.push({
+        day: `N${d}`,
+        date: dayStr,
+        amount,
+      });
+    }
+    return arr;
+  }, [activeCategory, selectedMonth, selectedYear]);
+
   // Mobility Outflows vs Household Outflows
   const vehicleExpense = useMemo(() => {
-    return transactions
+    return filteredTransactions
       .filter((t) => t.transaction_type === 'EXPENSE' && (t.asset_id || t.category?.name?.includes('Phương tiện')))
       .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   const generalExpense = Math.max(0, totalExpense - vehicleExpense);
 
@@ -290,6 +485,26 @@ export default function FamilyFinancialReportsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 print:hidden">
+            {/* Wallet Filter (Spendee Style) */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-xs font-semibold text-slate-700 dark:text-slate-200">
+              <WalletIcon className="w-3.5 h-3.5 text-indigo-500" />
+              <span>Tài khoản:</span>
+              <select
+                value={selectedWalletId}
+                onChange={(e) => setSelectedWalletId(e.target.value)}
+                className="bg-transparent font-bold focus:outline-none cursor-pointer max-w-[160px] truncate"
+              >
+                <option value="ALL" className="dark:bg-slate-900">
+                  Tất cả ví ({wallets.length})
+                </option>
+                {wallets.map((w) => (
+                  <option key={w.id} value={w.id} className="dark:bg-slate-900">
+                    {w.name} ({fmt(w.current_balance)} ₫)
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Month & Year Filter */}
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm text-xs font-semibold text-slate-700 dark:text-slate-200">
               <Calendar className="w-3.5 h-3.5 text-sky-500" />
@@ -444,158 +659,380 @@ export default function FamilyFinancialReportsPage() {
                 </div>
               </div>
 
-              {/* Cashflow Charts Section */}
-              {isMounted && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pb-4">
-                  {/* Chart 1: Cashflow Overview Bar Chart */}
-                  <div className="lg:col-span-7 bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                        <BarChart3 className="w-4 h-4 text-emerald-500" />
-                        Lưu Chuyển Dòng Tiền (Vào / Ra / Thặng Dư)
-                      </span>
-                      <ChartLabelToggle
-                        showLabels={showCashflowBarLabels}
-                        onToggle={toggleCashflowBarLabels}
-                        size="small"
-                      />
+              {/* ── Spendee Velocity KPI Strip ── */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-200 dark:border-slate-800">
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-1">
+                  <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Chi tiêu TB / ngày</span>
+                    <Clock className="w-3.5 h-3.5 text-sky-500" />
+                  </div>
+                  <div className="text-base font-black font-mono text-slate-900 dark:text-white">
+                    {fmt(avgDailyExpense)} ₫
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Trung bình {daysElapsed} ngày trong kỳ
+                  </div>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-1">
+                  <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Ngày chi nhiều nhất</span>
+                    <Flame className="w-3.5 h-3.5 text-rose-500" />
+                  </div>
+                  <div className="text-base font-black font-mono text-rose-600 dark:text-rose-400">
+                    {busiestDayInfo.dow}
+                  </div>
+                  <div className="text-[10px] text-slate-400 truncate">
+                    {busiestDayInfo.date} ({fmt(busiestDayInfo.dateAmt)} ₫)
+                  </div>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-1">
+                  <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Tỷ lệ tiết kiệm ròng</span>
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+                  </div>
+                  <div className={`text-base font-black font-mono ${savingsRate >= 20 ? 'text-emerald-600 dark:text-emerald-400' : savingsRate >= 0 ? 'text-amber-500' : 'text-rose-500'}`}>
+                    {savingsRate}%
+                  </div>
+                  <div className="text-[10px] text-slate-400 truncate">
+                    {netCashFlow >= 0 ? `+${fmt(netCashFlow)} ₫` : `${fmt(netCashFlow)} ₫`}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-1">
+                  <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Số lần giao dịch</span>
+                    <Activity className="w-3.5 h-3.5 text-indigo-500" />
+                  </div>
+                  <div className="text-base font-black font-mono text-indigo-600 dark:text-indigo-400">
+                    {totalExpenseCount} giao dịch
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Phân bổ {categoryBreakdown.list.length} danh mục
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Spendee Category Drill-Down View (When a category is active) ── */}
+              {activeCategory ? (
+                <div className="p-5 rounded-2xl bg-indigo-50/40 dark:bg-indigo-950/20 border-2 border-indigo-200 dark:border-indigo-800/80 space-y-5">
+                  {/* Breadcrumb Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-indigo-100 dark:border-indigo-900">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setSelectedCategoryDetail(null)}
+                        className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800 shadow-sm transition-all"
+                      >
+                        <ChevronLeft className="w-4 h-4" /> Báo cáo tổng quan
+                      </button>
+                      <span className="text-slate-400">/</span>
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: activeCategory.color }} />
+                        <h3 className="text-base font-black text-slate-900 dark:text-white">
+                          {activeCategory.name}
+                        </h3>
+                      </div>
                     </div>
-                    <div style={{ height: showCashflowBarLabels ? 245 : 224 }} className="w-full">
+                    <button
+                      onClick={() => setSelectedCategoryDetail(null)}
+                      className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-semibold"
+                    >
+                      ✕ Đóng chi tiết
+                    </button>
+                  </div>
+
+                  {/* Category Top 3 Metrics */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                      <span className="text-[11px] font-bold text-slate-400 block uppercase">Tổng chi danh mục</span>
+                      <span className="text-lg font-black font-mono text-rose-600 dark:text-rose-400">
+                        -{fmt(activeCategory.amount)} ₫
+                      </span>
+                      <span className="text-[10px] text-slate-500 block mt-0.5">
+                        Chiếm {activeCategory.percentage}% tổng chi tiêu
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                      <span className="text-[11px] font-bold text-slate-400 block uppercase">Số lần giao dịch</span>
+                      <span className="text-lg font-black font-mono text-indigo-600 dark:text-indigo-400">
+                        {activeCategory.count} giao dịch
+                      </span>
+                      <span className="text-[10px] text-slate-500 block mt-0.5">
+                        Trong Tháng {selectedMonth}/{selectedYear}
+                      </span>
+                    </div>
+
+                    <div className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                      <span className="text-[11px] font-bold text-slate-400 block uppercase">Chi tiêu trung bình / lần</span>
+                      <span className="text-lg font-black font-mono text-sky-600 dark:text-sky-400">
+                        {fmt(Math.round(activeCategory.amount / Math.max(1, activeCategory.count)))} ₫
+                      </span>
+                      <span className="text-[10px] text-slate-500 block mt-0.5">
+                        Giá trị hóa đơn trung bình
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Daily Category Changes Chart (Spendee Desktop Style) */}
+                  <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200">
+                      <span>Biến động chi tiêu danh mục ({activeCategory.name} - Ngày 1 đến {daysInMonth})</span>
+                      <span className="text-[11px] font-mono text-slate-400">Đơn vị: ₫</span>
+                    </div>
+                    <div style={{ height: 160 }} className="w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={cashflowChartData} margin={{ top: showCashflowBarLabels ? 20 : 10, right: 10, left: -10, bottom: 10 }}>
+                        <BarChart data={activeCategoryDailyData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
-                          <XAxis
-                            dataKey="name"
-                            tick={{ fill: axisColor, fontSize: 10, fontWeight: 600 }}
-                            axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
-                            tickLine={false}
-                          />
-                          <YAxis
-                            tick={{ fill: axisColor, fontSize: 10 }}
-                            axisLine={{ stroke: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)' }}
-                            tickLine={false}
-                            tickFormatter={(v) => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'}
-                            width={40}
-                          />
+                          <XAxis dataKey="day" tick={{ fill: axisColor, fontSize: 9 }} tickLine={false} />
+                          <YAxis tick={{ fill: axisColor, fontSize: 9 }} tickLine={false} tickFormatter={(v) => v > 0 ? `${(v / 1_000_000).toFixed(1)}M` : '0'} />
                           <ReTooltip
-                            formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
-                            contentStyle={{
-                              background: tooltipBg,
-                              border: `1px solid ${tooltipBorder}`,
-                              borderRadius: 12,
-                              color: tooltipText,
-                              fontSize: 11,
-                              boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
-                            }}
+                            formatter={(val: any) => [`${fmt(Number(val))} ₫`, 'Chi tiêu']}
+                            contentStyle={{ background: tooltipBg, border: `1px solid ${tooltipBorder}`, borderRadius: 8, fontSize: 11 }}
                           />
-                          <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
-                            {cashflowChartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.fill} />
-                            ))}
-                            {showCashflowBarLabels && (
-                              <LabelList
-                                dataKey="amount"
-                                position="top"
-                                formatter={(v: any) => fmtM(Number(v))}
-                                style={{ fill: isDark ? '#E2E8F0' : '#1E293B', fontSize: 9, fontWeight: 700 }}
-                                offset={4}
-                              />
-                            )}
-                          </Bar>
+                          <Bar dataKey="amount" fill={activeCategory.color} radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                   </div>
 
-                  {/* Chart 2: Expense Structure Donut Chart */}
-                  <div className="lg:col-span-5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-2">
-                    <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
+                  {/* 2 Split Panels: Subcategories & People */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Subcategories (Danh mục con) */}
+                    <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                        <PieChart className="w-4 h-4 text-sky-500" />
-                        Cơ Cấu Chi Phí & Trả Nợ
+                        <Tag className="w-3.5 h-3.5 text-sky-500" />
+                        Phân bổ theo Danh mục con ({Object.keys(activeCategory.subcategories).length})
                       </span>
-                      <div className="flex items-center gap-2">
-                        <ChartLabelToggle
-                          showLabels={showCashflowPieLabels}
-                          onToggle={toggleCashflowPieLabels}
-                          size="small"
-                        />
-                        <span className="text-[11px] font-mono font-bold text-rose-600 dark:text-rose-400">
-                          {fmt(totalExpense)} ₫
-                        </span>
+                      <div className="space-y-2.5">
+                        {Object.values(activeCategory.subcategories).map((sub) => {
+                          const subPct = activeCategory.amount > 0 ? Math.round((sub.amount / activeCategory.amount) * 100) : 0;
+                          return (
+                            <div key={sub.name} className="space-y-1">
+                              <div className="flex justify-between text-xs font-semibold">
+                                <span className="text-slate-700 dark:text-slate-300">{sub.name} ({sub.count} lần)</span>
+                                <span className="font-mono text-slate-900 dark:text-white">{fmt(sub.amount)} ₫ ({subPct}%)</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div className="h-full rounded-full" style={{ width: `${subPct}%`, backgroundColor: activeCategory.color }} />
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                    <div className="h-44 w-full relative">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RePieChart>
-                          <Pie
-                            data={expenseStructurePieData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={45}
-                            outerRadius={68}
-                            paddingAngle={4}
-                            dataKey="value"
-                            nameKey="name"
-                            labelLine={false}
-                            label={
-                              showCashflowPieLabels
-                                ? ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
-                                    const pct = getPieLabelPercent(percent);
-                                    if (pct < 3) return null;
-                                    const RADIAN = Math.PI / 180;
-                                    const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.5;
-                                    const x = Number(cx) + radius * Math.cos(-midAngle * RADIAN);
-                                    const y = Number(cy) + radius * Math.sin(-midAngle * RADIAN);
-                                    return (
-                                      <text
-                                        x={x}
-                                        y={y}
-                                        fill="#FFFFFF"
-                                        textAnchor="middle"
-                                        dominantBaseline="central"
-                                        style={{ fontSize: 10, fontWeight: 800, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
-                                      >
-                                        {`${pct}%`}
-                                      </text>
-                                    );
-                                  }
-                                : false
-                            }
-                          >
-                            {expenseStructurePieData.map((entry, index) => (
-                              <Cell key={`cell-exp-${index}`} fill={entry.color} stroke="transparent" />
-                            ))}
-                          </Pie>
-                          <ReTooltip
-                            formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
-                            contentStyle={{
-                              background: tooltipBg,
-                              border: `1px solid ${tooltipBorder}`,
-                              borderRadius: 12,
-                              color: tooltipText,
-                              fontSize: 11,
-                              boxShadow: isDark ? '0 10px 25px -5px rgba(0, 0, 0, 0.5)' : '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
-                            }}
-                          />
-                        </RePieChart>
-                      </ResponsiveContainer>
+
+                    {/* People / Members (Thành viên chi tiêu) */}
+                    <div className="p-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-indigo-500" />
+                        Thành viên chi tiêu ({Object.keys(activeCategory.members).length})
+                      </span>
+                      <div className="space-y-2.5">
+                        {Object.values(activeCategory.members).map((mem) => {
+                          const memPct = activeCategory.amount > 0 ? Math.round((mem.amount / activeCategory.amount) * 100) : 0;
+                          return (
+                            <div key={mem.name} className="space-y-1">
+                              <div className="flex justify-between text-xs font-semibold">
+                                <span className="text-slate-700 dark:text-slate-300">{mem.name} ({mem.count} giao dịch)</span>
+                                <span className="font-mono text-slate-900 dark:text-white">{fmt(mem.amount)} ₫ ({memPct}%)</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${memPct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="space-y-1 text-[10px]">
-                      {expenseStructurePieData.map((item) => (
-                        <div key={item.name} className="flex items-center justify-between">
-                          <span className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                            {item.name}
-                          </span>
-                          <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-                            {fmt(item.value)} ₫ ({totalExpense > 0 ? Math.round((item.value / totalExpense) * 100) : 0}%)
+                  </div>
+
+                  {/* Transaction Details in this category */}
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                      Lịch sử giao dịch chi tiết ({activeCategory.transactions.length})
+                    </span>
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                      {activeCategory.transactions.slice(0, 15).map((t) => (
+                        <div key={t.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 text-xs">
+                          <div>
+                            <span className="font-bold text-slate-800 dark:text-slate-200 block">
+                              {t.description || t.payee_vendor || activeCategory.name}
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              {t.date} • {t.wallet?.name || 'Ví thanh toán'}
+                            </span>
+                          </div>
+                          <span className="font-mono font-bold text-rose-600 dark:text-rose-400 text-sm">
+                            -{fmt(t.amount)} ₫
                           </span>
                         </div>
                       ))}
                     </div>
                   </div>
                 </div>
+              ) : (
+                /* ── Spendee Category Donut & Interactive List + Daily Cashflow ── */
+                isMounted && (
+                  <div className="space-y-6">
+                    {/* Row 1: Spendee Donut + Interactive Category List */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                      {/* Donut Chart */}
+                      <div className="lg:col-span-5 bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                            <PieChart className="w-4 h-4 text-sky-500" />
+                            Cơ Cấu Chi Tiêu (Spendee Donut)
+                          </span>
+                          <span className="text-xs font-mono font-bold text-rose-600 dark:text-rose-400">
+                            {fmt(totalExpense)} ₫
+                          </span>
+                        </div>
+
+                        <div className="h-52 w-full relative flex items-center justify-center">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RePieChart>
+                              <Pie
+                                data={categoryBreakdown.list}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={55}
+                                outerRadius={80}
+                                paddingAngle={3}
+                                dataKey="amount"
+                                nameKey="name"
+                                onClick={(entry: any) => setSelectedCategoryDetail(entry.id)}
+                                cursor="pointer"
+                              >
+                                {categoryBreakdown.list.map((entry, index) => (
+                                  <Cell key={`cell-cat-${index}`} fill={entry.color} stroke="transparent" />
+                                ))}
+                              </Pie>
+                              <ReTooltip
+                                formatter={(val: any, name: string) => [`${fmt(Number(val))} ₫`, name]}
+                                contentStyle={{
+                                  background: tooltipBg,
+                                  border: `1px solid ${tooltipBorder}`,
+                                  borderRadius: 12,
+                                  color: tooltipText,
+                                  fontSize: 11,
+                                }}
+                              />
+                            </RePieChart>
+                          </ResponsiveContainer>
+                          {/* Donut Center Display */}
+                          <div className="absolute text-center pointer-events-none">
+                            <span className="text-[10px] font-bold text-slate-400 block tracking-wider uppercase">TỔNG CHI</span>
+                            <span className="text-sm font-black font-mono text-slate-900 dark:text-white">
+                              {totalExpense > 0 ? fmt(totalExpense) : '0'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block">VNĐ</span>
+                          </div>
+                        </div>
+
+                        <p className="text-[11px] text-center text-slate-400">
+                          💡 Bấm vào từng lát bánh hoặc danh mục bên cạnh để xem phân tích sâu
+                        </p>
+                      </div>
+
+                      {/* Interactive Category List (Spendee Phone List Style) */}
+                      <div className="lg:col-span-7 bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 space-y-3">
+                        <div className="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-700/60">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                            Danh Mục Chi Tiêu ({categoryBreakdown.list.length})
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            {totalExpenseCount} giao dịch
+                          </span>
+                        </div>
+
+                        <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                          {categoryBreakdown.list.map((cat) => (
+                            <button
+                              key={cat.id}
+                              onClick={() => setSelectedCategoryDetail(cat.id)}
+                              className="w-full p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-sm transition-all flex items-center justify-between text-left group"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span
+                                  className="w-3 h-3 rounded-full shrink-0"
+                                  style={{ backgroundColor: cat.color }}
+                                />
+                                <div>
+                                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                    {cat.name}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400">
+                                    {cat.count} giao dịch • {cat.percentage}% tổng chi
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-xs text-rose-600 dark:text-rose-400">
+                                  -{fmt(cat.amount)} ₫
+                                </span>
+                                <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Row 2: Spendee Daily Cashflow Trend (31 days) */}
+                    <div className="bg-slate-50 dark:bg-slate-800/40 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 space-y-3">
+                      <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
+                        <div>
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                            <BarChart3 className="w-4 h-4 text-emerald-500" />
+                            Biến Động Dòng Tiền 31 Ngày Trong Kỳ (Daily Cashflow Trend)
+                          </span>
+                          <p className="text-[11px] text-slate-400">
+                            Theo dõi nhịp thu chi từng ngày: Cột xanh (Thu nhập vào), Cột đỏ (Chi tiêu ra)
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs font-semibold">
+                          <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> Thu vào
+                          </span>
+                          <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                            <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> Chi ra
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ height: 200 }} className="w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={dailyCashflowData} margin={{ top: 10, right: 10, left: -15, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                            <XAxis dataKey="day" tick={{ fill: axisColor, fontSize: 9 }} tickLine={false} />
+                            <YAxis
+                              tick={{ fill: axisColor, fontSize: 9 }}
+                              tickLine={false}
+                              tickFormatter={(v) => v > 0 ? `${(v / 1_000_000).toFixed(0)}M` : '0'}
+                            />
+                            <ReTooltip
+                              formatter={(val: any, name: string) => [
+                                `${fmt(Number(val))} ₫`,
+                                name === 'income' ? 'Thu nhập' : 'Chi tiêu',
+                              ]}
+                              contentStyle={{
+                                background: tooltipBg,
+                                border: `1px solid ${tooltipBorder}`,
+                                borderRadius: 10,
+                                fontSize: 11,
+                              }}
+                            />
+                            <Bar dataKey="income" fill="#10b981" radius={[3, 3, 0, 0]} />
+                            <Bar dataKey="expense" fill="#f43f5e" radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                )
               )}
 
               {/* Cashflow Table */}
