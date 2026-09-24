@@ -310,6 +310,7 @@ class _LoansScreenState extends State<LoansScreen> {
                         children: [
                           Expanded(
                             child: ChoiceChip(
+                              showCheckmark: false,
                               label: const Center(child: Text('Tôi đi vay / Trả góp')),
                               selected: selectedType == LoanType.BORROW,
                               onSelected: (val) {
@@ -320,6 +321,7 @@ class _LoansScreenState extends State<LoansScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: ChoiceChip(
+                              showCheckmark: false,
                               label: const Center(child: Text('Cho người khác vay')),
                               selected: selectedType == LoanType.LEND,
                               onSelected: (val) {

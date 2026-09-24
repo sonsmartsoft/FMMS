@@ -713,6 +713,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                     runSpacing: 6,
                     children: [
                       ChoiceChip(
+                        showCheckmark: false,
                         label: const Text('Mục chung', style: TextStyle(fontSize: 11)),
                         selected: _selectedSubCategoryId == null,
                         onSelected: (selected) {
@@ -722,6 +723,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                       ..._currentSubCategories.map((sc) {
                         final isSelected = _selectedSubCategoryId == sc.id;
                         return ChoiceChip(
+                          showCheckmark: false,
                           label: Text(sc.name, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
                           selected: isSelected,
                           selectedColor: tabColor.withValues(alpha: 0.2),
@@ -949,6 +951,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
   Widget _buildDebtSubPill(String label, String code) {
     final isSelected = _debtSubType == code;
     return ChoiceChip(
+      showCheckmark: false,
       label: Text(label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
       selected: isSelected,
       selectedColor: const Color(0xFFF59E0B).withValues(alpha: 0.25),

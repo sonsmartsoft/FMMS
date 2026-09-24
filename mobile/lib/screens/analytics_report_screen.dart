@@ -515,7 +515,11 @@ class _AnalyticsReportScreenState extends State<AnalyticsReportScreen> {
             _buildWalletFilterPill(isDark),
             const SizedBox(height: 12),
 
-            // 4. Report Views
+            // 4. MISA DUAL SUMMARY CARDS (TỔNG THU & TỔNG CHI CỠ LỚN THEO BỘ LỌC)
+            _buildDualSummaryCards(stats, isDark),
+            const SizedBox(height: 14),
+
+            // 5. Report Views
             if (_selectedReport == MisaReportType.EXPENSE) ...[
               _buildExpenseReportView(stats, isDark),
             ] else if (_selectedReport == MisaReportType.INCOME) ...[
@@ -580,6 +584,7 @@ class _AnalyticsReportScreenState extends State<AnalyticsReportScreen> {
           return Padding(
             padding: const EdgeInsets.only(right: 6),
             child: ChoiceChip(
+              showCheckmark: false,
               avatar: Icon(
                 t['icon'] as IconData,
                 size: 15,
@@ -787,6 +792,257 @@ class _AnalyticsReportScreenState extends State<AnalyticsReportScreen> {
                 ),
                 const SizedBox(width: 4),
                 const Icon(Icons.arrow_drop_down, size: 16, color: Colors.grey),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- 5. DUAL SUMMARY CARDS (TỔNG THU & TỔNG CHI CO-EQUAL BANNER) ---
+  Widget _buildDualSummaryCards(PeriodStats stats, bool isDark) {
+    final isIncomeSelected = _selectedReport == MisaReportType.INCOME;
+    final isExpenseSelected = _selectedReport == MisaReportType.EXPENSE;
+
+    final totalIncomeTx = stats.incomeCategoryTransactions.values.fold<int>(0, (sum, list) => sum + list.length);
+    final totalExpenseTx = stats.categoryTransactions.values.fold<int>(0, (sum, list) => sum + list.length);
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            // 1. THẺ TỔNG THU
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _selectedReport = MisaReportType.INCOME);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isIncomeSelected
+                        ? (isDark ? const Color(0xFF008C53).withValues(alpha: 0.2) : const Color(0xFFE8F5E9))
+                        : (isDark ? const Color(0xFF1E293B) : Colors.white),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isIncomeSelected
+                          ? const Color(0xFF008C53)
+                          : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                      width: isIncomeSelected ? 2.0 : 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isIncomeSelected
+                            ? const Color(0xFF008C53).withValues(alpha: 0.25)
+                            : Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+                        blurRadius: isIncomeSelected ? 10 : 6,
+                        offset: const Offset(0, 3),
+                      )
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF008C53).withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.arrow_downward, color: Color(0xFF008C53), size: 14),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'TỔNG THU',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF008C53),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (isIncomeSelected)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF008C53),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text('Chi tiết', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '+ ${_currencyFmt.format(stats.totalIncome)}',
+                        style: const TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF008C53),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$totalIncomeTx khoản thu • Chạm xem',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+
+            // 2. THẺ TỔNG CHI
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() => _selectedReport = MisaReportType.EXPENSE);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isExpenseSelected
+                        ? (isDark ? const Color(0xFFEF4444).withValues(alpha: 0.2) : const Color(0xFFFEE2E2))
+                        : (isDark ? const Color(0xFF1E293B) : Colors.white),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isExpenseSelected
+                          ? const Color(0xFFEF4444)
+                          : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                      width: isExpenseSelected ? 2.0 : 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isExpenseSelected
+                            ? const Color(0xFFEF4444).withValues(alpha: 0.25)
+                            : Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
+                        blurRadius: isExpenseSelected ? 10 : 6,
+                        offset: const Offset(0, 3),
+                      )
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.arrow_outward, color: Color(0xFFEF4444), size: 14),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'TỔNG CHI',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFEF4444),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (isExpenseSelected)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEF4444),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text('Chi tiết', style: TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold)),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '- ${_currencyFmt.format(stats.totalExpense)}',
+                        style: const TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFEF4444),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$totalExpenseTx khoản chi • Chạm xem',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Mini banner chênh lệch tồn dư
+        GestureDetector(
+          onTap: () {
+            setState(() => _selectedReport = MisaReportType.CASHFLOW);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _selectedReport == MisaReportType.CASHFLOW
+                    ? const Color(0xFF0284C7)
+                    : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.account_balance_wallet_outlined, size: 16, color: Colors.grey[500]),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Tồn dư kỳ này (Thu - Chi):',
+                      style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                    ),
+                  ],
+                ),
+                Text(
+                  '${stats.netSavings >= 0 ? "+" : ""}${_currencyFmt.format(stats.netSavings)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: stats.netSavings >= 0 ? const Color(0xFF008C53) : const Color(0xFFEF4444),
+                  ),
+                ),
               ],
             ),
           ),

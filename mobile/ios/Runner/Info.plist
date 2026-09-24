@@ -34,6 +34,8 @@
 	<string>Ứng dụng cần truy cập Thư viện ảnh để chọn ảnh biên lai chi tiêu.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Ứng dụng sử dụng nhận diện giọng nói tiếng Việt để ghi sổ tự động.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Sử dụng Face ID để mở khóa ứng dụng và bảo vệ dữ liệu tài chính gia đình an toàn.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

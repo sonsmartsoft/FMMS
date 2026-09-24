@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/user_member_model.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_service.dart';
+import '../widgets/app_lock_gatekeeper.dart';
 import 'login_profile_screen.dart';
 
 class AccountSecurityScreen extends StatefulWidget {
@@ -692,7 +694,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
             value: _appLockEnabled,
             activeColor: const Color(0xFF10B981),
             onChanged: (val) async {
-              if (val && _pinCode == null) {
+              if (val && (_pinCode == null || _pinCode!.isEmpty)) {
                 _showSetPinDialog();
               } else {
                 await _authService.setAppLockEnabled(val);
@@ -700,6 +702,16 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
               }
             },
           ),
+          if (_appLockEnabled) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 6),
+              child: TextButton.icon(
+                onPressed: _showSetPinDialog,
+                icon: const Icon(Icons.pin, size: 16, color: Color(0xFF008C53)),
+                label: const Text('Đổi mã PIN mới (4 số)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF008C53))),
+              ),
+            ),
+          ],
           const Divider(height: 1),
 
           // Switch: Biometrics (Face ID)
@@ -710,6 +722,27 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
             value: _biometricEnabled,
             activeColor: const Color(0xFF10B981),
             onChanged: (val) async {
+              if (val) {
+                final bio = BiometricService();
+                final available = await bio.isBiometricAvailable();
+                if (!available) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Thiết bị chưa bật hoặc chưa cài Face ID trong Cài đặt iPhone.')),
+                    );
+                  }
+                  return;
+                }
+                final authOk = await bio.authenticate(reason: 'Quét Face ID để kích hoạt tính năng bảo mật');
+                if (!authOk) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Chưa xác thực Face ID thành công.')),
+                    );
+                  }
+                  return;
+                }
+              }
               await _authService.setBiometricEnabled(val);
               setState(() => _biometricEnabled = val);
             },
@@ -752,6 +785,27 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
               },
             ),
           ),
+
+          // Test Lock App Now Button
+          if (_appLockEnabled) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF008C53),
+                  side: const BorderSide(color: Color(0xFF008C53), width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.lock, size: 18),
+                label: const Text('Khóa Thử Ứng Dụng Ngay Bây Giờ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                onPressed: () {
+                  AppLockGatekeeper.of(context)?.lockApp();
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );

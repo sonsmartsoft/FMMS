@@ -5,6 +5,7 @@ import 'models/user_member_model.dart';
 import 'screens/login_profile_screen.dart';
 import 'screens/main_shell_screen.dart';
 import 'services/auth_service.dart';
+import 'widgets/app_lock_gatekeeper.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,6 +84,10 @@ class FFMSApp extends StatelessWidget {
         Locale('en', 'US'),
       ],
       home: initialMember != null ? const MainShellScreen() : const LoginProfileScreen(),
+      builder: (context, child) {
+        if (initialMember == null) return child ?? const SizedBox();
+        return AppLockGatekeeper(child: child ?? const SizedBox());
+      },
     );
   }
 }

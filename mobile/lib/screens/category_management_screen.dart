@@ -129,12 +129,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> wit
                         decoration: BoxDecoration(
                           color: color,
                           shape: BoxShape.circle,
-                          border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
+                          border: isSelected ? Border.all(color: const Color(0xFF0284C7), width: 3) : null,
                           boxShadow: isSelected
                               ? [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 6, spreadRadius: 1)]
                               : null,
                         ),
-                        child: isSelected ? const Icon(Icons.check, size: 16, color: Colors.white) : null,
                       ),
                     );
                   }).toList(),
