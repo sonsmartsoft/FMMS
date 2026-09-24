@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/user_member_model.dart';
 import '../services/auth_service.dart';
 import 'main_shell_screen.dart';
 
@@ -18,13 +19,28 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPassController = TextEditingController();
 
+  List<FamilyMemberModel> _familyMembers = [];
   bool _isSignUpMode = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _rememberMe = true;
   String? _errorMessage;
 
   static const String appVersion = 'v1.2.0';
   static const String appRevision = 'rev.20260924';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFamilyMembers();
+  }
+
+  Future<void> _loadFamilyMembers() async {
+    final members = await _authService.fetchMembers();
+    if (mounted) {
+      setState(() => _familyMembers = members);
+    }
+  }
 
   @override
   void dispose() {
@@ -33,6 +49,29 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
     _passwordController.dispose();
     _confirmPassController.dispose();
     super.dispose();
+  }
+
+  void _quickFillUser(FamilyMemberModel member) {
+    setState(() {
+      _emailController.text = member.email ?? '';
+      _passwordController.text = '123456';
+      _isSignUpMode = false;
+      _errorMessage = null;
+    });
+  }
+
+  Future<void> _handleQuickSwitch(FamilyMemberModel member) async {
+    setState(() => _isLoading = true);
+    await _authService.setActiveMember(member);
+    if (!mounted) return;
+
+    if (widget.isSwitching) {
+      Navigator.of(context).pop(member);
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainShellScreen()),
+      );
+    }
   }
 
   Future<void> _handleSubmit() async {
@@ -103,6 +142,75 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
     }
   }
 
+  void _showForgotPasswordDialog() {
+    final emailResetCtrl = TextEditingController(text: _emailController.text.trim());
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          title: const Row(
+            children: [
+              Icon(Icons.lock_reset, color: Color(0xFF0284C7)),
+              SizedBox(width: 10),
+              Text('Đặt lại mật khẩu', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Nhập địa chỉ email tài khoản của bạn để nhận liên kết khôi phục mật khẩu:',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailResetCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  hintText: 'email@domain.com',
+                  prefixIcon: Icon(Icons.email_outlined, size: 20),
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Huỷ', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                final em = emailResetCtrl.text.trim();
+                Navigator.pop(ctx);
+                final res = await _authService.resetPasswordEmail(em);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(res.message),
+                      backgroundColor: const Color(0xFF0284C7),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Gửi yêu cầu'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -126,21 +234,28 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (widget.isSwitching)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(context).pop(),
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                      const Text(
+                        'Chuyển Hồ Sơ Gia Đình',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(width: 48),
+                    ],
                   )
                 else
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
 
-                // Brand Logo
+                // Brand Logo & Title
                 Center(
                   child: Container(
-                    width: 72,
-                    height: 72,
+                    width: 68,
+                    height: 68,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: const LinearGradient(
@@ -151,32 +266,34 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
                       boxShadow: [
                         BoxShadow(
                           color: const Color(0xFF0284C7).withValues(alpha: 0.35),
-                          blurRadius: 18,
-                          offset: const Offset(0, 6),
+                          blurRadius: 16,
+                          offset: const Offset(0, 5),
                         )
                       ],
                     ),
-                    child: const Icon(Icons.shield_outlined, color: Colors.white, size: 36),
+                    child: const Icon(Icons.shield_outlined, color: Colors.white, size: 34),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
                 const Center(
                   child: Text(
                     'FMMS MOBILITY & FINANCE',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 2.0,
                       color: Color(0xFF0284C7),
                     ),
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
 
                 Center(
                   child: Text(
-                    _isSignUpMode ? 'Tạo Tài Khoản Mới' : 'Đăng Nhập Hệ Thống',
+                    widget.isSwitching
+                        ? 'Chọn Hồ Sơ Thành Viên'
+                        : (_isSignUpMode ? 'Tạo Tài Khoản Mới' : 'Đăng Nhập Hệ Thống'),
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -187,14 +304,81 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
 
                 Center(
                   child: Text(
-                    'Quản lý chi tiêu gia đình & chi phí phương tiện xe',
+                    'Sổ thu chi gia đình & quản lý xe thông minh',
                     style: TextStyle(
                       fontSize: 12,
                       color: isDark ? Colors.grey[400] : Colors.grey[600],
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
+
+                // Fast Profile Switch Grid / Cards
+                if (_familyMembers.isNotEmpty) ...[
+                  Text(
+                    widget.isSwitching ? 'Chạm vào thành viên để đăng nhập ngay:' : 'Đăng nhập nhanh với hồ sơ gia đình:',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 84,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _familyMembers.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      itemBuilder: (context, i) {
+                        final m = _familyMembers[i];
+                        final color = Color(int.tryParse(m.colorHex.replaceFirst('#', '0xFF')) ?? 0xFF0284C7);
+                        return InkWell(
+                          onTap: () {
+                            if (widget.isSwitching) {
+                              _handleQuickSwitch(m);
+                            } else {
+                              _quickFillUser(m);
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(14),
+                          child: Container(
+                            width: 110,
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: color,
+                                  child: Text(
+                                    m.name.isNotEmpty ? m.name.characters.first.toUpperCase() : '?',
+                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  m.name,
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  m.relationship ?? 'Thành viên',
+                                  style: const TextStyle(fontSize: 9, color: Colors.grey),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 // Mode Switch Segmented Tabs
                 Container(
@@ -217,7 +401,7 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
                           },
                           borderRadius: BorderRadius.circular(10),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            padding: const EdgeInsets.symmetric(vertical: 9),
                             decoration: BoxDecoration(
                               color: !_isSignUpMode
                                   ? (isDark ? const Color(0xFF0F172A) : Colors.white)
@@ -254,7 +438,7 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
                           },
                           borderRadius: BorderRadius.circular(10),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            padding: const EdgeInsets.symmetric(vertical: 9),
                             decoration: BoxDecoration(
                               color: _isSignUpMode
                                   ? (isDark ? const Color(0xFF0F172A) : Colors.white)
@@ -282,7 +466,7 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
                 // Error / Success Banner
                 if (_errorMessage != null) ...[
@@ -306,7 +490,7 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                 ],
 
                 // Credentials Form Card
@@ -412,6 +596,37 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
                         ),
                       ),
 
+                      // Forgot password link
+                      if (!_isSignUpMode) ...[
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: Checkbox(
+                                    value: _rememberMe,
+                                    activeColor: const Color(0xFF0284C7),
+                                    onChanged: (val) => setState(() => _rememberMe = val ?? true),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Text('Ghi nhớ', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              ],
+                            ),
+                            TextButton(
+                              onPressed: _showForgotPasswordDialog,
+                              child: const Text(
+                                'Quên mật khẩu?',
+                                style: TextStyle(fontSize: 12, color: Color(0xFF0284C7), fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
                       // Confirm Password (Only in Sign Up Mode)
                       if (_isSignUpMode) ...[
                         const SizedBox(height: 14),
@@ -438,7 +653,7 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
                           ),
                         ),
                       ],
-                      const SizedBox(height: 22),
+                      const SizedBox(height: 18),
 
                       // Submit Button
                       SizedBox(
@@ -469,7 +684,7 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 24),
 
                 // Version & Revision Management Badge
                 Center(
@@ -496,7 +711,7 @@ class _LoginProfileScreenState extends State<LoginProfileScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Center(
                   child: Text(
                     'Bản quyền © 2026 Sonsmartsoft. Toàn quyền bảo lưu.',

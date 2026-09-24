@@ -155,8 +155,19 @@ class AuthService {
     } catch (_) {}
   }
 
-  /// Fetches real members from Supabase `user_members` table with offline caching
+  /// Fetches real members from local cache or Supabase `user_members` table
   Future<List<FamilyMemberModel>> fetchMembers() async {
+    // 1. Try local cache first for instant UI response
+    final prefs = await SharedPreferences.getInstance();
+    final cachedStr = prefs.getString(_kCachedMembersKey);
+    if (cachedStr != null && cachedStr.isNotEmpty) {
+      try {
+        final raw = jsonDecode(cachedStr) as List;
+        final list = raw.map((e) => FamilyMemberModel.fromJson(e)).toList();
+        if (list.isNotEmpty) return list;
+      } catch (_) {}
+    }
+
     try {
       final res = await _supabase
           .from('user_members')
@@ -168,25 +179,56 @@ class AuthService {
       final list = (res as List).map((e) => FamilyMemberModel.fromJson(e)).toList();
 
       if (list.isNotEmpty) {
-        // Cache to SharedPreferences
-        final prefs = await SharedPreferences.getInstance();
         final raw = list.map((m) => m.toJson()).toList();
         await prefs.setString(_kCachedMembersKey, jsonEncode(raw));
         return list;
       }
-    } catch (_) {
-      // Load from local cache if network is unavailable
-      final prefs = await SharedPreferences.getInstance();
-      final cachedStr = prefs.getString(_kCachedMembersKey);
-      if (cachedStr != null && cachedStr.isNotEmpty) {
-        try {
-          final raw = jsonDecode(cachedStr) as List;
-          return raw.map((e) => FamilyMemberModel.fromJson(e)).toList();
-        } catch (_) {}
-      }
+    } catch (_) {}
+
+    // Initialize with default members if cache is empty
+    final defaults = FamilyMemberModel.defaultMembers;
+    final raw = defaults.map((m) => m.toJson()).toList();
+    await prefs.setString(_kCachedMembersKey, jsonEncode(raw));
+    return defaults;
+  }
+
+  /// Saves or updates a family member in local storage and remote
+  Future<void> saveMember(FamilyMemberModel member) async {
+    final members = await fetchMembers();
+    final index = members.indexWhere((m) => m.id == member.id);
+    if (index >= 0) {
+      members[index] = member;
+    } else {
+      members.add(member);
     }
 
-    return FamilyMemberModel.defaultMembers;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = members.map((m) => m.toJson()).toList();
+    await prefs.setString(_kCachedMembersKey, jsonEncode(raw));
+
+    // Update active member if matching
+    if (_cachedActiveMember != null && _cachedActiveMember!.id == member.id) {
+      _cachedActiveMember = member;
+      await prefs.setString(_kActiveMemberKey, jsonEncode(member.toJson()));
+    }
+
+    try {
+      await _supabase.from('user_members').upsert(member.toJson());
+    } catch (_) {}
+  }
+
+  /// Deletes or deactivates a member
+  Future<void> deleteMember(String memberId) async {
+    final members = await fetchMembers();
+    members.removeWhere((m) => m.id == memberId);
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = members.map((m) => m.toJson()).toList();
+    await prefs.setString(_kCachedMembersKey, jsonEncode(raw));
+
+    try {
+      await _supabase.from('user_members').delete().eq('id', memberId);
+    } catch (_) {}
   }
 
   List<FamilyMemberModel> getAllMembers() {
@@ -204,7 +246,116 @@ class AuthService {
     return res;
   }
 
+  /// Changes password for current user via Supabase or local offline storage
+  Future<({bool success, String message})> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final cleanCurrent = currentPassword.trim();
+    final cleanNew = newPassword.trim();
+
+    if (cleanNew.length < 6) {
+      return (success: false, message: 'Mật khẩu mới phải có tối thiểu 6 ký tự.');
+    }
+
+    try {
+      if (_supabase.auth.currentUser != null) {
+        final email = _supabase.auth.currentUser!.email;
+        if (email != null && cleanCurrent.isNotEmpty) {
+          try {
+            await _supabase.auth.signInWithPassword(email: email, password: cleanCurrent);
+          } catch (_) {
+            return (success: false, message: 'Mật khẩu hiện tại không chính xác.');
+          }
+        }
+        await _supabase.auth.updateUser(UserAttributes(password: cleanNew));
+        return (success: true, message: 'Đổi mật khẩu thành công! Tài khoản đã được cập nhật bảo mật.');
+      }
+    } catch (_) {}
+
+    // Offline / local persistence fallback
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('ffms_local_password', cleanNew);
+    return (success: true, message: 'Đổi mật khẩu thành công! Hồ sơ thành viên đã được bảo vệ.');
+  }
+
+  /// Sends password reset email
+  Future<({bool success, String message})> resetPasswordEmail(String email) async {
+    final cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail.isEmpty) {
+      return (success: false, message: 'Vui lòng nhập địa chỉ email hợp lệ.');
+    }
+    try {
+      await _supabase.auth.resetPasswordForEmail(cleanEmail);
+      return (success: true, message: 'Liên kết đặt lại mật khẩu đã được gửi đến $cleanEmail.');
+    } catch (_) {
+      return (success: true, message: 'Yêu cầu đặt lại mật khẩu đã được ghi nhận cho $cleanEmail.');
+    }
+  }
+
+  // --- App Security & Protection Preferences ---
+  static const String _kAppLockKey = 'ffms_security_app_lock';
+  static const String _kBiometricKey = 'ffms_security_biometric';
+  static const String _kHideBalanceKey = 'ffms_security_hide_balance';
+  static const String _kAutoLockMinsKey = 'ffms_security_auto_lock_mins';
+  static const String _kPinCodeKey = 'ffms_security_pin_code';
+
+  Future<bool> getAppLockEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kAppLockKey) ?? false;
+  }
+
+  Future<void> setAppLockEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kAppLockKey, value);
+  }
+
+  Future<bool> getBiometricEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kBiometricKey) ?? true;
+  }
+
+  Future<void> setBiometricEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kBiometricKey, value);
+  }
+
+  Future<bool> getHideBalanceEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kHideBalanceKey) ?? false;
+  }
+
+  Future<void> setHideBalanceEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kHideBalanceKey, value);
+  }
+
+  Future<int> getAutoLockMinutes() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_kAutoLockMinsKey) ?? 1;
+  }
+
+  Future<void> setAutoLockMinutes(int minutes) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kAutoLockMinsKey, minutes);
+  }
+
+  Future<String?> getPinCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kPinCodeKey);
+  }
+
+  Future<void> setPinCode(String? pin) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (pin == null || pin.isEmpty) {
+      await prefs.remove(_kPinCodeKey);
+    } else {
+      await prefs.setString(_kPinCodeKey, pin);
+    }
+  }
+
   Future<void> signOut() async {
     await clearActiveMember();
   }
 }
+

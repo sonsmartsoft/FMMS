@@ -1,16 +1,77 @@
 import 'package:flutter/material.dart';
+import 'account_security_screen.dart';
 import 'ai_chat_screen.dart';
 import 'budget_screen.dart';
+import 'cashbook_search_screen.dart';
+import 'category_management_screen.dart';
 import 'events_trips_screen.dart';
+import 'family_members_screen.dart';
 import 'home_dashboard_screen.dart';
 import 'loans_screen.dart';
 import 'login_profile_screen.dart';
 import 'recurring_bills_screen.dart';
+import '../services/auth_service.dart';
 
 class UtilitiesHubScreen extends StatelessWidget {
   final VoidCallback onOpenQuickAdd;
 
   const UtilitiesHubScreen({super.key, required this.onOpenQuickAdd});
+
+  void _confirmLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.logout, color: Color(0xFFEF4444), size: 22),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text('Đăng Xuất Tài Khoản', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          content: Text(
+            'Bạn có chắc chắn muốn đăng xuất khỏi ứng dụng? Mọi dữ liệu đã được đồng bộ an toàn.',
+            style: TextStyle(fontSize: 13, color: isDark ? Colors.grey[300] : Colors.grey[700]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Huỷ bỏ', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w600)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await AuthService().clearActiveMember();
+                if (!context.mounted) return;
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const LoginProfileScreen()),
+                  (route) => false,
+                );
+              },
+              child: const Text('Đăng Xuất', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   void _exportCsvData(BuildContext context) {
     showDialog(
@@ -154,12 +215,28 @@ class UtilitiesHubScreen extends StatelessWidget {
             subtitle: 'Đóng gói ngân sách du lịch, cưới hỏi, lễ Tết độc lập',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EventsTripsScreen())),
           ),
+          _buildToolTile(
+            context: context,
+            icon: Icons.category_outlined,
+            iconColor: const Color(0xFF0284C7),
+            title: 'Hạng Mục Thu / Chi',
+            subtitle: 'Tùy chỉnh danh mục cha, danh mục con theo thói quen gia đình',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CategoryManagementScreen())),
+          ),
 
           const SizedBox(height: 20),
 
           // Section 2: TIỆN ÍCH DỮ LIỆU & BÁO CÁO
           _buildSectionHeader('DỮ LIỆU & BÁO CÁO'),
           const SizedBox(height: 8),
+          _buildToolTile(
+            context: context,
+            icon: Icons.search,
+            iconColor: const Color(0xFF0284C7),
+            title: 'Tìm Kiếm Giao Dịch Nâng Cao',
+            subtitle: 'Lọc thu chi đa chiều theo thời gian, ví, danh mục và từ khóa',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CashbookSearchScreen())),
+          ),
           _buildToolTile(
             context: context,
             icon: Icons.table_chart_outlined,
@@ -196,10 +273,26 @@ class UtilitiesHubScreen extends StatelessWidget {
           _buildToolTile(
             context: context,
             icon: Icons.people_outline,
-            iconColor: const Color(0xFF64748B),
+            iconColor: const Color(0xFF10B981),
             title: 'Thành Viên Gia Đình & Phân Quyền',
-            subtitle: 'Đổi tài khoản đăng nhập (Bố, Mẹ, Con), quản lý hồ sơ',
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginProfileScreen())),
+            subtitle: 'Quản lý thành viên, đặt hạn mức chi tiêu, mời vào sổ',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FamilyMembersScreen())),
+          ),
+          _buildToolTile(
+            context: context,
+            icon: Icons.shield_outlined,
+            iconColor: const Color(0xFF0284C7),
+            title: 'Bảo Mật & Đổi Mật Khẩu',
+            subtitle: 'Đổi mật khẩu tài khoản, mã PIN, Face ID & quản lý phiên',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountSecurityScreen())),
+          ),
+          _buildToolTile(
+            context: context,
+            icon: Icons.logout_outlined,
+            iconColor: const Color(0xFFEF4444),
+            title: 'Đăng Xuất Tài Khoản',
+            subtitle: 'Thoát khỏi hồ sơ đăng nhập hiện tại trên thiết bị này',
+            onTap: () => _confirmLogout(context),
           ),
 
           const SizedBox(height: 60),

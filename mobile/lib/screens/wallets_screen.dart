@@ -4,6 +4,7 @@ import '../models/finance_model.dart';
 import '../services/finance_service.dart';
 import '../widgets/fintech_card.dart';
 import 'loans_screen.dart';
+import 'wallet_detail_screen.dart';
 
 class WalletsScreen extends StatefulWidget {
   const WalletsScreen({super.key});
@@ -585,26 +586,39 @@ class _WalletsScreenState extends State<WalletsScreen> {
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 14),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF312E81).withValues(alpha: 0.3),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => WalletDetailScreen(
+                                  wallet: wallet,
+                                  onUpdated: _loadWallets,
+                                ),
                               ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF312E81).withValues(alpha: 0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
@@ -708,15 +722,29 @@ class _WalletsScreenState extends State<WalletsScreen> {
                             ],
                           ),
                         ),
-                      );
-                    }
+                      ),
+                    );
+                  }
 
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: FintechCard(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => WalletDetailScreen(
+                                wallet: wallet,
+                                onUpdated: _loadWallets,
+                              ),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: FintechCard(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
                             Container(
                               width: 44,
                               height: 44,
@@ -765,8 +793,9 @@ class _WalletsScreenState extends State<WalletsScreen> {
                           ],
                         ),
                       ),
-                    );
-                  }),
+                    ),
+                  );
+                }),
 
                   const SizedBox(height: 100),
                 ],

@@ -1,7 +1,7 @@
 // FFMS - Mobile Data Models
 
 enum WalletType { CASH, BANK, CREDIT_CARD, E_WALLET, SAVINGS, INVESTMENT }
-enum TransactionType { EXPENSE, INCOME, TRANSFER }
+enum TransactionType { EXPENSE, INCOME, TRANSFER, DEBT_LOAN }
 enum BudgetBucket { NECESSITY, SAVINGS, EDUCATION, PLAY, INVESTMENT, GIVE }
 
 class WalletModel {
@@ -70,6 +70,34 @@ class WalletModel {
     'payment_due_day': paymentDueDay,
     'color': color,
   };
+
+  WalletModel copyWith({
+    String? id,
+    String? name,
+    WalletType? walletType,
+    String? bankName,
+    String? accountNumber,
+    double? currentBalance,
+    double? creditLimit,
+    int? statementDay,
+    int? paymentDueDay,
+    String? color,
+    String? icon,
+  }) {
+    return WalletModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      walletType: walletType ?? this.walletType,
+      bankName: bankName ?? this.bankName,
+      accountNumber: accountNumber ?? this.accountNumber,
+      currentBalance: currentBalance ?? this.currentBalance,
+      creditLimit: creditLimit ?? this.creditLimit,
+      statementDay: statementDay ?? this.statementDay,
+      paymentDueDay: paymentDueDay ?? this.paymentDueDay,
+      color: color ?? this.color,
+      icon: icon ?? this.icon,
+    );
+  }
 }
 
 class TransactionCategoryModel {
@@ -138,6 +166,30 @@ class TransactionCategoryModel {
     'icon': icon,
     'display_order': displayOrder,
   };
+
+  TransactionCategoryModel copyWith({
+    String? id,
+    String? name,
+    TransactionType? type,
+    String? parentId,
+    String? color,
+    String? icon,
+    BudgetBucket? budgetBucket,
+    bool? isEssential,
+    int? displayOrder,
+  }) {
+    return TransactionCategoryModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      parentId: parentId ?? this.parentId,
+      color: color ?? this.color,
+      icon: icon ?? this.icon,
+      budgetBucket: budgetBucket ?? this.budgetBucket,
+      isEssential: isEssential ?? this.isEssential,
+      displayOrder: displayOrder ?? this.displayOrder,
+    );
+  }
 }
 
 class FamilyTransactionModel {
@@ -158,7 +210,13 @@ class FamilyTransactionModel {
   final String? categoryName;
   final String? subCategoryName;
   final String? eventTripId;
+  final String? eventTripName;
   final String? forMemberName;
+  final String? paidByMember;
+  final bool isExcludedFromReport;
+  final String? location;
+  final String? imageUrl;
+  final double? transferFee;
 
   FamilyTransactionModel({
     required this.id,
@@ -178,13 +236,20 @@ class FamilyTransactionModel {
     this.categoryName,
     this.subCategoryName,
     this.eventTripId,
+    this.eventTripName,
     this.forMemberName,
+    this.paidByMember,
+    this.isExcludedFromReport = false,
+    this.location,
+    this.imageUrl,
+    this.transferFee,
   });
 
   factory FamilyTransactionModel.fromJson(Map<String, dynamic> json) {
     TransactionType parseType(String? val) {
       if (val == 'INCOME') return TransactionType.INCOME;
       if (val == 'TRANSFER') return TransactionType.TRANSFER;
+      if (val == 'DEBT_LOAN') return TransactionType.DEBT_LOAN;
       return TransactionType.EXPENSE;
     }
 
@@ -206,11 +271,18 @@ class FamilyTransactionModel {
       categoryName: json['category'] != null ? json['category']['name'] : null,
       subCategoryName: json['sub_category_name']?.toString(),
       eventTripId: json['event_trip_id']?.toString(),
+      eventTripName: json['event_trip_name']?.toString(),
       forMemberName: json['for_member_name']?.toString(),
+      paidByMember: json['paid_by_member']?.toString(),
+      isExcludedFromReport: json['is_excluded_from_report'] == true,
+      location: json['location']?.toString(),
+      imageUrl: json['image_url']?.toString(),
+      transferFee: (json['transfer_fee'] as num?)?.toDouble(),
     );
   }
 
   Map<String, dynamic> toJson() => {
+    'id': id.isNotEmpty ? id : null,
     'wallet_id': walletId,
     'to_wallet_id': toWalletId,
     'category_id': categoryId,
@@ -224,6 +296,67 @@ class FamilyTransactionModel {
     'notes': notes,
     'is_essential': isEssential,
     'event_trip_id': eventTripId,
+    'event_trip_name': eventTripName,
     'for_member_name': forMemberName,
+    'paid_by_member': paidByMember,
+    'is_excluded_from_report': isExcludedFromReport,
+    'location': location,
+    'image_url': imageUrl,
+    'transfer_fee': transferFee,
   };
+
+  FamilyTransactionModel copyWith({
+    String? id,
+    String? walletId,
+    String? toWalletId,
+    String? categoryId,
+    String? subCategoryId,
+    String? assetId,
+    TransactionType? transactionType,
+    double? amount,
+    String? date,
+    String? payeeVendor,
+    String? description,
+    String? notes,
+    bool? isEssential,
+    String? walletName,
+    String? categoryName,
+    String? subCategoryName,
+    String? eventTripId,
+    String? eventTripName,
+    String? forMemberName,
+    String? paidByMember,
+    bool? isExcludedFromReport,
+    String? location,
+    String? imageUrl,
+    double? transferFee,
+  }) {
+    return FamilyTransactionModel(
+      id: id ?? this.id,
+      walletId: walletId ?? this.walletId,
+      toWalletId: toWalletId ?? this.toWalletId,
+      categoryId: categoryId ?? this.categoryId,
+      subCategoryId: subCategoryId ?? this.subCategoryId,
+      assetId: assetId ?? this.assetId,
+      transactionType: transactionType ?? this.transactionType,
+      amount: amount ?? this.amount,
+      date: date ?? this.date,
+      payeeVendor: payeeVendor ?? this.payeeVendor,
+      description: description ?? this.description,
+      notes: notes ?? this.notes,
+      isEssential: isEssential ?? this.isEssential,
+      walletName: walletName ?? this.walletName,
+      categoryName: categoryName ?? this.categoryName,
+      subCategoryName: subCategoryName ?? this.subCategoryName,
+      eventTripId: eventTripId ?? this.eventTripId,
+      eventTripName: eventTripName ?? this.eventTripName,
+      forMemberName: forMemberName ?? this.forMemberName,
+      paidByMember: paidByMember ?? this.paidByMember,
+      isExcludedFromReport: isExcludedFromReport ?? this.isExcludedFromReport,
+      location: location ?? this.location,
+      imageUrl: imageUrl ?? this.imageUrl,
+      transferFee: transferFee ?? this.transferFee,
+    );
+  }
 }
+

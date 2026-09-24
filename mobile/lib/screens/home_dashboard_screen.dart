@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../services/finance_service.dart';
 import '../widgets/fintech_card.dart';
 import '../widgets/member_spending_bar.dart';
+import 'account_security_screen.dart';
 import 'ai_chat_screen.dart';
 import 'events_trips_screen.dart';
 import 'loans_screen.dart';
@@ -156,6 +157,27 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.shield_outlined, color: Color(0xFF10B981)),
+                ),
+                title: const Text('Bảo mật & Đổi mật khẩu', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Đổi mật khẩu, mã PIN, Face ID', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                trailing: const Icon(Icons.chevron_right, size: 20),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AccountSecurityScreen()),
+                  );
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
                     color: const Color(0xFFEF4444).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -165,13 +187,35 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 subtitle: const Text('Thoát khỏi phiên đăng nhập hiện tại', style: TextStyle(fontSize: 12, color: Colors.grey)),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  await _authService.clearActiveMember();
-                  if (!mounted) return;
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginProfileScreen()),
-                    (route) => false,
+                  final shouldLogout = await showDialog<bool>(
+                    context: context,
+                    builder: (alertCtx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      title: const Text('Xác nhận đăng xuất', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      content: const Text('Bạn có chắc chắn muốn đăng xuất tài khoản?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(alertCtx, false),
+                          child: const Text('Huỷ bỏ', style: TextStyle(color: Colors.grey)),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
+                          onPressed: () => Navigator.pop(alertCtx, true),
+                          child: const Text('Đăng xuất'),
+                        ),
+                      ],
+                    ),
                   );
+
+                  if (shouldLogout == true) {
+                    await _authService.clearActiveMember();
+                    if (!mounted) return;
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginProfileScreen()),
+                      (route) => false,
+                    );
+                  }
                 },
               ),
             ],

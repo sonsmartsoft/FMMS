@@ -8,11 +8,15 @@ import 'auth_service.dart';
 class FinanceService {
   final SupabaseClient _supabase = Supabase.instance.client;
   final AuthService _authService = AuthService();
+
   static const String _kOfflineQueueKey = 'offline_tx_queue';
-
   static const String _kWalletsStorageKey = 'local_wallets_storage';
+  static const String _kTransactionsStorageKey = 'local_transactions_storage';
+  static const String _kCategoriesStorageKey = 'local_categories_storage';
 
-  // 1. Wallets
+  // ==========================================
+  // 1. WALLETS (TÀI KHOẢN / VÍ)
+  // ==========================================
   Future<List<WalletModel>> getWallets() async {
     try {
       final res = await _supabase
@@ -27,7 +31,6 @@ class FinanceService {
       }
     } catch (_) {}
 
-    // Fallback to locally stored wallets or initial defaults
     return _loadLocalWallets();
   }
 
@@ -83,7 +86,58 @@ class FinanceService {
     await prefs.setString(_kWalletsStorageKey, encoded);
   }
 
-  // 2. Categories with Hierarchical Subcategories
+  // Adjust Wallet Balance (Điều chỉnh số dư ví với giao dịch đối ứng kiểu MISA)
+  Future<bool> adjustWalletBalance({
+    required String walletId,
+    required double newBalance,
+    String? note,
+  }) async {
+    final wallets = await getWallets();
+    final idx = wallets.indexWhere((w) => w.id == walletId);
+    if (idx == -1) return false;
+
+    final targetWallet = wallets[idx];
+    final diff = newBalance - targetWallet.currentBalance;
+
+    // Update wallet balance
+    wallets[idx] = targetWallet.copyWith(currentBalance: newBalance);
+    await _saveLocalWallets(wallets);
+
+    try {
+      await _supabase.from('wallets').update({'current_balance': newBalance}).eq('id', walletId);
+    } catch (_) {}
+
+    // If there is a difference, record an automatic adjustment transaction
+    if (diff.abs() > 0.01) {
+      final isIncrease = diff > 0;
+      final adjTx = FamilyTransactionModel(
+        id: 'tx-adj-${DateTime.now().millisecondsSinceEpoch}',
+        walletId: walletId,
+        walletName: targetWallet.name,
+        transactionType: isIncrease ? TransactionType.INCOME : TransactionType.EXPENSE,
+        amount: diff.abs(),
+        date: DateTime.now().toIso8601String().split('T').first,
+        payeeVendor: 'Điều chỉnh số dư',
+        description: note ?? (isIncrease ? 'Điều chỉnh tăng số dư ví' : 'Điều chỉnh giảm số dư ví'),
+        notes: note ?? 'Cân đối lại số dư thực tế khớp với thực tế',
+        isEssential: true,
+      );
+
+      final txList = await _loadLocalTransactions();
+      txList.insert(0, adjTx);
+      await _saveLocalTransactions(txList);
+
+      try {
+        await _supabase.from('family_transactions').insert(adjTx.toJson());
+      } catch (_) {}
+    }
+
+    return true;
+  }
+
+  // ==========================================
+  // 2. CATEGORIES (HẠNG MỤC THU / CHI)
+  // ==========================================
   Future<List<TransactionCategoryModel>> getCategories() async {
     try {
       final res = await _supabase
@@ -92,15 +146,71 @@ class FinanceService {
           .order('display_order', ascending: true);
 
       final list = (res as List).map((e) => TransactionCategoryModel.fromJson(e)).toList();
-      if (list.isNotEmpty) return list;
-      return _getLocalCategoriesFallback();
-    } catch (e) {
-      return _getLocalCategoriesFallback();
-    }
+      if (list.isNotEmpty) {
+        await _saveLocalCategories(list);
+        return list;
+      }
+    } catch (_) {}
+
+    return _loadLocalCategories();
   }
 
-  // 3. Transactions (with Member attribution parsing)
-  Future<List<FamilyTransactionModel>> getTransactions({int limit = 50}) async {
+  Future<bool> saveCategory(TransactionCategoryModel category) async {
+    final list = await _loadLocalCategories();
+    final idx = list.indexWhere((c) => c.id == category.id);
+
+    try {
+      final payload = category.toJson();
+      if (payload['id'] == null || payload['id'].toString().startsWith('cat-local-')) {
+        payload.remove('id');
+      }
+      await _supabase.from('transaction_categories').upsert(payload);
+    } catch (_) {}
+
+    if (idx != -1) {
+      list[idx] = category;
+    } else {
+      list.add(category);
+    }
+    await _saveLocalCategories(list);
+    return true;
+  }
+
+  Future<bool> deleteCategory(String id) async {
+    try {
+      await _supabase.from('transaction_categories').delete().eq('id', id);
+    } catch (_) {}
+
+    final list = await _loadLocalCategories();
+    list.removeWhere((c) => c.id == id || c.parentId == id);
+    await _saveLocalCategories(list);
+    return true;
+  }
+
+  Future<List<TransactionCategoryModel>> _loadLocalCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kCategoriesStorageKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw) as List;
+        return decoded.map((e) => TransactionCategoryModel.fromJson(e)).toList();
+      } catch (_) {}
+    }
+    final defaults = _getLocalCategoriesFallback();
+    await _saveLocalCategories(defaults);
+    return defaults;
+  }
+
+  Future<void> _saveLocalCategories(List<TransactionCategoryModel> categories) async {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded = jsonEncode(categories.map((c) => c.toJson()).toList());
+    await prefs.setString(_kCategoriesStorageKey, encoded);
+  }
+
+  // ==========================================
+  // 3. TRANSACTIONS (SỔ THU CHI & GIAO DỊCH)
+  // ==========================================
+  Future<List<FamilyTransactionModel>> getTransactions({int limit = 100}) async {
     try {
       final res = await _supabase
           .from('family_transactions')
@@ -108,71 +218,201 @@ class FinanceService {
           .order('date', ascending: false)
           .limit(limit);
 
-      return (res as List).map((e) => FamilyTransactionModel.fromJson(e)).toList();
-    } catch (e) {
-      return [];
-    }
+      final list = (res as List).map((e) => FamilyTransactionModel.fromJson(e)).toList();
+      if (list.isNotEmpty) {
+        await _saveLocalTransactions(list);
+        return list;
+      }
+    } catch (_) {}
+
+    return _loadLocalTransactions();
   }
 
-  // 4. Create Transaction (Auto-attaching Member Note & Subcategory)
+  // Create Transaction (Cập nhật số dư ví tự động)
   Future<bool> createTransaction(FamilyTransactionModel tx, {String? memberName, String? memberId}) async {
+    final activeMember = _authService.getCurrentMember();
+    final effectiveName = memberName ?? activeMember.name;
+    final effectiveId = memberId ?? activeMember.id;
+
+    String notesWithMember = tx.notes ?? '';
+    if (!notesWithMember.contains('[Người chi:')) {
+      notesWithMember = '[Người chi: $effectiveName] $notesWithMember'.trim();
+    }
+
+    if (tx.subCategoryName != null && tx.subCategoryName!.isNotEmpty) {
+      if (!notesWithMember.contains('[Chi tiết:')) {
+        notesWithMember = '$notesWithMember [Chi tiết: ${tx.subCategoryName}]'.trim();
+      }
+    }
+
+    final txId = (tx.id.isNotEmpty && !tx.id.startsWith('tx-'))
+        ? tx.id
+        : 'tx-local-${DateTime.now().millisecondsSinceEpoch}';
+
+    final finalTx = tx.copyWith(
+      id: txId,
+      notes: notesWithMember,
+    );
+
+    // 1. Apply wallet balance effects
+    await _applyBalanceDelta(finalTx, isAdding: true);
+
+    // 2. Save locally
+    final localList = await _loadLocalTransactions();
+    localList.insert(0, finalTx);
+    await _saveLocalTransactions(localList);
+
+    // 3. Sync to Supabase
     try {
-      final activeMember = _authService.getCurrentMember();
-      final effectiveName = memberName ?? activeMember.name;
-      final effectiveId = memberId ?? activeMember.id;
-
-      String notesWithMember = tx.notes ?? '';
-      if (!notesWithMember.contains('[Người chi:')) {
-        notesWithMember = '[Người chi: $effectiveName] $notesWithMember'.trim();
-      }
-
-      // If subcategory is selected, append to notes for cloud visibility
-      if (tx.subCategoryName != null && tx.subCategoryName!.isNotEmpty) {
-        if (!notesWithMember.contains('[Chi tiết:')) {
-          notesWithMember = '$notesWithMember [Chi tiết: ${tx.subCategoryName}]'.trim();
-        }
-      }
-
-      final payload = tx.toJson();
-      payload['notes'] = notesWithMember;
+      final payload = finalTx.toJson();
       payload['created_by'] = effectiveId;
-
       await _supabase.from('family_transactions').insert(payload);
       return true;
     } catch (e) {
-      // Save to offline queue if network fails
-      await _enqueueOffline(tx, memberName: memberName);
+      await _enqueueOffline(finalTx, memberName: memberName);
       return false;
     }
   }
 
-  // 5. Inter-wallet Transfer
+  // Update Transaction (Cập nhật & Cân đối lại số dư ví)
+  Future<bool> updateTransaction(FamilyTransactionModel oldTx, FamilyTransactionModel newTx) async {
+    // 1. Revert old transaction effect on wallets
+    await _applyBalanceDelta(oldTx, isAdding: false);
+
+    // 2. Apply new transaction effect on wallets
+    await _applyBalanceDelta(newTx, isAdding: true);
+
+    // 3. Update local transactions list
+    final list = await _loadLocalTransactions();
+    final idx = list.indexWhere((t) => t.id == oldTx.id);
+    if (idx != -1) {
+      list[idx] = newTx;
+    } else {
+      list.insert(0, newTx);
+    }
+    await _saveLocalTransactions(list);
+
+    // 4. Update Supabase
+    try {
+      final payload = newTx.toJson();
+      await _supabase.from('family_transactions').update(payload).eq('id', newTx.id);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Delete Transaction (Hoàn lại tiền vào ví)
+  Future<bool> deleteTransaction(FamilyTransactionModel tx) async {
+    // 1. Revert transaction effect on wallets
+    await _applyBalanceDelta(tx, isAdding: false);
+
+    // 2. Remove from local storage
+    final list = await _loadLocalTransactions();
+    list.removeWhere((t) => t.id == tx.id);
+    await _saveLocalTransactions(list);
+
+    // 3. Delete from Supabase
+    try {
+      await _supabase.from('family_transactions').delete().eq('id', tx.id);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Helper: Apply Balance Delta to Wallets
+  Future<void> _applyBalanceDelta(FamilyTransactionModel tx, {required bool isAdding}) async {
+    final wallets = await getWallets();
+    final factor = isAdding ? 1.0 : -1.0;
+
+    if (tx.transactionType == TransactionType.EXPENSE) {
+      final idx = wallets.indexWhere((w) => w.id == tx.walletId);
+      if (idx != -1) {
+        final totalDeducted = tx.amount + (tx.transferFee ?? 0.0);
+        final newBal = wallets[idx].currentBalance - (factor * totalDeducted);
+        wallets[idx] = wallets[idx].copyWith(currentBalance: newBal);
+      }
+    } else if (tx.transactionType == TransactionType.INCOME) {
+      final idx = wallets.indexWhere((w) => w.id == tx.walletId);
+      if (idx != -1) {
+        final newBal = wallets[idx].currentBalance + (factor * tx.amount);
+        wallets[idx] = wallets[idx].copyWith(currentBalance: newBal);
+      }
+    } else if (tx.transactionType == TransactionType.TRANSFER) {
+      final fromIdx = wallets.indexWhere((w) => w.id == tx.walletId);
+      if (fromIdx != -1) {
+        final totalFrom = tx.amount + (tx.transferFee ?? 0.0);
+        final newFromBal = wallets[fromIdx].currentBalance - (factor * totalFrom);
+        wallets[fromIdx] = wallets[fromIdx].copyWith(currentBalance: newFromBal);
+      }
+      if (tx.toWalletId != null) {
+        final toIdx = wallets.indexWhere((w) => w.id == tx.toWalletId);
+        if (toIdx != -1) {
+          final newToBal = wallets[toIdx].currentBalance + (factor * tx.amount);
+          wallets[toIdx] = wallets[toIdx].copyWith(currentBalance: newToBal);
+        }
+      }
+    }
+
+    await _saveLocalWallets(wallets);
+  }
+
+  // Transfer Money between Wallets (with optional transfer fee)
   Future<bool> transferMoney({
     required String fromWalletId,
     required String toWalletId,
     required double amount,
     required String date,
+    double? transferFee,
     String? note,
   }) async {
-    try {
-      final activeMember = _authService.getCurrentMember();
-      final payload = {
-        'wallet_id': fromWalletId,
-        'to_wallet_id': toWalletId,
-        'transaction_type': 'TRANSFER',
-        'amount': amount,
-        'date': date,
-        'notes': '[Người chi: ${activeMember.name}] ${note ?? 'Chuyển tiền nội bộ giữa các ví'}',
-        'created_by': activeMember.id,
-      };
-      await _supabase.from('family_transactions').insert(payload);
-      return true;
-    } catch (e) {
-      return false;
-    }
+    final wallets = await getWallets();
+    final fromWallet = wallets.where((w) => w.id == fromWalletId).firstOrNull;
+    final toWallet = wallets.where((w) => w.id == toWalletId).firstOrNull;
+
+    final tx = FamilyTransactionModel(
+      id: 'tx-trans-${DateTime.now().millisecondsSinceEpoch}',
+      walletId: fromWalletId,
+      toWalletId: toWalletId,
+      walletName: fromWallet?.name,
+      transactionType: TransactionType.TRANSFER,
+      amount: amount,
+      transferFee: transferFee,
+      date: date,
+      payeeVendor: 'Chuyển tiền: ${fromWallet?.name ?? "Ví nguồn"} ➔ ${toWallet?.name ?? "Ví đích"}',
+      description: note ?? 'Chuyển tiền nội bộ',
+      notes: note,
+      isEssential: true,
+    );
+
+    return createTransaction(tx);
   }
 
-  // 6. Budgets
+  // Local Transactions Cache Management
+  Future<List<FamilyTransactionModel>> _loadLocalTransactions() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kTransactionsStorageKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw) as List;
+        return decoded.map((e) => FamilyTransactionModel.fromJson(e)).toList();
+      } catch (_) {}
+    }
+    final defaults = _getInitialDefaultTransactions();
+    await _saveLocalTransactions(defaults);
+    return defaults;
+  }
+
+  Future<void> _saveLocalTransactions(List<FamilyTransactionModel> list) async {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded = jsonEncode(list.map((t) => t.toJson()).toList());
+    await prefs.setString(_kTransactionsStorageKey, encoded);
+  }
+
+  // ==========================================
+  // 4. BUDGETS
+  // ==========================================
   Future<List<BudgetModel>> getBudgets() async {
     try {
       final now = DateTime.now();
@@ -187,7 +427,7 @@ class FinanceService {
         return res.map((e) => BudgetModel.fromJson(e)).toList();
       }
       return _getMockBudgets();
-    } catch (e) {
+    } catch (_) {
       return _getMockBudgets();
     }
   }
@@ -196,7 +436,6 @@ class FinanceService {
   Future<void> _enqueueOffline(FamilyTransactionModel tx, {String? memberName}) async {
     final prefs = await SharedPreferences.getInstance();
     final list = prefs.getStringList(_kOfflineQueueKey) ?? [];
-    
     final payload = tx.toJson();
     if (memberName != null && memberName.isNotEmpty) {
       payload['notes'] = '[Người chi: $memberName] ${payload['notes'] ?? ''}'.trim();
@@ -227,7 +466,9 @@ class FinanceService {
     return synced;
   }
 
-  // Fallback / Initial Data
+  // ==========================================
+  // FALLBACK DEFAULTS
+  // ==========================================
   List<WalletModel> _getLocalWalletsFallback() {
     return [
       WalletModel(id: 'w-cash-01', name: 'Tiền mặt gia đình', walletType: WalletType.CASH, currentBalance: 15400000, color: '#10B981', icon: 'Banknote'),
@@ -275,6 +516,105 @@ class FinanceService {
 
       // 8. Thu nhập
       TransactionCategoryModel(id: 'cat-salary', name: 'Lương & Thưởng', type: TransactionType.INCOME, icon: 'briefcase', color: '#059669', displayOrder: 20),
+      TransactionCategoryModel(id: 'cat-inc-bonus', name: 'Thưởng & Thu nhập thêm', parentId: 'cat-salary', type: TransactionType.INCOME, icon: 'gift', color: '#10B981', displayOrder: 21),
+      TransactionCategoryModel(id: 'cat-inc-invest', name: 'Lãi đầu tư & Cổ tức', parentId: 'cat-salary', type: TransactionType.INCOME, icon: 'trending-up', color: '#059669', displayOrder: 22),
+    ];
+  }
+
+  List<FamilyTransactionModel> _getInitialDefaultTransactions() {
+    final now = DateTime.now();
+    final d = (int day) => '${now.year}-${now.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
+
+    return [
+      FamilyTransactionModel(
+        id: 'tx-def-01',
+        walletId: 'w-tcb-01',
+        walletName: 'Techcombank Chi tiêu',
+        categoryId: 'cat-mob-fuel',
+        categoryName: 'Xăng xe & Nhiên liệu',
+        subCategoryName: 'Xăng xe & Nhiên liệu',
+        transactionType: TransactionType.EXPENSE,
+        amount: 600000,
+        date: d(now.day > 1 ? now.day - 1 : now.day),
+        payeeVendor: 'Petrolimex Cây Xăng Số 3',
+        description: 'Đổ xăng RON 95-V xe Mazda 2 AT',
+        notes: '[Người chi: Anh Tú] Đầy bình 35L',
+        forMemberName: 'Cả gia đình',
+      ),
+      FamilyTransactionModel(
+        id: 'tx-def-02',
+        walletId: 'w-cash-01',
+        walletName: 'Tiền mặt gia đình',
+        categoryId: 'cat-food-groceries',
+        categoryName: 'Ăn uống & Đi chợ',
+        subCategoryName: 'Đi chợ & Siêu thị',
+        transactionType: TransactionType.EXPENSE,
+        amount: 380000,
+        date: d(now.day),
+        payeeVendor: 'Siêu thị WinMart',
+        description: 'Mua thịt bò, rau củ quả cuối tuần',
+        notes: '[Người chi: Chị Mai]',
+        forMemberName: 'Cả gia đình',
+      ),
+      FamilyTransactionModel(
+        id: 'tx-def-03',
+        walletId: 'w-vcb-01',
+        walletName: 'Vietcombank Lương & Dự phòng',
+        categoryId: 'cat-salary',
+        categoryName: 'Lương & Thưởng',
+        transactionType: TransactionType.INCOME,
+        amount: 32000000,
+        date: d(5),
+        payeeVendor: 'Công ty Cổ phần Công nghệ',
+        description: 'Nhận lương tháng',
+        notes: '[Người chi: Anh Tú] Lương định kỳ qua Vietcombank',
+        forMemberName: 'Cả gia đình',
+      ),
+      FamilyTransactionModel(
+        id: 'tx-def-04',
+        walletId: 'w-tcb-01',
+        walletName: 'Techcombank Chi tiêu',
+        categoryId: 'cat-home-bills',
+        categoryName: 'Nhà cửa & Tiện ích',
+        subCategoryName: 'Điện, Nước, Internet',
+        transactionType: TransactionType.EXPENSE,
+        amount: 1450000,
+        date: d(12),
+        payeeVendor: 'Điện Lực EVN TP.HCM',
+        description: 'Thanh toán tiền điện sinh hoạt tháng',
+        notes: '[Người chi: Anh Tú]',
+        forMemberName: 'Cả gia đình',
+      ),
+      FamilyTransactionModel(
+        id: 'tx-def-05',
+        walletId: 'w-tcb-01',
+        walletName: 'Techcombank Chi tiêu',
+        categoryId: 'cat-mob-toll',
+        categoryName: 'Phương tiện & Đi lại (Xe)',
+        subCategoryName: 'Phí VETC & Gửi xe',
+        transactionType: TransactionType.EXPENSE,
+        amount: 300000,
+        date: d(15),
+        payeeVendor: 'VETC Thu Phí Tự Động',
+        description: 'Nạp tài khoản thu phí VETC',
+        notes: '[Người chi: Anh Tú]',
+        forMemberName: 'Cả gia đình',
+      ),
+      FamilyTransactionModel(
+        id: 'tx-def-06',
+        walletId: 'w-tcb-credit',
+        walletName: 'Techcombank Visa Signature',
+        categoryId: 'cat-play-dining',
+        categoryName: 'Ăn uống & Đi chợ',
+        subCategoryName: 'Ăn ngoài & Cafe',
+        transactionType: TransactionType.EXPENSE,
+        amount: 850000,
+        date: d(18),
+        payeeVendor: 'Nhà hàng Pizza 4P\'s',
+        description: 'Ăn tối gia đình cuối tuần',
+        notes: '[Người chi: Anh Tú] Quẹt thẻ Visa tích điểm hoàn tiền',
+        forMemberName: 'Cả gia đình',
+      ),
     ];
   }
 

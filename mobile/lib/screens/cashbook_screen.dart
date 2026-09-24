@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/finance_model.dart';
 import '../services/finance_service.dart';
+import 'cashbook_search_screen.dart';
+import 'transaction_detail_screen.dart';
 
 class CashbookScreen extends StatefulWidget {
   final VoidCallback onOpenQuickAdd;
@@ -160,6 +162,13 @@ class _CashbookScreenState extends State<CashbookScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.search, color: Color(0xFF0284C7)),
+            tooltip: 'Tìm kiếm giao dịch',
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const CashbookSearchScreen())).then((_) => _loadData());
+            },
+          ),
           IconButton(
             icon: Icon(_selectedWalletId == 'ALL' ? Icons.filter_alt_outlined : Icons.filter_alt, color: const Color(0xFF0284C7)),
             tooltip: 'Lọc theo tài khoản',
@@ -603,6 +612,17 @@ class _CashbookScreenState extends State<CashbookScreen> {
         ),
       ),
       child: ListTile(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TransactionDetailScreen(
+                transaction: tx,
+                onUpdated: _loadData,
+              ),
+            ),
+          );
+        },
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         leading: CircleAvatar(
           backgroundColor: isExpense
