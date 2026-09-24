@@ -157,6 +157,8 @@ class FamilyTransactionModel {
   final String? walletName;
   final String? categoryName;
   final String? subCategoryName;
+  final String? eventTripId;
+  final String? forMemberName;
 
   FamilyTransactionModel({
     required this.id,
@@ -175,6 +177,8 @@ class FamilyTransactionModel {
     this.walletName,
     this.categoryName,
     this.subCategoryName,
+    this.eventTripId,
+    this.forMemberName,
   });
 
   factory FamilyTransactionModel.fromJson(Map<String, dynamic> json) {
@@ -201,6 +205,8 @@ class FamilyTransactionModel {
       walletName: json['wallet'] != null ? json['wallet']['name'] : null,
       categoryName: json['category'] != null ? json['category']['name'] : null,
       subCategoryName: json['sub_category_name']?.toString(),
+      eventTripId: json['event_trip_id']?.toString(),
+      forMemberName: json['for_member_name']?.toString(),
     );
   }
 
@@ -217,5 +223,7 @@ class FamilyTransactionModel {
     'description': description,
     'notes': notes,
     'is_essential': isEssential,
+    'event_trip_id': eventTripId,
+    'for_member_name': forMemberName,
   };
 }

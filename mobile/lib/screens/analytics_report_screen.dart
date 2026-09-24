@@ -875,6 +875,40 @@ class _AnalyticsReportScreenState extends State<AnalyticsReportScreen> {
               ),
             ],
           ),
+
+          // Comparison with previous period
+          if (stats.expenseChangePercent != 0.0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: (stats.expenseChangePercent < 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    stats.expenseChangePercent < 0 ? Icons.trending_down : Icons.trending_up,
+                    size: 16,
+                    color: stats.expenseChangePercent < 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      stats.expenseChangePercent < 0
+                          ? 'Chi tiêu giảm ${stats.expenseChangePercent.abs().toStringAsFixed(1)}% so với kỳ trước 🎉 Tiết kiệm tốt hơn!'
+                          : 'Chi tiêu tăng +${stats.expenseChangePercent.toStringAsFixed(1)}% so với kỳ trước. Cần chú ý hạn mức!',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: stats.expenseChangePercent < 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

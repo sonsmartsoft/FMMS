@@ -3,12 +3,15 @@ import 'package:intl/intl.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:image_picker/image_picker.dart';
 import '../models/ai_action_model.dart';
+import '../models/event_trip_model.dart';
 import '../models/finance_model.dart';
 import '../models/user_member_model.dart';
 import '../services/ai_assistant_service.dart';
 import '../services/auth_service.dart';
+import '../services/event_trip_service.dart';
 import '../services/finance_service.dart';
 import '../widgets/ai_action_card_widget.dart';
+import '../widgets/calculator_keypad_widget.dart';
 
 class QuickExpenseSheet extends StatefulWidget {
   final VoidCallback onSaved;
@@ -23,6 +26,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
   final FinanceService _financeService = FinanceService();
   final AuthService _authService = AuthService();
   final AIAssistantService _aiService = AIAssistantService();
+  final EventTripService _eventTripService = EventTripService();
   final NumberFormat _currencyFmt = NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0);
 
   final TextEditingController _promptController = TextEditingController();
@@ -32,6 +36,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
   bool _isListening = false;
   bool _isProcessingAI = false;
   bool _manualMode = false;
+  bool _showCalculator = false;
   AIActionDraft? _currentDraft;
 
   // Manual inputs
@@ -40,11 +45,14 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
   String? _selectedParentCategoryId;
   String? _selectedSubCategoryId;
   String? _selectedMemberName;
+  String? _forMemberName;
+  String? _selectedEventTripId;
   String _payee = '';
 
   List<WalletModel> _wallets = [];
   List<TransactionCategoryModel> _allCategories = [];
   List<FamilyMemberModel> _members = [];
+  List<EventTripModel> _eventTrips = [];
 
   List<TransactionCategoryModel> get _parentCategories =>
       _allCategories.where((c) => c.isParent && c.type == TransactionType.EXPENSE).toList();
@@ -65,12 +73,15 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
     final cList = await _financeService.getCategories();
     final mList = await _authService.fetchMembers();
     final currentMember = _authService.getCurrentMember();
+    final tList = await _eventTripService.getEventTrips();
 
     setState(() {
       _wallets = wList;
       _allCategories = cList;
       _members = mList;
+      _eventTrips = tList;
       _selectedMemberName = currentMember.name;
+      _forMemberName = 'Cả gia đình';
       if (_wallets.isNotEmpty) _selectedWalletId = _wallets.first.id;
       if (_parentCategories.isNotEmpty) {
         _selectedParentCategoryId = _parentCategories.first.id;
@@ -295,9 +306,15 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
       payeeVendor: _payee.trim().isNotEmpty ? _payee.trim() : null,
       description: _payee.trim().isNotEmpty ? _payee.trim() : parentCat.name,
       isEssential: true,
+      eventTripId: _selectedEventTripId,
+      forMemberName: _forMemberName,
     );
 
     final success = await _financeService.createTransaction(tx, memberName: _selectedMemberName);
+
+    if (_selectedEventTripId != null) {
+      await _eventTripService.addExpenseToTrip(_selectedEventTripId!, _manualAmount.toDouble());
+    }
 
     if (!mounted) return;
     Navigator.pop(context);
@@ -483,35 +500,75 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
               ],
             ]
 
-            // MODE B: MANUAL INPUT (With 2-Tier Subcategory Selection)
+            // MODE B: MANUAL INPUT (With Calculator & Subcategories)
             else ...[
-              // Amount Display
-              Center(
-                child: Text(
-                  _currencyFmt.format(_manualAmount),
-                  style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFFEF4444)),
+              // Amount Display with Calculator Toggle
+              GestureDetector(
+                onTap: () => setState(() => _showCalculator = !_showCalculator),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _showCalculator ? const Color(0xFFEF4444) : Colors.transparent,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _currencyFmt.format(_manualAmount),
+                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFFEF4444)),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        _showCalculator ? Icons.keyboard_hide_outlined : Icons.calculate_outlined,
+                        color: const Color(0xFFEF4444),
+                        size: 24,
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
-              // Presets
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                children: [
-                  _buildPresetChip('+20k', 20000),
-                  _buildPresetChip('+50k', 50000),
-                  _buildPresetChip('+100k', 100000),
-                  _buildPresetChip('+500k', 500000),
-                  _buildPresetChip('+1Tr', 1000000),
-                  ActionChip(label: const Text('Xoá'), onPressed: () => setState(() => _manualAmount = 0)),
-                ],
-              ),
-              const SizedBox(height: 14),
+              // Interactive Calculator Keypad (MISA MoneyKeeper Style)
+              if (_showCalculator) ...[
+                CalculatorKeypadWidget(
+                  initialAmount: _manualAmount.toDouble(),
+                  onAmountChanged: (val) => setState(() => _manualAmount = val.toInt()),
+                  onDone: () => setState(() => _showCalculator = false),
+                ),
+                const SizedBox(height: 10),
+              ] else ...[
+                // Presets & Calculator button
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _buildPresetChip('+20k', 20000),
+                    _buildPresetChip('+50k', 50000),
+                    _buildPresetChip('+100k', 100000),
+                    _buildPresetChip('+500k', 500000),
+                    _buildPresetChip('+1Tr', 1000000),
+                    ActionChip(
+                      avatar: const Icon(Icons.calculate, size: 16, color: Color(0xFF0284C7)),
+                      label: const Text('Máy tính', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0284C7))),
+                      onPressed: () => setState(() => _showCalculator = true),
+                    ),
+                    ActionChip(label: const Text('Xoá'), onPressed: () => setState(() => _manualAmount = 0)),
+                  ],
+                ),
+                const SizedBox(height: 14),
+              ],
 
-              // Member & Wallet Pickers
+              // Row 1: Member & Beneficiary (Người chi & Chi cho ai)
               Row(
                 children: [
-                  // Member
+                  // Người chi
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _selectedMemberName,
@@ -521,6 +578,25 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                     ),
                   ),
                   const SizedBox(width: 10),
+                  // Chi cho ai (Beneficiary)
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _forMemberName ?? 'Cả gia đình',
+                      decoration: const InputDecoration(labelText: 'Chi cho ai', contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                      items: [
+                        const DropdownMenuItem(value: 'Cả gia đình', child: Text('Cả gia đình', style: TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis)),
+                        ..._members.map((m) => DropdownMenuItem(value: m.name, child: Text(m.name, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))),
+                      ],
+                      onChanged: (v) => setState(() => _forMemberName = v),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // Row 2: Wallet & Event / Trip Picker
+              Row(
+                children: [
                   // Wallet
                   Expanded(
                     child: DropdownButtonFormField<String>(
@@ -530,9 +606,22 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                       onChanged: (v) => setState(() => _selectedWalletId = v),
                     ),
                   ),
+                  const SizedBox(width: 10),
+                  // Chuyến đi / Sự kiện
+                  Expanded(
+                    child: DropdownButtonFormField<String?>(
+                      initialValue: _selectedEventTripId,
+                      decoration: const InputDecoration(labelText: 'Chuyến đi / Dịp', contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('Không gắn dịp', style: TextStyle(fontSize: 12, color: Colors.grey))),
+                        ..._eventTrips.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis))),
+                      ],
+                      onChanged: (v) => setState(() => _selectedEventTripId = v),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
 
               // 1. Main Category Picker
               DropdownButtonFormField<String>(
@@ -553,7 +642,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
 
               // 2. Subcategory (Tier 2 Chips)
               if (_currentSubCategories.isNotEmpty) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     const Icon(Icons.subdirectory_arrow_right, size: 16, color: Color(0xFF0284C7)),
