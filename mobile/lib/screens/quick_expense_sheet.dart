@@ -12,6 +12,7 @@ import '../services/event_trip_service.dart';
 import '../services/finance_service.dart';
 import '../widgets/ai_action_card_widget.dart';
 import '../widgets/calculator_keypad_widget.dart';
+import '../widgets/category_picker_modal.dart';
 
 class QuickExpenseSheet extends StatefulWidget {
   final VoidCallback onSaved;
@@ -60,6 +61,16 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
   List<TransactionCategoryModel> get _currentSubCategories {
     if (_selectedParentCategoryId == null) return [];
     return _allCategories.where((c) => c.parentId == _selectedParentCategoryId).toList();
+  }
+
+  String? get _selectedParentCategoryName {
+    if (_selectedParentCategoryId == null) return null;
+    return _allCategories.where((c) => c.id == _selectedParentCategoryId).firstOrNull?.name;
+  }
+
+  String? get _selectedSubCategoryName {
+    if (_selectedSubCategoryId == null) return null;
+    return _allCategories.where((c) => c.id == _selectedSubCategoryId).firstOrNull?.name;
   }
 
   @override
@@ -623,21 +634,70 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
               ),
               const SizedBox(height: 12),
 
-              // 1. Main Category Picker
-              DropdownButtonFormField<String>(
-                initialValue: _selectedParentCategoryId,
-                decoration: const InputDecoration(
-                  labelText: '1. Danh mục chính',
-                  prefixIcon: Icon(Icons.category_outlined, size: 20),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                ),
-                items: _parentCategories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, style: const TextStyle(fontSize: 13)))).toList(),
-                onChanged: (v) {
-                  setState(() {
-                    _selectedParentCategoryId = v;
-                    _selectedSubCategoryId = null; // reset subcategory on parent change
-                  });
+              // MISA 2-Tier Category Tile
+              InkWell(
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (ctx) => CategoryPickerModal(
+                      initialType: TransactionType.EXPENSE,
+                      selectedCategoryId: _selectedSubCategoryId ?? _selectedParentCategoryId,
+                      onCategorySelected: (cat) {
+                        setState(() {
+                          if (cat.isParent) {
+                            _selectedParentCategoryId = cat.id;
+                            _selectedSubCategoryId = null;
+                          } else {
+                            _selectedParentCategoryId = cat.parentId;
+                            _selectedSubCategoryId = cat.id;
+                          }
+                        });
+                      },
+                    ),
+                  );
                 },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.grid_view, size: 22, color: Color(0xFF0284C7)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('HẠNG MỤC THU / CHI (MISA)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                            const SizedBox(height: 2),
+                            Text(
+                              _selectedSubCategoryName != null
+                                  ? '${_selectedParentCategoryName ?? "Mục"} › $_selectedSubCategoryName'
+                                  : (_selectedParentCategoryName ?? 'Chạm để chọn hạng mục thu chi'),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('Đổi mục', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0284C7))),
+                      ),
+                    ],
+                  ),
+                ),
               ),
 
               // 2. Subcategory (Tier 2 Chips)

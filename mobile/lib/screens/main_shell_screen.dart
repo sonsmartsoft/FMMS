@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'analytics_report_screen.dart';
-import 'budget_screen.dart';
-import 'home_dashboard_screen.dart';
+import 'cashbook_screen.dart';
 import 'quick_expense_sheet.dart';
+import 'utilities_hub_screen.dart';
 import 'wallets_screen.dart';
 
 class MainShellScreen extends StatefulWidget {
@@ -35,10 +35,10 @@ class _MainShellScreenState extends State<MainShellScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     final List<Widget> pages = [
-      HomeDashboardScreen(onOpenQuickAdd: _openQuickAddModal),
+      CashbookScreen(onOpenQuickAdd: _openQuickAddModal),
       const AnalyticsReportScreen(),
       const WalletsScreen(),
-      const BudgetScreen(),
+      UtilitiesHubScreen(onOpenQuickAdd: _openQuickAddModal),
     ];
 
     return Scaffold(
@@ -90,11 +90,11 @@ class _MainShellScreenState extends State<MainShellScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildNavItem(0, Icons.home_outlined, Icons.home, 'Tổng quan'),
+                _buildNavItem(0, Icons.calendar_month_outlined, Icons.calendar_month, 'Sổ Thu Chi'),
                 _buildNavItem(1, Icons.pie_chart_outline, Icons.pie_chart, 'Báo cáo'),
                 const SizedBox(width: 48), // Gap for central Floating Action Button
-                _buildNavItem(2, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Ví & Thẻ'),
-                _buildNavItem(3, Icons.track_changes_outlined, Icons.track_changes, 'Ngân sách'),
+                _buildNavItem(2, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Tài khoản'),
+                _buildNavItem(3, Icons.grid_view_outlined, Icons.grid_view, 'Tiện ích'),
               ],
             ),
           ),
