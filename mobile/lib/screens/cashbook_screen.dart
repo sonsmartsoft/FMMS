@@ -643,6 +643,17 @@ class _CashbookScreenState extends State<CashbookScreen> {
         subtitle: Row(
           children: [
             Text(walletName, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+            if (tx.assetName != null && tx.assetName!.isNotEmpty) ...[
+              const Text(' • ', style: TextStyle(color: Colors.grey)),
+              const Icon(Icons.directions_car, size: 12, color: Color(0xFF06B6D4)),
+              const SizedBox(width: 3),
+              Text(tx.assetName!, style: const TextStyle(fontSize: 11, color: Color(0xFF06B6D4), fontWeight: FontWeight.w600)),
+            ] else if (tx.notes?.contains('[Tự động đồng bộ từ xe]') == true) ...[
+              const Text(' • ', style: TextStyle(color: Colors.grey)),
+              const Icon(Icons.directions_car, size: 12, color: Color(0xFF06B6D4)),
+              const SizedBox(width: 3),
+              const Text('Hệ thống xe', style: TextStyle(fontSize: 11, color: Color(0xFF06B6D4), fontWeight: FontWeight.w600)),
+            ],
             if (tx.forMemberName != null) ...[
               const Text(' • ', style: TextStyle(color: Colors.grey)),
               Text('Cho ${tx.forMemberName}', style: const TextStyle(fontSize: 11, color: Color(0xFF0284C7))),

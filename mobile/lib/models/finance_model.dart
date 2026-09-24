@@ -199,6 +199,7 @@ class FamilyTransactionModel {
   final String? categoryId;
   final String? subCategoryId;
   final String? assetId;
+  final String? assetName;
   final TransactionType transactionType;
   final double amount;
   final String date;
@@ -225,6 +226,7 @@ class FamilyTransactionModel {
     this.categoryId,
     this.subCategoryId,
     this.assetId,
+    this.assetName,
     required this.transactionType,
     required this.amount,
     required this.date,
@@ -260,6 +262,7 @@ class FamilyTransactionModel {
       categoryId: json['category_id']?.toString(),
       subCategoryId: json['sub_category_id']?.toString(),
       assetId: json['asset_id']?.toString(),
+      assetName: json['asset_name']?.toString() ?? (json['asset'] != null ? json['asset']['name']?.toString() : null),
       transactionType: parseType(json['transaction_type']),
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       date: json['date']?.toString() ?? '',
@@ -288,6 +291,7 @@ class FamilyTransactionModel {
     'category_id': categoryId,
     'sub_category_id': subCategoryId,
     'asset_id': assetId,
+    'asset_name': assetName,
     'transaction_type': transactionType.name,
     'amount': amount,
     'date': date,
@@ -312,6 +316,7 @@ class FamilyTransactionModel {
     String? categoryId,
     String? subCategoryId,
     String? assetId,
+    String? assetName,
     TransactionType? transactionType,
     double? amount,
     String? date,
@@ -338,6 +343,7 @@ class FamilyTransactionModel {
       categoryId: categoryId ?? this.categoryId,
       subCategoryId: subCategoryId ?? this.subCategoryId,
       assetId: assetId ?? this.assetId,
+      assetName: assetName ?? this.assetName,
       transactionType: transactionType ?? this.transactionType,
       amount: amount ?? this.amount,
       date: date ?? this.date,

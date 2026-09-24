@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/finance_model.dart';
@@ -211,6 +212,12 @@ class FinanceService {
   // 3. TRANSACTIONS (SỔ THU CHI & GIAO DỊCH)
   // ==========================================
   Future<List<FamilyTransactionModel>> getTransactions({int limit = 100}) async {
+    // 1. Dọn dẹp triệt để bất kỳ giao dịch mẫu (mock) nào còn sót trong bộ nhớ cache
+    await _purgeMockTransactions();
+
+    final allTxs = <FamilyTransactionModel>[];
+
+    // 2. Tải các giao dịch gia đình thực sự từ Supabase (bảng family_transactions)
     try {
       final res = await _supabase
           .from('family_transactions')
@@ -218,12 +225,231 @@ class FinanceService {
           .order('date', ascending: false)
           .limit(limit);
 
-      final list = (res as List).map((e) => FamilyTransactionModel.fromJson(e)).toList();
-      if (list.isNotEmpty) {
-        await _saveLocalTransactions(list);
-        return list;
+      final list = (res as List)
+          .map((e) => FamilyTransactionModel.fromJson(e))
+          .where((t) => !t.id.startsWith('tx-def-')) // Loại bỏ bản ghi mẫu
+          .toList();
+
+      allTxs.addAll(list);
+    } catch (e) {
+      debugPrint('Error fetching family_transactions: $e');
+    }
+
+    // 3. Tự động đồng bộ các khoản chi thực tế từ hệ thống xe (Fleet & Mobility)
+    try {
+      // 3.1 Lấy danh mục xe (assets) để map tên xe và biển số
+      final assetNameMap = <String, String>{};
+      try {
+        final assetsRes = await _supabase.from('assets').select('id, name, license_plate');
+        if (assetsRes is List) {
+          for (final a in assetsRes) {
+            final id = a['id']?.toString() ?? '';
+            final name = a['name']?.toString() ?? 'Xe gia đình';
+            final plate = a['license_plate']?.toString();
+            assetNameMap[id] = (plate != null && plate.isNotEmpty) ? '$name ($plate)' : name;
+          }
+        }
+      } catch (_) {}
+
+      final defaultCarName = assetNameMap.values.firstOrNull ?? 'Mazda 2AT 2026 (19B-213.87)';
+
+      // 3.2 Lấy chi phí xe từ bảng `expenses`
+      try {
+        final expensesRes = await _supabase
+            .from('expenses')
+            .select('*')
+            .order('date', ascending: false)
+            .limit(limit);
+
+        if (expensesRes is List && expensesRes.isNotEmpty) {
+          for (final exp in expensesRes) {
+            final expId = exp['id']?.toString() ?? '';
+            final assetId = exp['asset_id']?.toString();
+            final amount = (exp['amount'] as num?)?.toDouble() ?? 0.0;
+            final rawDate = exp['date']?.toString() ?? '';
+            final date = rawDate.contains('T')
+                ? rawDate.split('T')[0]
+                : (rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate);
+            final vendor = exp['vendor']?.toString() ?? 'Dịch vụ xe ô tô';
+            final desc = exp['description']?.toString() ?? exp['subcategory']?.toString() ?? 'Chi phí xe';
+            final odo = exp['odometer_km'];
+            final carName = (assetId != null && assetNameMap.containsKey(assetId))
+                ? assetNameMap[assetId]
+                : defaultCarName;
+
+            final isDuplicate = allTxs.any((tx) {
+              if (tx.id == 'exp_$expId' || tx.id == expId) return true;
+              final sameDate = tx.date == date;
+              final sameAmt = (tx.amount - amount).abs() < 100;
+              final sameAsset = tx.assetId == assetId;
+              return sameDate && sameAmt && (sameAsset || tx.notes?.contains(expId) == true);
+            });
+
+            if (!isDuplicate && amount > 0) {
+              final mapped = _mapVehicleCategory(
+                exp['category']?.toString(),
+                exp['subcategory']?.toString(),
+                desc,
+              );
+
+              allTxs.add(FamilyTransactionModel(
+                id: 'exp_$expId',
+                walletId: 'w-tcb-01',
+                walletName: 'Techcombank Chi tiêu',
+                categoryId: mapped['id'],
+                categoryName: mapped['name'],
+                subCategoryName: exp['subcategory']?.toString() ?? mapped['name'],
+                assetId: assetId,
+                assetName: carName,
+                transactionType: TransactionType.EXPENSE,
+                amount: amount,
+                date: date,
+                payeeVendor: vendor,
+                description: desc,
+                notes: '[Tự động đồng bộ từ xe] ${odo != null ? "ODO: ${odo} km - " : ""}$desc',
+                isEssential: true,
+                forMemberName: 'Cả gia đình',
+              ));
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error fetching vehicle expenses: $e');
       }
-    } catch (_) {}
+
+      // 3.3 Lấy nhật ký đổ xăng thực tế từ bảng `fuel_logs`
+      try {
+        final fuelRes = await _supabase
+            .from('fuel_logs')
+            .select('*')
+            .order('timestamp', ascending: false)
+            .limit(limit);
+
+        if (fuelRes is List && fuelRes.isNotEmpty) {
+          for (final f in fuelRes) {
+            final fId = f['id']?.toString() ?? '';
+            final assetId = f['asset_id']?.toString();
+            final cost = (f['total_cost'] ?? f['cost'] as num?)?.toDouble() ?? 0.0;
+            final rawTs = (f['timestamp'] ?? f['date'])?.toString() ?? '';
+            final date = rawTs.contains('T')
+                ? rawTs.split('T')[0]
+                : (rawTs.length >= 10 ? rawTs.substring(0, 10) : rawTs);
+            final station = f['station']?.toString() ?? 'Cây xăng';
+            final liters = f['fuel_liters'] ?? f['liters'];
+            final odo = f['odometer_km'];
+            final carName = (assetId != null && assetNameMap.containsKey(assetId))
+                ? assetNameMap[assetId]
+                : defaultCarName;
+
+            final isDuplicate = allTxs.any((tx) {
+              if (tx.id == 'fuel_$fId' || tx.id == fId) return true;
+              final sameDate = tx.date == date;
+              final sameAmt = (tx.amount - cost).abs() < 100;
+              return sameDate && sameAmt;
+            });
+
+            if (!isDuplicate && cost > 0) {
+              allTxs.add(FamilyTransactionModel(
+                id: 'fuel_$fId',
+                walletId: 'w-tcb-01',
+                walletName: 'Techcombank Chi tiêu',
+                categoryId: 'cat-mob-fuel',
+                categoryName: 'Xăng xe & Nhiên liệu',
+                subCategoryName: 'Đổ xăng',
+                assetId: assetId,
+                assetName: carName,
+                transactionType: TransactionType.EXPENSE,
+                amount: cost,
+                date: date,
+                payeeVendor: station,
+                description: 'Đổ xăng ${liters != null ? "$liters L " : ""}xe $carName',
+                notes: '[Tự động đồng bộ từ xe] ${odo != null ? "ODO: ${odo} km" : ""}',
+                isEssential: true,
+                forMemberName: 'Cả gia đình',
+              ));
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error fetching fuel logs: $e');
+      }
+
+      // 3.4 Lấy lịch sử bảo dưỡng thực tế từ bảng `maintenance_records`
+      try {
+        final maintRes = await _supabase
+            .from('maintenance_records')
+            .select('*')
+            .order('service_date', ascending: false)
+            .limit(limit);
+
+        if (maintRes is List && maintRes.isNotEmpty) {
+          for (final m in maintRes) {
+            final mId = m['id']?.toString() ?? '';
+            final assetId = m['asset_id']?.toString();
+            final cost = (m['cost'] as num?)?.toDouble() ?? 0.0;
+            final rawDate = (m['service_date'] ?? m['date'])?.toString() ?? '';
+            final date = rawDate.contains('T')
+                ? rawDate.split('T')[0]
+                : (rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate);
+            final vendor = m['vendor']?.toString() ?? 'Gara ô tô';
+            final mType = m['maintenance_type']?.toString() ?? 'Bảo dưỡng định kỳ';
+            final desc = m['description']?.toString() ?? m['notes']?.toString() ?? mType;
+            final odo = m['odometer_km'];
+            final carName = (assetId != null && assetNameMap.containsKey(assetId))
+                ? assetNameMap[assetId]
+                : defaultCarName;
+
+            final isDuplicate = allTxs.any((tx) {
+              if (tx.id == 'maint_$mId' || tx.id == mId) return true;
+              final sameDate = tx.date == date;
+              final sameAmt = (tx.amount - cost).abs() < 100;
+              return sameDate && sameAmt;
+            });
+
+            if (!isDuplicate && cost > 0) {
+              allTxs.add(FamilyTransactionModel(
+                id: 'maint_$mId',
+                walletId: 'w-tcb-01',
+                walletName: 'Techcombank Chi tiêu',
+                categoryId: 'cat-mob-maint',
+                categoryName: 'Bảo dưỡng & Sửa xe',
+                subCategoryName: mType,
+                assetId: assetId,
+                assetName: carName,
+                transactionType: TransactionType.EXPENSE,
+                amount: cost,
+                date: date,
+                payeeVendor: vendor,
+                description: 'Bảo dưỡng xe: $desc',
+                notes: '[Tự động đồng bộ từ xe] ${odo != null ? "ODO: ${odo} km - " : ""}$desc',
+                isEssential: true,
+                forMemberName: 'Cả gia đình',
+              ));
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error fetching maintenance records: $e');
+      }
+    } catch (e) {
+      debugPrint('Error syncing vehicle expenses: $e');
+    }
+
+    // 4. Nếu có giao dịch cục bộ hợp lệ (không phải mock tx-def-*) do người dùng tự nhập
+    final localTxs = await _loadLocalTransactions();
+    for (final ltx in localTxs) {
+      if (!ltx.id.startsWith('tx-def-') && !allTxs.any((t) => t.id == ltx.id)) {
+        allTxs.add(ltx);
+      }
+    }
+
+    // 5. Sắp xếp giảm dần theo ngày và lưu cache
+    allTxs.sort((a, b) => b.date.compareTo(a.date));
+
+    if (allTxs.isNotEmpty) {
+      await _saveLocalTransactions(allTxs);
+      return allTxs;
+    }
 
     return _loadLocalTransactions();
   }
@@ -396,12 +622,31 @@ class FinanceService {
     if (raw != null && raw.isNotEmpty) {
       try {
         final decoded = jsonDecode(raw) as List;
-        return decoded.map((e) => FamilyTransactionModel.fromJson(e)).toList();
+        final list = decoded
+            .map((e) => FamilyTransactionModel.fromJson(e))
+            .where((t) => !t.id.startsWith('tx-def-'))
+            .toList();
+        return list;
       } catch (_) {}
     }
-    final defaults = _getInitialDefaultTransactions();
-    await _saveLocalTransactions(defaults);
-    return defaults;
+    return [];
+  }
+
+  Future<void> _purgeMockTransactions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kTransactionsStorageKey);
+      if (raw != null && raw.isNotEmpty) {
+        final decoded = jsonDecode(raw) as List;
+        final cleaned = decoded.where((e) {
+          final id = e['id']?.toString() ?? '';
+          return !id.startsWith('tx-def-');
+        }).toList();
+        if (cleaned.length != decoded.length) {
+          await prefs.setString(_kTransactionsStorageKey, jsonEncode(cleaned));
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _saveLocalTransactions(List<FamilyTransactionModel> list) async {
@@ -521,109 +766,46 @@ class FinanceService {
     ];
   }
 
-  List<FamilyTransactionModel> _getInitialDefaultTransactions() {
-    final now = DateTime.now();
-    final d = (int day) => '${now.year}-${now.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
+  Map<String, String> _mapVehicleCategory(String? category, String? subcategory, String? description) {
+    final cat = (category ?? '').toUpperCase().trim();
+    final text = '${subcategory ?? ''} ${description ?? ''}'.toLowerCase();
 
-    return [
-      FamilyTransactionModel(
-        id: 'tx-def-01',
-        walletId: 'w-tcb-01',
-        walletName: 'Techcombank Chi tiêu',
-        categoryId: 'cat-mob-fuel',
-        categoryName: 'Xăng xe & Nhiên liệu',
-        subCategoryName: 'Xăng xe & Nhiên liệu',
-        transactionType: TransactionType.EXPENSE,
-        amount: 600000,
-        date: d(now.day > 1 ? now.day - 1 : now.day),
-        payeeVendor: 'Petrolimex Cây Xăng Số 3',
-        description: 'Đổ xăng RON 95-V xe Mazda 2 AT',
-        notes: '[Người chi: Anh Tú] Đầy bình 35L',
-        forMemberName: 'Cả gia đình',
-      ),
-      FamilyTransactionModel(
-        id: 'tx-def-02',
-        walletId: 'w-cash-01',
-        walletName: 'Tiền mặt gia đình',
-        categoryId: 'cat-food-groceries',
-        categoryName: 'Ăn uống & Đi chợ',
-        subCategoryName: 'Đi chợ & Siêu thị',
-        transactionType: TransactionType.EXPENSE,
-        amount: 380000,
-        date: d(now.day),
-        payeeVendor: 'Siêu thị WinMart',
-        description: 'Mua thịt bò, rau củ quả cuối tuần',
-        notes: '[Người chi: Chị Mai]',
-        forMemberName: 'Cả gia đình',
-      ),
-      FamilyTransactionModel(
-        id: 'tx-def-03',
-        walletId: 'w-vcb-01',
-        walletName: 'Vietcombank Lương & Dự phòng',
-        categoryId: 'cat-salary',
-        categoryName: 'Lương & Thưởng',
-        transactionType: TransactionType.INCOME,
-        amount: 32000000,
-        date: d(5),
-        payeeVendor: 'Công ty Cổ phần Công nghệ',
-        description: 'Nhận lương tháng',
-        notes: '[Người chi: Anh Tú] Lương định kỳ qua Vietcombank',
-        forMemberName: 'Cả gia đình',
-      ),
-      FamilyTransactionModel(
-        id: 'tx-def-04',
-        walletId: 'w-tcb-01',
-        walletName: 'Techcombank Chi tiêu',
-        categoryId: 'cat-home-bills',
-        categoryName: 'Nhà cửa & Tiện ích',
-        subCategoryName: 'Điện, Nước, Internet',
-        transactionType: TransactionType.EXPENSE,
-        amount: 1450000,
-        date: d(12),
-        payeeVendor: 'Điện Lực EVN TP.HCM',
-        description: 'Thanh toán tiền điện sinh hoạt tháng',
-        notes: '[Người chi: Anh Tú]',
-        forMemberName: 'Cả gia đình',
-      ),
-      FamilyTransactionModel(
-        id: 'tx-def-05',
-        walletId: 'w-tcb-01',
-        walletName: 'Techcombank Chi tiêu',
-        categoryId: 'cat-mob-toll',
-        categoryName: 'Phương tiện & Đi lại (Xe)',
-        subCategoryName: 'Phí VETC & Gửi xe',
-        transactionType: TransactionType.EXPENSE,
-        amount: 300000,
-        date: d(15),
-        payeeVendor: 'VETC Thu Phí Tự Động',
-        description: 'Nạp tài khoản thu phí VETC',
-        notes: '[Người chi: Anh Tú]',
-        forMemberName: 'Cả gia đình',
-      ),
-      FamilyTransactionModel(
-        id: 'tx-def-06',
-        walletId: 'w-tcb-credit',
-        walletName: 'Techcombank Visa Signature',
-        categoryId: 'cat-play-dining',
-        categoryName: 'Ăn uống & Đi chợ',
-        subCategoryName: 'Ăn ngoài & Cafe',
-        transactionType: TransactionType.EXPENSE,
-        amount: 850000,
-        date: d(18),
-        payeeVendor: 'Nhà hàng Pizza 4P\'s',
-        description: 'Ăn tối gia đình cuối tuần',
-        notes: '[Người chi: Anh Tú] Quẹt thẻ Visa tích điểm hoàn tiền',
-        forMemberName: 'Cả gia đình',
-      ),
-    ];
+    // 1. Nhiên liệu / Xăng dầu
+    if (cat == 'FUEL' || text.contains('xăng') || text.contains('dầu') || text.contains('ron 95') || text.contains('diesel')) {
+      return {'id': 'cat-mob-fuel', 'name': 'Xăng xe & Nhiên liệu'};
+    }
+    // 2. Bảo dưỡng & Sửa chữa định kỳ
+    if (cat == 'MAINTENANCE' || cat == 'LABOR' || text.contains('bảo dưỡng') || text.contains('thay dầu') || text.contains('nhớt') || text.contains('sửa chữa') || text.contains('gara') || text.contains('hãng')) {
+      return {'id': 'cat-mob-maint', 'name': 'Bảo dưỡng & Sửa xe'};
+    }
+    // 3. Phí cầu đường BOT, VETC, ePass
+    if (cat == 'TOLL' || text.contains('vetc') || text.contains('epass') || text.contains('cầu đường') || text.contains('bot') || text.contains('cao tốc')) {
+      return {'id': 'cat-mob-toll', 'name': 'Phí VETC & Gửi xe'};
+    }
+    // 4. Vé gửi xe, đỗ xe
+    if (cat == 'PARKING' || text.contains('gửi xe') || text.contains('đỗ xe') || text.contains('bãi đỗ')) {
+      return {'id': 'cat-mob-toll', 'name': 'Phí VETC & Gửi xe'};
+    }
+    // 5. Rửa xe, dọn nội thất, spa
+    if (cat == 'CAR_WASH' || text.contains('rửa xe') || text.contains('spa') || text.contains('dọn nội thất')) {
+      return {'id': 'cat-mob-wash', 'name': 'Rửa xe & Chăm sóc xe'};
+    }
+    // 6. Khoản vay mua xe
+    if (cat == 'LOAN' || cat == 'LOAN_PAYMENT' || text.contains('gốc vay') || text.contains('tiền gốc')) {
+      return {'id': 'cat-debt', 'name': 'Trả gốc vay mua xe'};
+    }
+    if (cat == 'LOAN_INTEREST' || text.contains('lãi vay') || text.contains('tiền lãi')) {
+      return {'id': 'cat-debt', 'name': 'Trả lãi vay mua xe'};
+    }
+    // Default
+    return {'id': 'cat-mobility', 'name': 'Phương tiện & Đi lại (Xe)'};
+  }
+
+  List<FamilyTransactionModel> _getInitialDefaultTransactions() {
+    return []; // Không sinh bất kỳ giao dịch mẫu nào
   }
 
   List<BudgetModel> _getMockBudgets() {
-    return [
-      BudgetModel(id: 'b-1', categoryId: 'cat-food', categoryName: 'Ăn uống & Đi chợ', limitAmount: 12000000, spentAmount: 8450000, month: '2026-03'),
-      BudgetModel(id: 'b-2', categoryId: 'cat-home', categoryName: 'Nhà cửa & Tiện ích', limitAmount: 6000000, spentAmount: 4200000, month: '2026-03'),
-      BudgetModel(id: 'b-3', categoryId: 'cat-play', categoryName: 'Hưởng thụ & Du lịch', limitAmount: 5000000, spentAmount: 4900000, month: '2026-03'),
-      BudgetModel(id: 'b-4', categoryId: 'cat-mobility', categoryName: 'Phương tiện & Đi lại (Xe)', limitAmount: 4000000, spentAmount: 1200000, month: '2026-03'),
-    ];
+    return []; // Không sinh ngân sách mẫu
   }
 }

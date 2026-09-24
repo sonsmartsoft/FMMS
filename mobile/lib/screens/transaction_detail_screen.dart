@@ -325,6 +325,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       label: 'Chi cho ai',
                       value: _currentTx.forMemberName ?? 'Cả gia đình',
                     ),
+                    if (_currentTx.assetName != null || _currentTx.assetId != null) ...[
+                      const Divider(height: 1),
+                      _buildDetailRow(
+                        icon: Icons.directions_car_outlined,
+                        iconColor: const Color(0xFF06B6D4),
+                        label: 'Phương tiện liên quan',
+                        value: _currentTx.assetName ?? 'Hệ thống xe',
+                      ),
+                    ],
                     if (_currentTx.eventTripId != null) ...[
                       const Divider(height: 1),
                       _buildDetailRow(
