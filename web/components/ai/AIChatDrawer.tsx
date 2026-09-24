@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
-import { X, Send, Sparkles, Bot, User, CheckCircle2, Settings, Trash2, Maximize2, RotateCcw, ArrowUpRight, MessageSquareText, Layers, ShieldCheck, Copy, Check } from 'lucide-react';
+import { X, Send, Sparkles, Bot, User, CheckCircle2, Settings, Trash2, Maximize2, RotateCcw, ArrowUpRight, MessageSquareText, Layers, ShieldCheck, Copy, Check, Camera } from 'lucide-react';
 import Link from 'next/link';
 import { MODERN_AI_PROVIDERS, getActiveAISettings } from '@/lib/services/aiConfig';
 import { useAIChat } from '@/lib/hooks/useAIChat';
@@ -70,6 +70,80 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
   const { messages, loading, sendMessage, clearHistory } = useAIChat();
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isScanningImage, setIsScanningImage] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsScanningImage(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64 = reader.result as string;
+        const res = await fetch('/api/ai/scan-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
+        });
+        const json = await res.json();
+        if (json.success && json.data) {
+          const r = json.data;
+          const fmt = new Intl.NumberFormat('vi-VN').format(r.total_amount);
+          const itemsSummary = r.items?.slice(0, 15).map((i: any) => `${i.name} (x${i.quantity} - ${new Intl.NumberFormat('vi-VN').format(i.total_price)}₫)`).join(', ');
+          const prompt = `Tôi vừa chụp ảnh hóa đơn thanh toán tại **${r.merchant_name}** (${r.date_time || 'Gần đây'}).\n• Địa điểm: ${r.merchant_address || ''} (${r.table_or_room || ''})\n• Tổng tiền: **${fmt} ₫** gồm **${r.items?.length || 0} món**:\n${itemsSummary}\n• Tài khoản chuyển khoản: ${r.account_name || ''} - ${r.bank_name || ''}\nHãy lập dự thảo ghi nhận chi tiêu gia đình cho khoản này thuộc nhóm **${r.suggested_parent_category} > ${r.suggested_sub_category}**.`;
+          sendMessage(prompt, currentAssetId, activeProvider);
+        }
+      } catch (err) {
+        console.error('Scan error:', err);
+      } finally {
+        setIsScanningImage(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          setIsScanningImage(true);
+          const reader = new FileReader();
+          reader.onload = async () => {
+            try {
+              const base64 = reader.result as string;
+              const res = await fetch('/api/ai/scan-receipt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
+              });
+              const json = await res.json();
+              if (json.success && json.data) {
+                const r = json.data;
+                const fmt = new Intl.NumberFormat('vi-VN').format(r.total_amount);
+                const itemsSummary = r.items?.slice(0, 15).map((item: any) => `${item.name} (x${item.quantity} - ${new Intl.NumberFormat('vi-VN').format(item.total_price)}₫)`).join(', ');
+                const prompt = `Tôi vừa dán ảnh hóa đơn thanh toán tại **${r.merchant_name}** (${r.date_time || 'Gần đây'}).\n• Địa điểm: ${r.merchant_address || ''} (${r.table_or_room || ''})\n• Tổng tiền: **${fmt} ₫** gồm **${r.items?.length || 0} món**:\n${itemsSummary}\n• Tài khoản chuyển khoản: ${r.account_name || ''} - ${r.bank_name || ''}\nHãy lập dự thảo ghi nhận chi tiêu gia đình cho khoản này thuộc nhóm **${r.suggested_parent_category} > ${r.suggested_sub_category}**.`;
+                sendMessage(prompt, currentAssetId, activeProvider);
+              }
+            } catch (err) {
+              console.error('Paste scan error:', err);
+            } finally {
+              setIsScanningImage(false);
+            }
+          };
+          reader.readAsDataURL(file);
+          return;
+        }
+      }
+    }
+  };
 
   const handleCopy = (text: string, id: string) => {
     const clean = text.replace(/```(?:fmms_action|json:action|action)[\s\S]*?```/gi, '').trim();
@@ -410,6 +484,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
         style={{ borderTop: '1px solid var(--border-default)', background: 'var(--bg-primary)' }}
       >
         <div
+          onPaste={handlePaste}
           className="flex items-center space-x-2 p-1.5 rounded-2xl transition-all"
           style={{
             background: 'var(--bg-secondary)',
@@ -417,18 +492,35 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           }}
         >
           <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading || isScanningImage}
+            className="p-2 rounded-xl text-sky-400 hover:bg-sky-500/10 active:scale-95 transition cursor-pointer disabled:opacity-40"
+            title="Tải ảnh hoá đơn (Quán ăn, siêu thị, xăng xe...)"
+          >
+            <Camera className={`w-4 h-4 ${isScanningImage ? 'animate-pulse text-amber-400' : ''}`} />
+          </button>
+          <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-            placeholder="Nhập câu hỏi về chi phí, bảo dưỡng, ODO..."
+            onPaste={handlePaste}
+            placeholder={isScanningImage ? 'AI đang đọc và phân tích ảnh hoá đơn...' : 'Nhập câu hỏi, chụp ảnh hoặc dán (Ctrl+V) ảnh...'}
             className="flex-1 px-2.5 py-1.5 bg-transparent text-xs outline-none font-medium"
             style={{ color: 'var(--text-primary)' }}
           />
           <button
             onClick={() => handleSend()}
-            disabled={!input.trim() || loading}
+            disabled={!input.trim() || loading || isScanningImage}
             className="p-2.5 rounded-xl text-white transition disabled:opacity-30 hover:scale-105 active:scale-95 cursor-pointer shadow-md shadow-cyan-500/20"
             style={{ background: 'linear-gradient(135deg, #0EA5E9, #2563EB)' }}
             title="Gửi tin nhắn (Enter)"
@@ -437,7 +529,7 @@ export const AIChatDrawer: React.FC<AIChatDrawerProps> = ({
           </button>
         </div>
         <p className="text-[9px] text-center mt-1.5 opacity-50" style={{ color: 'var(--text-muted)' }}>
-          Nhấn Enter để gửi • Hỗ trợ truy vấn thông minh toàn bộ dữ liệu xe
+          Nhấn Enter để gửi • Hỗ trợ dán (Ctrl+V) ảnh hoá đơn, chụp ảnh & truy vấn toàn diện
         </p>
       </div>
     </div>

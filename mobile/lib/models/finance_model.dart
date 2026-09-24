@@ -44,17 +44,17 @@ class WalletModel {
     }
 
     return WalletModel(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
       walletType: parseType(json['wallet_type']),
-      bankName: json['bank_name'],
-      accountNumber: json['account_number'],
+      bankName: json['bank_name']?.toString(),
+      accountNumber: json['account_number']?.toString(),
       currentBalance: (json['current_balance'] as num?)?.toDouble() ?? 0.0,
       creditLimit: (json['credit_limit'] as num?)?.toDouble(),
-      statementDay: json['statement_day'],
-      paymentDueDay: json['payment_due_day'],
-      color: json['color'],
-      icon: json['icon'],
+      statementDay: json['statement_day'] as int?,
+      paymentDueDay: json['payment_due_day'] as int?,
+      color: json['color']?.toString(),
+      icon: json['icon']?.toString(),
     );
   }
 
@@ -76,20 +76,26 @@ class TransactionCategoryModel {
   final String id;
   final String name;
   final TransactionType type;
+  final String? parentId; // ID of parent category (null if top-level parent)
   final String? color;
   final String? icon;
   final BudgetBucket? budgetBucket;
   final bool isEssential;
+  final int displayOrder;
 
   TransactionCategoryModel({
     required this.id,
     required this.name,
     required this.type,
+    this.parentId,
     this.color,
     this.icon,
     this.budgetBucket,
     this.isEssential = true,
+    this.displayOrder = 0,
   });
+
+  bool get isParent => parentId == null || parentId!.isEmpty;
 
   factory TransactionCategoryModel.fromJson(Map<String, dynamic> json) {
     TransactionType parseType(String? val) {
@@ -111,15 +117,27 @@ class TransactionCategoryModel {
     }
 
     return TransactionCategoryModel(
-      id: json['id'] ?? '',
-      name: json['name'] ?? '',
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
       type: parseType(json['type']),
-      color: json['color'],
-      icon: json['icon'],
+      parentId: json['parent_id']?.toString(),
+      color: json['color']?.toString(),
+      icon: json['icon']?.toString(),
       budgetBucket: parseBucket(json['budget_bucket']),
       isEssential: json['is_essential'] ?? true,
+      displayOrder: (json['display_order'] as num?)?.toInt() ?? 0,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'type': type.name,
+    'parent_id': parentId,
+    'color': color,
+    'icon': icon,
+    'display_order': displayOrder,
+  };
 }
 
 class FamilyTransactionModel {
@@ -127,6 +145,7 @@ class FamilyTransactionModel {
   final String walletId;
   final String? toWalletId;
   final String? categoryId;
+  final String? subCategoryId;
   final String? assetId;
   final TransactionType transactionType;
   final double amount;
@@ -137,12 +156,14 @@ class FamilyTransactionModel {
   final bool isEssential;
   final String? walletName;
   final String? categoryName;
+  final String? subCategoryName;
 
   FamilyTransactionModel({
     required this.id,
     required this.walletId,
     this.toWalletId,
     this.categoryId,
+    this.subCategoryId,
     this.assetId,
     required this.transactionType,
     required this.amount,
@@ -153,6 +174,7 @@ class FamilyTransactionModel {
     this.isEssential = true,
     this.walletName,
     this.categoryName,
+    this.subCategoryName,
   });
 
   factory FamilyTransactionModel.fromJson(Map<String, dynamic> json) {
@@ -163,20 +185,22 @@ class FamilyTransactionModel {
     }
 
     return FamilyTransactionModel(
-      id: json['id'] ?? '',
-      walletId: json['wallet_id'] ?? '',
-      toWalletId: json['to_wallet_id'],
-      categoryId: json['category_id'],
-      assetId: json['asset_id'],
+      id: json['id']?.toString() ?? '',
+      walletId: json['wallet_id']?.toString() ?? '',
+      toWalletId: json['to_wallet_id']?.toString(),
+      categoryId: json['category_id']?.toString(),
+      subCategoryId: json['sub_category_id']?.toString(),
+      assetId: json['asset_id']?.toString(),
       transactionType: parseType(json['transaction_type']),
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-      date: json['date'] ?? '',
-      payeeVendor: json['payee_vendor'],
-      description: json['description'],
-      notes: json['notes'],
+      date: json['date']?.toString() ?? '',
+      payeeVendor: json['payee_vendor']?.toString(),
+      description: json['description']?.toString(),
+      notes: json['notes']?.toString(),
       isEssential: json['is_essential'] ?? true,
       walletName: json['wallet'] != null ? json['wallet']['name'] : null,
       categoryName: json['category'] != null ? json['category']['name'] : null,
+      subCategoryName: json['sub_category_name']?.toString(),
     );
   }
 
@@ -184,6 +208,7 @@ class FamilyTransactionModel {
     'wallet_id': walletId,
     'to_wallet_id': toWalletId,
     'category_id': categoryId,
+    'sub_category_id': subCategoryId,
     'asset_id': assetId,
     'transaction_type': transactionType.name,
     'amount': amount,

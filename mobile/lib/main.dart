@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'screens/quick_expense_screen.dart';
+import 'models/user_member_model.dart';
+import 'screens/login_profile_screen.dart';
+import 'screens/main_shell_screen.dart';
+import 'services/auth_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,28 +20,58 @@ Future<void> main() async {
     ),
   );
 
-  runApp(const FFMSApp());
+  final authService = AuthService();
+  final activeMember = await authService.getActiveMember();
+
+  runApp(FFMSApp(initialMember: activeMember));
 }
 
 class FFMSApp extends StatelessWidget {
-  const FFMSApp({Key? key}) : super(key: key);
+  final FamilyMemberModel? initialMember;
+
+  const FFMSApp({super.key, this.initialMember});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'FFMS Sổ Thu Chi Bỏ Túi',
+      title: 'FMMS Tài Chính Gia Đình',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.system,
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
         colorSchemeSeed: const Color(0xFF0284C7),
+        fontFamily: '.AppleSystemUIFont',
+        appBarTheme: const AppBarTheme(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            color: Color(0xFF0F172A),
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0B1120),
         colorSchemeSeed: const Color(0xFF0284C7),
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
+        fontFamily: '.AppleSystemUIFont',
+        appBarTheme: const AppBarTheme(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            color: Colors.white,
+            fontSize: 17,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -49,88 +82,7 @@ class FFMSApp extends StatelessWidget {
         Locale('vi', 'VN'),
         Locale('en', 'US'),
       ],
-      home: const MainNavigationScreen(),
-    );
-  }
-}
-
-class MainNavigationScreen extends StatefulWidget {
-  const MainNavigationScreen({Key? key}) : super(key: key);
-
-  @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
-}
-
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 0;
-
-  final List<Widget> _pages = [
-    const QuickExpenseScreen(),
-    const WalletsViewPlaceholder(),
-    const VehicleViewPlaceholder(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: _pages[_currentIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.add_circle_outline),
-            selectedIcon: Icon(Icons.add_circle),
-            label: 'Ghi chép',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet),
-            label: 'Ví & Thẻ',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.directions_car_outlined),
-            selectedIcon: Icon(Icons.directions_car),
-            label: 'Xe Mazda 2',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class WalletsViewPlaceholder extends StatelessWidget {
-  const WalletsViewPlaceholder({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Ví & Tài Khoản Thanh Toán')),
-      body: const Center(
-        child: Text(
-          'Đồng bộ tức thời với Web FFMS Core.\nBao gồm Tiền mặt, Techcombank, VCB, Visa Signature & MoMo.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey),
-        ),
-      ),
-    );
-  }
-}
-
-class VehicleViewPlaceholder extends StatelessWidget {
-  const VehicleViewPlaceholder({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Phương Tiện Xe Mazda 2')),
-      body: const Center(
-        child: Text(
-          'Đồng bộ với OBD Car Logger, ODO và sổ bảo dưỡng định kỳ.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey),
-        ),
-      ),
+      home: initialMember != null ? const MainShellScreen() : const LoginProfileScreen(),
     );
   }
 }
