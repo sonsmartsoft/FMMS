@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ai_action_model.dart';
 import '../models/receipt_model.dart';
 import 'auth_service.dart';
@@ -10,22 +11,157 @@ class AIAssistantService {
   static const String _defaultApiUrl = 'https://fmms.vercel.app/api/ai/chat';
   static const String _receiptApiUrl = 'https://fmms.vercel.app/api/ai/scan-receipt';
 
+  Future<String?> getGeminiApiKey() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('gemini_api_key')?.trim();
+  }
+
+  Future<void> saveGeminiApiKey(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('gemini_api_key', key.trim());
+  }
+
+  /// Direct Gemini Vision multimodal OCR extraction
+  Future<ReceiptAnalysisResult?> _scanWithGeminiVision(
+    Uint8List imageBytes,
+    String apiKey,
+    String mimeType,
+  ) async {
+    final cleanKey = apiKey.trim();
+    if (cleanKey.isEmpty) return null;
+
+    final base64Str = base64Encode(imageBytes);
+    const prompt = '''Bạn là hệ thống AI OCR thị giác chuyên sâu về hoá đơn bán lẻ và chi tiêu gia đình tại Việt Nam (FFMS Receipt Vision AI).
+Nhiệm vụ của bạn: Hãy đọc toàn bộ bức ảnh hoá đơn này và trích xuất ĐẦY ĐỦ, CHÍNH XÁC TẤT CẢ các thông tin sau từ ảnh thật, KHÔNG ĐƯỢC BỊA ĐẶT DỮ LIỆU:
+1. Tên nhà hàng / cửa hàng / quán ăn (merchant_name)
+2. Địa chỉ đầy đủ nếu có (merchant_address)
+3. Số điện thoại liên hệ (merchant_phone)
+4. Tiêu đề hoá đơn (receipt_type: HOÁ ĐƠN TẠM TÍNH, HOÁ ĐƠN BÁN HÀNG, PHIẾU THANH TOÁN...)
+5. Bàn / Phòng / Khu vực (table_or_room)
+6. Thời gian (date_time: DD/MM/YYYY HH:mm)
+7. Danh sách TẤT CẢ các món / mặt hàng (items):
+   Mỗi món gồm:
+   - name: Tên chính xác in trên hoá đơn
+   - quantity: Số lượng (số nguyên)
+   - unit_price: Đơn giá
+   - total_price: Thành tiền
+   - category_suggestion: Phân loại nhỏ (VD: Đồ uống, Món chính, Ăn kèm...)
+8. Tổng tiền thanh toán thực tế in trên hoá đơn (total_amount)
+9. Thông tin tài khoản nếu có: account_name, bank_name, has_qr_code (true/false)
+10. Tự động đề xuất phân loại:
+    - Nếu là ăn uống ngoài hàng: suggested_parent_category: "Ăn uống & Đi chợ", suggested_sub_category: "Ăn nhà hàng, Buffet & Cuối tuần"
+    - Nếu là cafe, trà sữa, sinh tố: suggested_parent_category: "Ăn uống & Đi chợ", suggested_sub_category: "Cà phê & Đồ uống"
+    - Nếu là siêu thị, đi chợ: suggested_parent_category: "Ăn uống & Đi chợ", suggested_sub_category: "Đi chợ & Siêu thị"
+    - Nếu là mua sắm đồ dùng, quần áo: suggested_parent_category: "Mua sắm gia đình", suggested_sub_category: "Quần áo & Phụ kiện"
+    - Nếu là đổ xăng: suggested_parent_category: "Phương tiện & Xe cộ (FMMS)", suggested_sub_category: "Xăng xe & Nhiên liệu"
+11. summary_text: Tóm tắt 1 câu ngắn gọn gồm tên quán, số món và tổng tiền thực tế.
+
+TRẢ VỀ DUY NHẤT 1 KHỐI JSON HỢP LỆ THEO SCHEMA:
+{
+  "merchant_name": "string",
+  "merchant_address": "string",
+  "merchant_phone": "string",
+  "receipt_type": "string",
+  "table_or_room": "string",
+  "date_time": "string",
+  "items": [
+    {"name": "string", "quantity": 1, "unit_price": 0, "total_price": 0, "category_suggestion": "string"}
+  ],
+  "total_amount": 0,
+  "account_name": "string",
+  "bank_name": "string",
+  "has_qr_code": false,
+  "suggested_parent_category": "string",
+  "suggested_sub_category": "string",
+  "confidence": 0.98,
+  "summary_text": "string"
+}''';
+
+    // Try available vision models in cascade
+    final candidateModels = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-pro',
+    ];
+
+    for (final model in candidateModels) {
+      try {
+        final url = Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$cleanKey',
+        );
+        final res = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'contents': [
+              {
+                'role': 'user',
+                'parts': [
+                  {'text': prompt},
+                  {
+                    'inline_data': {
+                      'mime_type': mimeType,
+                      'data': base64Str,
+                    }
+                  }
+                ]
+              }
+            ]
+          }),
+        ).timeout(const Duration(seconds: 30));
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+          final match = RegExp(r'\{[\s\S]*\}').firstMatch(text);
+          if (match != null) {
+            final parsedJson = jsonDecode(match.group(0)!);
+            debugPrint('[Gemini Vision] Successfully extracted receipt via model: $model');
+            return ReceiptAnalysisResult.fromJson(parsedJson);
+          }
+        } else {
+          debugPrint('[Gemini Vision $model] HTTP ${res.statusCode}: ${res.body}');
+        }
+      } catch (e) {
+        debugPrint('[Gemini Vision $model] Error: $e');
+      }
+    }
+    return null;
+  }
+
   /// Scans a receipt image with Gemini Vision / OCR and extracts full merchant info and items
   Future<ReceiptAnalysisResult> scanReceipt({
     required Uint8List imageBytes,
     String mimeType = 'image/jpeg',
   }) async {
-    // 1. Try calling FMMS Vision OCR API
+    final localKey = await getGeminiApiKey();
+
+    // 1. Prioritize Direct Google Gemini Vision API (Instant & Private)
+    if (localKey != null && localKey.isNotEmpty) {
+      final directResult = await _scanWithGeminiVision(imageBytes, localKey, mimeType);
+      if (directResult != null) {
+        return directResult;
+      }
+    }
+
+    // 2. Try FMMS Vision OCR API (Forwarding local API key if present)
     try {
       final base64Str = base64Encode(imageBytes);
+      final bodyMap = <String, dynamic>{
+        'imageBase64': base64Str,
+        'mimeType': mimeType,
+      };
+      if (localKey != null && localKey.isNotEmpty) {
+        bodyMap['apiKey'] = localKey;
+      }
+
       final res = await http.post(
         Uri.parse(_receiptApiUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'imageBase64': base64Str,
-          'mimeType': mimeType,
-        }),
-      ).timeout(const Duration(seconds: 10));
+        body: jsonEncode(bodyMap),
+      ).timeout(const Duration(seconds: 25));
 
       if (res.statusCode == 200) {
         final json = jsonDecode(res.body);
@@ -33,11 +169,14 @@ class AIAssistantService {
           return ReceiptAnalysisResult.fromJson(json['data']);
         }
       }
-    } catch (_) {
-      // Fallback to high-precision offline parser
+    } catch (_) {}
+
+    // 3. If no key was configured, notify UI to prompt for Gemini API Key
+    if (localKey == null || localKey.isEmpty) {
+      throw Exception('MISSING_GEMINI_API_KEY');
     }
 
-    return _getOfflineReceiptResult();
+    throw Exception('FAILED_TO_ANALYZE_RECEIPT');
   }
 
   /// Converts a detailed ReceiptAnalysisResult into an AIActionDraft ready to confirm into DB
@@ -78,41 +217,6 @@ class AIAssistantService {
     );
   }
 
-  ReceiptAnalysisResult _getOfflineReceiptResult() {
-    return ReceiptAnalysisResult(
-      merchantName: 'CỌ XANH Quán',
-      merchantAddress: '26 Phan Đình Giót - P. Vĩnh Phúc - Phú Thọ',
-      merchantPhone: '0961177298',
-      receiptType: 'HOÁ ĐƠN TẠM TÍNH',
-      tableOrRoom: 'KV5- CX2- SÀN T1, PHÒNG VIP - V.1.04',
-      dateTime: '20:11 - 20:22 16/09/2026',
-      items: [
-        ReceiptItemModel(name: 'BIA HƠI HN (tháp)', quantity: 5, unitPrice: 105000, totalPrice: 525000, categorySuggestion: 'Đồ uống có cồn'),
-        ReceiptItemModel(name: 'NƯỚC NGỌT', quantity: 3, unitPrice: 15000, totalPrice: 45000, categorySuggestion: 'Giải khát'),
-        ReceiptItemModel(name: 'NƯỚC LỌC', quantity: 1, unitPrice: 10000, totalPrice: 10000, categorySuggestion: 'Giải khát'),
-        ReceiptItemModel(name: 'Bia TIGER BẠC (lon 250ml)', quantity: 26, unitPrice: 20000, totalPrice: 520000, categorySuggestion: 'Đồ uống có cồn'),
-        ReceiptItemModel(name: 'RAU SÚP LƠ BABY LUỘC/XÀO', quantity: 2, unitPrice: 80000, totalPrice: 160000, categorySuggestion: 'Món rau'),
-        ReceiptItemModel(name: 'DƯA MUỐI CHUA', quantity: 2, unitPrice: 20000, totalPrice: 40000, categorySuggestion: 'Ăn kèm'),
-        ReceiptItemModel(name: 'LẠC RANG HÚNG LÌU', quantity: 2, unitPrice: 20000, totalPrice: 40000, categorySuggestion: 'Món nhắm'),
-        ReceiptItemModel(name: 'MÁ ĐÀO HẤP/NƯỚNG', quantity: 2, unitPrice: 169000, totalPrice: 338000, categorySuggestion: 'Món chính'),
-        ReceiptItemModel(name: 'THUỐC LÁ (sài gòn bấm)', quantity: 1, unitPrice: 35000, totalPrice: 35000, categorySuggestion: 'Chi tiêu khác'),
-        ReceiptItemModel(name: 'thêm TRỨNG LUỘC', quantity: 2, unitPrice: 10000, totalPrice: 20000, categorySuggestion: 'Món thêm'),
-        ReceiptItemModel(name: 'ĐẬU TẨM HÀNH', quantity: 2, unitPrice: 60000, totalPrice: 120000, categorySuggestion: 'Món nhắm'),
-        ReceiptItemModel(name: 'TÓP MỠ ÉP CAY (L1)', quantity: 2, unitPrice: 140000, totalPrice: 280000, categorySuggestion: 'Món nhắm'),
-        ReceiptItemModel(name: 'MỲ XÀO HẢI SẢN (size nhỏ)', quantity: 2, unitPrice: 80000, totalPrice: 160000, categorySuggestion: 'Món no'),
-        ReceiptItemModel(name: 'CƠM RANG THẬP CẨM (size to)', quantity: 2, unitPrice: 110000, totalPrice: 220000, categorySuggestion: 'Món no'),
-        ReceiptItemModel(name: 'DỒI SỤN', quantity: 2, unitPrice: 130000, totalPrice: 260000, categorySuggestion: 'Món nhắm'),
-      ],
-      totalAmount: 2773000,
-      accountName: 'NGUYEN THI THUY',
-      bankName: 'VIETCOMBANK',
-      hasQrCode: true,
-      suggestedParentCategory: 'Ăn uống & Đi chợ',
-      suggestedSubCategory: 'Ăn nhà hàng, Buffet & Cuối tuần',
-      confidence: 0.99,
-      summaryText: 'Hóa đơn Cọ Xanh Quán gồm 15 món (56 sản phẩm), tổng thanh toán 2.773.000 ₫ tại Phòng VIP V.1.04. Đề xuất ghi vào mục Ăn nhà hàng & Quán ăn.',
-    );
-  }
 
   /// Parses natural Vietnamese speech or text into a structured AIActionDraft with Subcategories
   Future<AIActionDraft> parseNaturalInput(

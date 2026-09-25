@@ -138,55 +138,28 @@ TRẢ VỀ DUY NHẤT 1 KHỐI JSON HỢP LỆ THEO SCHEMA SAU:
       }
     }
 
-    // 2. High-Fidelity Smart Fallback Analyzer (Guaranteed 100% Extraction Accuracy)
-    // Matches realistic Vietnamese restaurant, supermarket, and service receipts
-    const fallbackData = getSmartReceiptFallback(imageBase64);
-    return NextResponse.json({
-      success: true,
-      data: fallbackData,
-      source: 'FMMS High-Precision OCR Engine',
-    });
+    if (!activeApiKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Chưa cấu hình GEMINI_API_KEY. Vui lòng nhập API Key từ Google AI Studio (miễn phí).',
+          needsConfig: true,
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Không thể trích xuất nội dung hoá đơn từ ảnh này. Vui lòng kiểm tra ảnh chụp rõ nét, đủ ánh sáng và thử lại.',
+      },
+      { status: 422 }
+    );
   } catch (error: any) {
     return NextResponse.json(
       { error: error?.message || 'Không thể quét hoá đơn' },
       { status: 500 }
     );
   }
-}
-
-function getSmartReceiptFallback(base64?: string): ReceiptScanResponse {
-  // Trích xuất thông minh chuẩn hoá đơn CỌ XANH Quán & nhà hàng ẩm thực
-  return {
-    merchant_name: 'CỌ XANH Quán',
-    merchant_address: '26 Phan Đình Giót - P. Vĩnh Phúc - Phú Thọ',
-    merchant_phone: '0961177298',
-    receipt_type: 'HOÁ ĐƠN TẠM TÍNH',
-    table_or_room: 'KV5- CX2- SÀN T1, PHÒNG VIP - V.1.04',
-    date_time: '20:11 - 20:22 ngày 16/09/2026',
-    items: [
-      { name: 'BIA HƠI HN (tháp)', quantity: 5, unit_price: 105000, total_price: 525000, category_suggestion: 'Đồ uống có cồn' },
-      { name: 'NƯỚC NGỌT', quantity: 3, unit_price: 15000, total_price: 45000, category_suggestion: 'Giải khát' },
-      { name: 'NƯỚC LỌC', quantity: 1, unit_price: 10000, total_price: 10000, category_suggestion: 'Giải khát' },
-      { name: 'Bia TIGER BẠC (lon 250ml)', quantity: 26, unit_price: 20000, total_price: 520000, category_suggestion: 'Đồ uống có cồn' },
-      { name: 'RAU SÚP LƠ BABY LUỘC/XÀO', quantity: 2, unit_price: 80000, total_price: 160000, category_suggestion: 'Món rau & Ăn kèm' },
-      { name: 'DƯA MUỐI CHUA', quantity: 2, unit_price: 20000, total_price: 40000, category_suggestion: 'Món ăn kèm' },
-      { name: 'LẠC RANG HÚNG LÌU', quantity: 2, unit_price: 20000, total_price: 40000, category_suggestion: 'Món nhắm' },
-      { name: 'MÁ ĐÀO HẤP/NƯỚNG', quantity: 2, unit_price: 169000, total_price: 338000, category_suggestion: 'Món chính' },
-      { name: 'THUỐC LÁ (sài gòn bấm)', quantity: 1, unit_price: 35000, total_price: 35000, category_suggestion: 'Chi tiêu khác' },
-      { name: 'thêm TRỨNG LUỘC', quantity: 2, unit_price: 10000, total_price: 20000, category_suggestion: 'Món thêm' },
-      { name: 'ĐẬU TẨM HÀNH', quantity: 2, unit_price: 60000, total_price: 120000, category_suggestion: 'Món nhắm' },
-      { name: 'TÓP MỠ ÉP CAY (L1)', quantity: 2, unit_price: 140000, total_price: 280000, category_suggestion: 'Món nhắm' },
-      { name: 'MỲ XÀO HẢI SẢN (size nhỏ)', quantity: 2, unit_price: 80000, total_price: 160000, category_suggestion: 'Món no' },
-      { name: 'CƠM RANG THẬP CẨM (size to)', quantity: 2, unit_price: 110000, total_price: 220000, category_suggestion: 'Món no' },
-      { name: 'DỒI SỤN', quantity: 2, unit_price: 130000, total_price: 260000, category_suggestion: 'Món nhắm' },
-    ],
-    total_amount: 2773000,
-    account_name: 'NGUYEN THI THUY',
-    bank_name: 'VIETCOMBANK',
-    has_qr_code: true,
-    suggested_parent_category: 'Ăn uống & Đi chợ',
-    suggested_sub_category: 'Ăn nhà hàng, Buffet & Cuối tuần',
-    confidence: 0.99,
-    summary_text: 'Hóa đơn Cọ Xanh Quán gồm 15 món (56 sản phẩm), tổng thanh toán 2.773.000 ₫ tại Phòng VIP V.1.04. Đề xuất ghi vào mục Ăn nhà hàng & Quán ăn.',
-  };
 }
