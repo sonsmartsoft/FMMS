@@ -228,11 +228,34 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
       txCount = todayTxs.length;
     } catch (_) {}
 
-    final offlineGreeting = _aiService.getOfflineGreeting(
-      activeMember.name,
-      todaySpent: todaySpent,
-      txCount: txCount,
-    );
+    // Check if we have an API key configured to choose online vs offline greeting
+    final localKey = await _aiService.getGeminiApiKey();
+    final hasKey = localKey != null && localKey.trim().isNotEmpty;
+
+    String greeting = '';
+
+    // 1. If configured with Gemini AI Key, attempt natural dynamic greeting
+    if (hasKey) {
+      try {
+        final onlineGreeting = await _aiService.generateDynamicGreeting(
+          memberName: activeMember.name,
+          todaySpent: todaySpent,
+          txCount: txCount,
+        );
+        if (onlineGreeting != null && onlineGreeting.trim().isNotEmpty) {
+          greeting = onlineGreeting.trim();
+        }
+      } catch (_) {}
+    }
+
+    // 2. If offline, no key, or online call timed out, use contextual offline greeting
+    if (greeting.isEmpty) {
+      greeting = _aiService.getOfflineGreeting(
+        activeMember.name,
+        todaySpent: todaySpent,
+        txCount: txCount,
+      );
+    }
 
     if (mounted) {
       setState(() {
@@ -244,47 +267,17 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
           final welcomeMsg = ChatMessage(
             id: 'welcome-01',
             role: 'assistant',
-            content: offlineGreeting,
+            content: greeting,
           );
           _messages.add(welcomeMsg);
 
+          // Speak exactly once with the chosen greeting
           if (_isVoiceEnabled) {
             _speak(welcomeMsg.content, welcomeMsg.id);
           }
         }
       });
-
-      // Try generating live dynamic greeting via Gemini AI in the background
-      _fetchDynamicAiGreeting(activeMember.name, todaySpent, txCount);
     }
-  }
-
-  Future<void> _fetchDynamicAiGreeting(String memberName, double todaySpent, int txCount) async {
-    try {
-      final aiGreeting = await _aiService.generateDynamicGreeting(
-        memberName: memberName,
-        todaySpent: todaySpent,
-        txCount: txCount,
-      );
-
-      if (aiGreeting != null && aiGreeting.trim().isNotEmpty && mounted) {
-        setState(() {
-          final welcomeIdx = _messages.indexWhere((m) => m.id == 'welcome-01');
-          if (welcomeIdx != -1) {
-            _messages[welcomeIdx] = ChatMessage(
-              id: 'welcome-01',
-              role: 'assistant',
-              content: aiGreeting.trim(),
-            );
-          }
-        });
-
-        // If voice enabled, speak the dynamic AI greeting
-        if (_isVoiceEnabled) {
-          _speak(aiGreeting.trim(), 'welcome-01');
-        }
-      }
-    } catch (_) {}
   }
 
   String _getShortName(String fullName) {

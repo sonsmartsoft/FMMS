@@ -11,6 +11,7 @@ class AIAssistantService {
   final AuthService _authService = AuthService();
   static const String _defaultApiUrl = 'https://fmms.vercel.app/api/ai/chat';
   static const String _receiptApiUrl = 'https://fmms.vercel.app/api/ai/scan-receipt';
+  static ({String apiVersion, List<String> models})? _cachedModelInfo;
 
   Future<String?> getGeminiApiKey() async {
     final prefs = await SharedPreferences.getInstance();
@@ -20,6 +21,7 @@ class AIAssistantService {
   Future<void> saveGeminiApiKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('gemini_api_key', key.trim());
+    _cachedModelInfo = null; // Clear cache on new key
   }
 
   /// Offline smart contextual greeting based on time of day and today's finance status
@@ -131,6 +133,7 @@ Chỉ trả về trực tiếp lời chào bằng tiếng Việt, không kèm gi
   Future<({String apiVersion, List<String> models})?> getAvailableModels(String apiKey) async {
     final cleanKey = apiKey.trim();
     if (cleanKey.isEmpty) return null;
+    if (_cachedModelInfo != null) return _cachedModelInfo;
 
     for (final version in ['v1beta', 'v1']) {
       try {
@@ -152,7 +155,8 @@ Chỉ trả về trực tiếp lời chào bằng tiếng Việt, không kèm gi
               }
             }
             if (validModels.isNotEmpty) {
-              return (apiVersion: version, models: validModels);
+              _cachedModelInfo = (apiVersion: version, models: validModels);
+              return _cachedModelInfo;
             }
           }
         }
