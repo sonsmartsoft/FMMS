@@ -151,66 +151,86 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
     final firstName = AIPersonaModel.extractFirstName(_activeMember.name);
     final resolvedSalutation = currentConfig.resolveUserSalutation(_activeMember.name);
     final resolvedSelf = currentConfig.resolveSelfPronoun();
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isKeyboardOpen = bottomInset > 0;
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.90,
-      ),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F172A) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.90,
+          ),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F172A) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0284C7).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.psychology_rounded, color: Color(0xFF0284C7), size: 22),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Row(
                       children: [
-                        const Text(
-                          'Cấu Hình Vai Trò & AI Chat',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          'Cá nhân hoá tính cách, xưng hô theo tài khoản',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
+                          child: const Icon(Icons.psychology_rounded, color: Color(0xFF0284C7), size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Cấu Hình Vai Trò & AI Chat',
+                              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Cá nhân hoá tính cách, xưng hô theo tài khoản',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        if (isKeyboardOpen)
+                          IconButton(
+                            icon: const Icon(Icons.keyboard_hide_rounded, color: Color(0xFF0284C7)),
+                            tooltip: 'Thu bàn phím',
+                            onPressed: () => FocusScope.of(context).unfocus(),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.pop(context),
                         ),
                       ],
                     ),
                   ],
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
+              ),
+              const Divider(height: 1),
 
-          // Body Content
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-              children: [
+              // Body Content
+              Expanded(
+                child: ListView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                  children: [
                 // 1. User & Live Preview Card
                 Container(
                   padding: const EdgeInsets.all(14),
@@ -315,8 +335,8 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
                 _buildRoleOption(
                   keyId: 'advisor',
                   icon: Icons.account_balance_rounded,
-                  title: 'Cố vấn tài chính thông thái (Khuyên dùng)',
-                  desc: 'Phân tích tài chính sâu, nhắc nhở tiết kiệm, đầu tư và chi tiêu thông minh.',
+                  title: 'FMMS Senior AI Wealth & Fleet Strategist (Khuyên dùng)',
+                  desc: 'Cố vấn tài chính cấp cao, quản trị dòng tiền, tất toán dư nợ giảm dần, TCO/km và bảo dưỡng chủ động.',
                 ),
                 _buildRoleOption(
                   keyId: 'assistant',
@@ -348,6 +368,9 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
                   TextField(
                     controller: _customRoleController,
                     maxLines: 3,
+                    textInputAction: TextInputAction.done,
+                    onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                    onEditingComplete: () => FocusScope.of(context).unfocus(),
                     style: const TextStyle(fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Nhập mô tả vai trò mong muốn (Ví dụ: Bạn là quản gia quý tộc người Anh, luôn phục vụ tôi chu đáo...)',
@@ -422,6 +445,9 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _customSelfController,
+                    textInputAction: TextInputAction.done,
+                    onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                    onEditingComplete: () => FocusScope.of(context).unfocus(),
                     style: const TextStyle(fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Nhập ngôi xưng của AI (VD: em út, đệ tử, búp bê...)',
@@ -492,6 +518,9 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _customUserTitleController,
+                    textInputAction: TextInputAction.done,
+                    onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                    onEditingComplete: () => FocusScope.of(context).unfocus(),
                     style: const TextStyle(fontSize: 13),
                     decoration: InputDecoration(
                       hintText: 'Nhập cách gọi bạn (VD: Sếp $firstName, Đại ca $firstName...)',
@@ -583,6 +612,9 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
                 TextField(
                   controller: _customInstructionsController,
                   maxLines: 3,
+                  textInputAction: TextInputAction.done,
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                  onEditingComplete: () => FocusScope.of(context).unfocus(),
                   style: const TextStyle(fontSize: 13),
                   decoration: InputDecoration(
                     hintText: 'Ví dụ: "Luôn khuyên tôi suy nghĩ kỹ trước khi mua đồ trên 1 triệu", "Trả lời ngắn gọn dưới 30 từ khi dùng giọng nói", "Dùng thêm icon vui nhộn"...',
@@ -615,6 +647,25 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
               ],
             ),
           ),
+
+          if (isKeyboardOpen)
+            Container(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.keyboard_hide_rounded, size: 16, color: Color(0xFF0284C7)),
+                    label: const Text(
+                      'Thu bàn phím để lưu',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF0284C7), fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () => FocusScope.of(context).unfocus(),
+                  ),
+                ],
+              ),
+            ),
 
           // Footer Action Buttons
           Container(
@@ -656,7 +707,9 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
           ),
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 
   Widget _buildRoleOption({

@@ -5,8 +5,8 @@ import 'budget_screen.dart';
 import 'cashbook_search_screen.dart';
 import 'category_management_screen.dart';
 import 'events_trips_screen.dart';
+import 'family_fleet_screen.dart';
 import 'family_members_screen.dart';
-import 'home_dashboard_screen.dart';
 import 'loans_screen.dart';
 import 'login_profile_screen.dart';
 import 'recurring_bills_screen.dart';
@@ -248,13 +248,13 @@ class UtilitiesHubScreen extends StatelessWidget {
           ),
           _buildToolTile(
             context: context,
-            icon: Icons.directions_car_outlined,
-            iconColor: const Color(0xFF3B82F6),
-            title: 'Tổng Quan Xe Cộ & Đội Xe Gia Đình',
-            subtitle: 'Bảo dưỡng định kỳ, chi phí xăng xe, đăng kiểm xe Mazda 2 AT',
+            icon: Icons.directions_car_rounded,
+            iconColor: const Color(0xFF0284C7),
+            title: 'Đội Xe & Bảo Dưỡng Gia Đình',
+            subtitle: 'Theo dõi ODO, bảo dưỡng, đăng kiểm, xăng xe Mazda 2 AT',
             onTap: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => HomeDashboardScreen(onOpenQuickAdd: onOpenQuickAdd)),
+              MaterialPageRoute(builder: (_) => const FamilyFleetScreen()),
             ),
           ),
           _buildToolTile(
