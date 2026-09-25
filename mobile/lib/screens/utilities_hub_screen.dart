@@ -11,6 +11,7 @@ import 'loans_screen.dart';
 import 'login_profile_screen.dart';
 import 'recurring_bills_screen.dart';
 import '../services/auth_service.dart';
+import '../widgets/api_key_dialog.dart';
 
 class UtilitiesHubScreen extends StatelessWidget {
   final VoidCallback onOpenQuickAdd;
@@ -263,6 +264,14 @@ class UtilitiesHubScreen extends StatelessWidget {
             title: 'Trợ Lý Tài Chính Thông Minh (AI)',
             subtitle: 'Tư vấn phân bổ dòng tiền, giải đáp các thắc mắc chi tiêu',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AIChatScreen())),
+          ),
+          _buildToolTile(
+            context: context,
+            icon: Icons.vpn_key_rounded,
+            iconColor: const Color(0xFF0284C7),
+            title: 'Cấu Hình Gemini API Key (Quét Hoá Đơn)',
+            subtitle: 'Nhập hoặc dán API Key để AI đọc ảnh hoá đơn thật tự động',
+            onTap: () => ApiKeyDialog.show(context),
           ),
 
           const SizedBox(height: 20),

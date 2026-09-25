@@ -15,6 +15,7 @@ import '../services/ai_assistant_service.dart';
 import '../services/auth_service.dart';
 import '../services/finance_service.dart';
 import '../widgets/ai_action_card_widget.dart';
+import '../widgets/api_key_dialog.dart';
 import '../widgets/receipt_card_widget.dart';
 
 class ChatMessage {
@@ -83,6 +84,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
   String? _pendingCategory;
   String? _pendingSubCategory;
   String? _pendingDescription;
+  bool _hasApiKey = true;
 
   @override
   void initState() {
@@ -90,6 +92,16 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
     _initAnimations();
     _initTts();
     _loadDependencies();
+    _checkApiKey();
+  }
+
+  Future<void> _checkApiKey() async {
+    final key = await _aiService.getGeminiApiKey();
+    if (mounted) {
+      setState(() {
+        _hasApiKey = (key != null && key.trim().isNotEmpty);
+      });
+    }
   }
 
   void _initAnimations() {
@@ -1000,87 +1012,15 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
   }
 
   Future<void> _showApiKeySetupDialog({Uint8List? pendingImageBytes}) async {
-    final currentKey = await _aiService.getGeminiApiKey() ?? '';
-    final controller = TextEditingController(text: currentKey);
-
     if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.vpn_key_rounded, color: Color(0xFF0284C7)),
-            SizedBox(width: 8),
-            Text('Cấu hình Gemini API Key', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Để AI đọc chính xác mọi hoá đơn thật tự động (tên quán, từng món ăn, tổng tiền), ứng dụng sử dụng Gemini Vision OCR từ Google.',
-              style: TextStyle(fontSize: 13, height: 1.4),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0284C7).withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                '💡 API Key được cấp MIỄN PHÍ 100% tại: aistudio.google.com/apikey (chỉ cần dán 1 lần duy nhất).',
-                style: TextStyle(fontSize: 11.5, color: Color(0xFF0284C7), fontWeight: FontWeight.w600),
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                labelText: 'Google Gemini API Key',
-                hintText: 'AIzaSy...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                prefixIcon: const Icon(Icons.key_rounded, size: 20),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Để sau', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0284C7),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () async {
-              final newKey = controller.text.trim();
-              if (newKey.isNotEmpty) {
-                await _aiService.saveGeminiApiKey(newKey);
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('✓ Đã lưu Gemini API Key thành công! Đang tiến hành quét hoá đơn...'),
-                    backgroundColor: Color(0xFF10B981),
-                  ),
-                );
-                if (pendingImageBytes != null) {
-                  _processReceiptBytes(pendingImageBytes);
-                }
-              }
-            },
-            child: const Text('Lưu & Quét Ngay'),
-          ),
-        ],
-      ),
+    await ApiKeyDialog.show(
+      context,
+      onSaved: () {
+        _checkApiKey();
+        if (pendingImageBytes != null) {
+          _processReceiptBytes(pendingImageBytes);
+        }
+      },
     );
   }
 
@@ -1142,6 +1082,12 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
               });
             },
           ),
+          // Gemini API Key Button
+          IconButton(
+            icon: const Icon(Icons.vpn_key_rounded, color: Color(0xFF0284C7)),
+            tooltip: 'Cài đặt Gemini API Key (Quét hoá đơn)',
+            onPressed: () => _showApiKeySetupDialog(),
+          ),
           // Voice Settings Button
           IconButton(
             icon: const Icon(Icons.tune_rounded, color: Color(0xFF0284C7)),
@@ -1155,6 +1101,43 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
       ),
       body: Column(
         children: [
+          if (!_hasApiKey)
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0284C7).withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.vpn_key_rounded, color: Color(0xFF0284C7), size: 18),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Chưa cài Gemini API Key để quét hoá đơn thật.',
+                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF0284C7)),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => _showApiKeySetupDialog(),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0284C7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'Cài đặt',
+                        style: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // Message List
           Expanded(
             child: ListView.builder(
