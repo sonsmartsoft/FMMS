@@ -215,7 +215,24 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
     final mList = _authService.getAllMembers();
     final activeMember = _authService.getCurrentMember();
 
-    final firstName = _getShortName(activeMember.name);
+    // Calculate today's spending for contextual greeting
+    final today = DateTime.now().toIso8601String().split('T').first;
+    double todaySpent = 0;
+    int txCount = 0;
+    try {
+      final txs = await _financeService.getTransactions();
+      final todayTxs = txs.where((t) => t.date == today).toList();
+      todaySpent = todayTxs
+          .where((t) => t.transactionType == TransactionType.EXPENSE)
+          .fold(0.0, (sum, t) => sum + t.amount);
+      txCount = todayTxs.length;
+    } catch (_) {}
+
+    final offlineGreeting = _aiService.getOfflineGreeting(
+      activeMember.name,
+      todaySpent: todaySpent,
+      txCount: txCount,
+    );
 
     if (mounted) {
       setState(() {
@@ -227,7 +244,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
           final welcomeMsg = ChatMessage(
             id: 'welcome-01',
             role: 'assistant',
-            content: 'Chào $firstName! Em là Trợ lý AI Tài chính Gia đình FMMS. $firstName có thể chạm vào Micro để nói chuyện 2 chiều, hỏi tình hình chi tiêu hôm nay, hoặc nói khoản chi để em ghi sổ nhé!',
+            content: offlineGreeting,
           );
           _messages.add(welcomeMsg);
 
@@ -236,7 +253,38 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
           }
         }
       });
+
+      // Try generating live dynamic greeting via Gemini AI in the background
+      _fetchDynamicAiGreeting(activeMember.name, todaySpent, txCount);
     }
+  }
+
+  Future<void> _fetchDynamicAiGreeting(String memberName, double todaySpent, int txCount) async {
+    try {
+      final aiGreeting = await _aiService.generateDynamicGreeting(
+        memberName: memberName,
+        todaySpent: todaySpent,
+        txCount: txCount,
+      );
+
+      if (aiGreeting != null && aiGreeting.trim().isNotEmpty && mounted) {
+        setState(() {
+          final welcomeIdx = _messages.indexWhere((m) => m.id == 'welcome-01');
+          if (welcomeIdx != -1) {
+            _messages[welcomeIdx] = ChatMessage(
+              id: 'welcome-01',
+              role: 'assistant',
+              content: aiGreeting.trim(),
+            );
+          }
+        });
+
+        // If voice enabled, speak the dynamic AI greeting
+        if (_isVoiceEnabled) {
+          _speak(aiGreeting.trim(), 'welcome-01');
+        }
+      }
+    } catch (_) {}
   }
 
   String _getShortName(String fullName) {

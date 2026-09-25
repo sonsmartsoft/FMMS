@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ai_action_model.dart';
 import '../models/receipt_model.dart';
@@ -19,6 +20,111 @@ class AIAssistantService {
   Future<void> saveGeminiApiKey(String key) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('gemini_api_key', key.trim());
+  }
+
+  /// Offline smart contextual greeting based on time of day and today's finance status
+  String getOfflineGreeting(String memberName, {double todaySpent = 0, int txCount = 0}) {
+    final hour = DateTime.now().hour;
+    final salutation = memberName.contains('Thuý') || memberName.contains('Thúy')
+        ? 'chị Thuý'
+        : (memberName.contains('Tuấn') ? 'anh Tuấn' : 'anh Sơn');
+
+    String greetingPrefix = 'Chào buổi sáng $salutation!';
+    if (hour >= 11 && hour < 14) {
+      greetingPrefix = 'Chào buổi trưa $salutation!';
+    } else if (hour >= 14 && hour < 18) {
+      greetingPrefix = 'Chào buổi chiều $salutation!';
+    } else if (hour >= 18 && hour < 22) {
+      greetingPrefix = 'Chào buổi tối $salutation!';
+    } else if (hour >= 22 || hour < 5) {
+      greetingPrefix = 'Khuya rồi $salutation ơi!';
+    }
+
+    if (txCount > 0) {
+      final spentStr = NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0).format(todaySpent);
+      return '$greetingPrefix Hôm nay gia đình mình đã ghi nhận $txCount khoản chi ($spentStr). $salutation có cần em kiểm tra ngân sách hay ghi thêm khoản nào không ạ?';
+    }
+
+    return '$greetingPrefix Em là Trợ lý AI Tài chính Gia đình FMMS. $salutation có thể chạm vào Micro để nói chuyện 2 chiều, hỏi tình hình chi tiêu, hoặc chụp hoá đơn để em ghi sổ nhé!';
+  }
+
+  /// Generates a natural, dynamic, personalized greeting via Google Gemini AI
+  Future<String?> generateDynamicGreeting({
+    required String memberName,
+    required double todaySpent,
+    required int txCount,
+  }) async {
+    final localKey = await getGeminiApiKey();
+    if (localKey == null || localKey.isEmpty) return null;
+
+    final hour = DateTime.now().hour;
+    String timeOfDay = 'buổi sáng';
+    if (hour >= 11 && hour < 14) {
+      timeOfDay = 'buổi trưa';
+    } else if (hour >= 14 && hour < 18) {
+      timeOfDay = 'buổi chiều';
+    } else if (hour >= 18 && hour < 22) {
+      timeOfDay = 'buổi tối';
+    } else if (hour >= 22 || hour < 5) {
+      timeOfDay = 'đêm muộn';
+    }
+
+    final salutation = memberName.contains('Thuý') || memberName.contains('Thúy')
+        ? 'chị Thuý'
+        : (memberName.contains('Tuấn') ? 'anh Tuấn' : 'anh Sơn');
+
+    final spendingInfo = txCount > 0
+        ? 'hôm nay gia đình đã ghi nhận $txCount khoản chi tiêu, tổng cộng ${NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0).format(todaySpent)}'
+        : 'hôm nay gia đình mình chưa phát sinh khoản chi tiêu nào';
+
+    final prompt = '''Bạn là Trợ lý AI Tài chính Gia đình FMMS, luôn xưng "em" và gọi người dùng là "$salutation".
+Thời điểm: $timeOfDay (lúc $hour giờ).
+Tình hình sổ sách: $spendingInfo.
+Hãy tạo một câu chào mở đầu trò chuyện thật tự nhiên, duyên dáng, ấm áp (độ dài 2-3 câu ngắn gọn).
+Gợi ý $salutation có thể bấm Micro để nói chuyện 2 chiều rảnh tay, hỏi han chi tiêu hoặc chụp ảnh hoá đơn để em ghi chép.
+Chỉ trả về trực tiếp lời chào bằng tiếng Việt, không kèm giải thích hay tiêu đề markdown.''';
+
+    try {
+      final discovered = await getAvailableModels(localKey);
+      final ver = discovered?.apiVersion ?? 'v1';
+      final model = discovered?.models.firstWhere(
+        (m) => m.contains('flash'),
+        orElse: () => 'gemini-1.5-flash',
+      ) ?? 'gemini-1.5-flash';
+
+      final url = Uri.parse(
+        'https://generativelanguage.googleapis.com/$ver/models/$model:generateContent?key=$localKey',
+      );
+      final res = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'contents': [
+            {
+              'parts': [
+                {'text': prompt}
+              ]
+            }
+          ],
+          'generationConfig': {
+            'maxOutputTokens': 150,
+            'temperature': 0.85,
+          }
+        }),
+      ).timeout(const Duration(seconds: 4));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final candidates = data['candidates'] as List?;
+        final parts = candidates?.firstOrNull?['content']?['parts'] as List?;
+        final text = parts?.map((p) => p['text']?.toString() ?? '').join(' ').trim();
+        if (text != null && text.isNotEmpty) {
+          return text;
+        }
+      }
+    } catch (_) {}
+
+    return null;
   }
 
   /// Discovers working API version and available models supporting generateContent for this key
