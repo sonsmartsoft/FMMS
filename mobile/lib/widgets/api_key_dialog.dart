@@ -37,6 +37,9 @@ class _ApiKeyDialogState extends State<ApiKeyDialog> {
   bool _obscureText = true;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isTesting = false;
+  bool? _testSuccess;
+  String? _testMessage;
 
   @override
   void initState() {
@@ -77,6 +80,33 @@ class _ApiKeyDialogState extends State<ApiKeyDialog> {
         }
       }
     } catch (_) {}
+  }
+
+  Future<void> _testConnection() async {
+    final key = _controller.text.trim();
+    if (key.isEmpty) {
+      setState(() {
+        _testSuccess = false;
+        _testMessage = 'Vui lòng nhập hoặc dán Gemini API Key trước khi kiểm tra.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isTesting = true;
+      _testSuccess = null;
+      _testMessage = null;
+    });
+
+    final res = await _aiService.testGeminiApiKey(key);
+
+    if (mounted) {
+      setState(() {
+        _isTesting = false;
+        _testSuccess = res.success;
+        _testMessage = res.message;
+      });
+    }
   }
 
   Future<void> _saveKey() async {
@@ -217,6 +247,78 @@ class _ApiKeyDialogState extends State<ApiKeyDialog> {
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Test Connection Button & Status Box
+                  if (_isTesting)
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Row(
+                        children: [
+                          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Đang kiểm tra kết nối với Google AI Studio...',
+                              style: TextStyle(fontSize: 12, color: Color(0xFF0284C7)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (_testMessage != null)
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: (_testSuccess == true ? const Color(0xFF10B981) : Colors.red).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: (_testSuccess == true ? const Color(0xFF10B981) : Colors.red).withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            _testSuccess == true ? Icons.check_circle_rounded : Icons.error_outline_rounded,
+                            size: 18,
+                            color: _testSuccess == true ? const Color(0xFF10B981) : Colors.red,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _testMessage!,
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1.35,
+                                fontWeight: FontWeight.w500,
+                                color: _testSuccess == true ? const Color(0xFF065F46) : Colors.red.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        side: const BorderSide(color: Color(0xFF0284C7)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.bolt_rounded, size: 18, color: Color(0xFF0284C7)),
+                      label: const Text(
+                        'Kiểm tra kết nối API Key',
+                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                      ),
+                      onPressed: _isTesting ? null : _testConnection,
                     ),
                   ),
                 ],

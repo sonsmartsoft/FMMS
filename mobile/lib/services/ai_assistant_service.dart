@@ -21,12 +21,54 @@ class AIAssistantService {
     await prefs.setString('gemini_api_key', key.trim());
   }
 
+  /// Test whether the provided Gemini API key is valid and working
+  Future<({bool success, String message})> testGeminiApiKey(String key) async {
+    final cleanKey = key.trim();
+    if (cleanKey.isEmpty) {
+      return (success: false, message: 'Vui lòng nhập hoặc dán API Key');
+    }
+
+    try {
+      final url = Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$cleanKey',
+      );
+      final res = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'contents': [
+            {
+              'parts': [
+                {'text': 'ping'}
+              ]
+            }
+          ]
+        }),
+      ).timeout(const Duration(seconds: 12));
+
+      if (res.statusCode == 200) {
+        return (success: true, message: 'API Key hợp lệ 100%! Đã kết nối thành công với Google Gemini.');
+      }
+
+      try {
+        final errorBody = jsonDecode(res.body);
+        final errMsg = errorBody['error']?['message'] ?? 'Lỗi HTTP ${res.statusCode}';
+        return (success: false, message: 'Google API báo lỗi: $errMsg');
+      } catch (_) {
+        return (success: false, message: 'Lỗi HTTP ${res.statusCode}: ${res.body}');
+      }
+    } catch (e) {
+      return (success: false, message: 'Không thể kết nối đến máy chủ Google: $e');
+    }
+  }
+
   /// Direct Gemini Vision multimodal OCR extraction
   Future<ReceiptAnalysisResult?> _scanWithGeminiVision(
     Uint8List imageBytes,
     String apiKey,
-    String mimeType,
-  ) async {
+    String mimeType, {
+    void Function(String error)? onModelError,
+  }) async {
     final cleanKey = apiKey.trim();
     if (cleanKey.isEmpty) return null;
 
@@ -77,11 +119,10 @@ TRẢ VỀ DUY NHẤT 1 KHỐI JSON HỢP LỆ THEO SCHEMA:
   "summary_text": "string"
 }''';
 
-    // Try available vision models in cascade
+    // Try available vision models in cascade (prioritizing 1.5-flash for universal availability)
     final candidateModels = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
       'gemini-1.5-flash',
+      'gemini-2.0-flash',
       'gemini-1.5-flash-latest',
       'gemini-1.5-pro',
     ];
@@ -108,13 +149,18 @@ TRẢ VỀ DUY NHẤT 1 KHỐI JSON HỢP LỆ THEO SCHEMA:
                   }
                 ]
               }
-            ]
+            ],
+            'generationConfig': {
+              'response_mime_type': 'application/json'
+            }
           }),
         ).timeout(const Duration(seconds: 30));
 
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
-          final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+          final candidates = data['candidates'] as List?;
+          final parts = candidates?.firstOrNull?['content']?['parts'] as List?;
+          final text = parts?.map((p) => p['text']?.toString() ?? '').join('\n') ?? '';
           final match = RegExp(r'\{[\s\S]*\}').firstMatch(text);
           if (match != null) {
             final parsedJson = jsonDecode(match.group(0)!);
@@ -122,9 +168,17 @@ TRẢ VỀ DUY NHẤT 1 KHỐI JSON HỢP LỆ THEO SCHEMA:
             return ReceiptAnalysisResult.fromJson(parsedJson);
           }
         } else {
-          debugPrint('[Gemini Vision $model] HTTP ${res.statusCode}: ${res.body}');
+          try {
+            final errorData = jsonDecode(res.body);
+            final msg = errorData['error']?['message'] ?? 'HTTP ${res.statusCode}';
+            onModelError?.call('[$model] $msg');
+            debugPrint('[Gemini Vision $model] HTTP ${res.statusCode}: $msg');
+          } catch (_) {
+            onModelError?.call('[$model] HTTP ${res.statusCode}');
+          }
         }
       } catch (e) {
+        onModelError?.call('[$model] $e');
         debugPrint('[Gemini Vision $model] Error: $e');
       }
     }
@@ -137,10 +191,16 @@ TRẢ VỀ DUY NHẤT 1 KHỐI JSON HỢP LỆ THEO SCHEMA:
     String mimeType = 'image/jpeg',
   }) async {
     final localKey = await getGeminiApiKey();
+    String? visionError;
 
     // 1. Prioritize Direct Google Gemini Vision API (Instant & Private)
     if (localKey != null && localKey.isNotEmpty) {
-      final directResult = await _scanWithGeminiVision(imageBytes, localKey, mimeType);
+      final directResult = await _scanWithGeminiVision(
+        imageBytes,
+        localKey,
+        mimeType,
+        onModelError: (err) => visionError = err,
+      );
       if (directResult != null) {
         return directResult;
       }
@@ -176,7 +236,7 @@ TRẢ VỀ DUY NHẤT 1 KHỐI JSON HỢP LỆ THEO SCHEMA:
       throw Exception('MISSING_GEMINI_API_KEY');
     }
 
-    throw Exception('FAILED_TO_ANALYZE_RECEIPT');
+    throw Exception(visionError ?? 'FAILED_TO_ANALYZE_RECEIPT');
   }
 
   /// Converts a detailed ReceiptAnalysisResult into an AIActionDraft ready to confirm into DB
