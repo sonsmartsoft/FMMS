@@ -21,6 +21,40 @@ class AIAssistantService {
     await prefs.setString('gemini_api_key', key.trim());
   }
 
+  /// Discovers working API version and available models supporting generateContent for this key
+  Future<({String apiVersion, List<String> models})?> getAvailableModels(String apiKey) async {
+    final cleanKey = apiKey.trim();
+    if (cleanKey.isEmpty) return null;
+
+    for (final version in ['v1beta', 'v1']) {
+      try {
+        final url = Uri.parse('https://generativelanguage.googleapis.com/$version/models?key=$cleanKey');
+        final res = await http.get(url).timeout(const Duration(seconds: 8));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          final rawList = data['models'] as List?;
+          if (rawList != null && rawList.isNotEmpty) {
+            final validModels = <String>[];
+            for (final item in rawList) {
+              final methods = (item['supportedGenerationMethods'] as List?)?.map((e) => e.toString()).toList() ?? [];
+              if (methods.contains('generateContent')) {
+                final rawName = item['name']?.toString() ?? '';
+                final cleanName = rawName.replaceFirst('models/', '');
+                if (cleanName.isNotEmpty) {
+                  validModels.add(cleanName);
+                }
+              }
+            }
+            if (validModels.isNotEmpty) {
+              return (apiVersion: version, models: validModels);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
   /// Test whether the provided Gemini API key is valid and working
   Future<({bool success, String message})> testGeminiApiKey(String key) async {
     final cleanKey = key.trim();
@@ -29,34 +63,58 @@ class AIAssistantService {
     }
 
     try {
-      final url = Uri.parse(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$cleanKey',
-      );
-      final res = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'contents': [
-            {
-              'parts': [
-                {'text': 'ping'}
-              ]
-            }
-          ]
-        }),
-      ).timeout(const Duration(seconds: 12));
+      // 1. First probe available models and working API endpoint (v1beta or v1)
+      final discovered = await getAvailableModels(cleanKey);
+      if (discovered != null && discovered.models.isNotEmpty) {
+        final ver = discovered.apiVersion;
+        // Prioritize flash model, then any available model
+        final testModel = discovered.models.firstWhere(
+          (m) => m.contains('flash'),
+          orElse: () => discovered.models.first,
+        );
 
-      if (res.statusCode == 200) {
-        return (success: true, message: 'API Key hợp lệ 100%! Đã kết nối thành công với Google Gemini.');
+        final url = Uri.parse(
+          'https://generativelanguage.googleapis.com/$ver/models/$testModel:generateContent?key=$cleanKey',
+        );
+        final res = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'contents': [
+              {
+                'parts': [
+                  {'text': 'ping'}
+                ]
+              }
+            ]
+          }),
+        ).timeout(const Duration(seconds: 12));
+
+        if (res.statusCode == 200) {
+          final sampleModels = discovered.models.take(4).join(', ');
+          return (
+            success: true,
+            message: '✓ Kết nối thành công tới Google Gemini ($ver)!\nModel đã kích hoạt: $testModel\n(Các model khác: $sampleModels)',
+          );
+        }
       }
 
-      try {
-        final errorBody = jsonDecode(res.body);
-        final errMsg = errorBody['error']?['message'] ?? 'Lỗi HTTP ${res.statusCode}';
-        return (success: false, message: 'Google API báo lỗi: $errMsg');
-      } catch (_) {
-        return (success: false, message: 'Lỗi HTTP ${res.statusCode}: ${res.body}');
+      // 2. If discovery did not succeed, call both v1beta and v1 to extract exact error message from Google
+      for (final ver in ['v1beta', 'v1']) {
+        final url = Uri.parse('https://generativelanguage.googleapis.com/$ver/models?key=$cleanKey');
+        final res = await http.get(url).timeout(const Duration(seconds: 8));
+        if (res.statusCode != 200) {
+          try {
+            final errorBody = jsonDecode(res.body);
+            final errMsg = errorBody['error']?['message'] ?? 'Lỗi HTTP ${res.statusCode}';
+            return (success: false, message: 'Google API ($ver) báo lỗi: $errMsg');
+          } catch (_) {
+            return (success: false, message: 'Lỗi HTTP ${res.statusCode}: ${res.body}');
+          }
+        }
       }
+
+      return (success: false, message: 'Không thể tìm thấy mô hình tương thích với API Key này.');
     } catch (e) {
       return (success: false, message: 'Không thể kết nối đến máy chủ Google: $e');
     }
@@ -119,67 +177,80 @@ TRẢ VỀ DUY NHẤT 1 KHỐI JSON HỢP LỆ THEO SCHEMA:
   "summary_text": "string"
 }''';
 
-    // Try available vision models in cascade (prioritizing 1.5-flash for universal availability)
-    final candidateModels = [
-      'gemini-1.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-pro',
-    ];
+    // 1. Discover actual models available for this key
+    final discovered = await getAvailableModels(cleanKey);
+    final apiVersionsToTry = discovered != null ? [discovered.apiVersion, 'v1', 'v1beta'] : ['v1beta', 'v1'];
 
-    for (final model in candidateModels) {
-      try {
-        final url = Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$cleanKey',
-        );
-        final res = await http.post(
-          url,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'contents': [
-              {
-                'role': 'user',
-                'parts': [
-                  {'text': prompt},
-                  {
-                    'inline_data': {
-                      'mime_type': mimeType,
-                      'data': base64Str,
+    List<String> candidateModels = [];
+    if (discovered != null && discovered.models.isNotEmpty) {
+      final flash = discovered.models.where((m) => m.contains('flash')).toList();
+      final pro = discovered.models.where((m) => m.contains('pro')).toList();
+      candidateModels = [...flash, ...pro];
+      if (candidateModels.isEmpty) candidateModels = discovered.models;
+    } else {
+      candidateModels = [
+        'gemini-1.5-flash-latest',
+        'gemini-1.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-pro',
+      ];
+    }
+
+    for (final ver in apiVersionsToTry.toSet()) {
+      for (final model in candidateModels) {
+        try {
+          final url = Uri.parse(
+            'https://generativelanguage.googleapis.com/$ver/models/$model:generateContent?key=$cleanKey',
+          );
+          final res = await http.post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'contents': [
+                {
+                  'role': 'user',
+                  'parts': [
+                    {'text': prompt},
+                    {
+                      'inline_data': {
+                        'mime_type': mimeType,
+                        'data': base64Str,
+                      }
                     }
-                  }
-                ]
+                  ]
+                }
+              ],
+              'generationConfig': {
+                'response_mime_type': 'application/json'
               }
-            ],
-            'generationConfig': {
-              'response_mime_type': 'application/json'
-            }
-          }),
-        ).timeout(const Duration(seconds: 30));
+            }),
+          ).timeout(const Duration(seconds: 30));
 
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          final candidates = data['candidates'] as List?;
-          final parts = candidates?.firstOrNull?['content']?['parts'] as List?;
-          final text = parts?.map((p) => p['text']?.toString() ?? '').join('\n') ?? '';
-          final match = RegExp(r'\{[\s\S]*\}').firstMatch(text);
-          if (match != null) {
-            final parsedJson = jsonDecode(match.group(0)!);
-            debugPrint('[Gemini Vision] Successfully extracted receipt via model: $model');
-            return ReceiptAnalysisResult.fromJson(parsedJson);
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            final candidates = data['candidates'] as List?;
+            final parts = candidates?.firstOrNull?['content']?['parts'] as List?;
+            final text = parts?.map((p) => p['text']?.toString() ?? '').join('\n') ?? '';
+            final match = RegExp(r'\{[\s\S]*\}').firstMatch(text);
+            if (match != null) {
+              final parsedJson = jsonDecode(match.group(0)!);
+              debugPrint('[Gemini Vision] Successfully extracted receipt via model: $model ($ver)');
+              return ReceiptAnalysisResult.fromJson(parsedJson);
+            }
+          } else {
+            try {
+              final errorData = jsonDecode(res.body);
+              final msg = errorData['error']?['message'] ?? 'HTTP ${res.statusCode}';
+              onModelError?.call('[$model - $ver] $msg');
+              debugPrint('[Gemini Vision $model $ver] HTTP ${res.statusCode}: $msg');
+            } catch (_) {
+              onModelError?.call('[$model - $ver] HTTP ${res.statusCode}');
+            }
           }
-        } else {
-          try {
-            final errorData = jsonDecode(res.body);
-            final msg = errorData['error']?['message'] ?? 'HTTP ${res.statusCode}';
-            onModelError?.call('[$model] $msg');
-            debugPrint('[Gemini Vision $model] HTTP ${res.statusCode}: $msg');
-          } catch (_) {
-            onModelError?.call('[$model] HTTP ${res.statusCode}');
-          }
+        } catch (e) {
+          onModelError?.call('[$model - $ver] $e');
+          debugPrint('[Gemini Vision $model $ver] Error: $e');
         }
-      } catch (e) {
-        onModelError?.call('[$model] $e');
-        debugPrint('[Gemini Vision $model] Error: $e');
       }
     }
     return null;
