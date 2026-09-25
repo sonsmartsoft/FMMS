@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ai_action_model.dart';
+import '../models/ai_persona_model.dart';
 import '../models/receipt_model.dart';
 import 'auth_service.dart';
 
@@ -11,6 +12,7 @@ class AIAssistantService {
   final AuthService _authService = AuthService();
   static const String _defaultApiUrl = 'https://fmms.vercel.app/api/ai/chat';
   static const String _receiptApiUrl = 'https://fmms.vercel.app/api/ai/scan-receipt';
+  static const String _kPersonaConfigKey = 'fmms_ai_persona_config';
   static ({String apiVersion, List<String> models})? _cachedModelInfo;
 
   Future<String?> getGeminiApiKey() async {
@@ -24,12 +26,49 @@ class AIAssistantService {
     _cachedModelInfo = null; // Clear cache on new key
   }
 
-  /// Offline smart contextual greeting based on time of day and today's finance status
-  String getOfflineGreeting(String memberName, {double todaySpent = 0, int txCount = 0}) {
+  /// Retrieves user-configured AI persona, tone, language and addressing rules
+  Future<AIPersonaModel> getPersonaConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_kPersonaConfigKey);
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        final map = jsonDecode(jsonStr);
+        return AIPersonaModel.fromJson(map);
+      } catch (_) {}
+    }
+    return AIPersonaModel.defaultConfig();
+  }
+
+  /// Persists user-configured AI persona
+  Future<void> savePersonaConfig(AIPersonaModel config) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kPersonaConfigKey, jsonEncode(config.toJson()));
+  }
+
+  /// Offline smart contextual greeting based on persona, time of day and today's finance status
+  String getOfflineGreeting(
+    String memberName, {
+    double todaySpent = 0,
+    int txCount = 0,
+    AIPersonaModel? persona,
+  }) {
+    final p = persona ?? const AIPersonaModel();
     final hour = DateTime.now().hour;
-    final salutation = memberName.contains('Thuý') || memberName.contains('Thúy')
-        ? 'chị Thuý'
-        : (memberName.contains('Tuấn') ? 'anh Tuấn' : 'anh Sơn');
+    final salutation = p.resolveUserSalutation(memberName);
+    final selfPronoun = p.resolveSelfPronoun();
+    final isEn = p.language == 'en';
+
+    if (isEn) {
+      String timeStr = 'Good morning';
+      if (hour >= 12 && hour < 18) timeStr = 'Good afternoon';
+      if (hour >= 18) timeStr = 'Good evening';
+
+      if (txCount > 0) {
+        final spentStr = NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 0).format(todaySpent);
+        return '$timeStr $salutation! Your family recorded $txCount expense(s) ($spentStr) today. How can I assist you with the budget?';
+      }
+      return '$timeStr $salutation! I am your FMMS AI Financial Assistant. Tap the Mic to speak, ask about spending, or snap receipts!';
+    }
 
     String greetingPrefix = 'Chào buổi sáng $salutation!';
     if (hour >= 11 && hour < 14) {
@@ -42,12 +81,17 @@ class AIAssistantService {
       greetingPrefix = 'Khuya rồi $salutation ơi!';
     }
 
+    final capitalizedSelf = selfPronoun.isNotEmpty
+        ? '${selfPronoun[0].toUpperCase()}${selfPronoun.substring(1)}'
+        : 'Em';
+
     if (txCount > 0) {
       final spentStr = NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0).format(todaySpent);
-      return '$greetingPrefix Hôm nay gia đình mình đã ghi nhận $txCount khoản chi ($spentStr). $salutation có cần em kiểm tra ngân sách hay ghi thêm khoản nào không ạ?';
+      return '$greetingPrefix Hôm nay gia đình mình đã ghi nhận $txCount khoản chi ($spentStr). $salutation có cần $selfPronoun kiểm tra ngân sách hay ghi thêm khoản nào không ạ?';
     }
 
-    return '$greetingPrefix Em là Trợ lý AI Tài chính Gia đình FMMS. $salutation có thể chạm vào Micro để nói chuyện 2 chiều, hỏi tình hình chi tiêu, hoặc chụp hoá đơn để em ghi sổ nhé!';
+    final roleTitle = p.getRoleTitle();
+    return '$greetingPrefix $capitalizedSelf là $roleTitle của gia đình FMMS. $salutation có thể chạm vào Micro để nói chuyện 2 chiều, hỏi tình hình chi tiêu, hoặc chụp hoá đơn để $selfPronoun ghi sổ nhé!';
   }
 
   /// Generates a natural, dynamic, personalized greeting via Google Gemini AI
@@ -55,11 +99,16 @@ class AIAssistantService {
     required String memberName,
     required double todaySpent,
     required int txCount,
+    AIPersonaModel? persona,
   }) async {
     final localKey = await getGeminiApiKey();
     if (localKey == null || localKey.isEmpty) return null;
 
+    final p = persona ?? await getPersonaConfig();
     final hour = DateTime.now().hour;
+    final salutation = p.resolveUserSalutation(memberName);
+    final selfPronoun = p.resolveSelfPronoun();
+
     String timeOfDay = 'buổi sáng';
     if (hour >= 11 && hour < 14) {
       timeOfDay = 'buổi trưa';
@@ -71,20 +120,27 @@ class AIAssistantService {
       timeOfDay = 'đêm muộn';
     }
 
-    final salutation = memberName.contains('Thuý') || memberName.contains('Thúy')
-        ? 'chị Thuý'
-        : (memberName.contains('Tuấn') ? 'anh Tuấn' : 'anh Sơn');
-
     final spendingInfo = txCount > 0
         ? 'hôm nay gia đình đã ghi nhận $txCount khoản chi tiêu, tổng cộng ${NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0).format(todaySpent)}'
         : 'hôm nay gia đình mình chưa phát sinh khoản chi tiêu nào';
 
-    final prompt = '''Bạn là Trợ lý AI Tài chính Gia đình FMMS, luôn xưng "em" và gọi người dùng là "$salutation".
-Thời điểm: $timeOfDay (lúc $hour giờ).
+    final roleDesc = p.getRoleDescriptionPrompt();
+    final toneDesc = p.getToneDescriptionPrompt();
+    final langDesc = p.getLanguageInstructionPrompt();
+    final extraNotes = p.customInstructions.trim().isNotEmpty
+        ? '\nYêu cầu bổ sung của người dùng: ${p.customInstructions.trim()}'
+        : '';
+
+    final prompt = '''$roleDesc
+Quy tắc xưng hô: Luôn tự xưng là "$selfPronoun" và gọi người dùng là "$salutation".
+$toneDesc
+$langDesc$extraNotes
+
+Thời điểm hiện tại: $timeOfDay (lúc $hour giờ).
 Tình hình sổ sách: $spendingInfo.
-Hãy tạo một câu chào mở đầu trò chuyện thật tự nhiên, duyên dáng, ấm áp (độ dài 2-3 câu ngắn gọn).
-Gợi ý $salutation có thể bấm Micro để nói chuyện 2 chiều rảnh tay, hỏi han chi tiêu hoặc chụp ảnh hoá đơn để em ghi chép.
-Chỉ trả về trực tiếp lời chào bằng tiếng Việt, không kèm giải thích hay tiêu đề markdown.''';
+Hãy tạo một câu chào mở đầu trò chuyện thật tự nhiên, duyên dáng, phù hợp với vai trò và xưng hô trên (độ dài 2-3 câu ngắn gọn).
+Gợi ý $salutation có thể bấm Micro để nói chuyện 2 chiều rảnh tay, hỏi han chi tiêu hoặc chụp ảnh hoá đơn để $selfPronoun ghi chép.
+Chỉ trả về trực tiếp lời chào, không kèm giải thích hay tiêu đề markdown.''';
 
     try {
       final discovered = await getAvailableModels(localKey);
@@ -125,6 +181,116 @@ Chỉ trả về trực tiếp lời chào bằng tiếng Việt, không kèm gi
         }
       }
     } catch (_) {}
+
+    return null;
+  }
+
+  /// Open-ended conversation with Google Gemini AI adhering to configured Persona & Role
+  Future<String?> chatWithGemini({
+    required String userMessage,
+    required List<Map<String, String>> history,
+    required String memberName,
+    double todaySpent = 0,
+    int txCount = 0,
+    double totalBalance = 0,
+    AIPersonaModel? persona,
+  }) async {
+    final localKey = await getGeminiApiKey();
+    if (localKey == null || localKey.isEmpty) return null;
+
+    final p = persona ?? await getPersonaConfig();
+    final systemPrompt = p.buildSystemPrompt(
+      memberFullName: memberName,
+      todaySpent: todaySpent,
+      txCount: txCount,
+      totalBalance: totalBalance,
+    );
+
+    try {
+      final discovered = await getAvailableModels(localKey);
+      final ver = discovered?.apiVersion ?? 'v1';
+      final model = discovered?.models.firstWhere(
+        (m) => m.contains('flash'),
+        orElse: () => 'gemini-1.5-flash',
+      ) ?? 'gemini-1.5-flash';
+
+      // Build message contents from recent history
+      final contents = <Map<String, dynamic>>[];
+      final recent = history.length > 8 ? history.sublist(history.length - 8) : history;
+      for (final msg in recent) {
+        final r = (msg['role'] == 'assistant' || msg['role'] == 'model') ? 'model' : 'user';
+        final txt = msg['content']?.trim() ?? '';
+        if (txt.isNotEmpty) {
+          contents.add({
+            'role': r,
+            'parts': [{'text': txt}],
+          });
+        }
+      }
+
+      // Ensure the latest user message is at the end
+      if (contents.isEmpty || contents.last['role'] != 'user' || contents.last['parts']?[0]?['text'] != userMessage) {
+        contents.add({
+          'role': 'user',
+          'parts': [{'text': userMessage}],
+        });
+      }
+
+      final bodyMap = <String, dynamic>{
+        'contents': contents,
+        'generationConfig': {
+          'temperature': 0.75,
+          'maxOutputTokens': 450,
+        },
+      };
+
+      // Add system instruction
+      bodyMap['system_instruction'] = {
+        'parts': [{'text': systemPrompt}]
+      };
+
+      final url = Uri.parse(
+        'https://generativelanguage.googleapis.com/$ver/models/$model:generateContent?key=$localKey',
+      );
+
+      var res = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(bodyMap),
+      ).timeout(const Duration(seconds: 14));
+
+      // If system_instruction is not supported in the selected endpoint, prepend as first user prompt
+      if (res.statusCode != 200 && res.body.contains('system_instruction')) {
+        bodyMap.remove('system_instruction');
+        contents.insert(0, {
+          'role': 'user',
+          'parts': [{'text': '[SYSTEM INSTRUCTION & ROLE]:\n$systemPrompt'}],
+        });
+        contents.insert(1, {
+          'role': 'model',
+          'parts': [{'text': 'Dạ vâng, tôi đã hiểu rõ vai trò, ngôn ngữ, tính cách và quy tắc xưng hô này.'}],
+        });
+        bodyMap['contents'] = contents;
+
+        res = await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(bodyMap),
+        ).timeout(const Duration(seconds: 14));
+      }
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final candidates = data['candidates'] as List?;
+        final parts = candidates?.firstOrNull?['content']?['parts'] as List?;
+        final text = parts?.map((p) => p['text']?.toString() ?? '').join(' ').trim();
+        if (text != null && text.isNotEmpty) {
+          return text;
+        }
+      }
+    } catch (e) {
+      debugPrint('[chatWithGemini] Error: $e');
+    }
 
     return null;
   }

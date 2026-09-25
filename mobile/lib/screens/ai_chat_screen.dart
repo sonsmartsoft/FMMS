@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../models/ai_action_model.dart';
+import '../models/ai_persona_model.dart';
 import '../models/finance_model.dart';
 import '../models/receipt_model.dart';
 import '../models/user_member_model.dart';
@@ -15,6 +16,7 @@ import '../services/ai_assistant_service.dart';
 import '../services/auth_service.dart';
 import '../services/finance_service.dart';
 import '../widgets/ai_action_card_widget.dart';
+import '../widgets/ai_persona_dialog.dart';
 import '../widgets/api_key_dialog.dart';
 import '../widgets/receipt_card_widget.dart';
 
@@ -85,6 +87,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
   String? _pendingSubCategory;
   String? _pendingDescription;
   bool _hasApiKey = true;
+  AIPersonaModel _persona = AIPersonaModel.defaultConfig();
 
   @override
   void initState() {
@@ -214,6 +217,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
     final wList = await _financeService.getWallets();
     final mList = _authService.getAllMembers();
     final activeMember = _authService.getCurrentMember();
+    final persona = await _aiService.getPersonaConfig();
 
     // Calculate today's spending for contextual greeting
     final today = DateTime.now().toIso8601String().split('T').first;
@@ -241,6 +245,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
           memberName: activeMember.name,
           todaySpent: todaySpent,
           txCount: txCount,
+          persona: persona,
         );
         if (onlineGreeting != null && onlineGreeting.trim().isNotEmpty) {
           greeting = onlineGreeting.trim();
@@ -254,6 +259,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
         activeMember.name,
         todaySpent: todaySpent,
         txCount: txCount,
+        persona: persona,
       );
     }
 
@@ -262,6 +268,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
         _categories = cList;
         _wallets = wList;
         _members = mList;
+        _persona = persona;
 
         if (_messages.isEmpty) {
           final welcomeMsg = ChatMessage(
@@ -281,9 +288,22 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
   }
 
   String _getShortName(String fullName) {
-    if (fullName.contains('Thuý') || fullName.contains('Thúy')) return 'chị Thúy';
-    if (fullName.contains('Tuấn')) return 'anh Tuấn';
-    return 'anh Sơn';
+    return _persona.resolveUserSalutation(fullName);
+  }
+
+  void _showPersonaSettingsDialog() {
+    AIPersonaDialog.show(
+      context,
+      currentConfig: _persona,
+      onSaved: (newConfig) {
+        setState(() {
+          _persona = newConfig;
+        });
+      },
+      onTestVoice: (speechText) {
+        _speak(speechText, 'persona-preview');
+      },
+    );
   }
 
   @override
@@ -639,6 +659,51 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
                       },
                     ),
                   ),
+                  // AI Persona & Role Settings
+                  const Divider(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.psychology_rounded, color: Color(0xFF0284C7), size: 20),
+                          SizedBox(width: 8),
+                          Text('Vai trò & Xưng hô AI', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          _persona.getRoleTitle(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0284C7),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.tune_rounded, size: 18, color: Color(0xFF0284C7)),
+                      label: const Text('Cấu hình vai trò, tính cách & cách gọi bạn', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showPersonaSettingsDialog();
+                      },
+                    ),
+                  ),
                   // Gemini Vision AI API Key
                   const Divider(height: 24),
                   Row(
@@ -785,6 +850,10 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
     try {
       final activeMember = _authService.getCurrentMember();
       final userSalutation = _getShortName(activeMember.name);
+      final selfPronoun = _persona.resolveSelfPronoun();
+      final capitalizedSelf = selfPronoun.isNotEmpty
+          ? '${selfPronoun[0].toUpperCase()}${selfPronoun.substring(1)}'
+          : 'Em';
       final lowerText = text.toLowerCase();
 
       String replyText = '';
@@ -832,7 +901,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
             fallbackSubCategory: categoryResult.sub,
           );
           final catDisplay = draft.subCategoryName != null ? '${draft.categoryName} (${draft.subCategoryName})' : draft.categoryName;
-          replyText = 'Dạ vâng! Em đã lập phiếu chi ${_currencyFmt.format(draft.amount)} cho khoản "$text" vào danh mục $catDisplay cho $userSalutation rồi ạ. $userSalutation kiểm tra thẻ bên dưới nhé!';
+          replyText = 'Dạ vâng! $capitalizedSelf đã lập phiếu chi ${_currencyFmt.format(draft.amount)} cho khoản "$text" vào danh mục $catDisplay cho $userSalutation rồi ạ. $userSalutation kiểm tra thẻ bên dưới nhé!';
           _pendingAmount = null;
           _pendingCategory = null;
           _pendingSubCategory = null;
@@ -846,7 +915,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
             fallbackSubCategory: _pendingSubCategory,
           );
           final catDisplay = draft.subCategoryName != null ? '${draft.categoryName} (${draft.subCategoryName})' : draft.categoryName;
-          replyText = 'Dạ em đã ghi nhận số tiền ${_currencyFmt.format(extractedAmount)} cho "$_pendingDescription" vào danh mục $catDisplay. $userSalutation bấm Lưu để xác nhận nhé!';
+          replyText = 'Dạ $selfPronoun đã ghi nhận số tiền ${_currencyFmt.format(extractedAmount)} cho "$_pendingDescription" vào danh mục $catDisplay. $userSalutation bấm Lưu để xác nhận nhé!';
           _pendingDescription = null;
           _pendingCategory = null;
           _pendingSubCategory = null;
@@ -854,46 +923,63 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
         // Case C: User provides only an amount ("vừa chi 200k", "hết 500k") without description
         else if (extractedAmount > 0 && !lowerText.contains('xăng') && !lowerText.contains('chợ') && !lowerText.contains('cơm') && !lowerText.contains('ăn') && !lowerText.contains('sửa') && !lowerText.contains('bảo dưỡng') && !lowerText.contains('điện') && !lowerText.contains('nước') && !lowerText.contains('học')) {
           _pendingAmount = extractedAmount;
-          replyText = 'Dạ em đã ghi nhận số tiền ${_currencyFmt.format(extractedAmount)}. Khoản này $userSalutation chi cho việc gì thế ạ (như ăn trưa, đổ xăng hay mua sắm)?';
+          replyText = 'Dạ $selfPronoun đã ghi nhận số tiền ${_currencyFmt.format(extractedAmount)}. Khoản này $userSalutation chi cho việc gì thế ạ (như ăn trưa, đổ xăng hay mua sắm)?';
         }
         // Case D: User mentions an expense item without an amount ("vừa đi đổ xăng", "ăn trưa xong")
         else if (hasExpenseKeywords && extractedAmount == 0 && (lowerText.contains('xăng') || lowerText.contains('ăn') || lowerText.contains('chợ') || lowerText.contains('sửa xe') || lowerText.contains('bảo dưỡng'))) {
           _pendingDescription = text;
           _pendingCategory = categoryResult.parent;
           _pendingSubCategory = categoryResult.sub;
-          replyText = 'Dạ khoản "$text" hết bao nhiêu tiền thế $userSalutation? $userSalutation nói số tiền em ghi sổ ngay nhé!';
+          replyText = 'Dạ khoản "$text" hết bao nhiêu tiền thế $userSalutation? $userSalutation nói số tiền $selfPronoun ghi sổ ngay nhé!';
         }
         // Case E: Complete single-turn expense sentence ("Đổ xăng 500k", "Ăn trưa hết 120k")
         else if (extractedAmount > 0 || hasExpenseKeywords) {
           draft = await _aiService.parseNaturalInput(text);
           final catDisplay = draft.subCategoryName != null ? '${draft.categoryName} (${draft.subCategoryName})' : draft.categoryName;
-          replyText = 'Em đã bóc tách xong khoản chi "${draft.description ?? text}" với số tiền ${_currencyFmt.format(draft.amount)} vào danh mục $catDisplay cho ${draft.memberName}. $userSalutation bấm Xác nhận để lưu nhé!';
+          replyText = '$capitalizedSelf đã bóc tách xong khoản chi "${draft.description ?? text}" với số tiền ${_currencyFmt.format(draft.amount)} vào danh mục $catDisplay cho ${draft.memberName}. $userSalutation bấm Xác nhận để lưu nhé!';
         }
       }
 
-      // 3. Fallback to Cloud AI Chat API for open-ended conversation
+      // 3. Prioritize Direct Gemini AI with Persona & Role
       if (replyText.isEmpty) {
-        try {
-          final res = await http.post(
-            Uri.parse('https://fmms.vercel.app/api/ai/chat'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'messages': _messages.map((m) => {'role': m.role, 'content': m.content}).toList(),
-            }),
-          ).timeout(const Duration(seconds: 4));
+        if (_hasApiKey) {
+          try {
+            final geminiReply = await _aiService.chatWithGemini(
+              userMessage: text,
+              history: _messages.map((m) => {'role': m.role, 'content': m.content}).toList(),
+              memberName: activeMember.name,
+              persona: _persona,
+            );
+            if (geminiReply != null && geminiReply.trim().isNotEmpty) {
+              replyText = geminiReply.trim();
+            }
+          } catch (_) {}
+        }
 
-          if (res.statusCode == 200) {
-            final data = jsonDecode(res.body);
-            replyText = data['reply'] ?? '';
-          }
-        } catch (_) {}
+        // Secondary fallback to Cloud AI Chat API
+        if (replyText.isEmpty) {
+          try {
+            final res = await http.post(
+              Uri.parse('https://fmms.vercel.app/api/ai/chat'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'messages': _messages.map((m) => {'role': m.role, 'content': m.content}).toList(),
+              }),
+            ).timeout(const Duration(seconds: 4));
+
+            if (res.statusCode == 200) {
+              final data = jsonDecode(res.body);
+              replyText = data['reply'] ?? '';
+            }
+          } catch (_) {}
+        }
       }
 
       if (replyText.isEmpty) {
         if (lowerText.contains('chào') || lowerText.contains('hello') || lowerText.contains('hi')) {
-          replyText = 'Dạ em chào $userSalutation! Hôm nay tình hình tài chính của gia đình rất ổn định. $userSalutation cần em hỗ trợ ghi chép chi tiêu hay kiểm tra số dư ví nào ạ?';
+          replyText = 'Dạ $selfPronoun chào $userSalutation! Hôm nay tình hình tài chính của gia đình rất ổn định. $userSalutation cần $selfPronoun hỗ trợ ghi chép chi tiêu hay kiểm tra số dư ví nào ạ?';
         } else {
-          replyText = 'Dạ em đã hiểu ý $userSalutation. Em luôn sẵn sàng ghi chép chi tiêu bằng giọng nói và theo dõi ngân sách cho gia đình mình!';
+          replyText = 'Dạ $selfPronoun đã hiểu ý $userSalutation. $capitalizedSelf luôn sẵn sàng ghi chép chi tiêu và hỗ trợ tài chính cho gia đình mình!';
         }
       }
 
@@ -1134,6 +1220,12 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
             icon: const Icon(Icons.tune_rounded, color: Color(0xFF0284C7)),
             tooltip: 'Cài đặt giọng đọc AI (Tốc độ & Tone)',
             onPressed: _showVoiceSettingsSheet,
+          ),
+          // AI Persona & Role Button
+          IconButton(
+            icon: const Icon(Icons.psychology_rounded, color: Color(0xFF0284C7)),
+            tooltip: 'Cấu hình vai trò & xưng hô AI',
+            onPressed: _showPersonaSettingsDialog,
           ),
           const SizedBox(width: 8),
         ],
