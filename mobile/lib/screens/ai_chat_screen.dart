@@ -5,6 +5,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../models/ai_action_model.dart';
 import '../models/finance_model.dart';
@@ -59,7 +60,14 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
   bool _isListening = false;
   String _liveSpeechText = '';
   bool _isVoiceEnabled = true; // Auto-speak AI replies
+  bool _isTwoWayDialogue = false; // Hands-free continuous 2-way conversation
   String? _currentlySpeakingId;
+
+  // TTS Voice Customization
+  double _speechRate = 0.56; // Natural Vietnamese cadence (0.50 was sluggish)
+  double _speechPitch = 1.05; // 1.05 gives clear, pleasant female tone
+  List<Map<String, String>> _availableVoices = [];
+  String? _selectedVoiceName;
 
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
@@ -96,13 +104,89 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
 
   Future<void> _initTts() async {
     try {
-      await _flutterTts.setLanguage('vi-VN');
-      await _flutterTts.setSpeechRate(0.52);
+      final prefs = await SharedPreferences.getInstance();
+      _speechRate = prefs.getDouble('ai_tts_rate') ?? 0.56;
+      _speechPitch = prefs.getDouble('ai_tts_pitch') ?? 1.05;
+      _selectedVoiceName = prefs.getString('ai_tts_voice_name');
+
+      await _flutterTts.setIosAudioCategory(
+        IosTextToSpeechAudioCategory.playback,
+        [
+          IosTextToSpeechAudioCategoryOptions.defaultToSpeaker,
+          IosTextToSpeechAudioCategoryOptions.allowBluetooth,
+          IosTextToSpeechAudioCategoryOptions.allowBluetoothA2DP,
+        ],
+        IosTextToSpeechAudioMode.defaultMode,
+      );
+      await _flutterTts.awaitSpeakCompletion(true);
+
+      final langs = await _flutterTts.getLanguages;
+      if (langs is List && (langs.contains('vi-VN') || langs.contains('vi_VN') || langs.contains('vi'))) {
+        if (langs.contains('vi-VN')) {
+          await _flutterTts.setLanguage('vi-VN');
+        } else if (langs.contains('vi_VN')) {
+          await _flutterTts.setLanguage('vi_VN');
+        } else {
+          await _flutterTts.setLanguage('vi');
+        }
+      } else {
+        await _flutterTts.setLanguage('vi-VN');
+      }
+
+      // Query and discover Vietnamese system voices on iOS
+      try {
+        final voices = await _flutterTts.getVoices;
+        if (voices is List) {
+          final viVoices = <Map<String, String>>[];
+          for (final v in voices) {
+            if (v is Map) {
+              final name = (v['name'] ?? '').toString();
+              final locale = (v['locale'] ?? '').toString();
+              if (locale.toLowerCase().contains('vi') ||
+                  name.toLowerCase().contains('vietnam') ||
+                  name.toLowerCase().contains('linh') ||
+                  name.toLowerCase().contains('an') ||
+                  name.toLowerCase().contains('siri')) {
+                viVoices.add({'name': name, 'locale': locale});
+              }
+            }
+          }
+          _availableVoices = viVoices;
+
+          if (_selectedVoiceName != null && viVoices.any((v) => v['name'] == _selectedVoiceName)) {
+            final chosen = viVoices.firstWhere((v) => v['name'] == _selectedVoiceName);
+            await _flutterTts.setVoice({'name': chosen['name']!, 'locale': chosen['locale'] ?? 'vi-VN'});
+          } else if (viVoices.isNotEmpty) {
+            final bestVoice = viVoices.firstWhere(
+              (v) =>
+                  v['name']!.toLowerCase().contains('enhanced') ||
+                  v['name']!.toLowerCase().contains('premium') ||
+                  v['name']!.toLowerCase().contains('siri'),
+              orElse: () => viVoices.first,
+            );
+            _selectedVoiceName = bestVoice['name'];
+            await _flutterTts.setVoice({'name': bestVoice['name']!, 'locale': bestVoice['locale'] ?? 'vi-VN'});
+          }
+        }
+      } catch (e) {
+        debugPrint('Voice fetch error: $e');
+      }
+
+      await _flutterTts.setSpeechRate(_speechRate);
       await _flutterTts.setVolume(1.0);
-      await _flutterTts.setPitch(1.0);
+      await _flutterTts.setPitch(_speechPitch);
 
       _flutterTts.setCompletionHandler(() {
-        if (mounted) setState(() => _currentlySpeakingId = null);
+        if (mounted) {
+          setState(() => _currentlySpeakingId = null);
+          if (_isTwoWayDialogue && mounted && !_isListening) {
+            Future.delayed(const Duration(milliseconds: 350), () {
+              if (mounted && !_isListening && _isTwoWayDialogue) {
+                _startListening();
+              }
+            });
+          }
+        }
       });
       _flutterTts.setCancelHandler(() {
         if (mounted) setState(() => _currentlySpeakingId = null);
@@ -159,20 +243,9 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
-  // --- Voice Input (STT) ---
-  Future<void> _toggleListening() async {
+  // --- Voice Input (STT) & Hands-Free 2-Way Dialogue ---
+  Future<void> _startListening() async {
     await _stopSpeaking();
-
-    if (_isListening) {
-      await _speech.stop();
-      setState(() => _isListening = false);
-      if (_liveSpeechText.trim().isNotEmpty) {
-        final text = _liveSpeechText.trim();
-        _liveSpeechText = '';
-        _sendMessage(text);
-      }
-      return;
-    }
 
     bool available = await _speech.initialize(
       onStatus: (status) {
@@ -187,12 +260,13 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
           }
         }
       },
-      onError: (_) {
+      onError: (err) {
+        debugPrint('STT error: $err');
         if (mounted) setState(() => _isListening = false);
       },
     );
 
-    if (available) {
+    if (available && mounted) {
       setState(() {
         _isListening = true;
         _liveSpeechText = '';
@@ -202,6 +276,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
           listenMode: stt.ListenMode.dictation,
           partialResults: true,
           localeId: 'vi_VN',
+          cancelOnError: false,
         ),
         onResult: (result) {
           if (mounted) {
@@ -220,6 +295,27 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
     }
   }
 
+  Future<void> _toggleListening() async {
+    await _stopSpeaking();
+
+    if (_isListening) {
+      await _speech.stop();
+      setState(() {
+        _isListening = false;
+        _isTwoWayDialogue = false; // Turn off 2-way when manually stopping
+      });
+      if (_liveSpeechText.trim().isNotEmpty) {
+        final text = _liveSpeechText.trim();
+        _liveSpeechText = '';
+        _sendMessage(text);
+      }
+      return;
+    }
+
+    _isTwoWayDialogue = true; // Activating voice input turns on hands-free two-way dialogue
+    await _startListening();
+  }
+
   // --- Voice Output (TTS) ---
   Future<void> _speak(String text, String messageId) async {
     if (!_isVoiceEnabled) return;
@@ -231,24 +327,337 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
 
     await _stopSpeaking();
 
-    // Clean text for natural speech
+    // Clean text for natural Vietnamese speech
     final cleanText = text
-        .replaceAll(RegExp(r'[\*#_`~]'), '')
+        .replaceAll(RegExp(r'\*\*|\*|#|_|`|~'), '')
         .replaceAll('₫', ' đồng ')
         .replaceAll('VND', ' đồng ')
         .replaceAll('✓', 'Đã ')
         .replaceAll('•', ' ')
-        .replaceAll('-', ' ');
+        .replaceAll('-', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    if (cleanText.isEmpty) return;
 
     setState(() => _currentlySpeakingId = messageId);
-    await _flutterTts.speak(cleanText);
+    try {
+      await _flutterTts.speak(cleanText);
+    } catch (e) {
+      debugPrint('TTS speak error: $e');
+      if (mounted) setState(() => _currentlySpeakingId = null);
+    }
   }
 
   Future<void> _stopSpeaking() async {
-    await _flutterTts.stop();
+    try {
+      await _flutterTts.stop();
+    } catch (_) {}
     if (mounted) {
       setState(() => _currentlySpeakingId = null);
     }
+  }
+
+  Future<void> _updateTtsSettings({double? rate, double? pitch, String? voiceName}) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (rate != null) {
+      _speechRate = rate;
+      await _flutterTts.setSpeechRate(rate);
+      await prefs.setDouble('ai_tts_rate', rate);
+    }
+    if (pitch != null) {
+      _speechPitch = pitch;
+      await _flutterTts.setPitch(pitch);
+      await prefs.setDouble('ai_tts_pitch', pitch);
+    }
+    if (voiceName != null) {
+      _selectedVoiceName = voiceName;
+      final matched = _availableVoices.firstWhere(
+        (v) => v['name'] == voiceName,
+        orElse: () => {'name': voiceName, 'locale': 'vi-VN'},
+      );
+      await _flutterTts.setVoice({'name': matched['name']!, 'locale': matched['locale'] ?? 'vi-VN'});
+      await prefs.setString('ai_tts_voice_name', voiceName);
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _showVoiceSettingsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetContext, setModalState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            return Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.tune_rounded, color: Color(0xFF0284C7), size: 20),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Cài Đặt Giọng Đọc AI',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Speed (Tốc độ đọc)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Tốc độ đọc', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      Text('${(_speechRate * 100).toInt()}%', style: const TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildPresetChip(
+                        label: 'Chậm (48%)',
+                        isSelected: (_speechRate - 0.48).abs() < 0.02,
+                        onTap: () {
+                          _updateTtsSettings(rate: 0.48);
+                          setModalState(() {});
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _buildPresetChip(
+                        label: 'Tự nhiên (56%)',
+                        isSelected: (_speechRate - 0.56).abs() < 0.02,
+                        isRecommended: true,
+                        onTap: () {
+                          _updateTtsSettings(rate: 0.56);
+                          setModalState(() {});
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _buildPresetChip(
+                        label: 'Nhanh (64%)',
+                        isSelected: (_speechRate - 0.64).abs() < 0.02,
+                        onTap: () {
+                          _updateTtsSettings(rate: 0.64);
+                          setModalState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: _speechRate.clamp(0.40, 0.80),
+                    min: 0.40,
+                    max: 0.80,
+                    divisions: 20,
+                    activeColor: const Color(0xFF0284C7),
+                    onChanged: (val) {
+                      _updateTtsSettings(rate: val);
+                      setModalState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Pitch (Cao độ giọng)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Cao độ giọng (Tone nữ)', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      Text('${(_speechPitch * 100).toInt()}%', style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _buildPresetChip(
+                        label: 'Trầm ấm',
+                        isSelected: (_speechPitch - 0.95).abs() < 0.03,
+                        onTap: () {
+                          _updateTtsSettings(pitch: 0.95);
+                          setModalState(() {});
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _buildPresetChip(
+                        label: 'Tự nhiên',
+                        isSelected: (_speechPitch - 1.05).abs() < 0.03,
+                        isRecommended: true,
+                        onTap: () {
+                          _updateTtsSettings(pitch: 1.05);
+                          setModalState(() {});
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      _buildPresetChip(
+                        label: 'Trong trẻo',
+                        isSelected: (_speechPitch - 1.15).abs() < 0.03,
+                        onTap: () {
+                          _updateTtsSettings(pitch: 1.15);
+                          setModalState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  Slider(
+                    value: _speechPitch.clamp(0.8, 1.3),
+                    min: 0.8,
+                    max: 1.3,
+                    divisions: 15,
+                    activeColor: const Color(0xFF10B981),
+                    onChanged: (val) {
+                      _updateTtsSettings(pitch: val);
+                      setModalState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Voice Selector if available
+                  if (_availableVoices.isNotEmpty) ...[
+                    const Text('Giọng hệ thống khả dụng:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: _availableVoices.map((v) {
+                        final vName = v['name'] ?? '';
+                        final isSelected = _selectedVoiceName == vName;
+                        final isEnhanced = vName.toLowerCase().contains('enhanced') || vName.toLowerCase().contains('siri');
+                        return ChoiceChip(
+                          label: Text(
+                            isEnhanced ? '✨ $vName (Nâng cao)' : vName,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? Colors.white : null,
+                            ),
+                          ),
+                          selected: isSelected,
+                          selectedColor: const Color(0xFF0284C7),
+                          onSelected: (selected) {
+                            if (selected) {
+                              _updateTtsSettings(voiceName: vName);
+                              setModalState(() {});
+                            }
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Test Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: const BorderSide(color: Color(0xFF0284C7)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.volume_up_rounded, color: Color(0xFF0284C7)),
+                      label: const Text('Thử nghe giọng đọc mẫu', style: TextStyle(color: Color(0xFF0284C7), fontWeight: FontWeight.bold)),
+                      onPressed: () {
+                        _speak('Dạ, em là trợ lý tài chính gia đình FMMS. Em đã sẵn sàng hỗ trợ anh chị quản lý và ghi chép chi tiêu rồi ạ!', 'test-preview');
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // iOS Tip for Studio Quality Siri/Linh Voice
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0284C7).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.lightbulb_outline_rounded, color: Color(0xFF0284C7), size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Mẹo cho iPhone: Để có giọng đọc tự nhiên như người thật, bạn vào Cài đặt máy > Trợ năng > Nội dung được đọc > Giọng nói > Tiếng Việt > Tải về giọng "Linh (Nâng cao)" hoặc "Siri". Ứng dụng sẽ tự động chọn giọng truyền cảm này!',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF0369A1),
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPresetChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    bool isRecommended = false,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? const Color(0xFF0284C7)
+                : (isRecommended ? const Color(0xFF0284C7).withValues(alpha: 0.08) : Colors.grey.withValues(alpha: 0.1)),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected
+                  ? const Color(0xFF0284C7)
+                  : (isRecommended ? const Color(0xFF0284C7).withValues(alpha: 0.4) : Colors.transparent),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected || isRecommended ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? Colors.white : (isRecommended ? const Color(0xFF0284C7) : null),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // --- Core Conversational Dialogue Engine ---
@@ -421,12 +830,18 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
   Future<void> _handleConfirmDraft(AIActionDraft draft) async {
     await _stopSpeaking();
     final wallet = _wallets.firstWhere(
-      (w) => w.name == draft.walletName,
-      orElse: () => _wallets.isNotEmpty ? _wallets.first : WalletModel(id: 'w-1', name: 'Tiền mặt', walletType: WalletType.CASH, currentBalance: 0),
+      (w) => w.name.toLowerCase() == (draft.walletName ?? '').toLowerCase() ||
+             w.name.toLowerCase().contains((draft.walletName ?? '').toLowerCase()),
+      orElse: () => _wallets.isNotEmpty
+          ? _wallets.first
+          : WalletModel(id: '00000000-0000-0000-0000-000000000001', name: 'Tiền mặt gia đình', walletType: WalletType.CASH, currentBalance: 0),
     );
     final cat = _categories.firstWhere(
-      (c) => c.name == draft.categoryName,
-      orElse: () => _categories.isNotEmpty ? _categories.first : TransactionCategoryModel(id: 'c-1', name: 'Khác', type: TransactionType.EXPENSE),
+      (c) => c.name.toLowerCase() == (draft.categoryName ?? '').toLowerCase() ||
+             c.name.toLowerCase().contains((draft.categoryName ?? '').toLowerCase()),
+      orElse: () => _categories.isNotEmpty
+          ? _categories.first
+          : TransactionCategoryModel(id: '00000000-0000-0000-0001-000000000001', name: 'Ăn uống & Đi chợ', type: TransactionType.EXPENSE),
     );
 
     final tx = FamilyTransactionModel(
@@ -447,89 +862,20 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: const Color(0xFF10B981),
+        backgroundColor: ok ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
         behavior: SnackBarBehavior.floating,
         content: Row(
           children: [
-            const Icon(Icons.check_circle, color: Colors.white, size: 20),
+            Icon(ok ? Icons.check_circle : Icons.cloud_queue, color: Colors.white, size: 20),
             const SizedBox(width: 8),
-            Text(ok ? '✓ Đã ghi sổ cho ${draft.memberName} thành công!' : 'Đã lưu offline vào hàng đợi!'),
+            Text(ok ? '✓ Đã ghi sổ cho ${draft.memberName ?? "gia đình"} và đồng bộ lên Web!' : 'Đã lưu offline vào hàng đợi!'),
           ],
         ),
       ),
     );
   }
 
-  void _showReceiptSourceSheet() {
-    _stopSpeaking();
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final isDark = Theme.of(ctx).brightness == Brightness.dark;
-        return Container(
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const Text(
-                'QUÉT HOÁ ĐƠN BẰNG AI VISION',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1.1, color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0284C7).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.camera_alt, color: Color(0xFF0284C7)),
-                ),
-                title: const Text('Chụp ảnh hoá đơn mới', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Chụp trực tiếp từ camera quán ăn, siêu thị', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _handlePickReceipt(ImageSource.camera);
-                },
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.photo_library, color: Color(0xFF10B981)),
-                ),
-                title: const Text('Chọn ảnh từ thư viện', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text('Tải ảnh hoá đơn đã chụp trước đó', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _handlePickReceipt(ImageSource.gallery);
-                },
-              ),
-              const SizedBox(height: 12),
-            ],
-          ),
-        );
-      },
-    );
-  }
+
 
   Future<void> _handlePickReceipt(ImageSource source) async {
     try {
@@ -609,6 +955,25 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
           ],
         ),
         actions: [
+          // Two-Way Dialogue Mode Toggle Button
+          IconButton(
+            icon: Icon(
+              _isTwoWayDialogue ? Icons.record_voice_over_rounded : Icons.record_voice_over_outlined,
+              color: _isTwoWayDialogue ? const Color(0xFF10B981) : Colors.grey,
+            ),
+            tooltip: _isTwoWayDialogue ? 'Đối thoại 2 chiều: Đang BẬT (AI tự nghe lại sau khi trả lời)' : 'Bật đối thoại 2 chiều rảnh tay',
+            onPressed: () {
+              setState(() {
+                _isTwoWayDialogue = !_isTwoWayDialogue;
+                if (_isTwoWayDialogue && !_isListening) {
+                  _startListening();
+                } else if (!_isTwoWayDialogue && _isListening) {
+                  _speech.stop();
+                  _isListening = false;
+                }
+              });
+            },
+          ),
           // Voice Toggle Button
           IconButton(
             icon: Icon(
@@ -622,6 +987,12 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
                 if (!_isVoiceEnabled) _stopSpeaking();
               });
             },
+          ),
+          // Voice Settings Button
+          IconButton(
+            icon: const Icon(Icons.tune_rounded, color: Color(0xFF0284C7)),
+            tooltip: 'Cài đặt giọng đọc AI (Tốc độ & Tone)',
+            onPressed: _showVoiceSettingsSheet,
           ),
           const SizedBox(width: 8),
         ],
@@ -772,6 +1143,10 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
                         child: ReceiptCardWidget(
                           receipt: msg.receiptResult!,
                           onConfirmAll: () => _handleConfirmReceipt(msg.receiptResult!),
+                          onSpeak: () => _speak(
+                            'Em đã đọc xong hoá đơn ${msg.receiptResult!.merchantName}, gồm ${msg.receiptResult!.items.length} món, tổng tiền ${_currencyFmt.format(msg.receiptResult!.totalAmount)}. Đề xuất ghi vào mục ${msg.receiptResult!.suggestedSubCategory}.',
+                            'receipt-${msg.id}',
+                          ),
                         ),
                       ),
                     ],
@@ -901,15 +1276,22 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
                       color: _isListening ? const Color(0xFFEF4444) : const Color(0xFF0284C7),
                       size: 26,
                     ),
-                    tooltip: 'Nói chuyện bằng giọng nói',
+                    tooltip: 'Nói chuyện / Đối thoại 2 chiều',
                     onPressed: _toggleListening,
                   ),
 
-                  // Camera / Receipt Scan Button
+                  // Camera Button (Chụp trực tiếp)
                   IconButton(
                     icon: const Icon(Icons.camera_alt_outlined, color: Color(0xFF0284C7), size: 24),
-                    tooltip: 'Chụp hoặc chọn ảnh hoá đơn',
-                    onPressed: _showReceiptSourceSheet,
+                    tooltip: 'Chụp ảnh hoá đơn (Camera)',
+                    onPressed: () => _handlePickReceipt(ImageSource.camera),
+                  ),
+
+                  // Photo Library Button (Tải ảnh từ thư viện)
+                  IconButton(
+                    icon: const Icon(Icons.photo_library_outlined, color: Color(0xFF10B981), size: 24),
+                    tooltip: 'Chọn ảnh hoá đơn từ thư viện ảnh',
+                    onPressed: () => _handlePickReceipt(ImageSource.gallery),
                   ),
 
                   // Text Field

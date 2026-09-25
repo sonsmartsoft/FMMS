@@ -454,7 +454,7 @@ class FinanceService {
     return _loadLocalTransactions();
   }
 
-  // Create Transaction (Cập nhật số dư ví tự động)
+  // Create Transaction (Cập nhật số dư ví tự động & Đồng bộ 2 chiều lên Supabase)
   Future<bool> createTransaction(FamilyTransactionModel tx, {String? memberName, String? memberId}) async {
     final activeMember = _authService.getCurrentMember();
     final effectiveName = memberName ?? activeMember.name;
@@ -471,12 +471,38 @@ class FinanceService {
       }
     }
 
-    final txId = (tx.id.isNotEmpty && !tx.id.startsWith('tx-'))
+    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+
+    // 1. Chuẩn hoá wallet_id thành UUID hợp lệ
+    String validWalletId = tx.walletId;
+    if (!uuidRegex.hasMatch(validWalletId)) {
+      final wallets = await getWallets();
+      final matched = wallets.where(
+        (w) => w.id == validWalletId || w.name.toLowerCase().contains(validWalletId.toLowerCase())
+      ).firstOrNull;
+      validWalletId = matched?.id ?? (wallets.isNotEmpty ? wallets.first.id : '00000000-0000-0000-0000-000000000001');
+    }
+
+    // 2. Chuẩn hoá category_id thành UUID hợp lệ
+    String? validCategoryId = tx.categoryId;
+    if (validCategoryId != null && !uuidRegex.hasMatch(validCategoryId)) {
+      final categories = await getCategories();
+      final matchedCat = categories.where((c) =>
+          c.id == validCategoryId ||
+          c.name.toLowerCase() == validCategoryId!.toLowerCase() ||
+          (tx.categoryName != null && c.name.toLowerCase() == tx.categoryName!.toLowerCase())
+      ).firstOrNull;
+      validCategoryId = matchedCat?.id;
+    }
+
+    final txId = (tx.id.isNotEmpty && uuidRegex.hasMatch(tx.id))
         ? tx.id
         : 'tx-local-${DateTime.now().millisecondsSinceEpoch}';
 
     final finalTx = tx.copyWith(
       id: txId,
+      walletId: validWalletId,
+      categoryId: validCategoryId,
       notes: notesWithMember,
     );
 
@@ -485,16 +511,69 @@ class FinanceService {
 
     // 2. Save locally
     final localList = await _loadLocalTransactions();
+    localList.removeWhere((t) => t.id == finalTx.id);
     localList.insert(0, finalTx);
     await _saveLocalTransactions(localList);
 
-    // 3. Sync to Supabase
+    // 3. Sync to Supabase với payload sạch đúng 100% schema bảng family_transactions
     try {
-      final payload = finalTx.toJson();
-      payload['created_by'] = effectiveId;
-      await _supabase.from('family_transactions').insert(payload);
+      final dbPayload = <String, dynamic>{
+        'wallet_id': validWalletId,
+        'transaction_type': finalTx.transactionType.name,
+        'amount': finalTx.amount,
+        'date': finalTx.date,
+        'is_essential': finalTx.isEssential,
+        'exclude_from_reports': finalTx.isExcludedFromReport,
+        'created_by': effectiveId,
+      };
+
+      if (uuidRegex.hasMatch(finalTx.id)) {
+        dbPayload['id'] = finalTx.id;
+      }
+      if (finalTx.toWalletId != null && uuidRegex.hasMatch(finalTx.toWalletId!)) {
+        dbPayload['to_wallet_id'] = finalTx.toWalletId;
+      }
+      if (validCategoryId != null && uuidRegex.hasMatch(validCategoryId)) {
+        dbPayload['category_id'] = validCategoryId;
+      }
+      if (finalTx.assetId != null && uuidRegex.hasMatch(finalTx.assetId!)) {
+        dbPayload['asset_id'] = finalTx.assetId;
+      }
+      if (finalTx.payeeVendor != null && finalTx.payeeVendor!.isNotEmpty) {
+        dbPayload['payee_vendor'] = finalTx.payeeVendor;
+      }
+      if (finalTx.description != null && finalTx.description!.isNotEmpty) {
+        dbPayload['description'] = finalTx.description;
+      }
+      if (finalTx.notes != null && finalTx.notes!.isNotEmpty) {
+        dbPayload['notes'] = finalTx.notes;
+      }
+      if (finalTx.imageUrl != null && finalTx.imageUrl!.isNotEmpty) {
+        dbPayload['bill_image_url'] = finalTx.imageUrl;
+      }
+
+      final insertRes = await _supabase
+          .from('family_transactions')
+          .insert(dbPayload)
+          .select()
+          .maybeSingle();
+
+      if (insertRes != null && insertRes['id'] != null) {
+        final serverId = insertRes['id'].toString();
+        // Cập nhật lại ID cục bộ bằng UUID chuẩn từ Supabase
+        final updatedTx = finalTx.copyWith(id: serverId);
+        final currentLocals = await _loadLocalTransactions();
+        final idx = currentLocals.indexWhere((t) => t.id == finalTx.id);
+        if (idx != -1) {
+          currentLocals[idx] = updatedTx;
+        } else {
+          currentLocals.insert(0, updatedTx);
+        }
+        await _saveLocalTransactions(currentLocals);
+      }
       return true;
     } catch (e) {
+      debugPrint('Supabase insert family_transactions error: $e');
       await _enqueueOffline(finalTx, memberName: memberName);
       return false;
     }
@@ -520,10 +599,24 @@ class FinanceService {
 
     // 4. Update Supabase
     try {
-      final payload = newTx.toJson();
-      await _supabase.from('family_transactions').update(payload).eq('id', newTx.id);
+      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+      if (uuidRegex.hasMatch(newTx.id)) {
+        final updatePayload = <String, dynamic>{
+          'amount': newTx.amount,
+          'date': newTx.date,
+          'payee_vendor': newTx.payeeVendor,
+          'description': newTx.description,
+          'notes': newTx.notes,
+          'is_essential': newTx.isEssential,
+          'exclude_from_reports': newTx.isExcludedFromReport,
+        };
+        if (uuidRegex.hasMatch(newTx.walletId)) updatePayload['wallet_id'] = newTx.walletId;
+        if (newTx.categoryId != null && uuidRegex.hasMatch(newTx.categoryId!)) updatePayload['category_id'] = newTx.categoryId;
+        await _supabase.from('family_transactions').update(updatePayload).eq('id', newTx.id);
+      }
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Update transaction error: $e');
       return false;
     }
   }
@@ -540,12 +633,17 @@ class FinanceService {
 
     // 3. Delete from Supabase
     try {
-      await _supabase.from('family_transactions').delete().eq('id', tx.id);
+      final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+      if (uuidRegex.hasMatch(tx.id)) {
+        await _supabase.from('family_transactions').delete().eq('id', tx.id);
+      }
       return true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Delete transaction error: $e');
       return false;
     }
   }
+
 
   // Helper: Apply Balance Delta to Wallets
   Future<void> _applyBalanceDelta(FamilyTransactionModel tx, {required bool isAdding}) async {
@@ -700,10 +798,15 @@ class FinanceService {
     for (final item in list) {
       try {
         final data = jsonDecode(item);
-        await _supabase.from('family_transactions').insert(data);
-        synced++;
+        final tx = FamilyTransactionModel.fromJson(data);
+        final ok = await createTransaction(tx);
+        if (ok) {
+          synced++;
+        } else {
+          remaining.add(item);
+        }
       } catch (_) {
-        remaining.add(item);
+        // Skip invalid item
       }
     }
 
@@ -716,53 +819,59 @@ class FinanceService {
   // ==========================================
   List<WalletModel> _getLocalWalletsFallback() {
     return [
-      WalletModel(id: 'w-cash-01', name: 'Tiền mặt gia đình', walletType: WalletType.CASH, currentBalance: 15400000, color: '#10B981', icon: 'Banknote'),
-      WalletModel(id: 'w-tcb-01', name: 'Techcombank Chi tiêu', walletType: WalletType.BANK, bankName: 'Techcombank', currentBalance: 38500000, color: '#EF4444', icon: 'Building2'),
-      WalletModel(id: 'w-vcb-01', name: 'Vietcombank Lương & Dự phòng', walletType: WalletType.BANK, bankName: 'Vietcombank', currentBalance: 85200000, color: '#059669', icon: 'CreditCard'),
-      WalletModel(id: 'w-tcb-credit', name: 'Techcombank Visa Signature', walletType: WalletType.CREDIT_CARD, bankName: 'Techcombank', currentBalance: -4850000, creditLimit: 100000000, statementDay: 20, paymentDueDay: 5, color: '#6366F1', icon: 'CreditCard'),
-      WalletModel(id: 'w-momo', name: 'Ví MoMo', walletType: WalletType.E_WALLET, currentBalance: 1250000, color: '#EC4899', icon: 'Smartphone'),
+      WalletModel(id: '00000000-0000-0000-0000-000000000001', name: 'Tiền mặt gia đình', walletType: WalletType.CASH, currentBalance: 15400000, color: '#10B981', icon: 'Banknote'),
+      WalletModel(id: '00000000-0000-0000-0000-000000000002', name: 'Techcombank Chi tiêu', walletType: WalletType.BANK, bankName: 'Techcombank', currentBalance: 38500000, color: '#EF4444', icon: 'Building2'),
+      WalletModel(id: '00000000-0000-0000-0000-000000000003', name: 'Vietcombank Lương & Dự phòng', walletType: WalletType.BANK, bankName: 'Vietcombank', currentBalance: 85200000, color: '#059669', icon: 'CreditCard'),
+      WalletModel(id: '00000000-0000-0000-0000-000000000004', name: 'Techcombank Visa Signature', walletType: WalletType.CREDIT_CARD, bankName: 'Techcombank', currentBalance: -4850000, creditLimit: 100000000, statementDay: 20, paymentDueDay: 5, color: '#6366F1', icon: 'CreditCard'),
+      WalletModel(id: '00000000-0000-0000-0000-000000000005', name: 'Ví MoMo', walletType: WalletType.E_WALLET, currentBalance: 1250000, color: '#EC4899', icon: 'Smartphone'),
+      WalletModel(id: '00000000-0000-0000-0000-000000000006', name: 'Sổ tiết kiệm ngân hàng', walletType: WalletType.SAVINGS, currentBalance: 150000000, color: '#38BDF8', icon: 'PiggyBank'),
+      WalletModel(id: '208ebe0f-ebaa-435a-ae38-03be6f225581', name: 'Shinhan bank', walletType: WalletType.BANK, currentBalance: 0, color: '#0284C7', icon: 'Building2'),
     ];
   }
 
   List<TransactionCategoryModel> _getLocalCategoriesFallback() {
     return [
       // 1. Ăn uống & Đi chợ
-      TransactionCategoryModel(id: 'cat-food', name: 'Ăn uống & Đi chợ', type: TransactionType.EXPENSE, icon: 'utensils', color: '#F59E0B', displayOrder: 1),
-      TransactionCategoryModel(id: 'cat-food-groceries', name: 'Đi chợ & Siêu thị', parentId: 'cat-food', type: TransactionType.EXPENSE, icon: 'shopping-bag', color: '#F59E0B', displayOrder: 2),
-      TransactionCategoryModel(id: 'cat-food-dining', name: 'Ăn ngoài & Cafe', parentId: 'cat-food', type: TransactionType.EXPENSE, icon: 'coffee', color: '#FBBF24', displayOrder: 3),
+      TransactionCategoryModel(id: '00000000-0000-0000-0001-000000000001', name: 'Ăn uống & Đi chợ', type: TransactionType.EXPENSE, icon: 'utensils', color: '#F59E0B', displayOrder: 1),
+      TransactionCategoryModel(id: '00000000-0000-0000-0001-000000000002', name: 'Đi chợ & Siêu thị', parentId: '00000000-0000-0000-0001-000000000001', type: TransactionType.EXPENSE, icon: 'shopping-bag', color: '#F59E0B', displayOrder: 2),
+      TransactionCategoryModel(id: '00000000-0000-0000-0001-000000000003', name: 'Ăn ngoài hàng & Cafe', parentId: '00000000-0000-0000-0001-000000000001', type: TransactionType.EXPENSE, icon: 'coffee', color: '#FBBF24', displayOrder: 3),
 
       // 2. Phương tiện & Xe cộ
-      TransactionCategoryModel(id: 'cat-mobility', name: 'Phương tiện & Đi lại (Xe)', type: TransactionType.EXPENSE, icon: 'car', color: '#06B6D4', displayOrder: 4),
-      TransactionCategoryModel(id: 'cat-mob-fuel', name: 'Xăng xe & Nhiên liệu', parentId: 'cat-mobility', type: TransactionType.EXPENSE, icon: 'fuel', color: '#06B6D4', displayOrder: 5),
-      TransactionCategoryModel(id: 'cat-mob-maint', name: 'Bảo dưỡng & Sửa xe', parentId: 'cat-mobility', type: TransactionType.EXPENSE, icon: 'wrench', color: '#0EA5E9', displayOrder: 6),
-      TransactionCategoryModel(id: 'cat-mob-toll', name: 'Phí VETC & Gửi xe', parentId: 'cat-mobility', type: TransactionType.EXPENSE, icon: 'credit-card', color: '#38BDF8', displayOrder: 7),
-      TransactionCategoryModel(id: 'cat-mob-wash', name: 'Rửa xe & Chăm sóc xe', parentId: 'cat-mobility', type: TransactionType.EXPENSE, icon: 'sparkles', color: '#A5F3FC', displayOrder: 8),
+      TransactionCategoryModel(id: '00000000-0000-0000-0003-000000000001', name: 'Phương tiện & Đi lại (Xe)', type: TransactionType.EXPENSE, icon: 'car', color: '#06B6D4', displayOrder: 4),
+      TransactionCategoryModel(id: '00000000-0000-0000-0003-000000000002', name: 'Xăng xe & Nhiên liệu', parentId: '00000000-0000-0000-0003-000000000001', type: TransactionType.EXPENSE, icon: 'fuel', color: '#06B6D4', displayOrder: 5),
+      TransactionCategoryModel(id: '00000000-0000-0000-0003-000000000003', name: 'Bảo dưỡng & Sửa xe', parentId: '00000000-0000-0000-0003-000000000001', type: TransactionType.EXPENSE, icon: 'wrench', color: '#0EA5E9', displayOrder: 6),
+      TransactionCategoryModel(id: '00000000-0000-0000-0003-000000000004', name: 'Phí cầu đường VETC & Gửi xe', parentId: '00000000-0000-0000-0003-000000000001', type: TransactionType.EXPENSE, icon: 'credit-card', color: '#38BDF8', displayOrder: 7),
+      TransactionCategoryModel(id: '00000000-0000-0000-0003-000000000006', name: 'Rửa xe & Phụ kiện xe', parentId: '00000000-0000-0000-0003-000000000001', type: TransactionType.EXPENSE, icon: 'sparkles', color: '#A5F3FC', displayOrder: 8),
 
       // 3. Nhà cửa & Tiện ích
-      TransactionCategoryModel(id: 'cat-home', name: 'Nhà cửa & Tiện ích', type: TransactionType.EXPENSE, icon: 'home', color: '#3B82F6', displayOrder: 9),
-      TransactionCategoryModel(id: 'cat-home-bills', name: 'Điện, Nước, Internet', parentId: 'cat-home', type: TransactionType.EXPENSE, icon: 'zap', color: '#38BDF8', displayOrder: 10),
-      TransactionCategoryModel(id: 'cat-home-furnishing', name: 'Đồ gia dụng & Nhà', parentId: 'cat-home', type: TransactionType.EXPENSE, icon: 'hammer', color: '#60A5FA', displayOrder: 11),
+      TransactionCategoryModel(id: '00000000-0000-0000-0002-000000000001', name: 'Nhà cửa & Tiện ích', type: TransactionType.EXPENSE, icon: 'home', color: '#3B82F6', displayOrder: 9),
+      TransactionCategoryModel(id: '00000000-0000-0000-0002-000000000002', name: 'Điện, Nước, Internet, Rác', parentId: '00000000-0000-0000-0002-000000000001', type: TransactionType.EXPENSE, icon: 'zap', color: '#38BDF8', displayOrder: 10),
+      TransactionCategoryModel(id: '00000000-0000-0000-0002-000000000003', name: 'Đồ gia dụng & Sửa nhà', parentId: '00000000-0000-0000-0002-000000000001', type: TransactionType.EXPENSE, icon: 'hammer', color: '#60A5FA', displayOrder: 11),
 
       // 4. Con cái & Giáo dục
-      TransactionCategoryModel(id: 'cat-education', name: 'Con cái & Giáo dục', type: TransactionType.EXPENSE, icon: 'graduation-cap', color: '#8B5CF6', displayOrder: 12),
-      TransactionCategoryModel(id: 'cat-edu-tuition', name: 'Học phí trường & Học thêm', parentId: 'cat-education', type: TransactionType.EXPENSE, icon: 'book-open', color: '#A78BFA', displayOrder: 13),
-      TransactionCategoryModel(id: 'cat-edu-kids', name: 'Sữa, Bỉm & Đồ chơi', parentId: 'cat-education', type: TransactionType.EXPENSE, icon: 'baby', color: '#C4B5FD', displayOrder: 14),
+      TransactionCategoryModel(id: '00000000-0000-0000-0005-000000000001', name: 'Con cái & Giáo dục', type: TransactionType.EXPENSE, icon: 'graduation-cap', color: '#8B5CF6', displayOrder: 12),
+      TransactionCategoryModel(id: '00000000-0000-0000-0005-000000000002', name: 'Học phí & Khóa học', parentId: '00000000-0000-0000-0005-000000000001', type: TransactionType.EXPENSE, icon: 'book-open', color: '#A78BFA', displayOrder: 13),
+      TransactionCategoryModel(id: '00000000-0000-0000-0005-000000000003', name: 'Sữa, Bỉm, Đồ chơi trẻ em', parentId: '00000000-0000-0000-0005-000000000001', type: TransactionType.EXPENSE, icon: 'baby', color: '#C4B5FD', displayOrder: 14),
 
       // 5. Mua sắm & Hưởng thụ
-      TransactionCategoryModel(id: 'cat-play', name: 'Hưởng thụ & Du lịch', type: TransactionType.EXPENSE, icon: 'plane', color: '#EC4899', displayOrder: 15),
-      TransactionCategoryModel(id: 'cat-play-travel', name: 'Nghỉ dưỡng & Du lịch', parentId: 'cat-play', type: TransactionType.EXPENSE, icon: 'palmtree', color: '#F472B6', displayOrder: 16),
-      TransactionCategoryModel(id: 'cat-play-shopping', name: 'Mua sắm & Quần áo', parentId: 'cat-play', type: TransactionType.EXPENSE, icon: 'shopping-bag', color: '#FB7185', displayOrder: 17),
+      TransactionCategoryModel(id: '00000000-0000-0000-0006-000000000001', name: 'Hưởng thụ & Du lịch', type: TransactionType.EXPENSE, icon: 'plane', color: '#EC4899', displayOrder: 15),
+      TransactionCategoryModel(id: '00000000-0000-0000-0006-000000000002', name: 'Du lịch & Nghỉ dưỡng', parentId: '00000000-0000-0000-0006-000000000001', type: TransactionType.EXPENSE, icon: 'palmtree', color: '#F472B6', displayOrder: 16),
+      TransactionCategoryModel(id: '00000000-0000-0000-0006-000000000003', name: 'Mua sắm & Thời trang', parentId: '00000000-0000-0000-0006-000000000001', type: TransactionType.EXPENSE, icon: 'shopping-bag', color: '#FB7185', displayOrder: 17),
 
       // 6. Y tế & Sức khỏe
-      TransactionCategoryModel(id: 'cat-health', name: 'Y tế & Sức khỏe', type: TransactionType.EXPENSE, icon: 'heart', color: '#10B981', displayOrder: 18),
+      TransactionCategoryModel(id: '00000000-0000-0000-0004-000000000001', name: 'Sức khỏe & Y tế', type: TransactionType.EXPENSE, icon: 'heart', color: '#10B981', displayOrder: 18),
+      TransactionCategoryModel(id: '00000000-0000-0000-0004-000000000002', name: 'Thuốc men & Khám bệnh', parentId: '00000000-0000-0000-0004-000000000001', type: TransactionType.EXPENSE, icon: 'pill', color: '#34D399', displayOrder: 19),
 
       // 7. Trả góp & Nợ
-      TransactionCategoryModel(id: 'cat-debt', name: 'Trả góp & Trả nợ', type: TransactionType.EXPENSE, icon: 'badge-percent', color: '#E11D48', displayOrder: 19),
+      TransactionCategoryModel(id: '00000000-0000-0000-0007-000000000001', name: 'Trả góp & Trả nợ ngân hàng', type: TransactionType.EXPENSE, icon: 'badge-percent', color: '#E11D48', displayOrder: 20),
 
       // 8. Thu nhập
-      TransactionCategoryModel(id: 'cat-salary', name: 'Lương & Thưởng', type: TransactionType.INCOME, icon: 'briefcase', color: '#059669', displayOrder: 20),
-      TransactionCategoryModel(id: 'cat-inc-bonus', name: 'Thưởng & Thu nhập thêm', parentId: 'cat-salary', type: TransactionType.INCOME, icon: 'gift', color: '#10B981', displayOrder: 21),
-      TransactionCategoryModel(id: 'cat-inc-invest', name: 'Lãi đầu tư & Cổ tức', parentId: 'cat-salary', type: TransactionType.INCOME, icon: 'trending-up', color: '#059669', displayOrder: 22),
+      TransactionCategoryModel(id: '00000000-0000-0000-0008-000000000001', name: 'Lương cố định hàng tháng', type: TransactionType.INCOME, icon: 'coins', color: '#10B981', displayOrder: 21),
+      TransactionCategoryModel(id: '00000000-0000-0000-0008-000000000002', name: 'Thưởng & Thu nhập phụ', parentId: '00000000-0000-0000-0008-000000000001', type: TransactionType.INCOME, icon: 'trending-up', color: '#34D399', displayOrder: 22),
+      TransactionCategoryModel(id: '00000000-0000-0000-0008-000000000003', name: 'Lợi nhuận kinh doanh / Đầu tư', parentId: '00000000-0000-0000-0008-000000000001', type: TransactionType.INCOME, icon: 'briefcase', color: '#059669', displayOrder: 23),
+
+      // 9. Chuyển tiền nội bộ
+      TransactionCategoryModel(id: '00000000-0000-0000-0009-000000000001', name: 'Chuyển tiền nội bộ giữa các ví', type: TransactionType.TRANSFER, icon: 'arrow-right-left', color: '#64748B', displayOrder: 24),
     ];
   }
 

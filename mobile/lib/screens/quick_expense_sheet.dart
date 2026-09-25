@@ -210,8 +210,8 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
     }
   }
 
-  Future<void> _pickReceiptImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.camera);
+  Future<void> _pickReceiptImage([ImageSource source = ImageSource.camera]) async {
+    final XFile? image = await _picker.pickImage(source: source, imageQuality: 85);
     if (image == null) return;
 
     setState(() => _isProcessingAI = true);
@@ -232,7 +232,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
     final txType = draft.actionType == 'INCOME' ? TransactionType.INCOME : TransactionType.EXPENSE;
     final tx = FamilyTransactionModel(
       id: '',
-      walletId: draft.walletId ?? (_wallets.isNotEmpty ? _wallets.first.id : 'w-cash-01'),
+      walletId: draft.walletId ?? (_wallets.isNotEmpty ? _wallets.first.id : '00000000-0000-0000-0000-000000000001'),
       categoryId: draft.categoryId,
       subCategoryId: draft.subCategoryId,
       transactionType: txType,
@@ -251,8 +251,8 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: const Color(0xFF10B981),
-        content: Text(success ? '✓ Đã ghi sổ thông minh thành công!' : 'Đã lưu offline!'),
+        backgroundColor: success ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+        content: Text(success ? '✓ Đã ghi sổ thông minh & đồng bộ lên Web thành công!' : 'Đã lưu offline vào hàng đợi!'),
       ),
     );
   }
@@ -519,8 +519,14 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.camera_alt_outlined, color: Color(0xFF64748B)),
-                      onPressed: _pickReceiptImage,
+                      icon: const Icon(Icons.camera_alt_outlined, color: Color(0xFF0284C7)),
+                      tooltip: 'Chụp ảnh hoá đơn (Camera)',
+                      onPressed: () => _pickReceiptImage(ImageSource.camera),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.photo_library_outlined, color: Color(0xFF10B981)),
+                      tooltip: 'Tải ảnh hoá đơn từ thư viện ảnh',
+                      onPressed: () => _pickReceiptImage(ImageSource.gallery),
                     ),
                     IconButton(
                       icon: Icon(
@@ -681,7 +687,7 @@ class _QuickExpenseSheetState extends State<QuickExpenseSheet> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('HẠNG MỤC THU / CHI', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              const Text('HẠNG MỤC THU / CHI', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
                               const SizedBox(height: 2),
                               Text(
                                 _selectedSubCategoryName != null

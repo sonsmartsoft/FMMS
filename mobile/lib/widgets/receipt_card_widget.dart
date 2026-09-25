@@ -7,12 +7,14 @@ class ReceiptCardWidget extends StatefulWidget {
   final ReceiptAnalysisResult receipt;
   final VoidCallback onConfirmAll;
   final VoidCallback? onEditDetails;
+  final VoidCallback? onSpeak;
 
   const ReceiptCardWidget({
     super.key,
     required this.receipt,
     required this.onConfirmAll,
     this.onEditDetails,
+    this.onSpeak,
   });
 
   @override
@@ -61,16 +63,46 @@ class _ReceiptCardWidgetState extends State<ReceiptCardWidget> {
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Độ tin cậy: ${(receipt.confidence * 100).toInt()}%',
-                    style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF10B981)),
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.onSpeak != null) ...[
+                      InkWell(
+                        onTap: widget.onSpeak,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.volume_up_rounded, size: 13, color: Color(0xFF0284C7)),
+                              SizedBox(width: 4),
+                              Text(
+                                'Nghe đọc',
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Độ tin cậy: ${(receipt.confidence * 100).toInt()}%',
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF10B981)),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
