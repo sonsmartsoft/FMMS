@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'ai_chat_screen.dart';
 import 'analytics_report_screen.dart';
 import 'cashbook_screen.dart';
 import 'quick_expense_sheet.dart';
 import 'utilities_hub_screen.dart';
 import 'wallets_screen.dart';
+import '../widgets/draggable_floating_ai_bubble.dart';
 
 class MainShellScreen extends StatefulWidget {
   const MainShellScreen({super.key});
@@ -29,6 +31,35 @@ class _MainShellScreenState extends State<MainShellScreen> {
     );
   }
 
+  void _openAIChat([Offset? origin]) {
+    final screenSize = MediaQuery.of(context).size;
+    Alignment expandAlignment = Alignment.bottomRight;
+    if (origin != null && screenSize.width > 0 && screenSize.height > 0) {
+      final double alignX = (origin.dx / screenSize.width) * 2 - 1.0;
+      final double alignY = (origin.dy / screenSize.height) * 2 - 1.0;
+      expandAlignment = Alignment(alignX.clamp(-1.0, 1.0), alignY.clamp(-1.0, 1.0));
+    }
+
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 320),
+        reverseTransitionDuration: const Duration(milliseconds: 270),
+        pageBuilder: (context, animation, secondaryAnimation) => const AIChatScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+          return ScaleTransition(
+            scale: Tween<double>(begin: 0.12, end: 1.0).animate(curved),
+            alignment: expandAlignment,
+            child: FadeTransition(
+              opacity: curved,
+              child: child,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -42,9 +73,16 @@ class _MainShellScreenState extends State<MainShellScreen> {
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _currentIndex,
+            children: pages,
+          ),
+          DraggableFloatingAIBubble(
+            onTapWithPosition: (pos) => _openAIChat(pos),
+          ),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: Container(

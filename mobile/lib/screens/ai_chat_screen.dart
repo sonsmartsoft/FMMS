@@ -41,6 +41,94 @@ class ChatMessage {
     this.imageBytes,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'role': role,
+      'content': content,
+      'timestamp': timestamp.toIso8601String(),
+      'actionDraft': actionDraft != null
+          ? {
+              'id': actionDraft!.id,
+              'actionType': actionDraft!.actionType,
+              'amount': actionDraft!.amount,
+              'categoryId': actionDraft!.categoryId,
+              'categoryName': actionDraft!.categoryName,
+              'subCategoryId': actionDraft!.subCategoryId,
+              'subCategoryName': actionDraft!.subCategoryName,
+              'walletId': actionDraft!.walletId,
+              'walletName': actionDraft!.walletName,
+              'memberId': actionDraft!.memberId,
+              'memberName': actionDraft!.memberName,
+              'payeeVendor': actionDraft!.payeeVendor,
+              'description': actionDraft!.description,
+              'date': actionDraft!.date,
+              'isEssential': actionDraft!.isEssential,
+              'confidence': actionDraft!.confidence,
+            }
+          : null,
+      'receiptResult': receiptResult?.toJson(),
+      'imageBytes': (imageBytes != null && imageBytes!.lengthInBytes < 500000)
+          ? base64Encode(imageBytes!)
+          : null,
+    };
+  }
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    AIActionDraft? draft;
+    if (json['actionDraft'] != null) {
+      try {
+        final d = Map<String, dynamic>.from(json['actionDraft'] as Map);
+        draft = AIActionDraft(
+          id: d['id']?.toString() ?? '',
+          actionType: d['actionType']?.toString() ?? 'EXPENSE',
+          amount: (d['amount'] as num?)?.toDouble() ?? 0.0,
+          categoryId: d['categoryId']?.toString(),
+          categoryName: d['categoryName']?.toString(),
+          subCategoryId: d['subCategoryId']?.toString(),
+          subCategoryName: d['subCategoryName']?.toString(),
+          walletId: d['walletId']?.toString(),
+          walletName: d['walletName']?.toString(),
+          memberId: d['memberId']?.toString(),
+          memberName: d['memberName']?.toString(),
+          payeeVendor: d['payeeVendor']?.toString(),
+          description: d['description']?.toString(),
+          date: d['date']?.toString() ?? DateTime.now().toIso8601String().substring(0, 10),
+          isEssential: d['isEssential'] ?? true,
+          confidence: (d['confidence'] as num?)?.toDouble() ?? 0.95,
+        );
+      } catch (_) {}
+    }
+
+    ReceiptAnalysisResult? receipt;
+    if (json['receiptResult'] != null) {
+      try {
+        receipt = ReceiptAnalysisResult.fromJson(
+          Map<String, dynamic>.from(json['receiptResult'] as Map),
+        );
+      } catch (_) {}
+    }
+
+    Uint8List? imgBytes;
+    if (json['imageBytes'] != null) {
+      try {
+        imgBytes = base64Decode(json['imageBytes'] as String);
+      } catch (_) {}
+    }
+
+    return ChatMessage(
+      id: json['id']?.toString() ?? 'msg-${DateTime.now().millisecondsSinceEpoch}',
+      role: json['role']?.toString() ?? 'assistant',
+      content: json['content']?.toString() ?? '',
+      actionDraft: draft,
+      receiptResult: receipt,
+      imageBytes: imgBytes,
+      timestamp: json['timestamp'] != null
+          ? DateTime.tryParse(json['timestamp'].toString())
+          : null,
+    );
+  }
 }
 
 class AIChatScreen extends StatefulWidget {
@@ -99,8 +187,91 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
     super.initState();
     _initAnimations();
     _initTts();
-    _loadDependencies();
+    _loadChatHistory().then((_) {
+      _loadDependencies();
+    });
     _checkApiKey();
+  }
+
+  Future<void> _loadChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('fmms_ai_chat_messages_v1');
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(jsonStr);
+        final history = decoded
+            .map((item) => ChatMessage.fromJson(Map<String, dynamic>.from(item as Map)))
+            .toList();
+        if (history.isNotEmpty && mounted) {
+          setState(() {
+            _messages.clear();
+            _messages.addAll(history);
+          });
+          _scrollToBottom();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading chat history: $e');
+    }
+  }
+
+  Future<void> _saveChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final toSave = _messages.length > 60
+          ? _messages.sublist(_messages.length - 60)
+          : _messages;
+      final jsonList = toSave.map((m) => m.toJson()).toList();
+      await prefs.setString('fmms_ai_chat_messages_v1', jsonEncode(jsonList));
+    } catch (e) {
+      debugPrint('Error saving chat history: $e');
+    }
+  }
+
+  Future<void> _clearChatHistory() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444)),
+            SizedBox(width: 8),
+            Text('Xóa lịch sử chat?', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: const Text(
+          'Tất cả các tin nhắn trò chuyện trước đây của bạn với AI Trợ Lý sẽ được xóa và làm mới.',
+          style: TextStyle(fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Hủy'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+            child: const Text('Xóa', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('fmms_ai_chat_messages_v1');
+      if (mounted) {
+        setState(() {
+          _messages.clear();
+        });
+        _loadDependencies();
+      }
+    }
+  }
+
+  void _addMessage(ChatMessage msg) {
+    _messages.add(msg);
+    _saveChatHistory();
   }
 
   Future<void> _checkApiKey() async {
@@ -322,7 +493,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
             role: 'assistant',
             content: greeting,
           );
-          _messages.add(welcomeMsg);
+          _addMessage(welcomeMsg);
 
           // Speak exactly once with the chosen greeting
           if (_isVoiceEnabled) {
@@ -1086,7 +1257,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
     );
 
     setState(() {
-      _messages.add(userMsg);
+      _addMessage(userMsg);
       _isSending = true;
     });
     _scrollToBottom();
@@ -1116,7 +1287,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
           content: ackReply,
         );
         setState(() {
-          _messages.add(assistantMsg);
+          _addMessage(assistantMsg);
           _isSending = false;
         });
         _scrollToBottom();
@@ -1408,7 +1579,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
       );
 
       setState(() {
-        _messages.add(assistantMsg);
+        _addMessage(assistantMsg);
         _isSending = false;
       });
       _scrollToBottom();
@@ -1506,7 +1677,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
     );
 
     setState(() {
-      _messages.add(userMsg);
+      _addMessage(userMsg);
       _isSending = true;
     });
     _scrollToBottom();
@@ -1531,7 +1702,7 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
 
       if (mounted) {
         setState(() {
-          _messages.add(assistantMsg);
+          _addMessage(assistantMsg);
           _isSending = false;
         });
         _scrollToBottom();
@@ -1637,6 +1808,12 @@ class _AIChatScreenState extends State<AIChatScreen> with SingleTickerProviderSt
             icon: const Icon(Icons.psychology_rounded, color: Color(0xFF0284C7)),
             tooltip: 'Cấu hình vai trò & xưng hô AI',
             onPressed: _showPersonaSettingsDialog,
+          ),
+          // Clear Chat History Button
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_outlined, color: Colors.grey),
+            tooltip: 'Xóa lịch sử trò chuyện',
+            onPressed: _clearChatHistory,
           ),
           const SizedBox(width: 8),
         ],
