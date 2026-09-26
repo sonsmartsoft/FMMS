@@ -72,72 +72,72 @@ class _MainShellScreenState extends State<MainShellScreen> {
       UtilitiesHubScreen(onOpenQuickAdd: _openQuickAddModal),
     ];
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          IndexedStack(
+    return Stack(
+      children: [
+        Scaffold(
+          body: IndexedStack(
             index: _currentIndex,
             children: pages,
           ),
-          DraggableFloatingAIBubble(
-            onTapWithPosition: (pos) => _openAIChat(pos),
-          ),
-        ],
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: Container(
-        height: 62,
-        width: 62,
-        margin: const EdgeInsets.only(top: 10),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0284C7), Color(0xFF0EA5E9), Color(0xFF10B981)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0284C7).withValues(alpha: 0.4),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            )
-          ],
-        ),
-        child: FloatingActionButton(
-          onPressed: _openQuickAddModal,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          tooltip: 'AI Ghi Sổ Nhanh',
-          child: const Icon(Icons.auto_awesome, color: Colors.white, size: 28),
-        ),
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF0F172A) : Colors.white,
-          border: Border(
-            top: BorderSide(
-              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-              width: 1,
-            ),
-          ),
-        ),
-        child: SafeArea(
-          child: SizedBox(
-            height: 64,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(0, Icons.calendar_month_outlined, Icons.calendar_month, 'Sổ Thu Chi'),
-                _buildNavItem(1, Icons.pie_chart_outline, Icons.pie_chart, 'Báo cáo'),
-                const SizedBox(width: 48), // Gap for central Floating Action Button
-                _buildNavItem(2, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Tài khoản'),
-                _buildNavItem(3, Icons.grid_view_outlined, Icons.grid_view, 'Tiện ích'),
+          floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+          floatingActionButton: Container(
+            height: 62,
+            width: 62,
+            margin: const EdgeInsets.only(top: 10),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF0284C7), Color(0xFF0EA5E9), Color(0xFF10B981)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0284C7).withValues(alpha: 0.4),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                )
               ],
             ),
+            child: FloatingActionButton(
+              onPressed: _openQuickAddModal,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              tooltip: 'AI Ghi Sổ Nhanh',
+              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 28),
+            ),
+          ),
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF0F172A) : Colors.white,
+              border: Border(
+                top: BorderSide(
+                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: SafeArea(
+              child: SizedBox(
+                height: 64,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildNavItem(0, Icons.calendar_month_outlined, Icons.calendar_month, 'Sổ Thu Chi'),
+                    _buildNavItem(1, Icons.pie_chart_outline, Icons.pie_chart, 'Báo cáo'),
+                    const SizedBox(width: 48), // Gap for central Floating Action Button
+                    _buildNavItem(2, Icons.account_balance_wallet_outlined, Icons.account_balance_wallet, 'Tài khoản'),
+                    _buildNavItem(3, Icons.grid_view_outlined, Icons.grid_view, 'Tiện ích'),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
-      ),
+        DraggableFloatingAIBubble(
+          onTapWithPosition: (pos) => _openAIChat(pos),
+        ),
+      ],
     );
   }
 

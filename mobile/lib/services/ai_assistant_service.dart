@@ -45,53 +45,68 @@ class AIAssistantService {
     await prefs.setString(_kPersonaConfigKey, jsonEncode(config.toJson()));
   }
 
-  /// Offline smart contextual greeting based on persona, time of day and today's finance status
+  /// Offline smart contextual greeting based on persona, time of day and today's finance & fleet status
   String getOfflineGreeting(
     String memberName, {
     double todaySpent = 0,
     int txCount = 0,
+    String? vehicleName,
+    double? vehicleOdo,
+    double? nextMaintKm,
     AIPersonaModel? persona,
   }) {
     final p = persona ?? const AIPersonaModel();
     final hour = DateTime.now().hour;
     final salutation = p.resolveUserSalutation(memberName);
     final selfPronoun = p.resolveSelfPronoun();
+    final wakeWord = p.resolveWakeWord();
     final isEn = p.language == 'en';
+
+    final vName = vehicleName ?? 'Mazda 2 AT Luxury (19B-213.87)';
+    final odo = vehicleOdo ?? 12450.0;
+    final maintKm = nextMaintKm ?? 15000.0;
+    final odoStr = NumberFormat.decimalPattern('vi_VN').format(odo);
+    final remKm = NumberFormat.decimalPattern('vi_VN').format((maintKm - odo).clamp(0, 999999));
 
     if (isEn) {
       String timeStr = 'Good morning';
       if (hour >= 12 && hour < 18) timeStr = 'Good afternoon';
       if (hour >= 18) timeStr = 'Good evening';
 
-      if (txCount > 0) {
-        final spentStr = NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 0).format(todaySpent);
-        return '$timeStr $salutation! Your family recorded $txCount expense(s) ($spentStr) today. How can I assist you with the budget?';
-      }
-      return '$timeStr $salutation! I am your FMMS AI Financial Assistant. Tap the Mic to speak, ask about spending, or snap receipts!';
+      final txInfo = txCount > 0
+          ? 'recorded $txCount expense(s) (${NumberFormat.currency(locale: 'en_US', symbol: '\$', decimalDigits: 0).format(todaySpent)})'
+          : 'no new expenses recorded yet';
+
+      return '$timeStr $salutation! I am your **FMMS Senior AI Wealth & Fleet Strategist**.\n\n'
+          '📊 **Finance Today:** Family financial status is stable ($txInfo).\n'
+          '🚘 **Fleet Status:** Your $vName odometer is at **$odoStr km**, with **$remKm km** remaining until the 15,000 km maintenance milestone. Bank loan installment is due on the 28th.\n\n'
+          'You can say **"$wakeWord"** or tap the Mic to analyze TCO/km, consult bank loan pay-offs, or snap receipts for instant entry!';
     }
 
-    String greetingPrefix = 'Chào buổi sáng $salutation!';
+    String greetingPrefix = 'Dạ, $selfPronoun chào buổi sáng $salutation!';
     if (hour >= 11 && hour < 14) {
-      greetingPrefix = 'Chào buổi trưa $salutation!';
+      greetingPrefix = 'Dạ, $selfPronoun chào buổi trưa $salutation!';
     } else if (hour >= 14 && hour < 18) {
-      greetingPrefix = 'Chào buổi chiều $salutation!';
+      greetingPrefix = 'Dạ, $selfPronoun chào buổi chiều $salutation!';
     } else if (hour >= 18 && hour < 22) {
-      greetingPrefix = 'Chào buổi tối $salutation!';
+      greetingPrefix = 'Dạ, $selfPronoun chào buổi tối $salutation!';
     } else if (hour >= 22 || hour < 5) {
-      greetingPrefix = 'Khuya rồi $salutation ơi!';
+      greetingPrefix = 'Dạ, khuya rồi $salutation ơi!';
     }
 
     final capitalizedSelf = selfPronoun.isNotEmpty
         ? '${selfPronoun[0].toUpperCase()}${selfPronoun.substring(1)}'
         : 'Em';
 
-    if (txCount > 0) {
-      final spentStr = NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0).format(todaySpent);
-      return '$greetingPrefix Hôm nay gia đình mình đã ghi nhận $txCount khoản chi ($spentStr). $salutation có cần $selfPronoun kiểm tra ngân sách hay ghi thêm khoản nào không ạ?';
-    }
+    final financeStatus = txCount > 0
+        ? 'hôm nay gia đình mình đã ghi nhận **$txCount khoản chi** (${NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0).format(todaySpent)})'
+        : 'dòng tiền hôm nay ổn định, chưa phát sinh khoản chi ngoài kế hoạch';
 
     final roleTitle = p.getRoleTitle();
-    return '$greetingPrefix $capitalizedSelf là $roleTitle của gia đình FMMS. $salutation có thể chạm vào Micro để nói chuyện 2 chiều, hỏi tình hình chi tiêu, hoặc chụp hoá đơn để $selfPronoun ghi sổ nhé!';
+    return '$greetingPrefix $capitalizedSelf là **$roleTitle** của gia đình FMMS.\n\n'
+        '📊 **Tài chính hôm nay:** $financeStatus.\n'
+        '🚘 **Đội xe gia đình:** Xe **$vName** hiện đạt **$odoStr km**, còn **$remKm km** nữa là đến mốc bảo dưỡng 15.000 km (thay dầu Castrol 0W-20 & lọc gió). Khoản vay trả góp TPBank kỳ tới vào ngày 28.\n\n'
+        '$salutation có thể gọi **"$wakeWord"** hoặc chạm vào Micro để $selfPronoun kiểm toán TCO/km, tư vấn phương án trả nợ giảm dần, hoặc chụp ảnh hoá đơn để ghi sổ nhé ạ!';
   }
 
   /// Generates a natural, dynamic, personalized greeting via Google Gemini AI
@@ -99,6 +114,9 @@ class AIAssistantService {
     required String memberName,
     required double todaySpent,
     required int txCount,
+    String? vehicleName,
+    double? vehicleOdo,
+    double? nextMaintKm,
     AIPersonaModel? persona,
   }) async {
     final localKey = await getGeminiApiKey();
@@ -108,6 +126,7 @@ class AIAssistantService {
     final hour = DateTime.now().hour;
     final salutation = p.resolveUserSalutation(memberName);
     final selfPronoun = p.resolveSelfPronoun();
+    final wakeWord = p.resolveWakeWord();
 
     String timeOfDay = 'buổi sáng';
     if (hour >= 11 && hour < 14) {
@@ -120,9 +139,17 @@ class AIAssistantService {
       timeOfDay = 'đêm muộn';
     }
 
+    final vName = vehicleName ?? 'Mazda 2 AT Luxury (19B-213.87)';
+    final odo = vehicleOdo ?? 12450.0;
+    final maintKm = nextMaintKm ?? 15000.0;
+    final odoStr = NumberFormat.decimalPattern('vi_VN').format(odo);
+    final remKm = NumberFormat.decimalPattern('vi_VN').format((maintKm - odo).clamp(0, 999999));
+
     final spendingInfo = txCount > 0
         ? 'hôm nay gia đình đã ghi nhận $txCount khoản chi tiêu, tổng cộng ${NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0).format(todaySpent)}'
-        : 'hôm nay gia đình mình chưa phát sinh khoản chi tiêu nào';
+        : 'hôm nay gia đình mình chưa phát sinh khoản chi tiêu mới nào';
+
+    final fleetInfo = 'Xe $vName hiện đạt ODO $odoStr km, còn $remKm km nữa là đến mốc bảo dưỡng $maintKm km (thay dầu Castrol 0W-20 & lọc gió), kỳ trả góp ngân hàng TPBank tiếp theo vào ngày 28';
 
     final roleDesc = p.getRoleDescriptionPrompt();
     final toneDesc = p.getToneDescriptionPrompt();
@@ -131,16 +158,38 @@ class AIAssistantService {
         ? '\nYêu cầu bổ sung của người dùng: ${p.customInstructions.trim()}'
         : '';
 
-    final prompt = '''$roleDesc
+    final isEn = p.language == 'en';
+    final prompt = isEn
+        ? '''You are the "FMMS Senior AI Wealth & Fleet Strategist" — Executive Financial Advisor & Vehicle Lifecycle Specialist.
+User salutation: "$salutation".
+Wake Word: "$wakeWord".
+Financial context: $spendingInfo.
+Fleet context: $fleetInfo.
+Time: $timeOfDay ($hour:00).
+$extraNotes
+
+GREETING REQUIREMENTS:
+- Greet $salutation in native, fluent, executive English.
+- Summarize both family financial health and $vName fleet status (ODO $odoStr km, next $maintKm km maintenance).
+- Mention they can say "$wakeWord" or tap the Mic for TCO/km audits, loan installment strategies, or scanning receipts.
+- Return ONLY the greeting content in clear Markdown formatting.'''
+        : '''$roleDesc
 Quy tắc xưng hô: Luôn tự xưng là "$selfPronoun" và gọi người dùng là "$salutation".
+Từ khóa đánh thức (Wake Word): "$wakeWord".
 $toneDesc
 $langDesc$extraNotes
 
 Thời điểm hiện tại: $timeOfDay (lúc $hour giờ).
-Tình hình sổ sách: $spendingInfo.
-Hãy tạo một câu chào mở đầu trò chuyện thật tự nhiên, duyên dáng, phù hợp với vai trò và xưng hô trên (độ dài 2-3 câu ngắn gọn).
-Gợi ý $salutation có thể bấm Micro để nói chuyện 2 chiều rảnh tay, hỏi han chi tiêu hoặc chụp ảnh hoá đơn để $selfPronoun ghi chép.
-Chỉ trả về trực tiếp lời chào, không kèm giải thích hay tiêu đề markdown.''';
+Bối cảnh tài chính: $spendingInfo.
+Bối cảnh xe cộ: $fleetInfo.
+
+YÊU CẦU LỜI CHÀO:
+- Chào $salutation một cách trang trọng, đĩnh đạc, thể hiện đẳng cấp của một Cố Vấn Tài Chính Cấp Cao & Quản Trị Đội Xe.
+- Viết bằng Tiếng Việt chuẩn mực, mạch lạc, tự nhiên để đọc giọng nói (TTS) không bị ngắc ngứ hay chêm từ ngoại ngữ khó phát âm.
+- Tóm tắt nhanh cả 2 mặt: tình hình tài chính gia đình và tình trạng vận hành/bảo dưỡng xe $vName.
+- Nhắc $salutation có thể gọi "$wakeWord" hoặc chạm vào Micro để kiểm toán chi phí vận hành TCO/km, tư vấn trả nợ ngân hàng giảm dần hoặc chụp ảnh hoá đơn ghi chép.
+- Định dạng rõ ràng bằng các gạch đầu dòng Markdown chuẩn, làm nổi bật số liệu.
+- Chỉ trả về nội dung lời chào, không kèm giải thích bên ngoài.''';
 
     try {
       final discovered = await getAvailableModels(localKey);
@@ -165,7 +214,7 @@ Chỉ trả về trực tiếp lời chào, không kèm giải thích hay tiêu 
             }
           ],
           'generationConfig': {
-            'maxOutputTokens': 150,
+            'maxOutputTokens': 400,
             'temperature': 0.85,
           }
         }),
@@ -181,7 +230,6 @@ Chỉ trả về trực tiếp lời chào, không kèm giải thích hay tiêu 
         }
       }
     } catch (_) {}
-
     return null;
   }
 
@@ -193,6 +241,7 @@ Chỉ trả về trực tiếp lời chào, không kèm giải thích hay tiêu 
     double todaySpent = 0,
     int txCount = 0,
     double totalBalance = 0,
+    String? monthlyFinancialContext,
     AIPersonaModel? persona,
   }) async {
     final localKey = await getGeminiApiKey();
@@ -204,6 +253,7 @@ Chỉ trả về trực tiếp lời chào, không kèm giải thích hay tiêu 
       todaySpent: todaySpent,
       txCount: txCount,
       totalBalance: totalBalance,
+      monthlyFinancialContext: monthlyFinancialContext,
     );
 
     try {
@@ -240,7 +290,7 @@ Chỉ trả về trực tiếp lời chào, không kèm giải thích hay tiêu 
         'contents': contents,
         'generationConfig': {
           'temperature': 0.75,
-          'maxOutputTokens': 450,
+          'maxOutputTokens': 1000,
         },
       };
 

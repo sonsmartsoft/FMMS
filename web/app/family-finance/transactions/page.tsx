@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   Wallet,
   FamilyTransaction,
@@ -41,6 +42,18 @@ import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
 import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 
 export default function TransactionsLedgerPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-sm text-slate-500">Đang tải sổ giao dịch...</div>}>
+      <TransactionsLedgerContent />
+    </Suspense>
+  );
+}
+
+function TransactionsLedgerContent() {
+  const searchParams = useSearchParams();
+  const initialType = searchParams?.get('type') || 'ALL';
+  const initialWallet = searchParams?.get('wallet') || 'ALL';
+
   const [transactions, setTransactions] = useState<FamilyTransaction[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
@@ -49,14 +62,25 @@ export default function TransactionsLedgerPage() {
   const [loading, setLoading] = useState(true);
 
   // Filters
-  const [typeFilter, setTypeFilter] = useState<string>('ALL');
-  const [walletFilter, setWalletFilter] = useState<string>('ALL');
+  const [typeFilter, setTypeFilter] = useState<string>(initialType);
+  const [walletFilter, setWalletFilter] = useState<string>(initialWallet);
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [assetFilter, setAssetFilter] = useState<string>('ALL');
   const [memberFilter, setMemberFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  useEffect(() => {
+    const urlType = searchParams?.get('type');
+    if (urlType && urlType !== typeFilter) {
+      setTypeFilter(urlType);
+    }
+    const urlWallet = searchParams?.get('wallet');
+    if (urlWallet && urlWallet !== walletFilter) {
+      setWalletFilter(urlWallet);
+    }
+  }, [searchParams]);
 
   // Modal
   const [isModalOpen, setIsModalOpen] = useState(false);

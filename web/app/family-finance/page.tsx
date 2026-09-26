@@ -19,6 +19,7 @@ import {
 } from '@/lib/services/familyFinanceService';
 import { get6JarsConfig, getBaseMonthlyIncome } from '@/lib/utils/jarsConfig';
 import KpiGradientCard from '@/components/ui/KpiGradientCard';
+import DraggableModal from '@/components/ui/DraggableModal';
 import QuickTransactionModal from '@/components/finance/QuickTransactionModal';
 import {
   Wallet as WalletIcon,
@@ -43,6 +44,7 @@ import {
   ExternalLink,
   ShieldAlert,
   BarChart3,
+  Search,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -99,6 +101,8 @@ export default function FamilyFinanceDashboard() {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalDefaultType, setModalDefaultType] = useState<'EXPENSE' | 'INCOME' | 'TRANSFER'>('EXPENSE');
+  const [activeKpiModal, setActiveKpiModal] = useState<'ASSETS' | 'INCOME' | 'EXPENSE' | 'DEBT' | null>(null);
+  const [kpiSearchQuery, setKpiSearchQuery] = useState('');
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -479,7 +483,7 @@ export default function FamilyFinanceDashboard() {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-          2. 4 QMS GRADIENT KPI CARDS (EXECUTIVE METRICS)
+          2. 4 QMS GRADIENT KPI CARDS (EXECUTIVE METRICS - CLICKABLE FOR DRILL-DOWN)
          ───────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiGradientCard
@@ -489,9 +493,10 @@ export default function FamilyFinanceDashboard() {
           subtitle="Số dư khả dụng các ví & ngân hàng"
           colorType="emerald"
           icon={WalletIcon}
-          badgeText="Ổn định"
+          badgeText="Xem chi tiết ví"
           badgeType="success"
-          href="/family-finance/wallets"
+          active={activeKpiModal === 'ASSETS'}
+          onClick={() => setActiveKpiModal((prev) => (prev === 'ASSETS' ? null : 'ASSETS'))}
         />
 
         <KpiGradientCard
@@ -501,9 +506,10 @@ export default function FamilyFinanceDashboard() {
           subtitle={`Tháng ${selectedMonth}/${selectedYear} (Lương & phụ)`}
           colorType="cyan"
           icon={ArrowDownLeft}
-          badgeText="Dòng tiền vào"
+          badgeText="Xem chi tiết thu"
           badgeType="info"
-          href="/family-finance/transactions?type=INCOME"
+          active={activeKpiModal === 'INCOME'}
+          onClick={() => setActiveKpiModal((prev) => (prev === 'INCOME' ? null : 'INCOME'))}
         />
 
         <KpiGradientCard
@@ -513,9 +519,10 @@ export default function FamilyFinanceDashboard() {
           subtitle={`Trong đó Xe cộ: ${fmt(vehicleExpenses)} ₫ (${vehiclePercent}%)`}
           colorType="amber"
           icon={ArrowUpRight}
-          badgeText={vehicleExpenses > 0 ? `Xe: ${vehiclePercent}%` : 'Chi ra'}
+          badgeText={vehicleExpenses > 0 ? `Xe: ${vehiclePercent}% • Xem chi` : 'Xem chi tiết'}
           badgeType="warning"
-          href="/family-finance/transactions?type=EXPENSE"
+          active={activeKpiModal === 'EXPENSE'}
+          onClick={() => setActiveKpiModal((prev) => (prev === 'EXPENSE' ? null : 'EXPENSE'))}
         />
 
         <KpiGradientCard
@@ -525,9 +532,10 @@ export default function FamilyFinanceDashboard() {
           subtitle="Gồm vay xe Mazda 2 & nợ thẻ tín dụng"
           colorType="rose"
           icon={CreditCard}
-          badgeText="Dư nợ"
+          badgeText="Xem chi tiết nợ"
           badgeType="danger"
-          href="/family-finance/loans"
+          active={activeKpiModal === 'DEBT'}
+          onClick={() => setActiveKpiModal((prev) => (prev === 'DEBT' ? null : 'DEBT'))}
         />
       </div>
 
@@ -1269,6 +1277,299 @@ export default function FamilyFinanceDashboard() {
         onSuccess={loadData}
         defaultType={modalDefaultType}
       />
+
+      {/* KPI Drill-Down Modal */}
+      {activeKpiModal && (
+        <DraggableModal
+          isOpen={true}
+          onClose={() => {
+            setActiveKpiModal(null);
+            setKpiSearchQuery('');
+          }}
+          title={
+            activeKpiModal === 'ASSETS'
+              ? `🏛️ Chi Tiết Danh Mục Tài Khoản & Ví Tiền (Tổng: ${fmt(totalAvailableBalance)} ₫)`
+              : activeKpiModal === 'INCOME'
+              ? `💰 Chi Tiết Các Khoản Thu Nhập Tháng ${selectedMonth}/${selectedYear} (Tổng: +${fmt(monthlyIncome)} ₫)`
+              : activeKpiModal === 'EXPENSE'
+              ? `💸 Chi Tiết Các Khoản Chi Tiêu Tháng ${selectedMonth}/${selectedYear} (Tổng: -${fmt(monthlyExpenses)} ₫)`
+              : `💳 Chi Tiết Tổng Dư Nợ & Khoản Vay (Tổng: ${fmt(totalDebt)} ₫)`
+          }
+          className="w-[95vw] sm:w-[90vw] md:w-[1100px] max-w-[1100px]"
+        >
+          <div className="space-y-4 text-xs">
+            {/* 1. ASSETS DRILL-DOWN */}
+            {activeKpiModal === 'ASSETS' && (
+              <div className="space-y-4">
+                <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 rounded-xl flex items-center justify-between">
+                  <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                    Tổng số dư khả dụng thực tế trên tất cả các ví:
+                  </span>
+                  <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
+                    {fmt(totalAvailableBalance)} ₫
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto">
+                  {wallets.map((w) => {
+                    const IconComp = getWalletIcon(w.wallet_type);
+                    return (
+                      <div
+                        key={w.id}
+                        className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="p-2 rounded-lg bg-sky-500/10 text-sky-500">
+                              <IconComp className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <span className="font-bold text-sm text-slate-900 dark:text-white block">
+                                {w.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                {w.bank_name || 'Ví cá nhân'} {w.account_number ? `• ${w.account_number}` : ''}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                            {w.wallet_type}
+                          </span>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                          <span className="text-[10px] text-slate-400">Số dư hiện tại:</span>
+                          <span className="text-sm font-black font-mono text-emerald-600 dark:text-emerald-400">
+                            {fmt(w.current_balance)} ₫
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <Link
+                    href="/family-finance/wallets"
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition-all"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Quản lý danh sách Ví &amp; Tài khoản
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* 2. DEBT DRILL-DOWN */}
+            {activeKpiModal === 'DEBT' && (
+              <div className="space-y-4">
+                <div className="p-3 bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 rounded-xl flex items-center justify-between">
+                  <span className="font-bold text-rose-800 dark:text-rose-300">
+                    Tổng dư nợ gốc &amp; hạn mức thẻ tín dụng đã dùng:
+                  </span>
+                  <span className="text-base font-black font-mono text-rose-600 dark:text-rose-400">
+                    {fmt(totalDebt)} ₫
+                  </span>
+                </div>
+
+                <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-rose-500" /> Các Khoản Vay Đang Trả Góp
+                  </h4>
+                  {loans
+                    .filter((l) => l.status === 'ACTIVE' && l.loan_type === 'BORROW')
+                    .map((l) => (
+                      <div
+                        key={l.id}
+                        className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm"
+                      >
+                        <div className="space-y-1">
+                          <span className="font-bold text-sm text-slate-900 dark:text-white block">
+                            {l.lender_borrower_name || l.title || 'Khoản vay'}
+                          </span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                            Gốc vay: {fmt(l.principal_amount)} ₫ • Lãi suất: {l.interest_rate_percent}%/năm • Kỳ hạn: {l.term_months || 0} tháng
+                          </span>
+                          <span className="text-[11px] text-indigo-500 font-semibold block">
+                            Ngày đóng: Ngày {l.payment_day || 28} hàng tháng • Trả tháng: {fmt(l.monthly_payment)} ₫
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 uppercase block">Dư nợ còn lại</span>
+                          <span className="text-base font-black font-mono text-rose-600 dark:text-rose-400">
+                            {fmt(l.remaining_balance)} ₫
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2 pt-2">
+                    <CreditCard className="w-4 h-4 text-amber-500" /> Thẻ Tín Dụng &amp; Dư Nợ Quẹt Thẻ
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {wallets
+                      .filter((w) => w.wallet_type === 'CREDIT_CARD')
+                      .map((w) => {
+                        const used = Math.max(0, (w.credit_limit || 0) - (w.current_balance || 0));
+                        return (
+                          <div
+                            key={w.id}
+                            className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-1.5"
+                          >
+                            <div className="flex justify-between items-center">
+                              <span className="font-bold text-slate-900 dark:text-white">{w.name}</span>
+                              <span className="text-[10px] text-slate-400">Hạn mức: {fmt(w.credit_limit || 0)} ₫</span>
+                            </div>
+                            <div className="flex justify-between items-center pt-1 border-t border-slate-100 dark:border-slate-800">
+                              <span className="text-[10px] text-slate-400">Đã chi tiêu (Dư nợ):</span>
+                              <span className="font-mono font-bold text-rose-600 dark:text-rose-400">
+                                {fmt(used)} ₫
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <Link
+                    href="/family-finance/loans"
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-500 rounded-xl transition-all"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Quản lý chi tiết Khoản vay &amp; Lịch trả nợ
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {/* 3. INCOME & EXPENSE TRANSACTIONS DRILL-DOWN */}
+            {(activeKpiModal === 'INCOME' || activeKpiModal === 'EXPENSE') && (
+              <div className="space-y-3">
+                {/* Search Bar & Total */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm theo nội dung, đối tác, danh mục, ví..."
+                      value={kpiSearchQuery}
+                      onChange={(e) => setKpiSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
+                        Tổng cộng ({transactions.filter((t) => (activeKpiModal === 'INCOME' ? t.transaction_type === 'INCOME' : t.transaction_type === 'EXPENSE') && !t.exclude_from_reports).length} giao dịch)
+                      </span>
+                      <span
+                        className={`text-base font-black font-mono ${
+                          activeKpiModal === 'INCOME'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-rose-600 dark:text-rose-400'
+                        }`}
+                      >
+                        {activeKpiModal === 'INCOME' ? '+' : '-'}
+                        {fmt(activeKpiModal === 'INCOME' ? monthlyIncome : monthlyExpenses)} ₫
+                      </span>
+                    </div>
+
+                    <Link
+                      href={`/family-finance/transactions?type=${activeKpiModal}`}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-sky-600 dark:text-sky-400 hover:text-sky-700 bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 rounded-lg shadow-sm transition-all"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Mở Sổ giao dịch đầy đủ
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Transactions Table */}
+                <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 max-h-[50vh] overflow-y-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                      <tr>
+                        <th className="py-2.5 px-3">Ngày</th>
+                        <th className="py-2.5 px-3">Hạng mục</th>
+                        <th className="py-2.5 px-3">Nội dung &amp; Đối tác</th>
+                        <th className="py-2.5 px-3">Tài khoản ví</th>
+                        {activeKpiModal === 'EXPENSE' && <th className="py-2.5 px-3">Gắn xe</th>}
+                        <th className="py-2.5 px-3 text-right">Số tiền (₫)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {transactions
+                        .filter((t) => {
+                          const matchesType = activeKpiModal === 'INCOME' ? t.transaction_type === 'INCOME' : t.transaction_type === 'EXPENSE';
+                          if (!matchesType || t.exclude_from_reports) return false;
+                          if (!kpiSearchQuery.trim()) return true;
+                          const q = kpiSearchQuery.toLowerCase();
+                          return (
+                            (t.description || '').toLowerCase().includes(q) ||
+                            (t.payee_vendor || '').toLowerCase().includes(q) ||
+                            (t.category?.name || '').toLowerCase().includes(q) ||
+                            (t.wallet?.name || '').toLowerCase().includes(q) ||
+                            String(t.amount || 0).includes(q)
+                          );
+                        })
+                        .map((tx) => (
+                          <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                            <td className="py-2 px-3 whitespace-nowrap font-mono text-slate-500">
+                              {fmtDate(tx.date)}
+                            </td>
+                            <td className="py-2 px-3 whitespace-nowrap font-semibold">
+                              <span
+                                className="inline-block w-2 h-2 rounded-full mr-1.5"
+                                style={{ backgroundColor: tx.category?.color || '#0ea5e9' }}
+                              />
+                              {tx.category?.name || 'Khác'}
+                            </td>
+                            <td className="py-2 px-3 max-w-[220px] truncate">
+                              <span className="font-bold text-slate-800 dark:text-slate-200 block truncate">
+                                {tx.description || tx.payee_vendor || 'Giao dịch'}
+                              </span>
+                              {tx.payee_vendor && (
+                                <span className="text-[10px] text-slate-400 block truncate">
+                                  {tx.payee_vendor}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 whitespace-nowrap text-slate-500">
+                              {tx.wallet?.name || 'Ví mặc định'}
+                            </td>
+                            {activeKpiModal === 'EXPENSE' && (
+                              <td className="py-2 px-3 whitespace-nowrap">
+                                {tx.asset_name ? (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-300 text-[10px] font-semibold border border-sky-200 dark:border-sky-800">
+                                    <Car className="w-2.5 h-2.5" /> {tx.asset_name}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600">-</span>
+                                )}
+                              </td>
+                            )}
+                            <td className="py-2 px-3 text-right font-mono font-bold whitespace-nowrap">
+                              <span
+                                className={
+                                  activeKpiModal === 'INCOME'
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : 'text-rose-600 dark:text-rose-400'
+                                }
+                              >
+                                {activeKpiModal === 'INCOME' ? '+' : '-'}
+                                {fmt(tx.amount)} ₫
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </DraggableModal>
+      )}
       </div>
     </FinanceErrorBoundary>
   );

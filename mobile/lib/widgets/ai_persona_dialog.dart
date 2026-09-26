@@ -51,6 +51,9 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
   late String _tone;
   late String _language;
   late TextEditingController _customInstructionsController;
+  late String _wakeWordPreset;
+  late TextEditingController _customWakeWordController;
+  late bool _enableWakeWord;
 
   late FamilyMemberModel _activeMember;
   bool _isSaving = false;
@@ -69,6 +72,17 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
     _language = c.language;
     _customInstructionsController = TextEditingController(text: c.customInstructions);
 
+    final wWord = c.resolveWakeWord();
+    const presets = ['FMMS ơi', 'Trợ lý ơi', 'Sơn ơi', 'Jarvis ơi', 'Alo AI'];
+    if (presets.contains(wWord)) {
+      _wakeWordPreset = wWord;
+      _customWakeWordController = TextEditingController(text: '');
+    } else {
+      _wakeWordPreset = 'custom';
+      _customWakeWordController = TextEditingController(text: wWord);
+    }
+    _enableWakeWord = c.enableWakeWord;
+
     _activeMember = _authService.getCurrentMember();
   }
 
@@ -78,10 +92,15 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
     _customSelfController.dispose();
     _customUserTitleController.dispose();
     _customInstructionsController.dispose();
+    _customWakeWordController.dispose();
     super.dispose();
   }
 
   AIPersonaModel _buildConfigFromState() {
+    final resolvedWake = _wakeWordPreset == 'custom'
+        ? (_customWakeWordController.text.trim().isNotEmpty ? _customWakeWordController.text.trim() : 'FMMS ơi')
+        : _wakeWordPreset;
+
     return AIPersonaModel(
       roleKey: _roleKey,
       customRolePrompt: _customRoleController.text.trim(),
@@ -92,6 +111,8 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
       tone: _tone,
       language: _language,
       customInstructions: _customInstructionsController.text.trim(),
+      wakeWord: resolvedWake,
+      enableWakeWord: _enableWakeWord,
     );
   }
 
@@ -125,6 +146,9 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
       _tone = def.tone;
       _language = def.language;
       _customInstructionsController.clear();
+      _wakeWordPreset = def.wakeWord;
+      _customWakeWordController.clear();
+      _enableWakeWord = def.enableWakeWord;
     });
   }
 
@@ -132,13 +156,13 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
     final config = _buildConfigFromState();
     final salutation = config.resolveUserSalutation(_activeMember.name);
     final selfPronoun = config.resolveSelfPronoun();
+    final wakeWord = config.resolveWakeWord();
 
     String sampleText = '';
     if (config.language == 'en') {
-      sampleText = 'Hello $salutation! I am your AI Financial Advisor. How may I assist you with your finances today?';
+      sampleText = 'Hello $salutation! You can call me by saying "$wakeWord". I am your FMMS Senior Wealth & Fleet Strategist, ready to assist you!';
     } else {
-      final roleTitle = config.getRoleTitle();
-      sampleText = 'Dạ, $selfPronoun là $roleTitle của gia đình. $selfPronoun đã sẵn sàng hỗ trợ $salutation quản lý chi tiêu rồi ạ!';
+      sampleText = 'Dạ, $selfPronoun nghe đây ạ! $salutation cứ gọi "$wakeWord" là $selfPronoun sẽ sẵn sàng kiểm toán tài chính và hỗ trợ xe cộ ngay nhé!';
     }
 
     widget.onTestVoice?.call(sampleText);
@@ -627,6 +651,86 @@ class _AIPersonaDialogState extends State<AIPersonaDialog> {
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
+
+                const SizedBox(height: 22),
+
+                // 5. Section: Custom Wake Word
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      '5. Từ Khóa Đánh Thức (Wake Word)',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                    Switch.adaptive(
+                      value: _enableWakeWord,
+                      activeTrackColor: const Color(0xFF0284C7),
+                      onChanged: (val) => setState(() => _enableWakeWord = val),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Khi đàm thoại rảnh tay, chỉ cần gọi từ khóa này là AI sẽ lập tức phản hồi và ưu tiên nhận lệnh',
+                  style: TextStyle(fontSize: 12, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                ),
+                if (_enableWakeWord) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildChip(
+                        label: '🎙️ FMMS ơi',
+                        isSelected: _wakeWordPreset == 'FMMS ơi',
+                        onTap: () => setState(() => _wakeWordPreset = 'FMMS ơi'),
+                      ),
+                      _buildChip(
+                        label: '🎙️ Trợ lý ơi',
+                        isSelected: _wakeWordPreset == 'Trợ lý ơi',
+                        onTap: () => setState(() => _wakeWordPreset = 'Trợ lý ơi'),
+                      ),
+                      _buildChip(
+                        label: '🎙️ $firstName ơi',
+                        isSelected: _wakeWordPreset == '$firstName ơi' || (_wakeWordPreset == 'Sơn ơi' && firstName == 'Sơn'),
+                        onTap: () => setState(() => _wakeWordPreset = '$firstName ơi'),
+                      ),
+                      _buildChip(
+                        label: '🎙️ Jarvis ơi',
+                        isSelected: _wakeWordPreset == 'Jarvis ơi',
+                        onTap: () => setState(() => _wakeWordPreset = 'Jarvis ơi'),
+                      ),
+                      _buildChip(
+                        label: '🎙️ Alo AI',
+                        isSelected: _wakeWordPreset == 'Alo AI',
+                        onTap: () => setState(() => _wakeWordPreset = 'Alo AI'),
+                      ),
+                      _buildChip(
+                        label: 'Tự đặt tên...',
+                        isSelected: _wakeWordPreset == 'custom',
+                        onTap: () => setState(() => _wakeWordPreset = 'custom'),
+                      ),
+                    ],
+                  ),
+                  if (_wakeWordPreset == 'custom') ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _customWakeWordController,
+                      textInputAction: TextInputAction.done,
+                      onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                      onEditingComplete: () => FocusScope.of(context).unfocus(),
+                      style: const TextStyle(fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Nhập từ khóa đánh thức (VD: Hey Sơn, Cố vấn ơi, Mazda ơi...)',
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                  ],
+                ],
 
                 const SizedBox(height: 20),
 

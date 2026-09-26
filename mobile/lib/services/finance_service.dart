@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/finance_model.dart';
@@ -219,18 +220,30 @@ class FinanceService {
 
     // 2. Tải các giao dịch gia đình thực sự từ Supabase (bảng family_transactions)
     try {
-      final res = await _supabase
-          .from('family_transactions')
-          .select('*, wallet:wallets!wallet_id(name), category:transaction_categories!category_id(name)')
-          .order('date', ascending: false)
-          .limit(limit);
+      dynamic res;
+      try {
+        res = await _supabase
+            .from('family_transactions')
+            .select('*, wallet:wallets!wallet_id(name), category:transaction_categories!category_id(name)')
+            .order('date', ascending: false)
+            .limit(limit);
+      } catch (_) {
+        // Fallback: truy vấn đơn giản không join nếu foreign key chưa được khai báo
+        res = await _supabase
+            .from('family_transactions')
+            .select('*')
+            .order('date', ascending: false)
+            .limit(limit);
+      }
 
-      final list = (res as List)
-          .map((e) => FamilyTransactionModel.fromJson(e))
-          .where((t) => !t.id.startsWith('tx-def-')) // Loại bỏ bản ghi mẫu
-          .toList();
+      if (res is List) {
+        final list = res
+            .map((e) => FamilyTransactionModel.fromJson(Map<String, dynamic>.from(e)))
+            .where((t) => !t.id.startsWith('tx-def-')) // Loại bỏ bản ghi mẫu
+            .toList();
 
-      allTxs.addAll(list);
+        allTxs.addAll(list);
+      }
     } catch (e) {
       debugPrint('Error fetching family_transactions: $e');
     }
@@ -916,5 +929,87 @@ class FinanceService {
 
   List<BudgetModel> _getMockBudgets() {
     return []; // Không sinh ngân sách mẫu
+  }
+
+  /// Xây dựng toàn bộ ngữ cảnh dữ liệu tài chính & đội xe thực tế từ Supabase để nạp cho AI (Gemini / Claude / Cloud API)
+  Future<String> buildFullAiFinancialContext() async {
+    final currencyFmt = NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0);
+    final buffer = StringBuffer();
+
+    buffer.writeln('=== DỮ LIỆU TÀI CHÍNH & ĐỘI XE THỰC TẾ TRONG HỆ THỐNG SUPABASE (NGUỒN SỰ THẬT DUY NHẤT) ===');
+    buffer.writeln('QUY TẮC BẮT BUỘC ĐỐI VỚI TRỢ LÝ AI:');
+    buffer.writeln('1. BẮT BUỘC chỉ được trả lời dựa trên các giao dịch và số liệu thực tế được liệt kê dưới đây.');
+    buffer.writeln('2. TUYỆT ĐỐI KHÔNG TỰ BỊA RA bất kỳ khoản chi, tên hàng quán (như Cọ Xanh quán, buffet...), hay số tiền nào không có trong danh sách này.');
+    buffer.writeln('3. Nếu người dùng hỏi về một khoản chi không có trong dữ liệu này (ví dụ: "Cọ Xanh quán 2tr7"), bạn PHẢI khẳng định rõ ràng là trong lịch sử hệ thống Supabase HOÀN TOÀN KHÔNG CÓ khoản chi này.\n');
+
+    // 1. Wallets
+    try {
+      final wallets = await getWallets();
+      if (wallets.isNotEmpty) {
+        final totalBal = wallets.fold(0.0, (sum, w) => sum + (w.walletType != WalletType.CREDIT_CARD ? w.currentBalance : 0));
+        buffer.writeln('1. TỔNG QUAN TÀI KHOẢN & VÍ THANH TOÁN (Tổng số dư khả dụng: ${currencyFmt.format(totalBal)}):');
+        for (final w in wallets) {
+          buffer.writeln('- ${w.name} [${w.walletType.name}]: ${currencyFmt.format(w.currentBalance)}');
+        }
+        buffer.writeln();
+      }
+    } catch (_) {}
+
+    // 2. Vehicles
+    try {
+      final assetsRes = await _supabase.from('assets').select('id, name, license_plate, current_odometer_km, next_maintenance_due');
+      if (assetsRes is List && assetsRes.isNotEmpty) {
+        buffer.writeln('2. ĐỘI XE GIA ĐÌNH:');
+        for (final a in assetsRes) {
+          final name = a['name'] ?? 'Xe';
+          final plate = a['license_plate'] ?? '';
+          final odo = a['current_odometer_km'] != null ? '${a['current_odometer_km']} km' : 'Chưa có ODO';
+          final maint = a['next_maintenance_due'] ?? 'Chưa lên lịch';
+          buffer.writeln('- $name ($plate) | ODO hiện tại: $odo | Bảo dưỡng tiếp theo: $maint');
+        }
+        buffer.writeln();
+      }
+    } catch (_) {}
+
+    // 3. Transactions (Synced from family_transactions, expenses, fuel_logs, maintenance)
+    try {
+      final txs = await getTransactions(limit: 200);
+      if (txs.isNotEmpty) {
+        // Group by Month
+        final now = DateTime.now();
+        final curMonthStr = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+        final curMonthTxs = txs.where((t) => t.date.startsWith(curMonthStr) && t.transactionType == TransactionType.EXPENSE).toList();
+        final double curMonthSpent = curMonthTxs.fold(0.0, (sum, t) => sum + t.amount);
+
+        buffer.writeln('3. TỔNG KẾT CHI TIÊU THÁNG HIỆN TẠI (${now.month.toString().padLeft(2, '0')}/${now.year}):');
+        buffer.writeln('- Tổng số tiền chi: ${currencyFmt.format(curMonthSpent)} qua ${curMonthTxs.length} giao dịch.');
+
+        // Category breakdown for current month
+        final catMap = <String, double>{};
+        for (final t in curMonthTxs) {
+          final cat = t.categoryName ?? 'Khác';
+          catMap[cat] = (catMap[cat] ?? 0.0) + t.amount;
+        }
+        for (final entry in catMap.entries) {
+          final pct = curMonthSpent > 0 ? (entry.value / curMonthSpent * 100).toStringAsFixed(1) : '0';
+          buffer.writeln('  + ${entry.key}: ${currencyFmt.format(entry.value)} ($pct%)');
+        }
+        buffer.writeln();
+
+        buffer.writeln('4. TOÀN BỘ DANH SÁCH GIAO DỊCH THỰC TẾ TRONG HỆ THỐNG SUPABASE (MỚI NHẤT TRƯỚC):');
+        for (final t in txs.take(60)) {
+          final type = t.transactionType == TransactionType.EXPENSE ? 'Chi' : (t.transactionType == TransactionType.INCOME ? 'Thu' : 'Chuyển');
+          final desc = t.description?.trim().isNotEmpty == true ? t.description! : (t.categoryName ?? 'Giao dịch');
+          final cat = t.categoryName != null ? '[${t.categoryName}] ' : '';
+          final wallet = t.walletName != null && t.walletName!.isNotEmpty ? ' (${t.walletName})' : '';
+          buffer.writeln('- Ngày ${t.date}: [$type] $cat$desc — ${currencyFmt.format(t.amount)}$wallet');
+        }
+        buffer.writeln();
+      } else {
+        buffer.writeln('3. LỊCH SỬ GIAO DỊCH: Chưa có giao dịch nào được ghi nhận trong cơ sở dữ liệu Supabase.\n');
+      }
+    } catch (_) {}
+
+    return buffer.toString().trim();
   }
 }

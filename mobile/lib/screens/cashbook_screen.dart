@@ -57,7 +57,10 @@ class _CashbookScreenState extends State<CashbookScreen> {
   List<FamilyTransactionModel> get _monthTransactions {
     return _allTransactions.where((tx) {
       try {
-        final d = DateTime.parse(tx.date);
+        final raw = tx.date;
+        final clean = raw.contains('T') ? raw.split('T').first : raw;
+        final d = DateTime.tryParse(clean) ?? DateTime.tryParse(raw);
+        if (d == null) return false;
         final matchesMonth = d.year == _currentMonth.year && d.month == _currentMonth.month;
         final matchesWallet = _selectedWalletId == 'ALL' || tx.walletId == _selectedWalletId;
         return matchesMonth && matchesWallet;
@@ -70,7 +73,11 @@ class _CashbookScreenState extends State<CashbookScreen> {
   // Transactions on the specifically selected calendar day
   List<FamilyTransactionModel> get _selectedDayTransactions {
     final dayStr = DateFormat('yyyy-MM-dd').format(_selectedDay);
-    return _monthTransactions.where((tx) => tx.date == dayStr).toList();
+    return _monthTransactions.where((tx) {
+      final raw = tx.date;
+      final clean = raw.contains('T') ? raw.split('T').first : raw;
+      return clean == dayStr;
+    }).toList();
   }
 
   double get _totalMonthIncome {

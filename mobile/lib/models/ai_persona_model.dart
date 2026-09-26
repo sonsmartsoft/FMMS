@@ -9,6 +9,8 @@ class AIPersonaModel {
   final String tone; // 'friendly', 'concise', 'humorous', 'strict'
   final String language; // 'vi', 'en', 'auto'
   final String customInstructions;
+  final String wakeWord; // e.g. 'FMMS ơi', 'Trợ lý ơi', 'Sơn ơi', 'Jarvis ơi'
+  final bool enableWakeWord;
 
   const AIPersonaModel({
     this.roleKey = 'advisor',
@@ -20,6 +22,8 @@ class AIPersonaModel {
     this.tone = 'friendly',
     this.language = 'vi',
     this.customInstructions = '',
+    this.wakeWord = 'FMMS ơi',
+    this.enableWakeWord = true,
   });
 
   /// Factory for clean default configuration
@@ -30,6 +34,8 @@ class AIPersonaModel {
       userTitlePattern: 'auto',
       tone: 'friendly',
       language: 'vi',
+      wakeWord: 'FMMS ơi',
+      enableWakeWord: true,
     );
   }
 
@@ -84,17 +90,19 @@ class AIPersonaModel {
   String getRoleTitle() {
     switch (roleKey) {
       case 'advisor':
-        return 'Senior AI Wealth & Fleet Strategist';
+        return language == 'en'
+            ? 'Senior AI Wealth & Fleet Strategist'
+            : 'Cố Vấn Tài Chính Cấp Cao & Quản Trị Đội Xe';
       case 'assistant':
-        return 'Trợ lý ảo chu đáo';
+        return language == 'en' ? 'Smart Family Assistant' : 'Trợ lý ảo chu đáo';
       case 'accountant':
-        return 'Kế toán trưởng nghiêm khắc';
+        return language == 'en' ? 'Chief Financial Controller' : 'Kế toán trưởng nghiêm khắc';
       case 'speed':
-        return 'Trợ lý siêu tốc & súc tích';
+        return language == 'en' ? 'Ultra-Fast Practical Assistant' : 'Trợ lý siêu tốc & súc tích';
       case 'custom':
-        return 'Vai trò tự định nghĩa';
+        return language == 'en' ? 'Custom AI Role' : 'Vai trò tự định nghĩa';
       default:
-        return 'Cố vấn tài chính & phương tiện';
+        return language == 'en' ? 'Wealth & Fleet Advisor' : 'Cố vấn tài chính & phương tiện';
     }
   }
 
@@ -167,6 +175,7 @@ QUY TẮC TRÌNH BÀY (BẮT BUỘC):
     double todaySpent = 0,
     int txCount = 0,
     double totalBalance = 0,
+    String? monthlyFinancialContext,
   }) {
     final aiSelf = resolveSelfPronoun();
     final userSalutation = resolveUserSalutation(memberFullName);
@@ -193,11 +202,25 @@ QUY TẮC TRÌNH BÀY (BẮT BUỘC):
       buffer.writeln();
     }
 
+    if (monthlyFinancialContext != null && monthlyFinancialContext.trim().isNotEmpty) {
+      buffer.writeln('SỐ LIỆU TÀI CHÍNH THỰC TẾ TRONG HỆ THỐNG FMMS (BẮT BUỘC DỰA TRÊN SỐ LIỆU NÀY KHI TRẢ LỜI, TUYỆT ĐỐI KHÔNG BỊA RA CON SỐ KHÁC):');
+      buffer.writeln(monthlyFinancialContext.trim());
+      buffer.writeln();
+    }
+
     buffer.writeln('NGỮ CẢNH HỆ THỐNG FMMS:');
-    buffer.writeln('- Bạn có thể giúp ghi chép thu chi, hỏi số dư ví, tình hình chi tiêu hôm nay, quét hoá đơn.');
-    buffer.writeln('- Giữ câu trả lời súc tích, vừa đủ để đọc hoặc phát qua giọng nói trợ lý ảo (TTS).');
+    buffer.writeln('- Bạn có thể giúp ghi chép thu chi, hỏi số dư ví, tình hình chi tiêu hôm nay, kiểm toán chi phí tháng và quản trị xe cộ.');
+    buffer.writeln('- Nếu người dùng yêu cầu bảng biểu hoặc có từ 2 số liệu trở lên, hãy dùng bảng Markdown chuẩn.');
 
     return buffer.toString().trim();
+  }
+
+  /// Resolves the active wake word (e.g. 'FMMS ơi', 'Trợ lý ơi', 'Sơn ơi')
+  String resolveWakeWord() {
+    if (wakeWord.trim().isNotEmpty) {
+      return wakeWord.trim();
+    }
+    return 'FMMS ơi';
   }
 
   /// Serialization to JSON
@@ -212,6 +235,8 @@ QUY TẮC TRÌNH BÀY (BẮT BUỘC):
       'tone': tone,
       'language': language,
       'customInstructions': customInstructions,
+      'wakeWord': wakeWord,
+      'enableWakeWord': enableWakeWord,
     };
   }
 
@@ -227,6 +252,8 @@ QUY TẮC TRÌNH BÀY (BẮT BUỘC):
       tone: json['tone']?.toString() ?? 'friendly',
       language: json['language']?.toString() ?? 'vi',
       customInstructions: json['customInstructions']?.toString() ?? '',
+      wakeWord: json['wakeWord']?.toString() ?? 'FMMS ơi',
+      enableWakeWord: json['enableWakeWord'] != false,
     );
   }
 
@@ -240,6 +267,8 @@ QUY TẮC TRÌNH BÀY (BẮT BUỘC):
     String? tone,
     String? language,
     String? customInstructions,
+    String? wakeWord,
+    bool? enableWakeWord,
   }) {
     return AIPersonaModel(
       roleKey: roleKey ?? this.roleKey,
@@ -251,6 +280,8 @@ QUY TẮC TRÌNH BÀY (BẮT BUỘC):
       tone: tone ?? this.tone,
       language: language ?? this.language,
       customInstructions: customInstructions ?? this.customInstructions,
+      wakeWord: wakeWord ?? this.wakeWord,
+      enableWakeWord: enableWakeWord ?? this.enableWakeWord,
     );
   }
 }
