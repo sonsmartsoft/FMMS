@@ -19,6 +19,7 @@ import {
 } from '@/lib/services/familyFinanceService';
 import { getAssets } from '@/lib/services/assetService';
 import KpiGradientCard from '@/components/ui/KpiGradientCard';
+import DraggableModal from '@/components/ui/DraggableModal';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
 import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 import {
@@ -28,6 +29,8 @@ import {
   ChevronRight,
   Printer,
   TrendingUp,
+  Search,
+  ExternalLink,
   TrendingDown,
   ShieldCheck,
   AlertTriangle,
@@ -105,6 +108,10 @@ export default function FamilyFinancialReportsPage() {
   const [selectedWalletId, setSelectedWalletId] = useState<string>('ALL');
   const [selectedCategoryDetail, setSelectedCategoryDetail] = useState<string | null>(null);
   const [activeReportTab, setActiveReportTab] = useState<'CASHFLOW' | 'NET_WORTH' | 'HEALTH'>('CASHFLOW');
+  const [activeDrillModal, setActiveDrillModal] = useState<
+    'NET_WORTH' | 'CASHFLOW' | 'DTI' | 'EMERGENCY' | 'INCOME' | 'EXPENSE' | 'MOBILITY' | null
+  >(null);
+  const [drillSearchQuery, setDrillSearchQuery] = useState('');
 
   const loadData = async () => {
     setLoading(true);
@@ -121,9 +128,16 @@ export default function FamilyFinancialReportsPage() {
       setLoans(lList);
       setAssets(aList);
 
-      const startStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
-      const endDay = new Date(selectedYear, selectedMonth, 0).getDate();
-      const endStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
+      const isAllYear = selectedMonth === 0;
+      const startStr = isAllYear
+        ? `${selectedYear}-01-01`
+        : `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+      const endDay = isAllYear
+        ? 31
+        : new Date(selectedYear, selectedMonth, 0).getDate();
+      const endStr = isAllYear
+        ? `${selectedYear}-12-31`
+        : `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
 
       const txList = await getFamilyTransactions({
         startDate: startStr,
@@ -169,12 +183,18 @@ export default function FamilyFinancialReportsPage() {
   const savingsRate = totalIncome > 0 ? Math.round((netCashFlow / totalIncome) * 100) : 0;
 
   // Spendee Velocity Metrics (Average daily expense, Busiest day, Transactions count)
-  const daysInMonth = useMemo(() => new Date(selectedYear, selectedMonth, 0).getDate(), [selectedMonth, selectedYear]);
+  const isAllYear = selectedMonth === 0;
+  const daysInYear = (selectedYear % 4 === 0 && (selectedYear % 100 !== 0 || selectedYear % 400 === 0)) ? 366 : 365;
+  const isCurrentYear = new Date().getFullYear() === selectedYear;
+  const daysElapsedInYear = isCurrentYear
+    ? Math.min(daysInYear, Math.floor((Date.now() - new Date(selectedYear, 0, 1).getTime()) / (1000 * 60 * 60 * 24)) + 1)
+    : daysInYear;
+  const daysInMonth = useMemo(() => isAllYear ? daysInYear : new Date(selectedYear, selectedMonth, 0).getDate(), [isAllYear, daysInYear, selectedMonth, selectedYear]);
   const isCurrentMonth = useMemo(() => {
     const now = new Date();
     return now.getMonth() + 1 === selectedMonth && now.getFullYear() === selectedYear;
   }, [selectedMonth, selectedYear]);
-  const daysElapsed = isCurrentMonth ? Math.min(daysInMonth, new Date().getDate()) : daysInMonth;
+  const daysElapsed = isAllYear ? daysElapsedInYear : (isCurrentMonth ? Math.min(daysInMonth, new Date().getDate()) : daysInMonth);
   const avgDailyExpense = Math.round(totalExpense / Math.max(1, daysElapsed));
 
   const busiestDayInfo = useMemo(() => {
@@ -217,10 +237,10 @@ export default function FamilyFinancialReportsPage() {
     return {
       dow: maxDowAmt > 0 ? maxDow : 'N/A',
       dowAmt: maxDowAmt,
-      date: maxDate ? `Ngày ${parseInt(maxDate.split('-')[2], 10)}` : 'N/A',
+      date: maxDate ? (isAllYear ? fmtDate(maxDate) : `Ngày ${parseInt(maxDate.split('-')[2], 10)}`) : 'N/A',
       dateAmt: maxDateAmt,
     };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, isAllYear]);
 
   const totalExpenseCount = useMemo(() => {
     return filteredTransactions.filter((t) => t.transaction_type === 'EXPENSE' && !t.exclude_from_reports).length;
@@ -299,8 +319,26 @@ export default function FamilyFinancialReportsPage() {
     return { list, total };
   }, [filteredTransactions]);
 
-  // Spendee Daily Cashflow (31 days)
+  // Spendee Daily or Monthly Cashflow Trend
   const dailyCashflowData = useMemo(() => {
+    if (selectedMonth === 0) {
+      const arr = [];
+      for (let m = 1; m <= 12; m++) {
+        const mPrefix = `${selectedYear}-${String(m).padStart(2, '0')}`;
+        const mTxs = filteredTransactions.filter((t) => t.date.startsWith(mPrefix) && !t.exclude_from_reports);
+        const income = mTxs.filter((t) => t.transaction_type === 'INCOME').reduce((s, t) => s + Number(t.amount || 0), 0);
+        const expense = mTxs.filter((t) => t.transaction_type === 'EXPENSE').reduce((s, t) => s + Number(t.amount || 0), 0);
+        arr.push({
+          day: `T${m}`,
+          dayNum: m,
+          date: `Tháng ${m}/${selectedYear}`,
+          income,
+          expense,
+          net: income - expense,
+        });
+      }
+      return arr;
+    }
     const days = new Date(selectedYear, selectedMonth, 0).getDate();
     const arr = [];
     for (let d = 1; d <= days; d++) {
@@ -328,9 +366,23 @@ export default function FamilyFinancialReportsPage() {
     ) || null;
   }, [selectedCategoryDetail, categoryBreakdown]);
 
-  // Active category daily trend
+  // Active category daily trend (or monthly trend if all year)
   const activeCategoryDailyData = useMemo(() => {
     if (!activeCategory) return [];
+    if (selectedMonth === 0) {
+      const arr = [];
+      for (let m = 1; m <= 12; m++) {
+        const mPrefix = `${selectedYear}-${String(m).padStart(2, '0')}`;
+        const mTxs = activeCategory.transactions.filter((t) => t.date.startsWith(mPrefix));
+        const amount = mTxs.reduce((s, t) => s + Number(t.amount || 0), 0);
+        arr.push({
+          day: `T${m}`,
+          date: `Tháng ${m}/${selectedYear}`,
+          amount,
+        });
+      }
+      return arr;
+    }
     const days = new Date(selectedYear, selectedMonth, 0).getDate();
     const arr = [];
     for (let d = 1; d <= days; d++) {
@@ -447,6 +499,80 @@ export default function FamilyFinancialReportsPage() {
     { name: 'Tài Sản Ròng (Net Worth)', amount: netWorth, fill: '#0ea5e9' },
   ], [totalAssets, totalLiabilities, netWorth]);
 
+  const periodLabel = selectedMonth === 0 ? `Cả năm ${selectedYear}` : `Tháng ${selectedMonth}/${selectedYear}`;
+
+  const drillTitle = useMemo(() => {
+    switch (activeDrillModal) {
+      case 'NET_WORTH':
+        return `🏛️ Bảng Cân Đối Tài Sản Ròng & Thống Kê Nợ — ${periodLabel}`;
+      case 'CASHFLOW':
+        return `📊 Sổ Lưu Chuyển Dòng Tiền Toàn Bộ — ${periodLabel}`;
+      case 'INCOME':
+        return `💰 Danh Sách Chi Tiết Các Khoản Thu Nhập — ${periodLabel}`;
+      case 'EXPENSE':
+        return `💸 Danh Sách Chi Tiết Mọi Khoản Chi Tiêu — ${periodLabel}`;
+      case 'MOBILITY':
+        return `🚗 Chi Tiết Toàn Bộ Chi Phí Xe Cộ & Phương Tiện — ${periodLabel}`;
+      case 'DTI':
+        return `💳 Chi Tiết Các Khoản Vay & Nghĩa Vụ Trả Nợ (DTI) — ${periodLabel}`;
+      case 'EMERGENCY':
+        return `🛡️ Báo Cáo Quỹ Dự Phòng Khẩn Cấp & Khả Năng Thanh Khoản — ${periodLabel}`;
+      default:
+        return '';
+    }
+  }, [activeDrillModal, periodLabel]);
+
+  const drillTransactions = useMemo(() => {
+    if (!activeDrillModal) return [];
+    let list: FamilyTransaction[] = [];
+    if (activeDrillModal === 'INCOME') {
+      list = filteredTransactions.filter((t) => t.transaction_type === 'INCOME' && !t.exclude_from_reports);
+    } else if (activeDrillModal === 'EXPENSE') {
+      list = filteredTransactions.filter((t) => t.transaction_type === 'EXPENSE' && !t.exclude_from_reports);
+    } else if (activeDrillModal === 'MOBILITY') {
+      list = filteredTransactions.filter(
+        (t) =>
+          t.transaction_type === 'EXPENSE' &&
+          (t.asset_id ||
+            t.category?.name?.includes('Phương tiện') ||
+            t.category_id?.startsWith('cat-mob') ||
+            t.category_id?.includes('car'))
+      );
+    } else if (activeDrillModal === 'CASHFLOW') {
+      list = filteredTransactions.filter((t) => !t.exclude_from_reports);
+    }
+
+    if (!drillSearchQuery.trim()) return list;
+    const q = drillSearchQuery.toLowerCase();
+    return list.filter(
+      (t) =>
+        (t.description || '').toLowerCase().includes(q) ||
+        (t.payee_vendor || '').toLowerCase().includes(q) ||
+        (t.category?.name || '').toLowerCase().includes(q) ||
+        (t.wallet?.name || '').toLowerCase().includes(q) ||
+        String(t.amount || 0).includes(q)
+    );
+  }, [activeDrillModal, filteredTransactions, drillSearchQuery]);
+
+  const drillTotal = useMemo(() => {
+    if (activeDrillModal === 'INCOME') {
+      return drillTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
+    }
+    if (activeDrillModal === 'EXPENSE' || activeDrillModal === 'MOBILITY') {
+      return drillTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
+    }
+    if (activeDrillModal === 'CASHFLOW') {
+      const inc = drillTransactions
+        .filter((t) => t.transaction_type === 'INCOME')
+        .reduce((s, t) => s + Number(t.amount || 0), 0);
+      const exp = drillTransactions
+        .filter((t) => t.transaction_type === 'EXPENSE')
+        .reduce((s, t) => s + Number(t.amount || 0), 0);
+      return inc - exp;
+    }
+    return 0;
+  }, [activeDrillModal, drillTransactions]);
+
   // Print report
   const handlePrint = () => {
     window.print();
@@ -514,6 +640,9 @@ export default function FamilyFinancialReportsPage() {
                 onChange={(e) => setSelectedMonth(Number(e.target.value))}
                 className="bg-transparent font-bold focus:outline-none cursor-pointer"
               >
+                <option value={0} className="dark:bg-slate-900 font-bold text-sky-600 dark:text-sky-400">
+                  ⭐ Cả năm {selectedYear}
+                </option>
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
                   <option key={m} value={m} className="dark:bg-slate-900">
                     Tháng {m}
@@ -544,7 +673,7 @@ export default function FamilyFinancialReportsPage() {
           </div>
         </div>
 
-        {/* ── Executive 4 KPI Gradient Cards ── */}
+        {/* ── Executive 4 KPI Gradient Cards (Clickable to Drill-Down) ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiGradientCard
             title="TÀI SẢN RÒNG GIA ĐÌNH (NET WORTH)"
@@ -553,19 +682,23 @@ export default function FamilyFinancialReportsPage() {
             subtitle={`Tổng tài sản (${fmt(totalAssets)}) - Dư nợ (${fmt(totalLiabilities)})`}
             colorType="emerald"
             icon={ShieldCheck}
-            badgeText={netWorth >= 0 ? 'Thịnh vượng' : 'Cảnh báo âm'}
+            badgeText={netWorth >= 0 ? 'Thịnh vượng • Xem cân đối' : 'Cảnh báo âm • Xem cân đối'}
             badgeType={netWorth >= 0 ? 'success' : 'danger'}
+            active={activeDrillModal === 'NET_WORTH'}
+            onClick={() => setActiveDrillModal((prev) => (prev === 'NET_WORTH' ? null : 'NET_WORTH'))}
           />
 
           <KpiGradientCard
-            title="DÒNG TIỀN RÒNG THÁNG (CASHFLOW)"
+            title={selectedMonth === 0 ? `DÒNG TIỀN RÒNG NĂM ${selectedYear}` : `DÒNG TIỀN RÒNG THÁNG ${selectedMonth}/${selectedYear}`}
             value={`${netCashFlow >= 0 ? '+' : ''}${fmt(netCashFlow)}`}
             unit="₫"
             subtitle={`Tỷ lệ tiết kiệm ròng: ${savingsRate}% thu nhập`}
             colorType={netCashFlow >= 0 ? 'cyan' : 'amber'}
             icon={TrendingUp}
-            badgeText={netCashFlow >= 0 ? 'Thặng dư' : 'Thâm hụt'}
+            badgeText={netCashFlow >= 0 ? 'Thặng dư • Xem sổ tiền' : 'Thâm hụt • Xem sổ tiền'}
             badgeType={netCashFlow >= 0 ? 'success' : 'warning'}
+            active={activeDrillModal === 'CASHFLOW'}
+            onClick={() => setActiveDrillModal((prev) => (prev === 'CASHFLOW' ? null : 'CASHFLOW'))}
           />
 
           <KpiGradientCard
@@ -575,8 +708,10 @@ export default function FamilyFinancialReportsPage() {
             subtitle={`Trả nợ tháng (${fmt(monthlyLoanObligation)}) / Thu nhập`}
             colorType={dtiRatio <= 30 ? 'emerald' : dtiRatio <= 40 ? 'amber' : 'rose'}
             icon={CreditCard}
-            badgeText={dtiRatio <= 30 ? 'Mức an toàn' : 'Áp lực cao'}
+            badgeText={dtiRatio <= 30 ? 'Mức an toàn • Xem nợ' : 'Áp lực cao • Xem nợ'}
             badgeType={dtiRatio <= 30 ? 'success' : 'danger'}
+            active={activeDrillModal === 'DTI'}
+            onClick={() => setActiveDrillModal((prev) => (prev === 'DTI' ? null : 'DTI'))}
           />
 
           <KpiGradientCard
@@ -586,8 +721,10 @@ export default function FamilyFinancialReportsPage() {
             subtitle={`Bảo đảm chi tiêu sinh hoạt không thu nhập`}
             colorType={emergencyFundMonths >= 6 ? 'cyan' : emergencyFundMonths >= 3 ? 'amber' : 'rose'}
             icon={PiggyBank}
-            badgeText={emergencyFundMonths >= 6 ? 'Vững chắc (≥6T)' : 'Cần tích lũy thêm'}
+            badgeText={emergencyFundMonths >= 6 ? 'Vững chắc (≥6T) • Xem ví' : 'Cần tích lũy • Xem ví'}
             badgeType={emergencyFundMonths >= 6 ? 'success' : 'warning'}
+            active={activeDrillModal === 'EMERGENCY'}
+            onClick={() => setActiveDrillModal((prev) => (prev === 'EMERGENCY' ? null : 'EMERGENCY'))}
           />
         </div>
 
@@ -643,7 +780,7 @@ export default function FamilyFinancialReportsPage() {
                     Báo Cáo Lưu Chuyển Tiền Tệ Chi Tiết (Cashflow Statement)
                   </h2>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Kỳ báo cáo: Tháng {selectedMonth}/{selectedYear} • Đơn vị tính: Việt Nam Đồng (VND)
+                    Kỳ báo cáo: {selectedMonth === 0 ? `Cả năm ${selectedYear}` : `Tháng ${selectedMonth}/${selectedYear}`} • Đơn vị tính: Việt Nam Đồng (VND)
                   </p>
                 </div>
                 <div className="text-right">
@@ -987,10 +1124,10 @@ export default function FamilyFinancialReportsPage() {
                         <div>
                           <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
                             <BarChart3 className="w-4 h-4 text-emerald-500" />
-                            Biến Động Dòng Tiền 31 Ngày Trong Kỳ (Daily Cashflow Trend)
+                            {selectedMonth === 0 ? `Biến Động Dòng Tiền 12 Tháng Trong Năm (Monthly Cashflow Trend)` : `Biến Động Dòng Tiền ${daysInMonth} Ngày Trong Kỳ (Daily Cashflow Trend)`}
                           </span>
                           <p className="text-[11px] text-slate-400">
-                            Theo dõi nhịp thu chi từng ngày: Cột xanh (Thu nhập vào), Cột đỏ (Chi tiêu ra)
+                            {selectedMonth === 0 ? 'Theo dõi nhịp thu chi 12 tháng: Cột xanh (Thu nhập vào), Cột đỏ (Chi tiêu ra)' : 'Theo dõi nhịp thu chi từng ngày: Cột xanh (Thu nhập vào), Cột đỏ (Chi tiêu ra)'}
                           </p>
                         </div>
                         <div className="flex items-center gap-3 text-xs font-semibold">
@@ -1048,10 +1185,19 @@ export default function FamilyFinancialReportsPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {/* Section 1: Inflows */}
-                    <tr className="bg-emerald-50/40 dark:bg-emerald-950/20 font-bold text-emerald-700 dark:text-emerald-300">
-                      <td colSpan={2} className="py-2.5 px-4 flex items-center gap-2">
-                        <ArrowDownLeft className="w-4 h-4 text-emerald-500" />
-                        I. DÒNG TIỀN VÀO (TỔNG THU NHẬP)
+                    <tr
+                      onClick={() => setActiveDrillModal('INCOME')}
+                      className="bg-emerald-50/40 dark:bg-emerald-950/20 font-bold text-emerald-700 dark:text-emerald-300 cursor-pointer hover:bg-emerald-100/60 dark:hover:bg-emerald-900/40 transition-colors group"
+                      title="Bấm để mở danh sách chi tiết các khoản thu nhập"
+                    >
+                      <td colSpan={2} className="py-2.5 px-4 flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <ArrowDownLeft className="w-4 h-4 text-emerald-500" />
+                          I. DÒNG TIỀN VÀO (TỔNG THU NHẬP)
+                        </span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                          🔍 Chi tiết thu nhập
+                        </span>
                       </td>
                       <td className="py-2.5 px-4 text-right font-mono text-sm">+{fmt(totalIncome)} ₫</td>
                       <td className="py-2.5 px-4 text-right font-mono">100.0%</td>
@@ -1070,10 +1216,19 @@ export default function FamilyFinancialReportsPage() {
                     </tr>
 
                     {/* Section 2: Outflows */}
-                    <tr className="bg-rose-50/40 dark:bg-rose-950/20 font-bold text-rose-700 dark:text-rose-300">
-                      <td colSpan={2} className="py-2.5 px-4 flex items-center gap-2">
-                        <ArrowUpRight className="w-4 h-4 text-rose-500" />
-                        II. DÒNG TIỀN RA (TỔNG CHI TIÊU &amp; TRẢ NỢ)
+                    <tr
+                      onClick={() => setActiveDrillModal('EXPENSE')}
+                      className="bg-rose-50/40 dark:bg-rose-950/20 font-bold text-rose-700 dark:text-rose-300 cursor-pointer hover:bg-rose-100/60 dark:hover:bg-rose-900/40 transition-colors group"
+                      title="Bấm để mở danh sách chi tiết các khoản chi tiêu"
+                    >
+                      <td colSpan={2} className="py-2.5 px-4 flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <ArrowUpRight className="w-4 h-4 text-rose-500" />
+                          II. DÒNG TIỀN RA (TỔNG CHI TIÊU &amp; TRẢ NỢ)
+                        </span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 group-hover:bg-rose-500 group-hover:text-white transition-all">
+                          🔍 Chi tiết chi tiêu
+                        </span>
                       </td>
                       <td className="py-2.5 px-4 text-right font-mono text-sm">-{fmt(totalExpense)} ₫</td>
                       <td className="py-2.5 px-4 text-right font-mono">
@@ -1088,8 +1243,17 @@ export default function FamilyFinancialReportsPage() {
                         {totalExpense > 0 ? Math.round((generalExpense / totalExpense) * 100) : 0}%
                       </td>
                     </tr>
-                    <tr>
-                      <td className="py-2 px-8 text-slate-700 dark:text-slate-300">2. Chi phí phương tiện đi lại (Xe Mazda 2AT)</td>
+                    <tr
+                      onClick={() => setActiveDrillModal('MOBILITY')}
+                      className="cursor-pointer hover:bg-cyan-50/60 dark:hover:bg-cyan-950/30 transition-colors group"
+                      title="Bấm để mở chi tiết mọi khoản chi xe cộ"
+                    >
+                      <td className="py-2 px-8 text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                        <span>2. Chi phí phương tiện đi lại (Xe Mazda 2AT)</span>
+                        <span className="text-[10px] font-semibold text-cyan-600 dark:text-cyan-400 opacity-80 group-hover:opacity-100 transition-opacity">
+                          🔍 Chi tiết xe
+                        </span>
+                      </td>
                       <td className="py-2 px-4 text-slate-500 dark:text-slate-400">Xăng RON 95, bảo dưỡng gara, phí cầu đường</td>
                       <td className="py-2 px-4 text-right font-mono font-medium text-cyan-600 dark:text-cyan-400">
                         -{fmt(vehicleExpense)} ₫
@@ -1110,9 +1274,16 @@ export default function FamilyFinancialReportsPage() {
                     </tr>
 
                     {/* Section 3: Net Cashflow */}
-                    <tr className="bg-sky-50/60 dark:bg-sky-950/30 font-black text-sky-800 dark:text-sky-200">
-                      <td colSpan={2} className="py-3 px-4 text-sm">
-                        III. DÒNG TIỀN THẶNG DƯ RÒNG (NET CASH FLOW)
+                    <tr
+                      onClick={() => setActiveDrillModal('CASHFLOW')}
+                      className="bg-sky-50/60 dark:bg-sky-950/30 font-black text-sky-800 dark:text-sky-200 cursor-pointer hover:bg-sky-100/70 dark:hover:bg-sky-900/50 transition-colors group"
+                      title="Bấm để mở toàn bộ nhật ký lưu chuyển dòng tiền"
+                    >
+                      <td colSpan={2} className="py-3 px-4 text-sm flex items-center justify-between">
+                        <span>III. DÒNG TIỀN THẶNG DƯ RÒNG (NET CASH FLOW)</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 group-hover:bg-sky-500 group-hover:text-white transition-all">
+                          🔍 Toàn bộ dòng tiền
+                        </span>
                       </td>
                       <td className="py-3 px-4 text-right font-mono text-base text-sky-600 dark:text-sky-300">
                         {netCashFlow >= 0 ? '+' : ''}{fmt(netCashFlow)} ₫
@@ -1582,7 +1753,382 @@ export default function FamilyFinancialReportsPage() {
             </div>
           </div>
         )}
+
+        {/* ── DrillDownModal (Itemized Drill-down Ledger & Breakdown) ── */}
+        {activeDrillModal && (
+          <DrillDownModal
+            title={drillTitle}
+            onClose={() => {
+              setActiveDrillModal(null);
+              setDrillSearchQuery('');
+            }}
+          >
+            {/* 1. NET WORTH DRILL-DOWN */}
+            {activeDrillModal === 'NET_WORTH' && (
+              <div className="space-y-5 text-xs">
+                {/* 4 Summary Stats */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Tổng Tài Sản</span>
+                    <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
+                      {fmt(totalAssets)} ₫
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Tổng Dư Nợ Phải Trả</span>
+                    <span className="text-base font-black font-mono text-rose-600 dark:text-rose-400">
+                      {fmt(totalLiabilities)} ₫
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Tài Sản Ròng (Net Worth)</span>
+                    <span className="text-base font-black font-mono text-sky-600 dark:text-sky-400">
+                      {fmt(netWorth)} ₫
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Đòn Bẩy Nợ (D/A)</span>
+                    <span className="text-base font-black font-mono text-indigo-600 dark:text-indigo-400">
+                      {debtToAssetRatio}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3 Detail Sections */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Column 1: Liquid Assets */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700/60 font-bold">
+                      <span className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
+                        <WalletIcon className="w-4 h-4" /> 1. Tài Sản Thanh Khoản
+                      </span>
+                      <span className="font-mono text-slate-900 dark:text-white">{fmt(liquidAssets)} ₫</span>
+                    </div>
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {wallets
+                        .filter((w) => w.status === 'ACTIVE' && w.wallet_type !== 'CREDIT_CARD' && w.wallet_type !== 'SAVINGS' && !w.is_excluded_from_total)
+                        .map((w) => (
+                          <div key={w.id} className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                            <div>
+                              <span className="font-bold text-slate-800 dark:text-slate-200 block">{w.name}</span>
+                              <span className="text-[10px] text-slate-400">{w.bank_name || 'Ví tiền'} • {w.wallet_type}</span>
+                            </div>
+                            <span className="font-mono font-bold text-slate-900 dark:text-white">{fmt(w.current_balance)} ₫</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Column 2: Savings & Vehicle Assets */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700/60 font-bold">
+                      <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                        <PiggyBank className="w-4 h-4" /> 2. Tiết Kiệm &amp; Phương Tiện
+                      </span>
+                      <span className="font-mono text-slate-900 dark:text-white">{fmt(savingsAssets + vehicleAssetValue)} ₫</span>
+                    </div>
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {wallets
+                        .filter((w) => w.status === 'ACTIVE' && w.wallet_type === 'SAVINGS' && !w.is_excluded_from_total)
+                        .map((w) => (
+                          <div key={w.id} className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                            <div>
+                              <span className="font-bold text-slate-800 dark:text-slate-200 block">{w.name}</span>
+                              <span className="text-[10px] text-emerald-500 font-semibold">Sổ tiết kiệm / Đầu tư</span>
+                            </div>
+                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{fmt(w.current_balance)} ₫</span>
+                          </div>
+                        ))}
+                      {vehicleAssetValue > 0 && (
+                        <div className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                          <div>
+                            <span className="font-bold text-slate-800 dark:text-slate-200 block">🚗 Xe Mazda 2AT Luxury</span>
+                            <span className="text-[10px] text-indigo-500 font-semibold">Định giá thị trường hiện tại</span>
+                          </div>
+                          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{fmt(vehicleAssetValue)} ₫</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Column 3: Liabilities / Debts */}
+                  <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700/60 font-bold">
+                      <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+                        <CreditCard className="w-4 h-4" /> 3. Dư Nợ Phải Trả
+                      </span>
+                      <span className="font-mono text-rose-600 dark:text-rose-400">-{fmt(totalLiabilities)} ₫</span>
+                    </div>
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {loans
+                        .filter((l) => l.status === 'ACTIVE' && l.loan_type === 'BORROW')
+                        .map((l) => (
+                          <div key={l.id} className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                            <div>
+                              <span className="font-bold text-slate-800 dark:text-slate-200 block">{l.lender_borrower_name || l.title || 'Khoản vay'}</span>
+                              <span className="text-[10px] text-slate-400">Gốc ban đầu {fmt(l.principal_amount)} ₫ • {l.interest_rate_percent}%/năm</span>
+                            </div>
+                            <span className="font-mono font-bold text-rose-600 dark:text-rose-400">-{fmt(l.remaining_balance)} ₫</span>
+                          </div>
+                        ))}
+                      {wallets
+                        .filter((w) => w.status === 'ACTIVE' && w.wallet_type === 'CREDIT_CARD')
+                        .map((w) => {
+                          const used = Math.max(0, (w.credit_limit || 0) - (w.current_balance || 0));
+                          return (
+                            <div key={w.id} className="p-2.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                              <div>
+                                <span className="font-bold text-slate-800 dark:text-slate-200 block">{w.name}</span>
+                                <span className="text-[10px] text-slate-400">Hạn mức {fmt(w.credit_limit || 0)} ₫</span>
+                              </div>
+                              <span className="font-mono font-bold text-amber-600 dark:text-amber-400">-{fmt(used)} ₫</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 2. DTI DRILL-DOWN */}
+            {activeDrillModal === 'DTI' && (
+              <div className="space-y-5 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Trả Nợ Hàng Tháng</span>
+                    <span className="text-base font-black font-mono text-rose-600 dark:text-rose-400">
+                      {fmt(monthlyLoanObligation)} ₫/tháng
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Thu Nhập Hàng Tháng (Benchmark)</span>
+                    <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
+                      {fmt(benchmarkIncome)} ₫/tháng
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Hệ Số DTI Thực Tế</span>
+                    <span className={`text-base font-black font-mono ${dtiRatio <= 30 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                      {dtiRatio}% thu nhập
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-sky-500" /> Danh Sách Các Khoản Vay Đang Hoạt Động
+                  </h4>
+                  <div className="space-y-2">
+                    {loans.filter((l) => l.status === 'ACTIVE' && l.loan_type === 'BORROW').map((l) => (
+                      <div key={l.id} className="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <span className="font-bold text-sm text-slate-900 dark:text-white block">{l.lender_borrower_name || l.title || 'Khoản vay'}</span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 block">
+                            Số tiền vay: {fmt(l.principal_amount)} ₫ • Lãi suất: {l.interest_rate_percent}%/năm • Kỳ hạn: {l.term_months || 0} tháng
+                          </span>
+                          <span className="text-[11px] text-indigo-500 font-semibold block">
+                            Ngày đóng: Ngày {l.payment_day || 28} hàng tháng
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 block uppercase">Dư nợ còn lại</span>
+                          <span className="text-base font-black font-mono text-rose-600 dark:text-rose-400">
+                            {fmt(l.remaining_balance)} ₫
+                          </span>
+                          <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-300 block">
+                            Trả tháng: {fmt(l.monthly_payment)} ₫
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 3. EMERGENCY FUND DRILL-DOWN */}
+            {activeDrillModal === 'EMERGENCY' && (
+              <div className="space-y-5 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Thời Gian Chống Chịu</span>
+                    <span className={`text-base font-black font-mono ${emergencyFundMonths >= 6 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}`}>
+                      {emergencyFundMonths} tháng chi tiêu
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Mức Chi Tiêu Cơ Sở / Tháng</span>
+                    <span className="text-base font-black font-mono text-slate-900 dark:text-white">
+                      {fmt(benchmarkMonthlyExpense)} ₫
+                    </span>
+                  </div>
+                  <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Tổng Quỹ Khả Dụng (Tiền &amp; Sổ)</span>
+                    <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
+                      {fmt(liquidAssets + savingsAssets)} ₫
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <PiggyBank className="w-4 h-4 text-emerald-500" /> Nguồn Tiền Khả Dụng Ngay Cho Quỹ Khẩn Cấp
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {wallets
+                      .filter((w) => w.status === 'ACTIVE' && w.wallet_type !== 'CREDIT_CARD' && !w.is_excluded_from_total)
+                      .map((w) => (
+                        <div key={w.id} className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex justify-between items-center">
+                          <div>
+                            <span className="font-bold text-slate-800 dark:text-slate-200 block">{w.name}</span>
+                            <span className="text-[10px] text-slate-400">{w.bank_name || 'Ví tiền'} • {w.wallet_type === 'SAVINGS' ? 'Sổ tiết kiệm' : 'Thanh khoản nhanh'}</span>
+                          </div>
+                          <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{fmt(w.current_balance)} ₫</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 4. TRANSACTION-BASED DRILL-DOWNS (CASHFLOW, INCOME, EXPENSE, MOBILITY) */}
+            {(activeDrillModal === 'CASHFLOW' || activeDrillModal === 'INCOME' || activeDrillModal === 'EXPENSE' || activeDrillModal === 'MOBILITY') && (
+              <div className="space-y-4 text-xs">
+                {/* Search & Stat Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm giao dịch, người nhận, ví, số tiền..."
+                      value={drillSearchQuery}
+                      onChange={(e) => setDrillSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
+                        Tổng ({drillTransactions.length} giao dịch)
+                      </span>
+                      <span className={`text-base font-black font-mono ${drillTotal >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                        {drillTotal >= 0 ? '+' : ''}{fmt(drillTotal)} ₫
+                      </span>
+                    </div>
+
+                    <Link
+                      href="/family-finance/transactions"
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-sky-600 dark:text-sky-400 hover:text-sky-700 bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 rounded-lg shadow-sm transition-all"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" /> Sổ giao dịch
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Transaction Table */}
+                <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 max-h-[55vh] overflow-y-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="sticky top-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
+                      <tr>
+                        <th className="py-2.5 px-3">Ngày</th>
+                        <th className="py-2.5 px-3">Hạng mục</th>
+                        <th className="py-2.5 px-3">Nội dung &amp; Đối tác</th>
+                        <th className="py-2.5 px-3">Tài khoản ví</th>
+                        <th className="py-2.5 px-3">Gắn xe</th>
+                        <th className="py-2.5 px-3 text-right">Số tiền (₫)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {drillTransactions.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400">
+                            Không tìm thấy giao dịch nào phù hợp với bộ lọc.
+                          </td>
+                        </tr>
+                      ) : (
+                        drillTransactions.map((tx) => {
+                          const isInc = tx.transaction_type === 'INCOME';
+                          return (
+                            <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                              <td className="py-2 px-3 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                                {tx.date}
+                              </td>
+                              <td className="py-2 px-3 whitespace-nowrap">
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                  style={{
+                                    backgroundColor: tx.category?.color ? `${tx.category.color}20` : 'rgba(14,165,233,0.1)',
+                                    color: tx.category?.color || '#0ea5e9',
+                                  }}
+                                >
+                                  {tx.category?.name || 'Khác'}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3">
+                                <span className="font-bold text-slate-800 dark:text-slate-200 block">
+                                  {tx.description || tx.payee_vendor || 'Không có mô tả'}
+                                </span>
+                                {tx.payee_vendor && tx.description && (
+                                  <span className="text-[10px] text-slate-400">Đối tác: {tx.payee_vendor}</span>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 whitespace-nowrap text-slate-600 dark:text-slate-400">
+                                {tx.wallet?.name || 'Ví thanh toán'}
+                              </td>
+                              <td className="py-2 px-3 whitespace-nowrap">
+                                {tx.asset_id ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-100 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300">
+                                    🚗 Mazda 2AT
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600">—</span>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono font-bold whitespace-nowrap">
+                                <span className={isInc ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+                                  {isInc ? '+' : '-'}{fmt(tx.amount)} ₫
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </DrillDownModal>
+        )}
       </div>
     </FinanceErrorBoundary>
+  );
+}
+
+function DrillDownModal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <DraggableModal
+      isOpen={true}
+      onClose={onClose}
+      title={title}
+      className="w-[95vw] sm:w-[90vw] md:w-[1200px] max-w-[1200px]"
+    >
+      <div
+        className="flex-1 overflow-y-auto p-4 sm:p-5 no-drag text-slate-900 dark:text-slate-100 max-h-[80vh]"
+        style={{ cursor: 'auto' }}
+      >
+        {children}
+      </div>
+    </DraggableModal>
   );
 }

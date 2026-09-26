@@ -77,9 +77,16 @@ export default function TransactionsLedgerPage() {
       setAssets(aList);
       setMembers(mList);
 
-      const startStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
-      const endDay = new Date(selectedYear, selectedMonth, 0).getDate();
-      const endStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
+      const isAllYear = selectedMonth === 0;
+      const startStr = isAllYear
+        ? `${selectedYear}-01-01`
+        : `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+      const endDay = isAllYear
+        ? 31
+        : new Date(selectedYear, selectedMonth, 0).getDate();
+      const endStr = isAllYear
+        ? `${selectedYear}-12-31`
+        : `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
 
       const txList = await getFamilyTransactions({
         startDate: startStr,
@@ -104,8 +111,14 @@ export default function TransactionsLedgerPage() {
       if (walletFilter !== 'ALL' && tx.wallet_id !== walletFilter && tx.to_wallet_id !== walletFilter) return false;
       if (categoryFilter !== 'ALL' && tx.category_id !== categoryFilter) return false;
       if (assetFilter !== 'ALL') {
-        if (assetFilter === 'NONE' && tx.asset_id) return false;
-        if (assetFilter !== 'NONE' && tx.asset_id !== assetFilter) return false;
+        if (assetFilter === 'MOBILITY_ONLY') {
+          const isMob = tx.asset_id || tx.category?.name?.includes('Phương tiện') || tx.category_id?.startsWith('cat-mob') || tx.category_id?.includes('car');
+          if (!isMob) return false;
+        } else if (assetFilter === 'NONE' && tx.asset_id) {
+          return false;
+        } else if (assetFilter !== 'NONE' && tx.asset_id !== assetFilter) {
+          return false;
+        }
       }
       if (memberFilter !== 'ALL') {
         const targetMember = members.find((m) => m.id === memberFilter);
@@ -198,6 +211,9 @@ export default function TransactionsLedgerPage() {
               onChange={(e) => setSelectedMonth(Number(e.target.value))}
               className="bg-transparent font-bold focus:outline-none cursor-pointer"
             >
+              <option value={0} className="dark:bg-slate-900 font-bold text-sky-600 dark:text-sky-400">
+                ⭐ Cả năm {selectedYear}
+              </option>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => (
                 <option key={m} value={m} className="dark:bg-slate-900">
                   Tháng {m}
@@ -251,17 +267,19 @@ export default function TransactionsLedgerPage() {
         </div>
       </div>
 
-      {/* Summary Ribbon with QMS KpiGradientCards */}
+      {/* Summary Ribbon with QMS KpiGradientCards (Clickable to Filter) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         <KpiGradientCard
           title="TỔNG THU NHẬP (LỌC)"
           value={`+${fmt(summary.income)}`}
           unit="₫"
-          subtitle={`Tháng ${selectedMonth}/${selectedYear} (Dòng tiền vào)`}
+          subtitle={selectedMonth === 0 ? `Cả năm ${selectedYear} (Dòng tiền vào)` : `Tháng ${selectedMonth}/${selectedYear} (Dòng tiền vào)`}
           colorType="emerald"
           icon={ArrowDownLeft}
-          badgeText="Thu vào"
+          badgeText={typeFilter === 'INCOME' ? '✓ Đang lọc Thu' : 'Bấm để lọc Thu'}
           badgeType="success"
+          active={typeFilter === 'INCOME'}
+          onClick={() => setTypeFilter((prev) => (prev === 'INCOME' ? 'ALL' : 'INCOME'))}
         />
 
         <KpiGradientCard
@@ -271,8 +289,10 @@ export default function TransactionsLedgerPage() {
           subtitle="Bao gồm sinh hoạt & phương tiện"
           colorType="rose"
           icon={ArrowUpRight}
-          badgeText="Chi ra"
+          badgeText={typeFilter === 'EXPENSE' ? '✓ Đang lọc Chi' : 'Bấm để lọc Chi'}
           badgeType="danger"
+          active={typeFilter === 'EXPENSE'}
+          onClick={() => setTypeFilter((prev) => (prev === 'EXPENSE' ? 'ALL' : 'EXPENSE'))}
         />
 
         <KpiGradientCard
@@ -282,19 +302,26 @@ export default function TransactionsLedgerPage() {
           subtitle="Xăng dầu, bảo dưỡng, phí cầu đường"
           colorType="cyan"
           icon={Car}
-          badgeText="Xe gia đình"
+          badgeText={assetFilter === 'MOBILITY_ONLY' ? '✓ Đang lọc Xe' : 'Bấm lọc chi phí xe'}
           badgeType="info"
+          active={assetFilter === 'MOBILITY_ONLY'}
+          onClick={() => setAssetFilter((prev) => (prev === 'MOBILITY_ONLY' ? 'ALL' : 'MOBILITY_ONLY'))}
         />
 
         <KpiGradientCard
           title="DÒNG TIỀN RÒNG (THU - CHI)"
           value={`${summary.balance >= 0 ? '+' : ''}${fmt(summary.balance)}`}
           unit="₫"
-          subtitle={summary.balance >= 0 ? 'Thặng dư ngân sách tháng' : 'Cảnh báo thâm hụt ngân sách'}
+          subtitle={summary.balance >= 0 ? (selectedMonth === 0 ? 'Thặng dư ngân sách cả năm' : 'Thặng dư ngân sách tháng') : (selectedMonth === 0 ? 'Cảnh báo thâm hụt năm' : 'Cảnh báo thâm hụt')}
           colorType={summary.balance >= 0 ? 'cyan' : 'amber'}
           icon={WalletIcon}
-          badgeText={summary.balance >= 0 ? 'Thặng dư' : 'Thâm hụt'}
+          badgeText={typeFilter === 'ALL' && assetFilter === 'ALL' ? 'Tất cả dòng tiền' : '✕ Bỏ bộ lọc'}
           badgeType={summary.balance >= 0 ? 'success' : 'warning'}
+          active={typeFilter === 'ALL' && assetFilter === 'ALL'}
+          onClick={() => {
+            setTypeFilter('ALL');
+            setAssetFilter('ALL');
+          }}
         />
       </div>
 
@@ -448,6 +475,7 @@ export default function TransactionsLedgerPage() {
               className="w-full px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-lg text-slate-800 dark:text-slate-200 focus:outline-none"
             >
               <option value="ALL">Tất cả giao dịch</option>
+              <option value="MOBILITY_ONLY">🚗 Tất cả chi phí xe cộ &amp; phương tiện</option>
               <option value="NONE">Không gắn xe</option>
               {assets.map((a) => (
                 <option key={a.id} value={a.id}>
