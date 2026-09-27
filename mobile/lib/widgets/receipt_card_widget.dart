@@ -24,6 +24,8 @@ class ReceiptCardWidget extends StatefulWidget {
 class _ReceiptCardWidgetState extends State<ReceiptCardWidget> {
   final NumberFormat _currencyFmt = NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0);
   bool _isExpanded = true;
+  bool _isSaving = false;
+  bool _isConfirmed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -346,20 +348,50 @@ class _ReceiptCardWidgetState extends State<ReceiptCardWidget> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
+                  backgroundColor: _isConfirmed
+                      ? const Color(0xFF059669)
+                      : (_isSaving ? Colors.grey.shade600 : const Color(0xFF10B981)),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   elevation: 0,
+                  disabledBackgroundColor: _isConfirmed ? const Color(0xFF059669) : Colors.grey.shade600,
+                  disabledForegroundColor: Colors.white,
                 ),
-                icon: const Icon(Icons.check_circle_outline, size: 18),
-                label: const Text(
-                  'Xác nhận Ghi Sổ Hoá Đơn Này',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : Icon(
+                        _isConfirmed ? Icons.check_circle : Icons.check_circle_outline,
+                        size: 18,
+                      ),
+                label: Text(
+                  _isSaving
+                      ? 'Đang ghi sổ hoá đơn...'
+                      : (_isConfirmed ? '✓ Đã ghi sổ thành công' : 'Xác nhận Ghi Sổ Hoá Đơn Này'),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                 ),
-                onPressed: widget.onConfirmAll,
+                onPressed: (_isSaving || _isConfirmed)
+                    ? null
+                    : () async {
+                        setState(() => _isSaving = true);
+                        try {
+                          widget.onConfirmAll();
+                          if (mounted) {
+                            setState(() {
+                              _isSaving = false;
+                              _isConfirmed = true;
+                            });
+                          }
+                        } catch (_) {
+                          if (mounted) setState(() => _isSaving = false);
+                        }
+                      },
               ),
             ),
           ],

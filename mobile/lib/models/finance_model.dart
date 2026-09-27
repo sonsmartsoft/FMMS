@@ -255,23 +255,83 @@ class FamilyTransactionModel {
       return TransactionType.EXPENSE;
     }
 
+    final type = parseType(json['transaction_type']);
+    final catId = json['category_id']?.toString();
+    final desc = json['description']?.toString() ?? '';
+    final notes = json['notes']?.toString() ?? '';
+    final payee = json['payee_vendor']?.toString() ?? '';
+    final combinedText = '$catId $desc $notes $payee'.toLowerCase();
+
+    String? resolvedCatName = json['category'] != null ? json['category']['name']?.toString() : null;
+    if (resolvedCatName == null || resolvedCatName.trim().isEmpty || resolvedCatName == 'Khác' || resolvedCatName == 'Chưa phân loại') {
+      if (type == TransactionType.INCOME) {
+        if (catId == '00000000-0000-0000-0008-000000000001' ||
+            catId == 'cat-inc-salary' ||
+            combinedText.contains('lương') ||
+            combinedText.contains('salary') ||
+            combinedText.contains('cố định') ||
+            combinedText.contains('thu nhập chính')) {
+          resolvedCatName = 'Lương cố định hàng tháng';
+        } else if (catId == '00000000-0000-0000-0008-000000000002' ||
+                   catId == 'cat-inc-bonus' ||
+                   combinedText.contains('thưởng') ||
+                   combinedText.contains('bonus') ||
+                   combinedText.contains('phụ cấp')) {
+          resolvedCatName = 'Thưởng & Thu nhập phụ';
+        } else if (catId == '00000000-0000-0000-0008-000000000003' ||
+                   catId == 'cat-inc-invest' ||
+                   catId == 'cat-inc-biz' ||
+                   combinedText.contains('đầu tư') ||
+                   combinedText.contains('lãi') ||
+                   combinedText.contains('tiết kiệm') ||
+                   combinedText.contains('cổ tức') ||
+                   combinedText.contains('kinh doanh')) {
+          resolvedCatName = 'Lợi nhuận kinh doanh / Đầu tư';
+        } else {
+          resolvedCatName = 'Thu nhập cố định / Lương';
+        }
+      } else if (type == TransactionType.TRANSFER) {
+        resolvedCatName = 'Chuyển tiền nội bộ giữa các ví';
+      } else if (type == TransactionType.DEBT_LOAN) {
+        resolvedCatName = 'Trả góp & Trả nợ ngân hàng';
+      }
+    }
+
+    String? resolvedWalletName = json['wallet'] != null ? json['wallet']['name']?.toString() : null;
+    if (resolvedWalletName == null || resolvedWalletName.isEmpty) {
+      final wId = json['wallet_id']?.toString();
+      if (wId == '00000000-0000-0000-0000-000000000002' || wId == 'w-tcb-01') {
+        resolvedWalletName = 'Techcombank Chi tiêu';
+      } else if (wId == '00000000-0000-0000-0000-000000000003' || wId == 'w-vcb-01') {
+        resolvedWalletName = 'Vietcombank Lương & Dự phòng';
+      } else if (wId == '00000000-0000-0000-0000-000000000001' || wId == 'w-cash-01') {
+        resolvedWalletName = 'Tiền mặt gia đình';
+      } else if (wId == '00000000-0000-0000-0000-000000000004' || wId == 'w-tcb-credit') {
+        resolvedWalletName = 'Techcombank Visa Signature';
+      } else if (wId == '00000000-0000-0000-0000-000000000005' || wId == 'w-momo-01') {
+        resolvedWalletName = 'Ví MoMo';
+      } else if (wId == '00000000-0000-0000-0000-000000000006' || wId == 'w-savings-01') {
+        resolvedWalletName = 'Sổ tiết kiệm ngân hàng';
+      }
+    }
+
     return FamilyTransactionModel(
       id: json['id']?.toString() ?? '',
       walletId: json['wallet_id']?.toString() ?? '',
       toWalletId: json['to_wallet_id']?.toString(),
-      categoryId: json['category_id']?.toString(),
+      categoryId: catId,
       subCategoryId: json['sub_category_id']?.toString(),
       assetId: json['asset_id']?.toString(),
       assetName: json['asset_name']?.toString() ?? (json['asset'] != null ? json['asset']['name']?.toString() : null),
-      transactionType: parseType(json['transaction_type']),
+      transactionType: type,
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       date: json['date']?.toString() ?? '',
       payeeVendor: json['payee_vendor']?.toString(),
       description: json['description']?.toString(),
       notes: json['notes']?.toString(),
       isEssential: json['is_essential'] ?? true,
-      walletName: json['wallet'] != null ? json['wallet']['name'] : null,
-      categoryName: json['category'] != null ? json['category']['name'] : null,
+      walletName: resolvedWalletName,
+      categoryName: resolvedCatName,
       subCategoryName: json['sub_category_name']?.toString(),
       eventTripId: json['event_trip_id']?.toString(),
       eventTripName: json['event_trip_name']?.toString(),

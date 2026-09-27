@@ -4,13 +4,13 @@ import '../models/ai_action_model.dart';
 import '../models/finance_model.dart';
 import '../models/user_member_model.dart';
 
-class AIActionCardWidget extends StatelessWidget {
+class AIActionCardWidget extends StatefulWidget {
   final AIActionDraft draft;
   final List<TransactionCategoryModel> categories;
   final List<WalletModel> wallets;
   final List<FamilyMemberModel> members;
   final NumberFormat currencyFmt;
-  final Function(AIActionDraft) onConfirmed;
+  final Future<void> Function(AIActionDraft) onConfirmed;
   final Function(AIActionDraft) onChanged;
   final VoidCallback onDismiss;
 
@@ -27,16 +27,25 @@ class AIActionCardWidget extends StatelessWidget {
   });
 
   @override
+  State<AIActionCardWidget> createState() => _AIActionCardWidgetState();
+}
+
+class _AIActionCardWidgetState extends State<AIActionCardWidget> {
+  bool _isSaving = false;
+  bool _isConfirmed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final draft = widget.draft;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final parentCategories = categories.where((c) => c.isParent).toList();
-    final matchingParent = categories.firstWhere(
+    final parentCategories = widget.categories.where((c) => c.isParent).toList();
+    final matchingParent = widget.categories.firstWhere(
       (c) => c.name == draft.categoryName,
-      orElse: () => parentCategories.isNotEmpty ? parentCategories.first : categories.first,
+      orElse: () => parentCategories.isNotEmpty ? parentCategories.first : widget.categories.first,
     );
-    final subCategories = categories.where((c) => c.parentId == matchingParent.id).toList();
+    final subCategories = widget.categories.where((c) => c.parentId == matchingParent.id).toList();
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -88,7 +97,7 @@ class AIActionCardWidget extends StatelessWidget {
               ),
               IconButton(
                 icon: const Icon(Icons.close, size: 18, color: Colors.grey),
-                onPressed: onDismiss,
+                onPressed: widget.onDismiss,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               )
@@ -102,7 +111,7 @@ class AIActionCardWidget extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                currencyFmt.format(draft.amount),
+                widget.currencyFmt.format(draft.amount),
                 style: const TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
@@ -126,8 +135,8 @@ class AIActionCardWidget extends StatelessWidget {
               // 1. Member Selector
               PopupMenuButton<String>(
                 initialValue: draft.memberName,
-                onSelected: (val) => onChanged(draft.copyWith(memberName: val)),
-                itemBuilder: (ctx) => members.map((m) => PopupMenuItem(value: m.name, child: Text(m.name))).toList(),
+                onSelected: (val) => widget.onChanged(draft.copyWith(memberName: val)),
+                itemBuilder: (ctx) => widget.members.map((m) => PopupMenuItem(value: m.name, child: Text(m.name))).toList(),
                 child: _buildChip(
                   icon: Icons.person_outline,
                   label: draft.memberName ?? 'Người chi',
@@ -138,7 +147,7 @@ class AIActionCardWidget extends StatelessWidget {
               // 2. Parent Category Selector
               PopupMenuButton<TransactionCategoryModel>(
                 onSelected: (val) {
-                  onChanged(draft.copyWith(
+                  widget.onChanged(draft.copyWith(
                     categoryName: val.name,
                     categoryId: val.id,
                     subCategoryName: null,
@@ -157,7 +166,7 @@ class AIActionCardWidget extends StatelessWidget {
               if (subCategories.isNotEmpty || draft.subCategoryName != null)
                 PopupMenuButton<TransactionCategoryModel?>(
                   onSelected: (val) {
-                    onChanged(draft.copyWith(
+                    widget.onChanged(draft.copyWith(
                       subCategoryName: val?.name,
                       subCategoryId: val?.id,
                     ));
@@ -182,8 +191,8 @@ class AIActionCardWidget extends StatelessWidget {
               // 3. Wallet Selector
               PopupMenuButton<String>(
                 initialValue: draft.walletName,
-                onSelected: (val) => onChanged(draft.copyWith(walletName: val)),
-                itemBuilder: (ctx) => wallets.map((w) => PopupMenuItem(value: w.name, child: Text(w.name))).toList(),
+                onSelected: (val) => widget.onChanged(draft.copyWith(walletName: val)),
+                itemBuilder: (ctx) => widget.wallets.map((w) => PopupMenuItem(value: w.name, child: Text(w.name))).toList(),
                 child: _buildChip(
                   icon: Icons.account_balance_wallet_outlined,
                   label: draft.walletName ?? 'Ví thanh toán',
@@ -203,17 +212,50 @@ class AIActionCardWidget extends StatelessWidget {
 
           const SizedBox(height: 14),
 
-          // Confirm Button (1-Click)
+          // Confirm Button (1-Click with loading & confirmed state)
           ElevatedButton.icon(
-            onPressed: () => onConfirmed(draft),
-            icon: const Icon(Icons.check_circle_outline, size: 18),
-            label: const Text('Xác nhận ghi sổ ngay (1 chạm)'),
+            onPressed: (_isSaving || _isConfirmed)
+                ? null
+                : () async {
+                    setState(() => _isSaving = true);
+                    try {
+                      await widget.onConfirmed(draft);
+                      if (mounted) {
+                        setState(() {
+                          _isSaving = false;
+                          _isConfirmed = true;
+                        });
+                      }
+                    } catch (_) {
+                      if (mounted) setState(() => _isSaving = false);
+                    }
+                  },
+            icon: _isSaving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : Icon(
+                    _isConfirmed ? Icons.check_circle : Icons.check_circle_outline,
+                    size: 18,
+                  ),
+            label: Text(
+              _isSaving
+                  ? 'Đang ghi sổ giao dịch...'
+                  : (_isConfirmed ? '✓ Đã ghi sổ thành công' : 'Xác nhận ghi sổ ngay (1 chạm)'),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
+              backgroundColor: _isConfirmed
+                  ? const Color(0xFF059669)
+                  : (_isSaving ? Colors.grey.shade600 : const Color(0xFF10B981)),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               elevation: 0,
+              disabledBackgroundColor: _isConfirmed ? const Color(0xFF059669) : Colors.grey.shade600,
+              disabledForegroundColor: Colors.white,
             ),
           )
         ],

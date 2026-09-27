@@ -415,14 +415,118 @@ export async function getFamilyTransactions(filter?: TransactionFilter): Promise
   return filtered.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Normalization helpers for UUID compatibility with Supabase
+const isUUID = (str?: string | null): boolean =>
+  Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str));
+
+const WALLET_ID_MAP: Record<string, string> = {
+  'w-cash-01': '00000000-0000-0000-0000-000000000001',
+  'w-tcb-01': '00000000-0000-0000-0000-000000000002',
+  'w-vcb-01': '00000000-0000-0000-0000-000000000003',
+  'w-tcb-credit': '00000000-0000-0000-0000-000000000004',
+  'w-momo-01': '00000000-0000-0000-0000-000000000005',
+  'w-savings-01': '00000000-0000-0000-0000-000000000006',
+};
+
+const CATEGORY_ID_MAP: Record<string, string> = {
+  'cat-food': '00000000-0000-0000-0001-000000000001',
+  'cat-food-groceries': '00000000-0000-0000-0001-000000000002',
+  'cat-food-breakfast': '00000000-0000-0000-0001-000000000003',
+  'cat-food-dining': '00000000-0000-0000-0001-000000000001',
+  'cat-food-cafe': '00000000-0000-0000-0001-000000000003',
+  'cat-home': '00000000-0000-0000-0002-000000000001',
+  'cat-home-bills': '00000000-0000-0000-0002-000000000002',
+  'cat-home-water': '00000000-0000-0000-0002-000000000002',
+  'cat-mobility': '00000000-0000-0000-0003-000000000001',
+  'cat-mob-fuel': '00000000-0000-0000-0003-000000000002',
+  'cat-mob-maint': '00000000-0000-0000-0003-000000000003',
+  'cat-mob-toll': '00000000-0000-0000-0003-000000000004',
+  'cat-mob-wash': '00000000-0000-0000-0003-000000000006',
+  'cat-health': '00000000-0000-0000-0004-000000000001',
+  'cat-edu': '00000000-0000-0000-0005-000000000001',
+  'cat-leisure': '00000000-0000-0000-0006-000000000001',
+  'cat-debt': '00000000-0000-0000-0007-000000000001',
+  'cat-inc-salary': '00000000-0000-0000-0008-000000000001',
+  'cat-inc-bonus': '00000000-0000-0000-0008-000000000002',
+  'cat-inc-invest': '00000000-0000-0000-0008-000000000003',
+  'cat-inc-biz': '00000000-0000-0000-0008-000000000003',
+  'cat-transfer': '00000000-0000-0000-0009-000000000001',
+};
+
+function normalizeWalletId(rawId?: string | null): string {
+  if (!rawId) return '00000000-0000-0000-0000-000000000002'; // default Techcombank Chi tiêu
+  if (isUUID(rawId)) return rawId;
+  return WALLET_ID_MAP[rawId] || '00000000-0000-0000-0000-000000000002';
+}
+
+function normalizeCategoryId(rawId?: string | null, type?: TransactionType, desc?: string): string | null {
+  if (!rawId) {
+    if (type === 'INCOME') return '00000000-0000-0000-0008-000000000001';
+    return null;
+  }
+  if (isUUID(rawId)) return rawId;
+  if (CATEGORY_ID_MAP[rawId]) return CATEGORY_ID_MAP[rawId];
+  const lower = (rawId + ' ' + (desc || '')).toLowerCase();
+  if (type === 'INCOME' || lower.includes('lương') || lower.includes('salary')) {
+    return '00000000-0000-0000-0008-000000000001';
+  }
+  if (lower.includes('thưởng') || lower.includes('bonus')) {
+    return '00000000-0000-0000-0008-000000000002';
+  }
+  if (lower.includes('lãi') || lower.includes('đầu tư') || lower.includes('tiết kiệm')) {
+    return '00000000-0000-0000-0008-000000000003';
+  }
+  return null;
+}
+
 export async function createFamilyTransaction(
   tx: Omit<FamilyTransaction, 'id' | 'created_at' | 'updated_at'>
 ): Promise<FamilyTransaction> {
+  const normWalletId = normalizeWalletId(tx.wallet_id);
+  const normToWalletId = tx.to_wallet_id ? normalizeWalletId(tx.to_wallet_id) : null;
+  const normCatId = normalizeCategoryId(tx.category_id, tx.transaction_type, `${tx.description || ''} ${tx.notes || ''}`);
+  const normAssetId = isUUID(tx.asset_id) ? tx.asset_id : null;
+
+  const dbPayload: Record<string, any> = {
+    wallet_id: normWalletId,
+    transaction_type: tx.transaction_type || 'EXPENSE',
+    amount: Number(tx.amount || 0),
+    date: tx.date || new Date().toISOString().split('T')[0],
+    is_essential: tx.is_essential ?? true,
+    exclude_from_reports: tx.exclude_from_reports ?? false,
+  };
+
+  if (tx.transaction_type === 'TRANSFER' && normToWalletId) {
+    dbPayload.to_wallet_id = normToWalletId;
+  }
+  if (normCatId) {
+    dbPayload.category_id = normCatId;
+  }
+  if (normAssetId) {
+    dbPayload.asset_id = normAssetId;
+  }
+  if (tx.payee_vendor?.trim()) {
+    dbPayload.payee_vendor = tx.payee_vendor.trim();
+  }
+  if (tx.description?.trim()) {
+    dbPayload.description = tx.description.trim();
+  }
+  if (tx.notes?.trim()) {
+    dbPayload.notes = tx.notes.trim();
+  }
+  if (tx.created_by && isUUID(tx.created_by)) {
+    dbPayload.created_by = tx.created_by;
+  }
+  if (tx.bill_image_url) {
+    dbPayload.bill_image_url = tx.bill_image_url;
+  }
+
   let createdTx: FamilyTransaction;
   try {
     const { data, error } = await supabase
       .from('family_transactions')
-      .insert([tx])
+      .insert([dbPayload])
       .select(`
         *,
         wallet:wallets!wallet_id(*),
@@ -433,13 +537,26 @@ export async function createFamilyTransaction(
     if (!error && data) {
       createdTx = data as FamilyTransaction;
     } else {
-      throw error || new Error('DB insert failed');
+      // Fallback plain insert if join fails
+      const { data: plainData, error: plainError } = await supabase
+        .from('family_transactions')
+        .insert([dbPayload])
+        .select()
+        .single();
+      if (!plainError && plainData) {
+        createdTx = plainData as FamilyTransaction;
+      } else {
+        throw plainError || error || new Error('DB insert failed');
+      }
     }
   } catch (dbErr) {
+    console.warn('[createFamilyTransaction] Supabase insert warning, saved locally:', dbErr);
     // Lưu vào lưu trữ cục bộ nếu DB bận hoặc gặp sự cố
     const newId = `ft_local_${Date.now()}`;
     createdTx = {
       ...tx,
+      wallet_id: normWalletId,
+      category_id: normCatId || tx.category_id,
       id: newId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -484,6 +601,24 @@ export async function updateFamilyTransaction(
   delete updatePayload.wallet;
   delete updatePayload.category;
   delete updatePayload.asset;
+  delete updatePayload.to_wallet;
+
+  if (updatePayload.wallet_id) {
+    updatePayload.wallet_id = normalizeWalletId(updatePayload.wallet_id);
+  }
+  if (updatePayload.to_wallet_id) {
+    updatePayload.to_wallet_id = normalizeWalletId(updatePayload.to_wallet_id);
+  }
+  if (updatePayload.category_id) {
+    updatePayload.category_id = normalizeCategoryId(
+      updatePayload.category_id,
+      updatePayload.transaction_type,
+      `${updatePayload.description || ''} ${updatePayload.notes || ''}`
+    );
+  }
+  if (updatePayload.asset_id && !isUUID(updatePayload.asset_id)) {
+    delete updatePayload.asset_id;
+  }
   updatePayload.updated_at = new Date().toISOString();
 
   let updatedTx: FamilyTransaction | null = null;
@@ -703,17 +838,22 @@ function getLocalWallets(): Wallet[] {
       const saved = localStorage.getItem('ffms_wallets');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((w) => ({
+            ...w,
+            id: normalizeWalletId(w.id),
+          }));
+        }
       }
     } catch {}
   }
   return [
-    { id: 'w-cash-01', name: 'Tiền mặt gia đình', wallet_type: 'CASH', initial_balance: 15400000, current_balance: 15400000, currency: 'VND', color: '#10b981', icon: 'Banknote', is_excluded_from_total: false, status: 'ACTIVE' },
-    { id: 'w-tcb-01', name: 'Techcombank Chi tiêu', wallet_type: 'BANK', bank_name: 'Techcombank', initial_balance: 38500000, current_balance: 38500000, currency: 'VND', color: '#ef4444', icon: 'Building2', is_excluded_from_total: false, status: 'ACTIVE' },
-    { id: 'w-vcb-01', name: 'Vietcombank Lương & Dự phòng', wallet_type: 'BANK', bank_name: 'Vietcombank', initial_balance: 85200000, current_balance: 85200000, currency: 'VND', color: '#059669', icon: 'CreditCard', is_excluded_from_total: false, status: 'ACTIVE' },
-    { id: 'w-tcb-credit', name: 'Techcombank Visa Signature', wallet_type: 'CREDIT_CARD', bank_name: 'Techcombank', initial_balance: 0, current_balance: -4850000, currency: 'VND', credit_limit: 100000000, statement_day: 20, payment_due_day: 5, color: '#6366f1', icon: 'CreditCard', is_excluded_from_total: false, status: 'ACTIVE' },
-    { id: 'w-momo-01', name: 'Ví MoMo', wallet_type: 'E_WALLET', initial_balance: 1250000, current_balance: 1250000, currency: 'VND', color: '#ec4899', icon: 'Smartphone', is_excluded_from_total: false, status: 'ACTIVE' },
-    { id: 'w-savings-01', name: 'Sổ tiết kiệm ngân hàng', wallet_type: 'SAVINGS', bank_name: 'Techcombank', initial_balance: 150000000, current_balance: 150000000, currency: 'VND', color: '#38bdf8', icon: 'PiggyBank', is_excluded_from_total: false, status: 'ACTIVE' },
+    { id: '00000000-0000-0000-0000-000000000001', name: 'Tiền mặt gia đình', wallet_type: 'CASH', initial_balance: 15400000, current_balance: 15400000, currency: 'VND', color: '#10b981', icon: 'Banknote', is_excluded_from_total: false, status: 'ACTIVE' },
+    { id: '00000000-0000-0000-0000-000000000002', name: 'Techcombank Chi tiêu', wallet_type: 'BANK', bank_name: 'Techcombank', initial_balance: 38500000, current_balance: 38500000, currency: 'VND', color: '#ef4444', icon: 'Building2', is_excluded_from_total: false, status: 'ACTIVE' },
+    { id: '00000000-0000-0000-0000-000000000003', name: 'Vietcombank Lương & Dự phòng', wallet_type: 'BANK', bank_name: 'Vietcombank', initial_balance: 85200000, current_balance: 85200000, currency: 'VND', color: '#059669', icon: 'CreditCard', is_excluded_from_total: false, status: 'ACTIVE' },
+    { id: '00000000-0000-0000-0000-000000000004', name: 'Techcombank Visa Signature', wallet_type: 'CREDIT_CARD', bank_name: 'Techcombank', initial_balance: 0, current_balance: -4850000, currency: 'VND', credit_limit: 100000000, statement_day: 20, payment_due_day: 5, color: '#6366f1', icon: 'CreditCard', is_excluded_from_total: false, status: 'ACTIVE' },
+    { id: '00000000-0000-0000-0000-000000000005', name: 'Ví MoMo', wallet_type: 'E_WALLET', initial_balance: 1250000, current_balance: 1250000, currency: 'VND', color: '#ec4899', icon: 'Smartphone', is_excluded_from_total: false, status: 'ACTIVE' },
+    { id: '00000000-0000-0000-0000-000000000006', name: 'Sổ tiết kiệm ngân hàng', wallet_type: 'SAVINGS', bank_name: 'Techcombank', initial_balance: 150000000, current_balance: 150000000, currency: 'VND', color: '#38bdf8', icon: 'PiggyBank', is_excluded_from_total: false, status: 'ACTIVE' },
   ];
 }
 
