@@ -513,6 +513,12 @@ function TransactionsLedgerContent() {
 
       {/* Transactions Table */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        {/* hint bar */}
+        <div className="px-4 py-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 flex items-center gap-1.5">
+          <Pencil className="w-3 h-3" />
+          <span>Bấm vào bất kỳ hàng nào để <strong className="text-slate-600 dark:text-slate-300">chỉnh sửa</strong> — hoặc dùng nút <strong className="text-rose-500">🗑 Xóa</strong> ở cuối hàng</span>
+        </div>
+
         {filteredTransactions.length === 0 ? (
           <div className="text-center py-16 text-slate-400 text-xs">
             Không tìm thấy giao dịch nào phù hợp với bộ lọc.
@@ -528,7 +534,7 @@ function TransactionsLedgerContent() {
                   <th className="py-3 px-4">Gắn với Xe</th>
                   <th className="py-3 px-4">Phân loại</th>
                   <th className="py-3 px-4 text-right">Số tiền</th>
-                  <th className="py-3 px-4 text-center">Thao tác</th>
+                  <th className="py-3 px-4 text-center">Xóa</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
@@ -537,7 +543,14 @@ function TransactionsLedgerContent() {
                   const isIncome = tx.transaction_type === 'INCOME';
 
                   return (
-                    <tr key={tx.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                    <tr
+                      key={tx.id}
+                      className="group hover:bg-sky-50/60 dark:hover:bg-sky-950/20 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setTransactionToEdit(tx);
+                        setIsModalOpen(true);
+                      }}
+                    >
                       <td className="py-3 px-4 whitespace-nowrap font-medium text-slate-500">
                         {fmtDate(tx.date)}
                       </td>
@@ -548,6 +561,10 @@ function TransactionsLedgerContent() {
                             style={{ backgroundColor: tx.category?.color || '#94a3b8' }}
                           />
                           <span>{tx.category?.name || 'Khác'}</span>
+                          {/* edit hint visible on hover */}
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 shrink-0">
+                            <Pencil className="w-2.5 h-2.5" /> Sửa
+                          </span>
                           {(() => {
                             const memberObj = tx.created_by ? members.find((m) => m.id === tx.created_by) : null;
                             const noteMatch = tx.notes?.match(/\[Người chi:\s*([^\]]+)\]/);
@@ -609,26 +626,18 @@ function TransactionsLedgerContent() {
                           {fmt(tx.amount)} ₫
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => {
-                              setTransactionToEdit(tx);
-                              setIsModalOpen(true);
-                            }}
-                            className="p-1 text-slate-400 hover:text-sky-500 transition-colors rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                            title="Chỉnh sửa giao dịch"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(tx.id)}
-                            className="p-1 text-slate-400 hover:text-rose-600 transition-colors rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                            title="Xóa giao dịch"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                      {/* Delete button — stop propagation so row click won't also trigger */}
+                      <td className="py-3 px-4 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(tx.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 transition-all p-1.5 text-slate-400 hover:text-white hover:bg-rose-500 rounded-lg border border-transparent hover:border-rose-400 active:scale-95"
+                          title="Xóa giao dịch này"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   );
