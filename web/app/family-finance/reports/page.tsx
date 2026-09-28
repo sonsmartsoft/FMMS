@@ -580,7 +580,7 @@ export default function FamilyFinancialReportsPage() {
 
   return (
     <FinanceErrorBoundary fallbackTitle="Không thể kết xuất báo cáo tài chính gia đình">
-      <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto print:p-0 print:m-0">
+      <div className="min-h-screen space-y-6 w-full print:p-0 print:m-0">
         {/* ── Top Header & Actions ── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800 print:border-none">
           <div className="flex items-center gap-3">

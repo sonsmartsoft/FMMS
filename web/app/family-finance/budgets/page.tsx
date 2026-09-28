@@ -345,7 +345,7 @@ export default function BudgetsManagementPage() {
 
   return (
     <FinanceErrorBoundary fallbackTitle="Không thể tải ngân sách thông minh">
-      <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="min-h-screen space-y-6 w-full">
         {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">

@@ -395,7 +395,7 @@ export default function FamilyFinanceDashboard() {
 
   return (
     <FinanceErrorBoundary fallbackTitle="Không thể tải tổng quan tài chính gia đình">
-      <div className="min-h-screen p-4 md:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+      <div className="min-h-screen space-y-6 w-full">
       {/* ─────────────────────────────────────────────────────────────
           1. HEADER & EXECUTIVE ACTIONS
          ───────────────────────────────────────────────────────────── */}
