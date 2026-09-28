@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import KpiGradientCard from '@/components/ui/KpiGradientCard';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
+import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 import { safeFormatCurrency as fmt, safeMaskAccount } from '@/lib/utils/formatters';
 
 export default function WalletsManagementPage() {
@@ -41,6 +42,13 @@ export default function WalletsManagementPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [editingWallet, setEditingWallet] = useState<Wallet | null>(null);
+  const [securityModal, setSecurityModal] = useState<{
+    isOpen: boolean;
+    title?: string;
+    description?: string;
+    actionName?: string;
+    onConfirm?: () => void;
+  }>({ isOpen: false });
 
   // Form State
   const [formName, setFormName] = useState('');
@@ -156,17 +164,26 @@ export default function WalletsManagementPage() {
     }
   };
 
-  const handleDeleteWallet = async (id: string) => {
-    if (confirm('Bạn có chắc chắn muốn xóa tài khoản/ví này? Các giao dịch liên quan có thể bị ảnh hưởng.')) {
-      try {
-        await deleteWallet(id);
-        setWallets((prev) => prev.filter((w) => w.id !== id));
-        setNotification({ message: '✓ Đã xóa tài khoản / ví thành công!', type: 'success' });
-        setTimeout(() => setNotification(null), 3000);
-      } catch (err) {
-        alert('Xóa ví thất bại');
-      }
-    }
+  const handleDeleteWallet = (id: string) => {
+    const targetWallet = wallets.find((w) => w.id === id);
+    const walletName = targetWallet?.name || 'Tài khoản/Ví';
+
+    setSecurityModal({
+      isOpen: true,
+      title: 'Xác thực Xóa Tài Khoản / Ví (Admin PIN)',
+      description: `CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn ví "${walletName}". Tất cả các giao dịch gắn với ví này có thể bị mất liên kết. Vui lòng nhập mã PIN Quản trị viên để xác nhận.`,
+      actionName: 'Xác nhận xóa tài khoản',
+      onConfirm: async () => {
+        try {
+          await deleteWallet(id);
+          setWallets((prev) => prev.filter((w) => w.id !== id));
+          setNotification({ message: '✓ Đã xóa tài khoản / ví thành công!', type: 'success' });
+          setTimeout(() => setNotification(null), 3000);
+        } catch (err) {
+          alert('Xóa ví thất bại');
+        }
+      },
+    });
   };
 
   // Groupings
@@ -728,6 +745,18 @@ export default function WalletsManagementPage() {
         onClose={() => setIsTransferModalOpen(false)}
         onSuccess={loadWallets}
         defaultType="TRANSFER"
+      />
+
+      {/* 🔒 Master Admin Security PIN Confirmation Modal */}
+      <AdminSecurityPinModal
+        isOpen={securityModal.isOpen}
+        title={securityModal.title}
+        description={securityModal.description}
+        actionName={securityModal.actionName}
+        onClose={() => setSecurityModal((p) => ({ ...p, isOpen: false }))}
+        onSuccess={() => {
+          if (securityModal.onConfirm) securityModal.onConfirm();
+        }}
       />
       </div>
     </FinanceErrorBoundary>

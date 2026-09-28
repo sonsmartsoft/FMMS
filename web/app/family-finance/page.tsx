@@ -65,6 +65,7 @@ import {
 import { useTheme } from '@/lib/theme/ThemeContext';
 import { ChartLabelToggle, useChartLabelState } from '@/components/charts/ChartLabelToggle';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
+import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 
 const fmtM = (n: number) => `${(n / 1_000_000).toFixed(1)}M`;
@@ -104,6 +105,13 @@ export default function FamilyFinanceDashboard() {
   const [activeKpiModal, setActiveKpiModal] = useState<'ASSETS' | 'INCOME' | 'EXPENSE' | 'DEBT' | null>(null);
   const [kpiSearchQuery, setKpiSearchQuery] = useState('');
   const [isMounted, setIsMounted] = useState(false);
+  const [securityModal, setSecurityModal] = useState<{
+    isOpen: boolean;
+    title?: string;
+    description?: string;
+    actionName?: string;
+    onConfirm?: () => void;
+  }>({ isOpen: false });
 
   useEffect(() => {
     setIsMounted(true);
@@ -372,15 +380,21 @@ export default function FamilyFinanceDashboard() {
     return months;
   }, [selectedMonth, selectedYear, monthlyIncome, monthlyExpenses]);
 
-  const handleDeleteTx = async (id: string) => {
-    if (confirm('Bạn có chắc muốn xóa giao dịch này?')) {
-      try {
-        await deleteFamilyTransaction(id);
-        loadData();
-      } catch (err) {
-        alert('Xóa thất bại');
-      }
-    }
+  const handleDeleteTx = (id: string) => {
+    setSecurityModal({
+      isOpen: true,
+      title: 'Xác thực Xóa Giao Dịch (Admin PIN)',
+      description: 'Hành động này sẽ xóa giao dịch khỏi hệ thống sổ thu chi gia đình. Vui lòng nhập mã PIN Quản trị viên để xác nhận.',
+      actionName: 'Xác nhận xóa giao dịch',
+      onConfirm: async () => {
+        try {
+          await deleteFamilyTransaction(id);
+          loadData();
+        } catch (err) {
+          alert('Xóa thất bại');
+        }
+      },
+    });
   };
 
   const getWalletIcon = (type: string) => {
@@ -1570,6 +1584,18 @@ export default function FamilyFinanceDashboard() {
           </div>
         </DraggableModal>
       )}
+
+      {/* 🔒 Master Admin Security PIN Confirmation Modal */}
+      <AdminSecurityPinModal
+        isOpen={securityModal.isOpen}
+        title={securityModal.title}
+        description={securityModal.description}
+        actionName={securityModal.actionName}
+        onClose={() => setSecurityModal((p) => ({ ...p, isOpen: false }))}
+        onSuccess={() => {
+          if (securityModal.onConfirm) securityModal.onConfirm();
+        }}
+      />
       </div>
     </FinanceErrorBoundary>
   );

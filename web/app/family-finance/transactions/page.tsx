@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import KpiGradientCard from '@/components/ui/KpiGradientCard';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
+import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 
 export default function TransactionsLedgerPage() {
@@ -86,6 +87,13 @@ function TransactionsLedgerContent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalDefaultType, setModalDefaultType] = useState<TransactionType>('EXPENSE');
   const [transactionToEdit, setTransactionToEdit] = useState<FamilyTransaction | null>(null);
+  const [securityModal, setSecurityModal] = useState<{
+    isOpen: boolean;
+    title?: string;
+    description?: string;
+    actionName?: string;
+    onConfirm?: () => void;
+  }>({ isOpen: false });
 
   const loadData = async () => {
     setLoading(true);
@@ -193,15 +201,21 @@ function TransactionsLedgerContent() {
     };
   }, [filteredTransactions]);
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Bạn có chắc muốn xóa giao dịch này? Số dư ví sẽ được tự động hoàn lại.')) {
-      try {
-        await deleteFamilyTransaction(id);
-        loadData();
-      } catch (err) {
-        alert('Xóa thất bại');
-      }
-    }
+  const handleDelete = (id: string) => {
+    setSecurityModal({
+      isOpen: true,
+      title: 'Xác thực Xóa Giao Dịch (Admin PIN)',
+      description: 'Hành động này sẽ xóa vĩnh viễn giao dịch khỏi sổ thu chi gia đình và tự động hoàn lại số dư ví liên quan. Vui lòng nhập mã PIN Quản trị viên để xác nhận.',
+      actionName: 'Xác nhận xóa giao dịch',
+      onConfirm: async () => {
+        try {
+          await deleteFamilyTransaction(id);
+          loadData();
+        } catch (err) {
+          alert('Xóa thất bại');
+        }
+      },
+    });
   };
 
   return (
@@ -657,6 +671,18 @@ function TransactionsLedgerContent() {
         onSuccess={loadData}
         defaultType={modalDefaultType}
         transactionToEdit={transactionToEdit}
+      />
+
+      {/* 🔒 Master Admin Security PIN Confirmation Modal */}
+      <AdminSecurityPinModal
+        isOpen={securityModal.isOpen}
+        title={securityModal.title}
+        description={securityModal.description}
+        actionName={securityModal.actionName}
+        onClose={() => setSecurityModal((p) => ({ ...p, isOpen: false }))}
+        onSuccess={() => {
+          if (securityModal.onConfirm) securityModal.onConfirm();
+        }}
       />
       </div>
     </FinanceErrorBoundary>

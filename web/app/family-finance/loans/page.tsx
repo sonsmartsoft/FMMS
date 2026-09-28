@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import KpiGradientCard from '@/components/ui/KpiGradientCard';
 import FinanceErrorBoundary from '@/components/finance/FinanceErrorBoundary';
+import AdminSecurityPinModal from '@/components/security/AdminSecurityPinModal';
 import { safeFormatCurrency as fmt, safeFormatDate as fmtDate } from '@/lib/utils/formatters';
 
 export default function LoansManagementPage() {
@@ -42,6 +43,13 @@ export default function LoansManagementPage() {
   // Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLoan, setEditingLoan] = useState<FamilyLoan | null>(null);
+  const [securityModal, setSecurityModal] = useState<{
+    isOpen: boolean;
+    title?: string;
+    description?: string;
+    actionName?: string;
+    onConfirm?: () => void;
+  }>({ isOpen: false });
 
   // Form State
   const [title, setTitle] = useState('');
@@ -169,15 +177,24 @@ export default function LoansManagementPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Bạn có chắc chắn muốn xóa khoản vay này?')) {
-      try {
-        await deleteFamilyLoan(id);
-        loadData();
-      } catch (err) {
-        alert('Xóa thất bại');
-      }
-    }
+  const handleDelete = (id: string) => {
+    const targetLoan = loans.find((l) => l.id === id);
+    const loanName = targetLoan?.title || 'Khoản vay';
+
+    setSecurityModal({
+      isOpen: true,
+      title: 'Xác thực Xóa Khoản Vay (Admin PIN)',
+      description: `CẢNH BÁO NGUY HIỂM: Bạn đang chuẩn bị xóa vĩnh viễn khoản vay "${loanName}". Toàn bộ lịch sử trả nợ và dữ liệu liên quan sẽ bị xóa khỏi hệ thống. Vui lòng nhập mã PIN Quản trị viên để xác nhận.`,
+      actionName: 'Xác nhận xóa khoản vay',
+      onConfirm: async () => {
+        try {
+          await deleteFamilyLoan(id);
+          loadData();
+        } catch (err) {
+          alert('Xóa thất bại');
+        }
+      },
+    });
   };
 
   // Totals
@@ -584,6 +601,18 @@ export default function LoansManagementPage() {
           </div>
         </form>
       </DraggableModal>
+
+      {/* 🔒 Master Admin Security PIN Confirmation Modal */}
+      <AdminSecurityPinModal
+        isOpen={securityModal.isOpen}
+        title={securityModal.title}
+        description={securityModal.description}
+        actionName={securityModal.actionName}
+        onClose={() => setSecurityModal((p) => ({ ...p, isOpen: false }))}
+        onSuccess={() => {
+          if (securityModal.onConfirm) securityModal.onConfirm();
+        }}
+      />
       </div>
     </FinanceErrorBoundary>
   );
