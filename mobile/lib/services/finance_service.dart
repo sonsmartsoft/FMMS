@@ -217,6 +217,7 @@ class FinanceService {
     await _purgeMockTransactions();
 
     final allTxs = <FamilyTransactionModel>[];
+    bool supabaseSuccess = false;
 
     // 2. Tải các giao dịch gia đình thực sự từ Supabase (bảng family_transactions)
     try {
@@ -243,6 +244,7 @@ class FinanceService {
             .toList();
 
         allTxs.addAll(list);
+        supabaseSuccess = true;
       }
     } catch (e) {
       debugPrint('Error fetching family_transactions: $e');
@@ -448,23 +450,23 @@ class FinanceService {
       debugPrint('Error syncing vehicle expenses: $e');
     }
 
-    // 4. Nếu có giao dịch cục bộ hợp lệ (không phải mock tx-def-*) do người dùng tự nhập
-    final localTxs = await _loadLocalTransactions();
-    for (final ltx in localTxs) {
-      if (!ltx.id.startsWith('tx-def-') && !allTxs.any((t) => t.id == ltx.id)) {
-        allTxs.add(ltx);
-      }
-    }
-
-    // 5. Sắp xếp giảm dần theo ngày và lưu cache
-    allTxs.sort((a, b) => b.date.compareTo(a.date));
-
-    if (allTxs.isNotEmpty) {
+    // 4. Đồng bộ với bộ nhớ cục bộ (Cache & Offline)
+    if (supabaseSuccess) {
+      // Khi đã kết nối thành công với Supabase:
+      // Supabase là NGUỒN CHUẨN (Single Source of Truth).
+      // Bất kỳ giao dịch nào từng có mã UUID hoặc server ID mà KHÔNG còn trên Supabase
+      // chứng tỏ đã được người dùng xoá trên Web/Database -> Tuyệt đối KHÔNG phục hồi lại!
+      
+      // Sắp xếp giảm dần theo ngày và ghi đè cache cục bộ với danh sách sạch từ server
+      allTxs.sort((a, b) => b.date.compareTo(a.date));
       await _saveLocalTransactions(allTxs);
       return allTxs;
     }
 
-    return _loadLocalTransactions();
+    // 5. Nếu mất kết nối mạng (offline), fallback đọc từ cache cục bộ
+    final fallbackList = await _loadLocalTransactions();
+    fallbackList.sort((a, b) => b.date.compareTo(a.date));
+    return fallbackList;
   }
 
   // Create Transaction (Cập nhật số dư ví tự động & Đồng bộ 2 chiều lên Supabase)
@@ -649,6 +651,12 @@ class FinanceService {
       final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
       if (uuidRegex.hasMatch(tx.id)) {
         await _supabase.from('family_transactions').delete().eq('id', tx.id);
+      } else if (tx.id.startsWith('exp_')) {
+        await _supabase.from('expenses').delete().eq('id', tx.id.replaceFirst('exp_', ''));
+      } else if (tx.id.startsWith('fuel_')) {
+        await _supabase.from('fuel_logs').delete().eq('id', tx.id.replaceFirst('fuel_', ''));
+      } else if (tx.id.startsWith('maint_')) {
+        await _supabase.from('maintenance_records').delete().eq('id', tx.id.replaceFirst('maint_', ''));
       }
       return true;
     } catch (e) {

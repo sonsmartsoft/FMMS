@@ -204,11 +204,15 @@ class _CashbookScreenState extends State<CashbookScreen> {
                   // 3 KPI Strip: Thu vào | Chi ra | Số dư ròng
                   _buildFinancialSummaryStrip(isDark),
 
-                  // Main Content: Calendar view or Grouped List view
+                  // Main Content: Calendar view or Grouped List view with Pull-to-Refresh
                   Expanded(
-                    child: _isCalendarMode
-                        ? _buildCalendarView(isDark)
-                        : _buildGroupedListView(isDark),
+                    child: RefreshIndicator(
+                      color: const Color(0xFF0284C7),
+                      onRefresh: _loadData,
+                      child: _isCalendarMode
+                          ? _buildCalendarView(isDark)
+                          : _buildGroupedListView(isDark),
+                    ),
                   ),
                 ],
               ),
