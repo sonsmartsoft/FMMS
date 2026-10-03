@@ -27,8 +27,13 @@ rsync -a --delete "${SOURCE_DIR}/" "${BACKUP_DIR}/" \
   --exclude='web/.turbo' \
   --exclude='android/.gradle' \
   --exclude='android/app/build' \
+  --exclude='android/build' \
   --exclude='android/.cxx' \
-  --exclude='android/releases' \
+  --exclude='mobile/build' \
+  --exclude='mobile/.dart_tool' \
+  --exclude='mobile/ios/Pods' \
+  --exclude='mobile/ios/.symlinks' \
+  --exclude='mobile/android/.gradle' \
   --exclude='*.DS_Store' \
   --exclude='*.log' \
   --exclude='.git' \

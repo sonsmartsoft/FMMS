@@ -28,11 +28,17 @@ rsync -a --delete \
   --exclude='web/.turbo' \
   --exclude='android/.gradle' \
   --exclude='android/app/build' \
+  --exclude='android/build' \
   --exclude='android/.cxx' \
-  --exclude='android/releases' \
+  --exclude='mobile/build' \
+  --exclude='mobile/.dart_tool' \
+  --exclude='mobile/ios/Pods' \
+  --exclude='mobile/ios/.symlinks' \
+  --exclude='mobile/android/.gradle' \
   --exclude='*.DS_Store' \
   --exclude='*.log' \
   --exclude='.git' \
+  --exclude='._*' \
   "${SOURCE_DIR}/" "${DEST_DIR}/"
 
 # 3. Dọn file ẩn AppleDouble của macOS trên ổ ngoài
