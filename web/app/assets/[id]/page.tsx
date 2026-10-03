@@ -1100,6 +1100,7 @@ export default function AssetDetailPage() {
     { label: 'Tháng 7', start: '2026-07-01', end: '2026-07-31' },
     { label: 'Tháng 8', start: '2026-08-01', end: '2026-08-31' },
     { label: 'Tháng 9', start: '2026-09-01', end: '2026-09-30' },
+    { label: 'Tháng 10', start: '2026-10-01', end: '2026-10-31' },
     { label: 'Hôm nay', start: todayLocalDate, end: todayLocalDate },
   ];
 
@@ -1378,22 +1379,48 @@ export default function AssetDetailPage() {
       }
     });
 
+    // Tập hợp các mốc chốt ODO rời rạc (Đổ xăng, Bảo dưỡng, Ghi ODO, Chi phí) để không bao giờ cộng trùng quãng đường
+    const discreteCheckpoints = events
+      .filter(e => e.odometer_km > 0)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.odometer_km - b.odometer_km);
+
     // Trips: Sắp xếp theo thứ tự thời gian tăng dần để phân tích chuỗi Odometer
     const chronologicalTrips = [...trips].sort((a, b) => (a.start_time || '').localeCompare(b.start_time || ''));
     let prevTripEndOdo: number | null = null;
+    let prevTripDate: string | null = null;
 
     chronologicalTrips.forEach(t => {
       const dStr = toLocalDateString(t.start_time);
       const startOdo = t.start_odometer != null && Number(t.start_odometer) > 0 ? Number(t.start_odometer) : null;
       const endOdo = t.end_odometer != null && Number(t.end_odometer) > 0 ? Number(t.end_odometer) : null;
 
+      // Đồng bộ mốc ODO trước đó với bất kỳ sự kiện Đổ xăng / Ghi ODO / Bảo dưỡng nào nằm giữa 2 chuyến đi
+      if (startOdo != null) {
+        discreteCheckpoints.forEach(cp => {
+          if (cp.date <= dStr && cp.odometer_km <= startOdo && (prevTripEndOdo == null || cp.odometer_km > prevTripEndOdo)) {
+            prevTripEndOdo = cp.odometer_km;
+            prevTripDate = cp.date;
+          }
+        });
+      }
+
       // 🔍 TỰ ĐỘNG PHÁT HIỆN KHOẢNG HỞ ODO (Auto Gap Detection khi app bị sót chuyến đi)
       if (prevTripEndOdo != null && startOdo != null && startOdo > prevTripEndOdo) {
         const gapKm = Number((startOdo - prevTripEndOdo).toFixed(2));
         // Nếu khoảng hở từ 0.1 km đến 500 km: đây là chuyến đi bị sót GPS / quên bật app
         if (gapKm >= 0.1 && gapKm <= 500) {
+          let gapDate = dStr;
+          if (prevTripDate && prevTripDate < dStr) {
+            const startHour = t.start_time ? new Date(t.start_time).getHours() : 12;
+            const prevDayObj = new Date(dStr + 'T00:00:00');
+            prevDayObj.setDate(prevDayObj.getDate() - 1);
+            const prevDayStr = `${prevDayObj.getFullYear()}-${String(prevDayObj.getMonth() + 1).padStart(2, '0')}-${String(prevDayObj.getDate()).padStart(2, '0')}`;
+            if (prevTripDate < prevDayStr || startHour < 10) {
+              gapDate = prevDayStr >= prevTripDate ? prevDayStr : dStr;
+            }
+          }
           events.push({
-            date: dStr,
+            date: gapDate,
             odometer_km: startOdo,
             type: 'TRIP',
             note: `Tự động bù ODO thất lạc: +${fmt(gapKm)} km (${fmt(prevTripEndOdo)} → ${fmt(startOdo)} km)`,
@@ -1414,8 +1441,10 @@ export default function AssetDetailPage() {
 
       if (endOdo != null) {
         prevTripEndOdo = endOdo;
+        prevTripDate = dStr;
       } else if (startOdo != null && Number(t.distance_km) > 0) {
         prevTripEndOdo = Number((startOdo + Number(t.distance_km)).toFixed(2));
+        prevTripDate = dStr;
       }
     });
 
@@ -1439,10 +1468,10 @@ export default function AssetDetailPage() {
     // Check if current asset odometer is higher than the estimated real ODO
     // maxEventOdo considers both discrete ODO readings AND accumulated trip distances
     const maxDiscreteOdo = events.reduce((max, ev) => Math.max(max, ev.odometer_km || 0), 0);
-    const totalTripKm = events
-      .filter(ev => ev.type === 'TRIP' && ev.raw?.distance_km)
+    const unanchoredTripKm = events
+      .filter(ev => ev.type === 'TRIP' && (!ev.odometer_km || ev.odometer_km === 0) && ev.raw?.distance_km)
       .reduce((sum, ev) => sum + Number(ev.raw.distance_km), 0);
-    const estimatedRealOdo = maxDiscreteOdo + totalTripKm;
+    const estimatedRealOdo = maxDiscreteOdo + unanchoredTripKm;
     const todayStr = toLocalDateString(new Date().toISOString());
     if (asset && asset.current_odometer_km > estimatedRealOdo) {
       events.push({
@@ -1542,9 +1571,9 @@ export default function AssetDetailPage() {
       if (day.maxOdo > 0 && prevOdo > 0 && day.maxOdo > prevOdo) {
         const odoDelta = Number((day.maxOdo - prevOdo).toFixed(2));
         if (odoDelta <= 500) {
-          // Tự động đối soát: Nếu xe chạy thực tế theo ODO lớn hơn tổng các chuyến GPS bắt được
-          // (do app bị sót chuyến), kmRun tự động lấy theo odoDelta để bù chính xác 100%
-          kmRun = Math.max(day.tripDistance, odoDelta);
+          // Tự động đối soát theo nguyên tắc ODO là chân lý tối thượng:
+          // Quãng đường trong ngày bằng đúng hiệu số ODO cuối ngày hôm nay trừ ODO cuối ngày trước đó
+          kmRun = odoDelta;
         } else {
           // Bước nhảy ODO quá lớn (> 500 km do lâu ngày mới chốt ODO), ưu tiên quãng đường trip nếu có
           kmRun = day.tripDistance > 0 ? day.tripDistance : 0;
