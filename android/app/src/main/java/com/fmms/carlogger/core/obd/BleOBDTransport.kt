@@ -74,18 +74,23 @@ class BleOBDTransport(context: Context) : OBDTransport {
     private val callback = object : BluetoothGattCallback() {
 
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> g.requestMtu(185)
-                BluetoothProfile.STATE_DISCONNECTED -> {
-                    _connectionState.value = OBDConnectionState.DISCONNECTED
-                    cleanup(g)
+            try {
+                when (newState) {
+                    BluetoothProfile.STATE_CONNECTED -> g.requestMtu(185)
+                    BluetoothProfile.STATE_DISCONNECTED -> {
+                        _connectionState.value = OBDConnectionState.DISCONNECTED
+                        cleanup(g)
+                    }
                 }
+            } catch (_: Throwable) {
+                _connectionState.value = OBDConnectionState.DISCONNECTED
+                cleanup(g)
             }
         }
 
         override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
             mtuValue = mtu
-            g.discoverServices()
+            try { g.discoverServices() } catch (_: Throwable) {}
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
@@ -162,36 +167,40 @@ class BleOBDTransport(context: Context) : OBDTransport {
                 BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE)) != 0
 
     private fun enableNotifications(g: BluetoothGatt) {
-        val c = rxChar ?: return
-        g.setCharacteristicNotification(c, true)
-        val desc = c.getDescriptor(CCCD)
-        if (desc == null) {
-            // No CCCD — some adapters push notifications regardless.
-            _connectionState.value = OBDConnectionState.CONNECTED
-            return
+        try {
+            val c = rxChar ?: return
+            g.setCharacteristicNotification(c, true)
+            val desc = c.getDescriptor(CCCD)
+            if (desc == null) {
+                // No CCCD — some adapters push notifications regardless.
+                _connectionState.value = OBDConnectionState.CONNECTED
+                return
+            }
+            desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            descAck = CompletableDeferred()
+            val ok = if (Build.VERSION.SDK_INT >= 33) {
+                g.writeDescriptor(desc, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
+                        BluetoothGatt.GATT_SUCCESS
+            } else {
+                @Suppress("DEPRECATION") g.writeDescriptor(desc)
+            }
+            if (!ok) {
+                _connectionState.value = OBDConnectionState.CONNECTED
+                return
+            }
+            // Wait briefly for the descriptor ack; proceed anyway on timeout.
+            val done = kotlinx.coroutines.runBlocking {
+                withTimeoutOrNull(3000) { descAck?.await(); true } ?: false
+            }
+            _connectionState.value = if (done || true) OBDConnectionState.CONNECTED else OBDConnectionState.CONNECTED
+        } catch (_: Throwable) {
+            _connectionState.value = OBDConnectionState.ERROR
         }
-        desc.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-        descAck = CompletableDeferred()
-        val ok = if (Build.VERSION.SDK_INT >= 33) {
-            g.writeDescriptor(desc, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
-                    BluetoothGatt.GATT_SUCCESS
-        } else {
-            @Suppress("DEPRECATION") g.writeDescriptor(desc)
-        }
-        if (!ok) {
-            _connectionState.value = OBDConnectionState.CONNECTED
-            return
-        }
-        // Wait briefly for the descriptor ack; proceed anyway on timeout.
-        val done = kotlinx.coroutines.runBlocking {
-            withTimeoutOrNull(3000) { descAck?.await(); true } ?: false
-        }
-        _connectionState.value = if (done || true) OBDConnectionState.CONNECTED else OBDConnectionState.CONNECTED
     }
 
     @SuppressLint("MissingPermission")
     override suspend fun connect(macAddress: String): Boolean = withContext(Dispatchers.IO) {
-        if (gatt?.connect() == true && txChar != null) {
+        if (try { gatt?.connect() == true } catch (_: Throwable) { false } && txChar != null) {
             _connectionState.value = OBDConnectionState.CONNECTED
             return@withContext true
         }
@@ -227,23 +236,20 @@ class BleOBDTransport(context: Context) : OBDTransport {
                 _connectionState.value == OBDConnectionState.CONNECTED
             }
             if (ready != true) {
-                try { g.close() } catch (_: Exception) {}
+                try { g.close() } catch (_: Throwable) {}
                 gatt = null
                 _connectionState.value = OBDConnectionState.ERROR
                 return@withContext false
             }
             true
-        } catch (e: SecurityException) {
-            _connectionState.value = OBDConnectionState.ERROR
-            false
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             _connectionState.value = OBDConnectionState.ERROR
             false
         }
     }
 
     private fun cleanup(g: BluetoothGatt) {
-        try { g.close() } catch (_: Exception) {}
+        try { g.close() } catch (_: Throwable) {}
         if (gatt === g) gatt = null
         txChar = null; rxChar = null
     }
@@ -276,7 +282,11 @@ class BleOBDTransport(context: Context) : OBDTransport {
                         g.writeCharacteristic(c)
                     }
                 }
-            } catch (e: SecurityException) { false }
+            } catch (e: Throwable) {
+                _connectionState.value = OBDConnectionState.DISCONNECTED
+                cleanup(g)
+                false
+            }
             if (!submitted) return false
             val ok = withTimeoutOrNull(2000) { ack.await() } ?: false
             if (!ok) return false
@@ -334,7 +344,7 @@ class BleOBDTransport(context: Context) : OBDTransport {
             g?.disconnect()
             delay(150)
             g?.close()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         } finally {
             gatt = null
             txChar = null; rxChar = null

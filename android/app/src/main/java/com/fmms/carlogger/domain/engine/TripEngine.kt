@@ -57,6 +57,13 @@ class TripEngine(
     private var lastGpsPoint: Location? = null
     private var prevGpsPoint: Location? = null
     private var consumedGpsPoint: Location? = null
+    // ODO (PID 01A6) chỉ refresh ~mỗi 25s (10 sweep x 2.5s) nên giữa các sweep
+    // giá trị "giữ nguyên" rồi nhảy cả cửa sổ 25s một lần. GPS chạy mỗi 2.5s.
+    // Trước đây vừa cộng GPS fragment từng 2.5s vừa cộng bước nhảy ODO cho cùng
+    // đoạn đường → distance gần gấp đôi thực tế. Fix: [gpsWindowAccum] tích lũy
+    // distance GPS trong cửa sổ ODO hiện tại; khi ODO nhảy chỉ cộng phần chưa
+    // được GPS bao phủ (ODO vẫn là nguồn chuẩn cuối cùng).
+    private var gpsWindowAccum = 0.0
     private var lastEngineRunning = false
     private var stoppedSince: Long? = null
     private var engineEvidenceSince: Long? = null
@@ -117,6 +124,7 @@ class TripEngine(
                 lastOdoKm = orphan.endOdometer ?: orphan.startOdometer ?: vehicle.odometerKm
                 lastFuelLevel = orphan.fuelStartPercent
                 accumulatedFuelUsed = orphan.fuelUsedLiters ?: 0.0
+                gpsWindowAccum = 0.0
                 maxSpeed = orphan.maxSpeedKmh ?: 0.0
                 startLat = orphan.startLatitude
                 startLng = orphan.startLongitude
@@ -203,6 +211,7 @@ class TripEngine(
         startTime = System.currentTimeMillis()
         lastFuelLevel = live.fuelLevelPercent
         accumulatedFuelUsed = 0.0
+        gpsWindowAccum = 0.0
         lastOdoKm = vehicle.odometerKm
         startOdometer = vehicle.odometerKm
         startLat = live.latitude ?: lastGpsPoint?.latitude
@@ -247,16 +256,25 @@ class TripEngine(
         if (speed > maxSpeed) maxSpeed = speed
         stoppedSince = null
 
-        // Distance: odometer priority, then GPS
+        // Distance: ODO (PID 01A6) là nguồn chuẩn. ODO chỉ refresh ~mỗi 25s
+        // (10 sweep x 2.5s) nên giá trị "giữ nguyên" giữa các sweep rồi nhảy
+        // CẢ cửa sổ một lần. GPS chạy mỗi 2.5s. Trước đây cộng cả ODO (1 cửa
+        // sổ) lẫn GPS (từng segment) cho cùng đoạn đường → distance gần gấp
+        // đôi thực tế (vd trip 20/09: ODO 93.5km, GPS 93.89km, ghi 180.09km).
+        // Fix: GPS bù liên tục giữa các sweep (vừa đếm vừa tích lũy cửa sổ);
+        // khi ODO nhảy, chỉ cộng phần CHƯA được GPS bao phủ trong cửa sổ đó.
         var distance = 0.0
         val odo = live.odometerKm ?: vehicle.odometerKm
         if (lastOdoKm != null && odo != null && odo > lastOdoKm!!) {
-            distance = odo - lastOdoKm!!
-        }
-        if (prevGpsPoint != null && lastGpsPoint != null && lastGpsPoint !== consumedGpsPoint) {
+            val odoDelta = odo - lastOdoKm!!
+            distance = (odoDelta - gpsWindowAccum).coerceAtLeast(0.0)
+            gpsWindowAccum = 0.0
+            consumedGpsPoint = lastGpsPoint // ODO đã bao phủ cả cửa sổ
+        } else if (prevGpsPoint != null && lastGpsPoint != null && lastGpsPoint !== consumedGpsPoint) {
             val gpsDist = distanceKm(prevGpsPoint!!, lastGpsPoint!!)
             if (gpsDist > distance) distance = gpsDist
             consumedGpsPoint = lastGpsPoint
+            gpsWindowAccum += gpsDist
         }
         lastOdoKm = odo
 

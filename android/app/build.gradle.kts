@@ -29,7 +29,7 @@ android {
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"sb_publishable_AateqAZXqTwmEsSwqweiPA_iGelY6O3\"")
         buildConfigField("String", "MAZDA2_ASSET_ID", "\"20260308-0001-4222-8888-19b213872026\"")
         // Số REV hiển thị ở Settings/About — tăng lên sau mỗi bản build.
-        buildConfigField("String", "REV", "\"136\"") // chống nhập sai giá: live preview tổng tiền + chặn giá <10k đ/L (thiếu ×1000)
+        buildConfigField("String", "REV", "\"140\"") // fix Zestech ACC Sleep/Wake auto-start (KeepAliveBootService + MCU/USB/Media wakeup + DeadSystemException guard)
     }
 
     androidResources {

@@ -57,10 +57,17 @@ object AppContainer {
     lateinit var odometerEngine: VirtualOdometerEngine
     lateinit var dtcEngine: DtcEngine
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val exceptionHandler = kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
+        android.util.Log.w("AppContainer", "Uncaught coroutine exception: ${throwable.message}", throwable)
+    }
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + exceptionHandler)
 
     private val _serviceRunning = MutableStateFlow(false)
     val serviceRunning: StateFlow<Boolean> = _serviceRunning.asStateFlow()
+
+    fun markServiceRunning(running: Boolean) {
+        _serviceRunning.value = running
+    }
 
     private val _themeMode = MutableStateFlow("dark")
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
@@ -205,19 +212,42 @@ object AppContainer {
                 android.util.Log.w("FmmsSync", "Backfill failed: ${e.message}")
             }
         }
+
+        // Luôn đặt lịch WorkManager định kỳ và tự bật TelemetryService nếu bất kỳ
+        // broadcast/service/worker nào đánh thức tiến trình khi Auto-Start đang bật.
+        try {
+            SyncWorker.schedule(this.context)
+        } catch (_: Throwable) {}
+
+        if (prefs.getAutoStart()) {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                try {
+                    if (!_serviceRunning.value) {
+                        startTelemetryService()
+                        android.util.Log.i("AppContainer", "Auto-started TelemetryService from AppContainer.init()")
+                    }
+                } catch (t: Throwable) {
+                    android.util.Log.w("AppContainer", "Auto-start TelemetryService from init deferred: ${t.message}")
+                }
+            }, 1_500L)
+        }
     }
 
     fun telemetryEngineState(): StateFlow<com.fmms.carlogger.domain.model.LiveTelemetry> =
         telemetryEngine.live
 
     fun startTelemetryService() {
-        val svc = Intent(context, TelemetryService::class.java)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            context.startForegroundService(svc)
-        } else {
-            context.startService(svc)
+        try {
+            val svc = Intent(context, TelemetryService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                context.startForegroundService(svc)
+            } else {
+                context.startService(svc)
+            }
+            _serviceRunning.value = true
+        } catch (t: Throwable) {
+            android.util.Log.w("AppContainer", "startTelemetryService failed: ${t.message}")
         }
-        _serviceRunning.value = true
     }
 
     fun scheduleSync() {

@@ -137,16 +137,21 @@ class FuelViewModel : ViewModel() {
 
                 // Full-to-Full chuẩn nhất: vòng "ĐẦY → ĐẦY" — số lít đổ hồi trước chính là
                 // lượng tiêu thụ từ hồi trước tới giờ (không phụ thuộc phao OBD sai lệch).
+                // CHỈ có nghĩa khi lần đổ TRƯỚC cũng full (nếu không, prevLitersAfter bị clamp
+                // theo bình → 44−mức hiện tại = số lít sai bét như trường hợp 26.7 L/100km).
                 val consumed = if (tankFull && prevLog.tankFull && prevLog.fuelLiters > 0) {
                     prevLog.fuelLiters
-                } else if (prevLitersAfter != null && fuelLitersBefore != null) {
+                } else if (prevLog.tankFull && prevLitersAfter != null && fuelLitersBefore != null) {
                     (prevLitersAfter - fuelLitersBefore).takeIf { it > 0 } ?: 0.0
                 } else {
                     0.0
                 }
                 if (consumed > 0 && deltaDistanceKm > 0) {
-                    fuelConsumedLiters = consumed
-                    calculatedConsumptionL100km = (consumed / deltaDistanceKm) * 100.0
+                    val c = (consumed / deltaDistanceKm) * 100.0
+                    if (c in 0.5..40.0) { // sanity: bỏ outlier từ phao OBD bẩn/gap odo
+                        fuelConsumedLiters = consumed
+                        calculatedConsumptionL100km = c
+                    }
                 }
             }
 
@@ -468,21 +473,23 @@ private fun AddRefuelBar(vm: FuelViewModel) {
 
             val pumpedL = liters.toDoubleOrNull()
             val priceL = price.replace(',', '.').toDoubleOrNull()
-            val likelyPriceUnitError = priceL != null && priceL > 0 && priceL < 10_000
+            val likelyPriceTooLow = priceL != null && priceL > 0 && priceL < 10_000
+            val likelyPriceTooHigh = priceL != null && priceL > 100_000
+            val priceUnitError = likelyPriceTooLow || likelyPriceTooHigh
             if (pumpedL != null && priceL != null && pumpedL > 0) {
                 val totalVnd = pumpedL * priceL
                 Surface(
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                     shape = RoundedCornerShape(8.dp),
-                    color = if (likelyPriceUnitError) colors.amber.copy(alpha = 0.15f) else colors.cyan.copy(alpha = 0.10f),
+                    color = if (priceUnitError) colors.amber.copy(alpha = 0.15f) else colors.cyan.copy(alpha = 0.10f),
                 ) {
                     Text(
-                        text = if (likelyPriceUnitError) {
-                            "⚠ Giá ${String.format(Locale.US, "%.0f", priceL)} đ/L quá thấp (thiếu ×1000?) — tổng ~${String.format(Locale.US, "%,.0f", totalVnd)} đ. Có phải ${String.format(Locale.US, "%.0f", priceL * 1000)} đ/L?"
-                        } else {
-                            "Tổng ≈ ${String.format(Locale.US, "%,.0f", totalVnd)} đ"
+                        text = when {
+                            likelyPriceTooLow -> "⚠ Giá ${String.format(Locale.US, "%.0f", priceL)} đ/L quá thấp (thiếu ×1000?) — tổng ~${String.format(Locale.US, "%,.0f", totalVnd)} đ. Có phải ${String.format(Locale.US, "%.0f", priceL * 1000)} đ/L?"
+                            likelyPriceTooHigh -> "⚠ Giá ${String.format(Locale.US, "%,.0f", priceL)} đ/L quá cao (thừa ×1000?) — tổng ~${String.format(Locale.US, "%,.0f", totalVnd)} đ. Có phải ${String.format(Locale.US, "%,.0f", priceL / 1000)} đ/L?"
+                            else -> "Tổng ≈ ${String.format(Locale.US, "%,.0f", totalVnd)} đ"
                         },
-                        color = if (likelyPriceUnitError) colors.amber else colors.cyan,
+                        color = if (priceUnitError) colors.amber else colors.cyan,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -534,7 +541,7 @@ private fun AddRefuelBar(vm: FuelViewModel) {
                     onClick = {
                         val l = liters.toDoubleOrNull()
                         val p = price.replace(',', '.').toDoubleOrNull()
-                        if (l != null && p != null && p > 0 && p >= 10_000) {
+                        if (l != null && p != null && p > 0 && p in 10_000.0..100_000.0) {
                             vm.addRefuel(l, p, full)
                             liters = ""
                             price = ""

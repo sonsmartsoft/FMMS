@@ -33,6 +33,14 @@ class FmmsApplication : Application() {
                 crashFile.appendText(entry)
             } catch (_: Exception) {
             }
+            // Trên đầu xe Zestech, khi tắt/bật ACC, Bluetooth/Binder tạm ngắt gây DeadSystemRuntimeException
+            // trên worker thread. Không tự sát tiến trình nếu lỗi xảy ra trên background thread.
+            val isDeadSystem = throwable.javaClass.simpleName.contains("DeadSystem") ||
+                throwable.cause?.javaClass?.simpleName?.contains("DeadSystem") == true
+            if (isDeadSystem && thread.name != "main") {
+                android.util.Log.w("FmmsApplication", "Ignored transient DeadSystemException on ${thread.name}", throwable)
+                return@setDefaultUncaughtExceptionHandler
+            }
             // Let the previous handler (or default) terminate the process.
             previous?.uncaughtException(thread, throwable)
                 ?: run { android.os.Process.killProcess(android.os.Process.myPid()) }

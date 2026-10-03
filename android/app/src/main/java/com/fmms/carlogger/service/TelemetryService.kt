@@ -34,7 +34,10 @@ import okhttp3.RequestBody.Companion.toRequestBody
  */
 class TelemetryService : Service() {
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val exceptionHandler = kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
+        android.util.Log.w("TelemetryService", "Uncaught coroutine exception: ${throwable.message}", throwable)
+    }
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + exceptionHandler)
     private var runnerJob: Job? = null
     private var gpsJob: Job? = null
     private var pushJob: Job? = null
@@ -45,6 +48,7 @@ class TelemetryService : Service() {
     override fun onCreate() {
         super.onCreate()
         AppContainer.init(applicationContext)
+        AppContainer.markServiceRunning(true)
         createNotificationChannel()
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -58,14 +62,16 @@ class TelemetryService : Service() {
                 @Suppress("DEPRECATION")
                 startForeground(NOTIFICATION_ID, notification("Starting OBD..."))
             }
-        } catch (e: SecurityException) {
+        } catch (e: Throwable) {
             // Missing notification/permission — degrade gracefully, never crash on boot.
+            AppContainer.markServiceRunning(false)
             stopSelf()
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         AppContainer.init(applicationContext)
+        AppContainer.markServiceRunning(true)
         startIfNeeded()
         return START_STICKY
     }
@@ -447,6 +453,7 @@ class TelemetryService : Service() {
     }
 
     override fun onDestroy() {
+        AppContainer.markServiceRunning(false)
         runnerJob?.cancel()
         gpsJob?.cancel()
         pushJob?.cancel()
